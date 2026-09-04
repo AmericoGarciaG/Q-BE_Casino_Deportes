@@ -1,0 +1,33 @@
+# ==============================================================================
+# QUANTITATIVE BETTING ENGINE (Q-BE V3.0 WEB) — DEPENDENCIES
+# ==============================================================================
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.30
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# Motores Cuantitativos y Matemáticos
+numpy>=1.26.0
+scipy>=1.13.0
+
+# Ingesta y Scraping
+httpx>=0.27.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pillow>=10.3.0
+pytesseract>=0.3.10
+
+# Inteligencia Artificial y Grounding
+google-generativeai>=0.8.0
+
+# Compilación y Reportes
+playwright>=1.44.0
+jinja2>=3.1.4
+markdown>=3.6
+
+# Infraestructura y Testing
+python-dotenv>=1.0.1
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+rich>=13.7.0

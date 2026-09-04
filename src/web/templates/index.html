@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-BE Casino Deportes — Quantitative Betting Engine</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span>🏛️</span> Q-BE CASINO DEPORTES <span style="font-size: 0.8rem; color: var(--text-muted);">WEB v3.0</span>
+        </div>
+        <div class="status-badge">● SYSTEM ONLINE</div>
+    </header>
+
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="tab-liveboard">📊 Live Board & Tabla</button>
+        <button class="tab-btn" data-tab="tab-ingestion">📥 Ingesta & Captura</button>
+        <button class="tab-btn" data-tab="tab-portfolio">⚙️ Cartera Cuantitativa</button>
+        <button class="tab-btn" data-tab="tab-reporting">📜 Tesis & Reporte PDF</button>
+    </nav>
+
+    <main class="content">
+        <!-- VISTA 1: LIVE BOARD -->
+        <section id="tab-liveboard" class="view-section active">
+            <div class="grid-2">
+                <div class="card">
+                    <h3>🏆 Tabla Oficial de Posiciones (Liga MX)</h3>
+                    <table class="fintech-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Club</th>
+                                <th>PJ</th>
+                                <th>G</th>
+                                <th>E</th>
+                                <th>P</th>
+                                <th>GF:GC</th>
+                                <th>PTS</th>
+                                <th>xG</th>
+                            </tr>
+                        </thead>
+                        <tbody id="standings-body">
+                            <!-- Inyectado vía JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h3>⚽ Cartelera Jornada Activa</h3>
+                    <div id="fixtures-container">
+                        <!-- Inyectado vía JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA 2: INGESTA -->
+        <section id="tab-ingestion" class="view-section">
+            <div class="card">
+                <h3>📥 Ingesta Directa y Capturas OCR</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Módulo de aduana y extracción de cuotas de Caliente.mx.</p>
+                <div style="display: flex; gap: 1rem;">
+                    <input type="text" placeholder="URL de evento Caliente.mx" style="flex: 1; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px;">
+                    <button class="btn-primary">Extraer Cuotas</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA 3: CARTERA CUANTITATIVA -->
+        <section id="tab-portfolio" class="view-section">
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3>⚙️ Configuración del Router de Cartera</h3>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <label>Bankroll Total ($):</label>
+                    <input type="number" id="bankroll-input" value="10000" style="padding: 0.5rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px;">
+                    <button class="btn-primary" onclick="generatePortfolio()">Generar Cartera (Kelly + Dutching)</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📋 Órdenes Sugeridas de Inversión</h3>
+                <table class="fintech-table">
+                    <thead>
+                        <tr>
+                            <th>Encuentro</th>
+                            <th>Selección</th>
+                            <th>Cuota</th>
+                            <th>Breakeven (θ*)</th>
+                            <th>Expected Value</th>
+                            <th>Stake Sugerido</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolio-orders-body">
+                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Haga clic en "Generar Cartera" para procesar órdenes.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VISTA 4: REPORTE & EXPORTACIÓN -->
+        <section id="tab-reporting" class="view-section">
+            <div class="card">
+                <h3>📜 Generador de Tesis Institucional</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Descarga del reporte de inversión en PDF A4 certificado.</p>
+                <button id="export-pdf-btn" class="btn-primary">Exportar Reporte PDF A4</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

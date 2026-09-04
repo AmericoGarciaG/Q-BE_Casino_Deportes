@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+data/qbe_database.db
+data/output/*
+!data/output/.gitkeep
+data/input/*
+!data/input/.gitkeep
+.env
+.cache_partidos/
+.pytest_cache/
