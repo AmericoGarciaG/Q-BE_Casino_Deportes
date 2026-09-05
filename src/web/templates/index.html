@@ -7,16 +7,21 @@
     <link rel="stylesheet" href="/static/css/theme.css">
 </head>
 <body>
-    <header>
+    <!-- Barra Superior Institucional Discreta [DES-QBE-010 Silent Branding] -->
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #0B132B; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
         <div class="logo">
-            <span>🏛️</span> Q-BE CASINO DEPORTES <span style="font-size: 0.8rem; color: var(--text-muted);">WEB v3.0</span>
+            <span style="font-size: 11pt;">🏛️</span>
+            <span>Q-BE · Casino Deportes</span>
+            <span style="font-size: 7pt; color: #64748B; background: rgba(255,255,255,0.04); padding: 1px 6px; border-radius: 4px;">v3.0</span>
         </div>
-        <div class="status-badge">● SYSTEM ONLINE</div>
+        <div class="status-badge" style="display: inline-flex; align-items: center; gap: 5px; font-size: 7.2pt; color: #38BDF8; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); padding: 3px 10px; border-radius: 12px; font-weight: 600;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #00E676; display: inline-block;"></span> SISTEMA EN LÍNEA
+        </div>
     </header>
 
     <nav class="tab-nav">
         <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Hub de Ligas</button>
-        <button class="tab-btn" data-tab="view-matchday-selection">📊 Split-View Live Board</button>
+        <button class="tab-btn" data-tab="view-matchday-selection">📊 Tablero de Posiciones y Cartelera</button>
         <button class="tab-btn" data-tab="tab-ingestion">📥 Ingesta & Captura</button>
         <button class="tab-btn" data-tab="tab-portfolio">⚙️ Cartera Cuantitativa</button>
         <button class="tab-btn" data-tab="tab-reporting">📜 Tesis & Reporte PDF</button>
@@ -26,7 +31,7 @@
         <!-- VISTA 1: HUB DE LIGAS -->
         <section id="view-leagues-hub" class="view-section active">
             <div class="card" style="margin-bottom: 1.5rem;">
-                <h3>🏆 Competencias Oficiales Registradas en SQLite</h3>
+                <h3>🏆 Ligas y Torneos de Alta Liquidez</h3>
                 <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
                     Seleccione una competencia para desplegar el Live Board interactivo de 18 clubes con datos Opta en tiempo real.
                 </p>
@@ -106,8 +111,8 @@
         <!-- VISTA 3: INGESTA -->
         <section id="tab-ingestion" class="view-section">
             <div class="card">
-                <h3>📥 Ingesta Directa y Capturas OCR</h3>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">Módulo de aduana y extracción de cuotas de Caliente.mx.</p>
+                <h3>📥 Carga Directa de Momios (Caliente.mx)</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Módulo de captura y extracción de cuotas en tiempo real.</p>
                 <div style="display: flex; gap: 1rem;">
                     <input type="text" placeholder="URL de evento Caliente.mx" style="flex: 1; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px;">
                     <button class="btn-primary">Extraer Cuotas</button>

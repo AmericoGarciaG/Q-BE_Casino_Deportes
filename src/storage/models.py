@@ -14,6 +14,17 @@ class League(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Team(Base):
+    __tablename__ = "teams"
+    id = Column(Integer, primary_key=True, index=True)
+    league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
+    fotmob_team_id = Column(Integer, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    short_name = Column(String, nullable=False)
+    canonical_slug = Column(String, nullable=False)
+    crest_url = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class StandingSnapshot(Base):
     __tablename__ = "standings_snapshots"
     id = Column(Integer, primary_key=True, index=True)

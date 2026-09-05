@@ -73,11 +73,12 @@ class AbstractTestLiveBoardIntegration(abc.ABC):
 
         for f in fixtures:
             assert "id_partido" in f and "local" in f and "visitante" in f
-            momios = f.get("momios", {})
-            assert momios.get("L", 0.0) > 1.0, f"Momio local inválido en {f.get('id_partido')}."
-            assert momios.get("E", 0.0) > 1.0, f"Momio empate inválido en {f.get('id_partido')}."
-            assert momios.get("V", 0.0) > 1.0, f"Momio visita inválido en {f.get('id_partido')}."
-            assert "pago_anticipado" in momios
+            if f.get("es_operable", True) and f.get("momios") is not None:
+                momios = f.get("momios") or {}
+                assert momios.get("L", 0.0) > 1.0, f"Momio local inválido en {f.get('id_partido')}."
+                assert momios.get("E", 0.0) > 1.0, f"Momio empate inválido en {f.get('id_partido')}."
+                assert momios.get("V", 0.0) > 1.0, f"Momio visita inválido en {f.get('id_partido')}."
+                assert "pago_anticipado" in momios
 
     def test_live_board_persists_snapshots_in_sqlite(self):
         """[SHIELD-INVARIANTE] Al consultar el Live Board, los datos deben persistirse en la base de datos local."""

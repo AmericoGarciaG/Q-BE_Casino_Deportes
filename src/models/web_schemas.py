@@ -52,7 +52,10 @@ class MatchFixtureOut(BaseModel):
     local: str
     visitante: str
     horario: str
-    momios: Odds1X2
+    fecha_bloque: Optional[str] = "Jornada 7"
+    es_operable: bool = True
+    es_pospuesto: bool = False
+    momios: Optional[Odds1X2] = None
     es_viable_triaje: bool = True
     motivo_triaje: Optional[str] = None
 

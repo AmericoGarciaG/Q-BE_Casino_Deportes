@@ -109,6 +109,19 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   2. Ejecutar Seeder (`src/storage/seeder.py`): inicializar Liga MX (ID: 262) si no existe.
   3. Ejecutar Sincronización de Arranque (`src/storage/sync_service.py`): consultar FotMob, validar y persistir la tabla general completa de 18 clubes y la cartelera activa.
 
+### [ARCH-1.5.1] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR]
+
+* **Propósito:** Disponer de un catálogo persistente en SQLite de los clubes oficiales por liga, almacenando sus identidades canónicas y las URLs de sus escudos de alta resolución para renderizado local y validación difusa.
+* **Modelo Relacional en SQLite (`teams`):**
+  - `id`: Entero (Primary Key).
+  - `league_id`: Entero (Foreign Key -> `leagues.id`).
+  - `fotmob_team_id`: Entero único (ID oficial de FotMob, ej. América = 7966).
+  - `name`: Cadena (Nombre oficial, ej. "Club América").
+  - `short_name`: Cadena (ej. "América").
+  - `canonical_slug`: Cadena para normalizador (ej. "club-america").
+  - `crest_url`: Cadena con la URL oficial del escudo en FotMob CDN (`https://images.fotmob.com/image_resources/logo/teamlogo/{id}.png`).
+* **Ciclo de Seeding:** Al iniciar la plataforma, `seeder.py` verifica la existencia de los 18 clubes de la Liga MX; si no existen, los sincroniza desde FotMob y puebla la tabla de forma inmutable.
+
 ---
 
 ### [ARCH-1.6.0] Arquitectura del Live Board Reactivo y Sincronización SQLite [ARCH-PILLAR]
@@ -121,7 +134,24 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
      - Consulta FotMob / Scraper para obtener la cartelera activa con momios decimales 1X2 y Pago Anticipado.
      - Persiste snapshots inmutables en SQLite (`standings_snapshots` y `fixtures_snapshots`).
      - Retorna el contrato canónico `LiveBoardOut`.
-* **Invarianza de Integridad de Tablas:** Queda estrictamente prohibido truncar la tabla de posiciones a un subconjunto de partidos. Todo snapshot de tabla en SQLite y en el Live Board DEBE contener los 18 clubes oficiales de la división.
+
+---
+
+### [ARCH-1.6.1] Política de Presentación Centrada en el Inversionista (Zero Technical Leakage) [ARCH-PILLAR] [UX-MANDATE]
+
+* **Axioma de Pulcritud Institucional:** Queda estrictamente prohibido exponer nombres de motores de base de datos (`SQLite`), métricas de consumo de modelos (`0 Tokens LLM`, `Prompt 01`) o terminología interna de ingeniería (`P.I.R. Sensor`) en las vistas visuales destinadas al usuario final.
+* **Voz de Socio Financiero:** Todo encabezado, badge o tarjeta debe comunicar valor operativo, liquidez y certidumbre deportiva en lenguaje didáctico accesible.
+* **Estructura Canónica de Cartelera (`LiveBoardOut.fixtures`):** Los partidos de la jornada activa deben estructurarse agrupados cronológicamente por fecha de evento (`"Hoy / Viernes"`, `"Sábado"`, `"Domingo"`, `"Pospuestos"`), con cuotas 1X2 normalizadas y un único identificador de selección por tarjeta.
+
+### [ARCH-1.6.2] Ventana Operativa de Cartelera y Ciclo de Vida de Cuotas [ARCH-PILLAR] [BIZ-LOGIC]
+
+* **Ventana Centrada en la Jornada (Jornada-Centric Window):** Queda prohibido el filtrado estricto por mes calendario. La cartelera extrae todos los partidos asignados a la jornada en disputa (`round_num == current_round`), resolviendo automáticamente fechas que cruzan fin de mes.
+* **Segmentación de Fixtures:**
+  1. `VENTANA_ACTIVA` (Próximos $\le 7$ días): Partidos habilitados con checkbox de selección para cálculo de cartera.
+  2. `VENTANA_POSPUESTA` (Fechas $> 14$ días): Partidos reprogramados agrupados bajo la sección `📅 PARTIDOS REPROGRAMADOS`, con checkbox deshabilitado (`disabled`) y badge `⏳ Fecha Lejana`.
+* **Ciclo de Vida de Cuotas (Disponibilidad de Momios):**
+  - Si el partido tiene cuotas publicadas en Caliente.mx $\implies$ se registran momios decimales 1X2 reales y `pago_anticipado = True/False`.
+  - Si Caliente.mx aún no publica cuotas $\implies$ `momios = null`, `disponible = False`. La interfaz muestra `L — | E — | V —  ⏳ Cuotas Pendientes` y deshabilita el checkbox de selección con un tooltip explicativo.
 
 
 ---
