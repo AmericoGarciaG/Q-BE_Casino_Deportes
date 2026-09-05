@@ -111,6 +111,21 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.6.0] Arquitectura del Live Board Reactivo y Sincronización SQLite [ARCH-PILLAR]
+
+* **Propósito:** Desacoplar la ingesta deportiva viva de la compilación de reportes, permitiendo que la interfaz SPA explore ligas, consulte tablas completas de 18 clubes en FotMob y seleccione partidos de forma interactiva persistiendo el estado en SQLite local.
+* **Flujo de Servicios y Endpoints:**
+  1. `GET /api/leagues`: Consulta la tabla `leagues` en SQLite y retorna las competencias activas registradas por el seeder.
+  2. `GET /api/leagues/{id}/live-board`:
+     - Consulta FotMob API (League ID: 262 para Liga MX) para obtener la tabla oficial de 18 clubes y métricas Opta ($xG, xGA, xPTS$).
+     - Consulta FotMob / Scraper para obtener la cartelera activa con momios decimales 1X2 y Pago Anticipado.
+     - Persiste snapshots inmutables en SQLite (`standings_snapshots` y `fixtures_snapshots`).
+     - Retorna el contrato canónico `LiveBoardOut`.
+* **Invarianza de Integridad de Tablas:** Queda estrictamente prohibido truncar la tabla de posiciones a un subconjunto de partidos. Todo snapshot de tabla en SQLite y en el Live Board DEBE contener los 18 clubes oficiales de la división.
+
+
+---
+
 ## 2. ESTRUCTURA LIMPIA DE MÓDULOS Y MAPEO DE CÓDIGO
 
 ```text

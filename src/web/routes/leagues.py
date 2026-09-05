@@ -1,35 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from src.storage.database import get_db
-from src.storage.repository import Repository
-from src.models.web_schemas import LeagueOut, LiveBoardResponse
+from src.storage.models import League
+from src.storage.sync_service import sync_league_live_board
+from src.models.web_schemas import LeagueOut, LiveBoardOut
 
-router = APIRouter(prefix="/api/leagues", tags=["Leagues"])
+router = APIRouter(prefix="/api/leagues", tags=["Leagues & Live Board"])
 
-@router.get("", response_model=list[LeagueOut])
-def list_leagues(db: Session = Depends(get_db)):
-    leagues = Repository.get_active_leagues(db)
+
+@router.get("", response_model=List[LeagueOut])
+@router.get("/", response_model=List[LeagueOut], include_in_schema=False)
+def get_leagues(db: Session = Depends(get_db)):
+    """Retorna todas las ligas activas registradas en SQLite."""
+    leagues = db.query(League).filter(League.is_active == True).all()
     return leagues
 
-@router.get("/{league_id}/live-board")
+
+@router.get("/{league_id}/live-board", response_model=LiveBoardOut)
 def get_live_board(league_id: int, db: Session = Depends(get_db)):
-    league = Repository.get_league_by_id(db, league_id)
-    if not league:
-        raise HTTPException(status_code=404, detail="Liga no encontrada")
-
-    standing_snap = Repository.get_latest_standing(db, league.id)
-    fixture_snap = Repository.get_latest_fixture(db, league.id)
-
-    return {
-        "league": {
-            "id": league.id,
-            "name": league.name,
-            "country": league.country,
-            "flag": league.flag,
-            "fotmob_id": league.fotmob_id,
-            "caliente_url": league.caliente_url,
-            "is_active": league.is_active
-        },
-        "standings": standing_snap.positions_json if standing_snap else [],
-        "fixtures": fixture_snap.matches_json if fixture_snap else []
-    }
+    """Extrae y sincroniza la tabla de 18 clubes de FotMob y la cartelera viva con SQLite."""
+    try:
+        board_data = sync_league_live_board(league_id, db)
+        return board_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

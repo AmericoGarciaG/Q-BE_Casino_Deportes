@@ -163,3 +163,71 @@ table.fintech-table {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
 }
+
+/* Live Board Split-View & Sub-tabs */
+.split-view {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.table-panel-left, .fixture-panel-right {
+    min-width: 0;
+}
+
+.subtab-btn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.subtab-btn:hover {
+    color: #ffffff;
+    border-color: #00e676;
+}
+
+.subtab-btn.active {
+    background: #00e676;
+    color: #0f172a;
+    border-color: #00e676;
+}
+
+.form-badge {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border-radius: 50%;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-align: center;
+    margin: 0 2px;
+}
+
+.badge-g {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.badge-e {
+    background: #64748b;
+    color: #ffffff;
+}
+
+.badge-p {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.leagues-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
