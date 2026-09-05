@@ -11,3 +11,4 @@ data/input/*
 .env
 .cache_partidos/
 .pytest_cache/
+scripts/diagnostico_fotmob_teams_crests.py

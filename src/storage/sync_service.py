@@ -154,17 +154,6 @@ CLUB_RIVALS_MAP = {
     "queretaro": "vs Rayados de Monterrey",
 }
 
-
-def _resolver_proximo_rival(nombre_equipo: str) -> str:
-    limpio = nombre_equipo.lower().strip()
-    if limpio in CLUB_RIVALS_MAP:
-        return CLUB_RIVALS_MAP[limpio]
-    for k, v in CLUB_RIVALS_MAP.items():
-        if k in limpio or limpio in k:
-            return v
-    return "vs Atlas FC"
-
-
 def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
     """
     Sincroniza la tabla de 18 clubes y la cartelera viva desde FotMob hacia la base de datos local,
@@ -186,7 +175,7 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
         crests_map[t.short_name.lower()] = t.crest_url
         crests_map[t.canonical_slug.lower()] = t.crest_url
 
-    # 1. Obtener Tabla de Posiciones Oficial desde FotMob
+    # 1. Obtener Tabla de Posiciones Oficial desde FotMobProvider
     standings_raw = FotMobProvider.obtener_tabla_posiciones(fotmob_id)
     if not standings_raw or len(standings_raw) < 18:
         last_snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
@@ -202,14 +191,20 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
         equipo = str(t.get("equipo") or t.get("name") or f"Club {idx}")
         
         # Buscar escudo URL oficial
+        escudo_id = t.get("escudo_id")
         escudo_url = t.get("escudo_url")
-        if not escudo_url:
+        if escudo_id:
+            escudo_url = f"https://images.fotmob.com/image_resources/logo/teamlogo/{escudo_id}.png"
+        elif not escudo_url:
             escudo_url = crests_map.get(equipo.lower())
         if not escudo_url:
             for k, v in crests_map.items():
                 if k in equipo.lower() or equipo.lower() in k:
                     escudo_url = v
                     break
+
+        proximo_escudo_id = t.get("proximo_escudo_id")
+        proximo_escudo_url = f"https://images.fotmob.com/image_resources/logo/teamlogo/{proximo_escudo_id}.png" if proximo_escudo_id else None
 
         pj = int(t.get("pj") or t.get("played") or 0)
         pg = int(t.get("pg") or t.get("win") or 0)
@@ -232,6 +227,7 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
             "pos": pos,
             "equipo": equipo,
             "escudo_url": escudo_url,
+            "proximo_escudo_url": proximo_escudo_url,
             "pj": pj,
             "pg": pg,
             "pe": pe,

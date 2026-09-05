@@ -122,16 +122,9 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ### ID: [LN-QBE-003] Ingesta Fáctica Estructurada FotMob (Opta Metrics Engine)
 
-* **Ω (Resumen):** Extraer la tabla de posiciones y métricas avanzadas garantizando anclaje a la temporada activa en curso (Apertura 2026), validando la paridad del líder y poblando el catálogo de equipos.
-* **I (Input):** `league_id` (e.g. `262` para Liga MX).
-* **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
-  1. Anclaje de Temporada: Consultar `leagues?id=262` filtrando estrictamente por la temporada en curso y seleccionando la tabla general del torneo regular en disputa (excluyendo cocientes o torneos clausurados).
-  2. Validación de Líder: Verificar que la posición #1 corresponda al club con mayor puntaje real (América con 16 pts). Discrepancias activan alerta de desacople.
-  3. Poblado de Catálogo: Sincronizar los 18 clubes hacia la tabla `teams` de SQLite con sus `crest_url` oficiales.
-  4. Extracción de Cartelera: Recuperar los partidos de la jornada activa mapeando el estado de cuotas de Caliente.mx. Partidos sin momio se clasifican como `CUOTAS_PENDIENTES`.
-* **O (Output):** `LiveBoardOut` tipado contra Pydantic V2.
-* **Φ (Transición):** Hacia **[LN-QBE-016]** y la Vista 2 (Split-View).
-* **[SHIELD]:** `tests/shield/abstract_test_LN_QBE_003_live_board_integration.py`
+* **P (Process) — Extracción Pura de FotMob sin Filtros Locales:**
+  1. El conector debe consumir en vivo `https://www.fotmob.com/api/leagues?id=262` y procesar la tabla oficial en tiempo real, reflejando partidos adelantados o jugados al momento de la consulta (Pachuca PJ: 7, PTS: 8 en puesto #11).
+  2. Prohibido el uso de diccionarios o tablas estáticas con datos preconcebidos. La tabla se extrae íntegra y dinámicamente con sus `id` oficiales de equipo.
 
 ---
 

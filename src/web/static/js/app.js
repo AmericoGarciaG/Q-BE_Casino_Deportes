@@ -87,6 +87,11 @@ async function seleccionarLiga(fotmobId) {
         if (!resp.ok) throw new Error("Error al obtener Live Board");
         currentLiveBoard = await resp.json();
 
+        const lblTabla = document.getElementById("lbl-nombre-tabla");
+        if (lblTabla) lblTabla.textContent = currentLiveBoard.league_name || "Liga MX";
+        const lblJornada = document.getElementById("lbl-nombre-jornada");
+        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada 7";
+
         renderizarTabla18Clubes(currentLiveBoard.standings);
         renderizarCartelera(currentLiveBoard.fixtures);
     } catch (e) {
@@ -105,16 +110,19 @@ function renderizarTabla18Clubes(standings) {
         const tr = document.createElement("tr");
         
         // Renderizado del escudo oficial del club
-        const escudoHtml = t.escudo_url
-            ? `<img src="${t.escudo_url}" class="team-crest" alt="${t.equipo}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle; margin-right: 6px;" onerror="this.style.display='none'">`
-            : '🛡️ ';
+        const escudoHtml = t.escudo_url ? `<img src="${t.escudo_url}" alt="" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle; margin-right: 6px;">` : '';
 
-        // Forma con círculos de colores
-        const formaHtml = (t.forma || ["G", "E", "P"]).map(f => {
-            const cls = (f === "G" || f === "W") ? "badge-g" : (f === "E" || f === "D") ? "badge-e" : "badge-p";
-            const letra = (f === "G" || f === "W") ? "G" : (f === "E" || f === "D") ? "E" : "P";
-            return `<span class="form-badge ${cls}">${letra}</span>`;
-        }).join("");
+        // Forma con círculos de colores en contenedor horizontal anti-descuadre [DES-QBE-036]
+        const formaHtml = `<div class="form-badges-wrapper" style="display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap;">` +
+            (t.forma || ["G", "E", "P"]).map(f => {
+                const cls = (f === "G" || f === "W") ? "badge-g" : (f === "E" || f === "D") ? "badge-e" : "badge-p";
+                const letra = (f === "G" || f === "W") ? "G" : (f === "E" || f === "D") ? "E" : "P";
+                return `<span class="form-badge ${cls}" style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 6pt; font-weight: 800; color: #fff;">${letra}</span>`;
+            }).join("") + `</div>`;
+
+        // Renderizado del próximo rival con escudo miniatura [DES-QBE-016]
+        const proxEscudoHtml = t.proximo_escudo_url ? `<img src="${t.proximo_escudo_url}" alt="" style="width: 14px; height: 14px; object-fit: contain; vertical-align: middle; margin-right: 4px;">` : '';
+        const proximoHtml = `<div style="display: inline-flex; align-items: center; white-space: nowrap; color: #38BDF8; font-weight: 600; font-size: 7.2pt;">${proxEscudoHtml}${t.proximo_rival || "—"}</div>`;
 
         const difColor = t.dif >= 0 ? "#00E676" : "#f87171";
         const difSign = t.dif > 0 ? "+" : "";
@@ -129,7 +137,7 @@ function renderizarTabla18Clubes(standings) {
 
         tr.innerHTML = `
             <td style="text-align: center; font-weight: 700;">${t.pos}</td>
-            <td style="font-weight: 600; color: #ffffff;">${escudoHtml}${t.equipo}</td>
+            <td style="font-weight: 600; color: #ffffff; white-space: nowrap;">${escudoHtml}${t.equipo}</td>
             <td style="text-align: center; font-weight: 700; color: #00E676;">${t.puntos}</td>
             <!-- General -->
             <td class="col-gen" style="text-align: center;">${t.pj}</td>
@@ -139,8 +147,8 @@ function renderizarTabla18Clubes(standings) {
             <td class="col-gen" style="text-align: center;">${t.gf}:${t.gc}</td>
             <td class="col-gen" style="text-align: center; font-weight: 700; color: ${difColor};">${difSign}${t.dif}</td>
             <!-- Forma -->
-            <td class="col-forma" style="text-align: center; display: none;">${formaHtml}</td>
-            <td class="col-forma" style="text-align: center; color: #38BDF8; font-weight: 600; display: none;">${t.proximo_rival || "—"}</td>
+            <td class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">${formaHtml}</td>
+            <td class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">${proximoHtml}</td>
             <!-- xG Opta -->
             <td class="col-xg" style="text-align: center; color: #38BDF8; font-weight: 600; display: none;">${t.xg || "—"}</td>
             <td class="col-xg" style="text-align: center; color: #f87171; display: none;">${t.xga || "—"}</td>

@@ -111,16 +111,9 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ### [ARCH-1.5.1] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR]
 
-* **Propósito:** Disponer de un catálogo persistente en SQLite de los clubes oficiales por liga, almacenando sus identidades canónicas y las URLs de sus escudos de alta resolución para renderizado local y validación difusa.
-* **Modelo Relacional en SQLite (`teams`):**
-  - `id`: Entero (Primary Key).
-  - `league_id`: Entero (Foreign Key -> `leagues.id`).
-  - `fotmob_team_id`: Entero único (ID oficial de FotMob, ej. América = 7966).
-  - `name`: Cadena (Nombre oficial, ej. "Club América").
-  - `short_name`: Cadena (ej. "América").
-  - `canonical_slug`: Cadena para normalizador (ej. "club-america").
-  - `crest_url`: Cadena con la URL oficial del escudo en FotMob CDN (`https://images.fotmob.com/image_resources/logo/teamlogo/{id}.png`).
-* **Ciclo de Seeding:** Al iniciar la plataforma, `seeder.py` verifica la existencia de los 18 clubes de la Liga MX; si no existen, los sincroniza desde FotMob y puebla la tabla de forma inmutable.
+* **Prohibición de Diccionarios de IDs Estáticos:** Queda estrictamente prohibido mantener listas manuales o adivinadas de `fotmob_id` en el código. La persistencia en SQLite de la tabla `teams` y de los snapshots de tabla debe alimentarse dinámicamente del campo `id` devuelto por el payload oficial de FotMob.
+* **CDN de Escudos Oficiales:** Todo escudo se obtiene de:
+  `https://images.fotmob.com/image_resources/logo/teamlogo/{fotmob_id}.png`.
 
 ---
 

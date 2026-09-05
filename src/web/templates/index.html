@@ -21,7 +21,7 @@
 
     <nav class="tab-nav">
         <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Hub de Ligas</button>
-        <button class="tab-btn" data-tab="view-matchday-selection">📊 Tablero de Posiciones y Cartelera</button>
+        <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Jornada y Tabla de Posiciones</button>
         <button class="tab-btn" data-tab="tab-ingestion">📥 Ingesta & Captura</button>
         <button class="tab-btn" data-tab="tab-portfolio">⚙️ Cartera Cuantitativa</button>
         <button class="tab-btn" data-tab="tab-reporting">📜 Tesis & Reporte PDF</button>
@@ -47,7 +47,7 @@
                 <!-- Panel Izquierdo: Tabla de 18 Clubes con 3 Pestañas -->
                 <div class="card table-panel-left">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0;">🛡️ Tabla Oficial (18 Clubes)</h3>
+                        <h3 style="margin: 0;">🛡️ <span id="lbl-nombre-tabla">Liga MX</span></h3>
                         <div style="display: flex; gap: 6px;">
                             <button id="btn-tab-general" class="subtab-btn active" onclick="switchTableTab('general')">📋 General</button>
                             <button id="btn-tab-forma" class="subtab-btn" onclick="switchTableTab('forma')">📈 Forma</button>
@@ -70,8 +70,8 @@
                                     <th class="col-gen" style="text-align: center;">GF:GC</th>
                                     <th class="col-gen" style="text-align: center;">DIF</th>
                                     <!-- Forma -->
-                                    <th class="col-forma" style="text-align: center; display: none;">FORMA (5P)</th>
-                                    <th class="col-forma" style="text-align: center; display: none;">PRÓX. RIVAL</th>
+                                    <th class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">FORMA (5P)</th>
+                                    <th class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">PRÓX. RIVAL</th>
                                     <!-- xG Opta -->
                                     <th class="col-xg" style="text-align: center; display: none;">xG</th>
                                     <th class="col-xg" style="text-align: center; display: none;">xGA</th>
@@ -89,7 +89,7 @@
                 <!-- Panel Derecho: Cartelera Dinámica y Checkboxes -->
                 <div class="card fixture-panel-right">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 style="margin: 0;">⚽ Cartelera Activa</h3>
+                        <h3 style="margin: 0;">⚽ <span id="lbl-nombre-jornada">Jornada 7</span></h3>
                         <span id="lbl-partidos-seleccionados" style="font-size: 0.85rem; font-weight: 700; color: #00E676;">
                             0 partidos seleccionados
                         </span>

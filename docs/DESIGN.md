@@ -29,15 +29,15 @@
 * **Etiqueta en Tarjeta:** `• 18 Clubes • Tabla y Métricas al Día`.
 * **Pestaña de Navegación:** `🌐 Hub de Ligas`.
 
-### [DES-QBE-016] Tablero de Posiciones y Cartelera (Vista 2) — Especificación de Escudos y Cuotas [UX-MANDATE]
+### [DES-QBE-016] Jornada y Tabla de Posiciones (Vista 2) [UX-MANDATE]
+* **Pestaña de Navegación:** `📊 Jornada y Tabla de Posiciones`.
+* **Encabezado de Tabla:** Nombre de la competencia activa (ej. `Liga MX`).
+* **Encabezado de Cartelera:** Jornada en disputa activa (ej. `Jornada 7`).
+* **Columna Próximo Rival (Pestaña Forma):** Debe renderizar el escudo miniatura del rival (`14x14px`) y su nombre canónico (ej. `vs Cruz Azul`). Prohibido el texto estático `vs Rival`.
 
-* **Escudos Oficiales en Tabla de Posiciones:** Cada fila de club debe renderizar el escudo oficial del club:
-  `<img src="{crest_url}" class="team-crest" alt="{equipo}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle; margin-right: 6px;">`.
-* **Partidos con Cuotas Pendientes:** Si un partido no tiene momios publicados por Caliente.mx:
-  - Momios: `L — | E — | V —`.
-  - Badge: `<span class="badge-pending">⏳ Momios Pendientes</span>` (estilo gris neutro).
-  - Selector: `<input type="checkbox" disabled ...>` con `cursor: not-allowed;` y tooltip: *"Caliente.mx aún no publica cuotas para este encuentro."*.
-* **Bloque de Partidos Reprogramados:** Los encuentros a más de 14 días de distancia se agrupan al final con encabezado `📅 PARTIDOS REPROGRAMADOS / FECHA LEJANA` con checkboxes deshabilitados.
+### [DES-QBE-036] Inviolabilidad Geométrica de la Columna Forma [UX-MANDATE] [ARCH-PILLAR]
+* **Regla Anti-Descuadre:** La celda `td.col-forma` debe forzar `white-space: nowrap !important;`.
+* **Contenedor de Círculos:** Los 5 círculos de forma deben montarse en un contenedor con `display: inline-flex; align-items: center; gap: 3px; flex-wrap: nowrap;`, garantizando una sola línea horizontal perfecta y prohibiendo estrictamente que el 5º círculo se apile verticalmente formando una figura en "T".
 
 ---
 
