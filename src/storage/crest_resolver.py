@@ -57,7 +57,7 @@ def resolver_escudo_canonico(
     1. Bóveda Local (/static/img/crests/{slug}.png) con verificación de archivo en disco.
     2. Registro en tabla `teams` (SQLite).
     3. Generador determinista de SVG Data URI.
-    PROHIBIDO retornar enlaces a images.fotmob.com.
+    PROHIBIDO retornar enlaces externos a CDN de terceros.
     """
     if not equipo_nombre:
         return _generar_svg_fallback("QBE", "Club")
@@ -81,7 +81,7 @@ def resolver_escudo_canonico(
             if team_rec and team_rec.crest_url:
                 c_url = team_rec.crest_url
                 # Solo aceptar si es ruta estática local o data uri (cero fotmob hotlinks)
-                if "images.fotmob.com" not in c_url:
+                if "fotmob.com" not in c_url.lower():
                     if c_url.startswith("/static/") or c_url.startswith("data:image/svg+xml"):
                         return c_url
         except Exception:

@@ -93,6 +93,9 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   2. Mapeo directo contra el diccionario canónico `_CANONICAL_ALIASES` (18 clubes Liga MX + clubes internacionales).
   3. Búsqueda difusa (*Fuzzy Matching*) mediante distancia de Levenshtein ($\text{ratio} \ge 0.78$) ante fallos de OCR o variantes tipográficas.
   4. Si un equipo no puede resolverse con certeza $\implies$ lanzamiento de `NormalizationException`.
+* **Heurística de Resolución de Próximo Rival (Safe Rival Lookup):**
+  1. Si la fuente estructurada omite el rival o devuelve texto genérico (`"vs Rival"` o vacío), el normalizador deducirá el club rival a partir del fixture cruzado de la jornada activa.
+  2. Si no es posible identificar con certeza al rival en la jornada, se resolverá como `"Por Definir"` asociando el placeholder SVG institucional. Prohibido el renderizado de cadenas vacías o términos no procesados.
 * **O (Output):** `EquipoCanónico` validado y unificado.
 * **Φ (Transición):** Hacia **[LN-QBE-005]** y **[LN-QBE-010]**.
 * **[SHIELD]:** `tests/shield/test_LN_QBE_012_normalizer.py`
@@ -361,12 +364,12 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Ω (Resumen):** Resolver la URI de imagen para cada club garantizando disponibilidad visual absoluta en el frontend, erradicando el bloqueo por anti-hotlinking HTTP 403 mediante el uso estricto de la Bóveda Soberana Local o placeholders deterministas.
 * **I (Input):** `equipo_nombre` (str), `fotmob_id` (int), `db_session` (SQLAlchemy Session opcional).
 * **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
-  1. **Resolución de Identidad:** Normalizar `equipo_nombre` mediante `[LN-QBE-012]` y obtener el `slug` canónico (ej. `"america"`, `"cruz-azul"`).
+  1. **Resolución de Identidad y Espejeo:** Normalizar `equipo_nombre` mediante `[LN-QBE-012]`, resolviendo el slug canónico primario o sus aliases vinculados.
   2. **Escalera de Precedencia Determinista:**
-     - **Nivel 1 (Bóveda Física Local):** Verificar si el archivo local `src/web/static/img/crests/{slug}.png` existe en disco y tiene tamaño $> 0$ bytes. Si existe $\implies$ retornar la URL servida `/static/img/crests/{slug}.png`.
-     - **Nivel 2 (Persistencia SQLite):** Consultar la tabla `teams`. Si existe un registro con `local_crest_url` no nulo y accesible $\implies$ retornar dicho valor.
-     - **Nivel 3 (Fallback SVG Local Inmutable):** Si el activo físico no existe en disco $\implies$ generar y retornar un SVG embebido Data-URI (`data:image/svg+xml;utf8,...`) estilizado con las iniciales del club (2 o 3 caracteres) sobre fondo Slate 800 (`#1C2541`) y borde Cian (`#38BDF8`).
-  3. **Mandato Anti-Hotlinking [ANTI-BUG]:** Queda terminantemente prohibido que la salida `escudo_url` contenga enlaces directos a `images.fotmob.com` o cualquier CDN externo con restricciones de referer.
+     - **Nivel 1 (Bóveda Local Certificada):** Verificar existencia física del archivo local `src/web/static/img/crests/{slug}.png`. Exigir obligatoriamente `size >= 2500` bytes (rechazo categórico de archivos de 0 bytes). Si es válido $\implies$ retornar `/static/img/crests/{slug}.png`.
+     - **Nivel 2 (Persistencia SQLite):** Consultar tabla `teams` con validación de URL local o CDN de la FMF (`cldrsrcs.apilmx.com`).
+     - **Nivel 3 (Fallback SVG Data URI):** Generar SVG determinista con las iniciales del club sobre fondo Slate 800 (`#1C2541`) y borde Cian (`#38BDF8`).
+  3. **Mandato Anti-Hotlinking:** Prohibición absoluta de enlaces directos a `images.fotmob.com`.
 * **O (Output):** `safe_crest_url: str` (Garantizada accesible localmente o mediante data-uri).
 * **Φ (Transición):** Hacia `StandingRowOut.escudo_url` y `MatchFixtureOut`.
 * **[SHIELD]:** `tests/shield/test_LN_QBE_019_crest_pipeline.py`

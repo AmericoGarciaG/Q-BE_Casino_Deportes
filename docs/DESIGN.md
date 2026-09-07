@@ -72,6 +72,17 @@
 * **Indicador de selección:** El estado activo se comunica únicamente mediante `border: 1px solid #38BDF8` en la `.fixture-card` y el atributo `checked` del `<input type="checkbox">`.
 * **[Binding Rationale]:** La duplicidad de controles de selección genera confusión UX y viola el principio de selector único enunciado en DES-QBE-016 v1.0.
 
+### [DES-QBE-016-B] Geometría y Renderizado de Próximo Rival [UX-MANDATE]
+
+* **Estructura DOM:** La celda `td.col-rival` debe contener:
+  ```html
+  <div style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+    <img src="/static/img/crests/{slug}.png" width="14" height="14" style="object-fit: contain;" alt="{Rival}">
+    <span>vs {Nombre Canónico}</span>
+  </div>
+  ```
+* **Inviolabilidad Geométrica:** Prohibido el salto de línea entre la miniatura y el texto.
+
 ---
 
 ### [DES-QBE-018] Panel Administrativo de Curación HITL (Catálogos y Bóveda) [UX-MANDATE]

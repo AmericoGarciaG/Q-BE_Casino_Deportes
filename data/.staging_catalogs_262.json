@@ -1,294 +1,269 @@
 [
   {
-    "id": "america",
     "id_candidato": "CAND-01",
     "name": "Club América",
-    "short_name": "Club",
+    "short_name": "América",
     "canonical_slug": "america",
-    "crest_candidate_url": "/static/img/crests/america.png",
-    "crest_url": "/static/img/crests/america.png",
     "stadium": "Ciudad de los Deportes",
     "city": "Ciudad de México",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/227.png",
     "aliases": [
-      "america",
-      "club-america"
+      "Águilas",
+      "América",
+      "CF América"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "atlas",
     "id_candidato": "CAND-02",
-    "name": "Atlas FC",
-    "short_name": "Atlas",
-    "canonical_slug": "atlas",
-    "crest_candidate_url": "/static/img/crests/atlas.png",
-    "crest_url": "/static/img/crests/atlas.png",
-    "stadium": "Jalisco",
-    "city": "Guadalajara",
-    "aliases": [
-      "atlas",
-      "atlas-fc"
-    ],
-    "status": "APPROVED"
-  },
-  {
-    "id": "club-tijuana",
-    "id_candidato": "CAND-03",
-    "name": "Club Tijuana",
-    "short_name": "Club",
-    "canonical_slug": "club-tijuana",
-    "crest_candidate_url": "/static/img/crests/club-tijuana.png",
-    "crest_url": "/static/img/crests/club-tijuana.png",
-    "stadium": "Caliente",
-    "city": "Tijuana",
-    "aliases": [
-      "club-tijuana",
-      "tijuana",
-      "xolos"
-    ],
-    "status": "APPROVED"
-  },
-  {
-    "id": "cruz-azul",
-    "id_candidato": "CAND-04",
-    "name": "Cruz Azul",
-    "short_name": "Cruz",
-    "canonical_slug": "cruz-azul",
-    "crest_candidate_url": "/static/img/crests/cruz-azul.png",
-    "crest_url": "/static/img/crests/cruz-azul.png",
-    "stadium": "Ciudad de los Deportes",
-    "city": "Ciudad de México",
-    "aliases": [
-      "cruz-azul",
-      "cruzazul"
-    ],
-    "status": "APPROVED"
-  },
-  {
-    "id": "guadalajara",
-    "id_candidato": "CAND-05",
     "name": "Chivas Guadalajara",
     "short_name": "Chivas",
     "canonical_slug": "guadalajara",
-    "crest_candidate_url": "/static/img/crests/guadalajara.png",
-    "crest_url": "/static/img/crests/guadalajara.png",
     "stadium": "Akron",
-    "city": "Guadalajara",
+    "city": "Zapopan",
+    "crest_candidate_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Jersey_Chivas_Rayadas_del_Guadalajara_2017.png/200px-Jersey_Chivas_Rayadas_del_Guadalajara_2017.png",
     "aliases": [
-      "guadalajara",
-      "chivas-guadalajara",
-      "chivas"
+      "Rebaño Sagrado",
+      "Chivas",
+      "Guadalajara"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "leon",
+    "id_candidato": "CAND-03",
+    "name": "Cruz Azul",
+    "short_name": "Cruz Azul",
+    "canonical_slug": "cruz-azul",
+    "stadium": "Ciudad de los Deportes",
+    "city": "Ciudad de México",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/219.png",
+    "aliases": [
+      "La Máquina",
+      "Cruz Azul",
+      "Cementeros"
+    ],
+    "status": "PENDING_CONFIRMATION"
+  },
+  {
+    "id_candidato": "CAND-04",
+    "name": "Tigres UANL",
+    "short_name": "Tigres",
+    "canonical_slug": "tigres-uanl",
+    "stadium": "Universitario",
+    "city": "San Nicolás de los Garza",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/230.png",
+    "aliases": [
+      "Felinos",
+      "Tigres",
+      "UANL"
+    ],
+    "status": "PENDING_CONFIRMATION"
+  },
+  {
+    "id_candidato": "CAND-05",
+    "name": "Rayados de Monterrey",
+    "short_name": "Monterrey",
+    "canonical_slug": "monterrey",
+    "stadium": "BBVA",
+    "city": "Guadalupe",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/225.png",
+    "aliases": [
+      "Rayados",
+      "Monterrey",
+      "La Pandilla"
+    ],
+    "status": "PENDING_CONFIRMATION"
+  },
+  {
     "id_candidato": "CAND-06",
-    "name": "Club León",
-    "short_name": "Club",
-    "canonical_slug": "leon",
-    "crest_candidate_url": "/static/img/crests/leon.png",
-    "crest_url": "/static/img/crests/leon.png",
-    "stadium": "León",
-    "city": "León",
+    "name": "Deportivo Toluca",
+    "short_name": "Toluca",
+    "canonical_slug": "toluca",
+    "stadium": "Nemesio Díez",
+    "city": "Toluca",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/218.png",
     "aliases": [
-      "leon",
-      "club-leon"
+      "Diablos Rojos",
+      "Toluca",
+      "Deportivo Toluca"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "pachuca",
     "id_candidato": "CAND-07",
     "name": "Club Pachuca",
-    "short_name": "Club",
+    "short_name": "Pachuca",
     "canonical_slug": "pachuca",
-    "crest_candidate_url": "/static/img/crests/pachuca.png",
-    "crest_url": "/static/img/crests/pachuca.png",
     "stadium": "Hidalgo",
     "city": "Pachuca",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/226.png",
     "aliases": [
-      "pachuca",
-      "club-pachuca"
+      "Tuzos",
+      "Pachuca"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "puebla",
     "id_candidato": "CAND-08",
-    "name": "Club Puebla",
-    "short_name": "Club",
-    "canonical_slug": "puebla",
-    "crest_candidate_url": "/static/img/crests/puebla.png",
-    "crest_url": "/static/img/crests/puebla.png",
-    "stadium": "Cuauhtémoc",
-    "city": "Puebla",
+    "name": "Pumas UNAM",
+    "short_name": "Pumas",
+    "canonical_slug": "pumas-unam",
+    "stadium": "Olímpico Universitario",
+    "city": "Ciudad de México",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/229.png",
     "aliases": [
-      "puebla",
-      "club-puebla"
+      "Universitarios",
+      "Pumas",
+      "UNAM"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "monterrey",
     "id_candidato": "CAND-09",
-    "name": "Rayados de Monterrey",
-    "short_name": "Rayados",
-    "canonical_slug": "monterrey",
-    "crest_candidate_url": "/static/img/crests/monterrey.png",
-    "crest_url": "/static/img/crests/monterrey.png",
-    "stadium": "BBVA",
-    "city": "Monterrey",
+    "name": "Club León",
+    "short_name": "León",
+    "canonical_slug": "leon",
+    "stadium": "León",
+    "city": "León",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/223.png",
     "aliases": [
-      "monterrey",
-      "rayados-de-monterrey",
-      "rayados"
+      "La Fiera",
+      "León",
+      "Panzas Verdes"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "santos-laguna",
     "id_candidato": "CAND-10",
     "name": "Santos Laguna",
     "short_name": "Santos",
     "canonical_slug": "santos-laguna",
-    "crest_candidate_url": "/static/img/crests/santos-laguna.png",
-    "crest_url": "/static/img/crests/santos-laguna.png",
     "stadium": "Corona",
     "city": "Torreón",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/231.png",
     "aliases": [
-      "santos-laguna",
-      "santos"
+      "Guerreros",
+      "Santos",
+      "Laguneros"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "tigres-uanl",
     "id_candidato": "CAND-11",
-    "name": "Tigres UANL",
-    "short_name": "Tigres",
-    "canonical_slug": "tigres-uanl",
-    "crest_candidate_url": "/static/img/crests/tigres-uanl.png",
-    "crest_url": "/static/img/crests/tigres-uanl.png",
-    "stadium": "Universitario",
-    "city": "San Nicolás de los Garza",
+    "name": "Atlas FC",
+    "short_name": "Atlas",
+    "canonical_slug": "atlas",
+    "stadium": "Jalisco",
+    "city": "Guadalajara",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/215.png",
     "aliases": [
-      "tigres-uanl",
-      "tigres"
+      "Zorros",
+      "Atlas",
+      "Rojinegros"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "toluca",
     "id_candidato": "CAND-12",
-    "name": "Deportivo Toluca",
-    "short_name": "Deportivo",
-    "canonical_slug": "toluca",
-    "crest_candidate_url": "/static/img/crests/toluca.png",
-    "crest_url": "/static/img/crests/toluca.png",
-    "stadium": "Nemesio Díez",
-    "city": "Toluca",
+    "name": "Club Tijuana",
+    "short_name": "Tijuana",
+    "canonical_slug": "club-tijuana",
+    "stadium": "Caliente",
+    "city": "Tijuana",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/9789.png",
     "aliases": [
-      "toluca",
-      "deportivo-toluca"
+      "Xolos",
+      "Tijuana",
+      "Tijuana Xolos de Caliente"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "pumas-unam",
     "id_candidato": "CAND-13",
-    "name": "Pumas UNAM",
-    "short_name": "Pumas",
-    "canonical_slug": "pumas-unam",
-    "crest_candidate_url": "/static/img/crests/pumas-unam.png",
-    "crest_url": "/static/img/crests/pumas-unam.png",
-    "stadium": "Olímpico Universitario",
-    "city": "Ciudad de México",
+    "name": "Club Puebla",
+    "short_name": "Puebla",
+    "canonical_slug": "puebla",
+    "stadium": "Cuauhtémoc",
+    "city": "Puebla",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/228.png",
     "aliases": [
-      "pumas-unam",
-      "pumas",
-      "unam"
+      "La Franja",
+      "Puebla",
+      "Camoteros"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "necaxa",
     "id_candidato": "CAND-14",
     "name": "Necaxa",
     "short_name": "Necaxa",
     "canonical_slug": "necaxa",
-    "crest_candidate_url": "/static/img/crests/necaxa.png",
-    "crest_url": "/static/img/crests/necaxa.png",
     "stadium": "Victoria",
     "city": "Aguascalientes",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/224.png",
     "aliases": [
-      "necaxa",
-      "rayos-necaxa"
+      "Rayos",
+      "Necaxa"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "queretaro",
     "id_candidato": "CAND-15",
     "name": "Querétaro FC",
     "short_name": "Querétaro",
     "canonical_slug": "queretaro",
-    "crest_candidate_url": "/static/img/crests/queretaro.png",
-    "crest_url": "/static/img/crests/queretaro.png",
     "stadium": "Corregidora",
     "city": "Querétaro",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/231.png",
     "aliases": [
-      "queretaro",
-      "queretaro-fc"
+      "Gallos Blancos",
+      "Querétaro",
+      "Qro FC"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "atletico-san-luis",
     "id_candidato": "CAND-16",
     "name": "Atlético San Luis",
-    "short_name": "Atlético",
+    "short_name": "San Luis",
     "canonical_slug": "atletico-san-luis",
-    "crest_candidate_url": "/static/img/crests/atletico-san-luis.png",
-    "crest_url": "/static/img/crests/atletico-san-luis.png",
     "stadium": "Alfonso Lastras",
     "city": "San Luis Potosí",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/17699.png",
     "aliases": [
-      "atletico-san-luis",
-      "san-luis"
+      "Potosinos",
+      "San Luis",
+      "Atleti San Luis"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "mazatlan",
     "id_candidato": "CAND-17",
     "name": "Mazatlán FC",
     "short_name": "Mazatlán",
     "canonical_slug": "mazatlan",
-    "crest_candidate_url": "/static/img/crests/mazatlan.png",
-    "crest_url": "/static/img/crests/mazatlan.png",
     "stadium": "El Encanto",
     "city": "Mazatlán",
+    "crest_candidate_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Mazatlan_FC_Flag.png/200px-Mazatlan_FC_Flag.png",
     "aliases": [
-      "mazatlan",
-      "mazatlan-fc"
+      "Cañoneros",
+      "Mazatlán"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   },
   {
-    "id": "fc-juarez",
     "id_candidato": "CAND-18",
     "name": "FC Juárez",
-    "short_name": "FC",
+    "short_name": "Juárez",
     "canonical_slug": "fc-juarez",
-    "crest_candidate_url": "/static/img/crests/fc-juarez.png",
-    "crest_url": "/static/img/crests/fc-juarez.png",
     "stadium": "Benito Juárez",
     "city": "Ciudad Juárez",
+    "crest_candidate_url": "https://a.espncdn.com/i/teamlogos/soccer/500/17700.png",
     "aliases": [
-      "fc-juarez",
-      "juarez"
+      "Bravos",
+      "Juárez",
+      "FC Juárez"
     ],
-    "status": "APPROVED"
+    "status": "PENDING_CONFIRMATION"
   }
 ]

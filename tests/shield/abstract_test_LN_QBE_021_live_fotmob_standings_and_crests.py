@@ -31,10 +31,16 @@ class AbstractTestLiveFotMobStandingsAndCrests(abc.ABC):
         assert pachuca["pj"] == 7, f"Pachuca debe tener 7 partidos jugados, se encontró: {pachuca['pj']}."
 
     def test_all_18_teams_have_valid_dynamic_crests(self):
-        """[SHIELD-INVARIANTE] Todos los 18 clubes deben tener URLs de escudos reales de FotMob CDN."""
+        """[SHIELD-INVARIANTE] Todos los 18 clubes deben tener rutas de escudos válidas y soberanas."""
         standings = self.get_live_standings_from_fotmob(262)
         for t in standings:
             assert "escudo_url" in t and t["escudo_url"], f"Falta escudo_url para {t['equipo']}."
-            assert t["escudo_url"].startswith("https://images.fotmob.com/image_resources/logo/teamlogo/"), (
+            assert (
+                t["escudo_url"].startswith("/static/img/crests/")
+                or t["escudo_url"].startswith("data:image/svg+xml")
+            ), (
                 f"URL de escudo inválida para {t['equipo']}: {t['escudo_url']}"
+            )
+            assert "fotmob.com" not in t["escudo_url"].lower(), (
+                f"Se encontró hotlink externo para {t['equipo']}: {t['escudo_url']}"
             )

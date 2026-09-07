@@ -101,6 +101,13 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.4.1] Resiliencia Defensiva del Scraper de Mercado [ARCH-PILLAR] [ANTI-BUG]
+
+* **Cabeceras y Evasión Anti-Bloqueo:** Toda llamada HTTP a interfaces de mercado (Caliente.mx u operadores afines) debe utilizar cabeceras de emulación de navegador de usuario real (`User-Agent` moderno, `Accept`, `Referer` legítimo) y un tiempo de espera explícito (`timeout` determinista de entre 8.0s y 15.0s).
+* **Degradación Controlada:** Ante anomalías de red o respuestas no conformes (HTTP 403, 500 o estructuras HTML incompletas), el scraper tiene prohibido bloquear el hilo de ejecución; debe capturar la contingencia de forma aislada y reportar el estado para activación de cuarentena (`QBE-00`).
+
+---
+
 ### [ARCH-1.5.0] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
 
 * **Motor:** SQLAlchemy 2.0 conectado a `sqlite:///data/qbe_database.db` con `check_same_thread=False`.
@@ -109,11 +116,13 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   2. Ejecutar Seeder (`src/storage/seeder.py`): inicializar Liga MX (ID: 262) si no existe.
   3. Ejecutar Sincronización de Arranque (`src/storage/sync_service.py`): consultar FotMob, validar y persistir la tabla general completa de 18 clubes y la cartelera activa.
 
-### [ARCH-1.5.1] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR]
+### [ARCH-1.5.1] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG]
 
-* **Prohibición de Diccionarios de IDs Estáticos:** Queda estrictamente prohibido mantener listas manuales o adivinadas de `fotmob_id` en el código. La persistencia en SQLite de la tabla `teams` y de los snapshots de tabla debe alimentarse dinámicamente del campo `id` devuelto por el payload oficial de FotMob.
-* **CDN de Escudos Oficiales:** Todo escudo se obtiene de:
-  `https://images.fotmob.com/image_resources/logo/teamlogo/{fotmob_id}.png`.
+* **Prohibición de URLs Vulnerables:** Queda estrictamente prohibido utilizar enlaces directos al CDN de FotMob (`images.fotmob.com`) para el renderizado de escudos en la interfaz, debido al bloqueo sistemático HTTP 403 por políticas de Anti-Hotlinking y a la presencia histórica de IDs cruzados o extintos.
+* **Fuente Canónica Primaria (Federación Oficial):** La única fuente oficial fáctica para la extracción de escudos de la Liga MX es el portal de la liga (`https://ligamx.net/`) y su CDN oficial centralizado:
+  `https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/{id}/{id}.png`.
+* **Persistencia Local Soberana:** La tabla `teams` de SQLite (`data/qbe_database.db`) almacena obligatoriamente la ruta estática servida localmente (`/static/img/crests/{canonical_slug}.png`), garantizando autonomía total e inmunidad ante caídas de red externas.
+* **Prohibición de Hotlinks Residuales en Código Fuente:** Queda terminantemente prohibido mantener URLs duras a `images.fotmob.com` o servidores externos no autorizados en datasets de prueba, constantes de ejemplo o fixtures fallback. Todo mock o semilla debe utilizar rutas locales canónicas (`/static/img/crests/{slug}.png`) o Data URIs SVG.
 
 ---
 
@@ -123,6 +132,11 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 * **Montaje Estático de FastAPI:** La aplicación monta el directorio estático en `/static` (`app.mount("/static", StaticFiles(directory="src/web/static"), name="static")`).
 * **Integración en Live Board:** El pipeline de ensamble de `GET /api/leagues/{id}/live-board` debe invocar obligatoriamente el servicio resolutor `[LN-QBE-019]` al poblar `StandingRowOut.escudo_url` y los escudos de la cartelera, sustituyendo cualquier URL de scraping remota por la ruta local canónica (`/static/img/crests/{slug}.png`) o su SVG representativo.
 * **Seed Automático:** El arranque de la aplicación (`seeder.py`) debe asegurar que el directorio `src/web/static/img/crests/` contenga los 18 escudos base de la Liga MX precargados.
+
+### [ARCH-1.5.4] Espejeo Físico de Aliases y Axioma Anti-Archivos Fantasma [ARCH-PILLAR] [GOVERNANCE-01]
+
+* **Axioma de Integridad Física de Activos:** Queda estrictamente prohibido crear o persistir archivos de 0 bytes o binarios vacíos (*dummy placeholders*) en `src/web/static/img/crests/` para eludir aserciones de pruebas. Todo archivo `.png` en la bóveda debe poseer un tamaño real $\ge 2,500$ bytes y portar los *magic bytes* válidos (`\x89PNG`).
+* **Política de Espejeo Físico (Multi-Slug Mirroring):** Para evitar desalineaciones entre slugs cortos y largos (ej. `guadalajara.png` vs. `chivas-guadalajara.png`, `america.png` vs. `club-america.png`), el sistema materializa copias físicas idénticas para cada alias canónico reconocido. Cualquier solicitud de asset visual debe resolver a un archivo completo e íntegro.
 
 ---
 
@@ -155,6 +169,13 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   - Si el partido tiene cuotas publicadas en Caliente.mx $\implies$ se registran momios decimales 1X2 reales y `pago_anticipado = True/False`.
   - Si Caliente.mx aún no publica cuotas $\implies$ `momios = null`, `disponible = False`. La interfaz muestra `L — | E — | V —  ⏳ Cuotas Pendientes` y deshabilita el checkbox de selección con un tooltip explicativo.
 
+### [ARCH-1.6.3] Estatus Semántico del Partido y Dinámica de Marcadores [ARCH-PILLAR] [BIZ-LOGIC]
+
+* **Ciclo de Estado de Cartelera:** Cada fixture en `MatchFixtureOut` debe portar su estado operativo:
+  1. `FINALIZADO`: Partido concluido con marcador oficial definitivo (deshabilitado para colocación de boletos).
+  2. `EN_JUEGO` / `MEDIO_TIEMPO`: Partido en disputa activa (marcador dinámico en tiempo real).
+  3. `PROXIMAMENTE`: Partido no iniciado disponible para análisis cuantitativo y emisión de portafolio.
+* **Integridad de Snapshot:** Los partidos finalizados de la jornada en curso actualizan dinámicamente la columna de puntos de la tabla general sin romper la correlación estocástica de los partidos restantes.
 
 ---
 
