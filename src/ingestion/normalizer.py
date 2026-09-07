@@ -66,9 +66,17 @@ _CANONICAL_ALIASES: Dict[str, str] = {
     "pumas": "Pumas UNAM",
     "pumas unam": "Pumas UNAM",
     "unam": "Pumas UNAM",
+    "univ. nacional": "Pumas UNAM",
+    "univ nacional": "Pumas UNAM",
+    "universidad nacional": "Pumas UNAM",
+    "club universidad nacional": "Pumas UNAM",
+    "u.n.a.m.": "Pumas UNAM",
+
     "san luis": "Atlético San Luis",
     "atletico san luis": "Atlético San Luis",
     "atlético san luis": "Atlético San Luis",
+    "atletico de san luis": "Atlético San Luis",
+    "atleti san luis": "Atlético San Luis",
     "atlante": "Atlante",
 }
 
@@ -137,6 +145,10 @@ def canonicalize_team_name(team_name: Optional[str]) -> str:
                 return canonical
 
     return str(team_name).strip()
+
+
+normalizar_nombre_club = canonicalize_team_name
+
 
 
 def canonicalize_match_teams(local: Optional[str], visitante: Optional[str]) -> Tuple[str, str]:

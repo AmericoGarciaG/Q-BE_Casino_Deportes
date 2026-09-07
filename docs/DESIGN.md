@@ -85,6 +85,20 @@
 
 ---
 
+### [DES-QBE-016-C] Jerarquía de Cartelera en 4 Niveles y Clicabilidad Total de Tarjeta [UX-MANDATE]
+
+* **Topología de 4 Niveles Visuales:**
+  1. **Nivel 1 (🔴 En Juego):** Tarjetas con borde sutil rojo (`#EF4444` al 40%), badge pulsante `🔴 EN CURSO (Minuto)` y marcador en tiempo real destacado en tipografía monospaciada (`14pt`, peso 700).
+  2. **Nivel 2 (📅 Ventana Activa):** Tarjetas operables agrupadas cronológicamente. Solo llevan el prefijo `"HOY — "` si `es_hoy == True`.
+  3. **Nivel 3 (⏳ Reprogramados / Fecha Lejana):** Agrupados bajo encabezado atenuado, checkboxes deshabilitados y badge `⏳ Fecha Lejana`.
+  4. **Nivel 4 (🏁 Finalizados al Fondo):** Ubicados obligatoriamente al final de la vista de cartelera. Opacidad general al 65%, badge neutro `FINALIZADO`, marcador definitivo en color Gris Pizarra (`#94A3B8`) y controles deshabilitados.
+* **Inviolabilidad de Interacción (Card-Level Clickability):**
+  - Todo el contenedor rectangular `.fixture-card` debe poseer `cursor: pointer;` (cuando no esté deshabilitado).
+  - Un clic en cualquier punto del rectángulo de la tarjeta debe alternar el estado del checkbox nativo (`checked = !checked`) y disparar el recálculo reactivo de partidos seleccionados.
+  - Las tarjetas en estado `FINALIZADO` o `REPROGRAMADO` deben poseer `cursor: not-allowed;` y bloquear cualquier intento de selección.
+
+---
+
 ### [DES-QBE-018] Panel Administrativo de Curación HITL (Catálogos y Bóveda) [UX-MANDATE]
 
 * **Propósito:** Interfaz de control y auditoría donde el Director visualiza la prospección de clubes antes de incorporarlos a la base de datos definitiva.
@@ -96,3 +110,4 @@
      - Píldoras de Aliases reconocidos (`"Águilas"`, `"América"`, etc.).
      - Estadio y Sede.
      - Botón de Estado Dual: `[ ✅ Aprobado ]` (verde) / `[ 🔄 Cambiar Fuente ]` (azul).
+

@@ -4,7 +4,7 @@
 Gobierna los esquemas de entrada y salida del cliente SPA reactivo.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -47,17 +47,31 @@ class Odds1X2(BaseModel):
 
 
 class MatchFixtureOut(BaseModel):
+    """
+    [ARCH-1.6.3] Contrato canónico de fixture con Máquina de Estados semántica.
+    Campos obligatorios para el ciclo de vida completo del partido en el Live Board.
+    """
     model_config = ConfigDict(from_attributes=True, extra="ignore")
     id_partido: str
     local: str
     visitante: str
+    local_escudo_url: Optional[str] = None
+    visitante_escudo_url: Optional[str] = None
     horario: str
-    fecha_bloque: Optional[str] = "Jornada 7"
-    es_operable: bool = True
-    es_pospuesto: bool = False
+    fecha_dt: Optional[str] = None              # ISO 8601: "YYYY-MM-DDTHH:MM:SS"
+    fecha_bloque: Optional[str] = None          # Etiqueta de agrupación (retrocompat.)
     momios: Optional[Odds1X2] = None
     es_viable_triaje: bool = True
     motivo_triaje: Optional[str] = None
+
+    # [ARCH-1.6.3] Máquina de Estados del Fixture
+    estado: Literal["PROGRAMADO", "EN_CURSO", "FINALIZADO", "REPROGRAMADO"] = "PROGRAMADO"
+    marcador_actual: Optional[str] = None       # Ej. "0 - 2", "1 - 1" (solo FINALIZADO/EN_CURSO)
+    minuto_juego: Optional[str] = None          # Ej. "75'", "Medio Tiempo", "Final"
+    es_hoy: bool = False                        # True si fecha_dt.date() == datetime.now().date()
+    disponible_para_seleccion: bool = True      # False si FINALIZADO o REPROGRAMADO [BIZ-LOGIC]
+    es_operable: bool = True
+    es_pospuesto: bool = False
 
 
 class LiveBoardOut(BaseModel):

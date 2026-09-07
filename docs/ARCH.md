@@ -169,12 +169,19 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   - Si el partido tiene cuotas publicadas en Caliente.mx $\implies$ se registran momios decimales 1X2 reales y `pago_anticipado = True/False`.
   - Si Caliente.mx aún no publica cuotas $\implies$ `momios = null`, `disponible = False`. La interfaz muestra `L — | E — | V —  ⏳ Cuotas Pendientes` y deshabilita el checkbox de selección con un tooltip explicativo.
 
-### [ARCH-1.6.3] Estatus Semántico del Partido y Dinámica de Marcadores [ARCH-PILLAR] [BIZ-LOGIC]
+### [ARCH-1.6.3] Ciclo de Vida del Fixture, Estatus Semántico y Dinamismo Temporal [ARCH-PILLAR] [BIZ-LOGIC] [ANTI-BUG]
 
-* **Ciclo de Estado de Cartelera:** Cada fixture en `MatchFixtureOut` debe portar su estado operativo:
-  1. `FINALIZADO`: Partido concluido con marcador oficial definitivo (deshabilitado para colocación de boletos).
-  2. `EN_JUEGO` / `MEDIO_TIEMPO`: Partido en disputa activa (marcador dinámico en tiempo real).
-  3. `PROXIMAMENTE`: Partido no iniciado disponible para análisis cuantitativo y emisión de portafolio.
+* **Axioma de Temporalidad Dinámica:** Queda terminantemente prohibido hardcodear la etiqueta `"HOY"` o prefijos relativos en cadenas de texto estáticas. La bandera `es_hoy` se calcula estrictamente en tiempo de ejecución:
+  $$\text{es\_hoy} = (\text{fecha\_partido.date}() == \text{datetime.now().date}())$$
+* **Máquina de Estados del Fixture (`MatchFixtureOut.estado`):**
+  1. `PROGRAMADO`: Partido futuro dentro de la ventana activa. Posee momios 1X2 válidos y checkbox de selección habilitado (`disponible = True`).
+  2. `EN_CURSO`: Partido en disputa en tiempo real. Expone `marcador_actual` dinámico y `minuto_juego` (ej. `"45'"`, `"Medio Tiempo"`). Checkbox deshabilitado para apuestas pre-partido.
+  3. `FINALIZADO`: Partido concluido. Expone `marcador_actual` oficial definitivo. Checkbox deshabilitado (`disponible = False`). Queda **estrictamente vetado** de ingresar en `selected_match_ids` hacia `/api/portfolio/generate`.
+  4. `REPROGRAMADO`: Partido con fecha lejana (> 14 días). Checkbox deshabilitado.
+* **Axioma Anti-Degradación de Partidos Pasados [GOVERNANCE-01]:** Si la marca temporal de un partido es anterior a la hora actual por más de 120 minutos, el sistema tiene prohibido clasificarlo como `PROGRAMADO`. Si la fuente no provee marcador, el partido entra en `CUARENTENA_SIN_RESULTADO` y se desactiva.
+* **Ordenamiento Topológico Obligatorio en API (`LiveBoardOut.fixtures`):**
+  El backend debe entregar la lista ordenada y agrupada cronológicamente bajo la jerarquía:
+  $$\text{Partidos EN\_CURSO} \longrightarrow \text{Partidos PROGRAMADOS (por fecha)} \longrightarrow \text{Partidos REPROGRAMADOS} \longrightarrow \text{Partidos FINALIZADOS (al fondo)}$$
 * **Integridad de Snapshot:** Los partidos finalizados de la jornada en curso actualizan dinámicamente la columna de puntos de la tabla general sin romper la correlación estocástica de los partidos restantes.
 
 ---

@@ -159,94 +159,256 @@ function renderizarTabla18Clubes(standings) {
     });
 }
 
-// 4. Renderizar Cartelera Agrupada por Bloques de Fecha con Checkbox Único (Panel Derecho)
+// 4. Renderizar Cartelera en 4 Niveles Visuales [DES-QBE-016-C] [ARCH-1.6.3]
 function renderizarCartelera(fixtures) {
     const container = document.querySelector(".fixtures-list");
     if (!container || !fixtures) return;
     container.innerHTML = "";
     selectedMatchIds = [];
 
-    // 1. Agrupar fixtures por bloque de fecha
-    const gruposFecha = {};
-    fixtures.forEach(f => {
-        const fechaLabel = f.fecha_bloque || f.horario_bloque || "Jornada 7";
-        if (!gruposFecha[fechaLabel]) gruposFecha[fechaLabel] = [];
-        gruposFecha[fechaLabel].push(f);
-    });
+    // Separar por estado semántico (Ordenamiento Topológico ya aplicado por el backend)
+    const enCurso     = fixtures.filter(f => f.estado === "EN_CURSO");
+    const programados = fixtures.filter(f => f.estado === "PROGRAMADO");
+    const reprogramados = fixtures.filter(f => f.estado === "REPROGRAMADO");
+    const finalizados = fixtures.filter(f => f.estado === "FINALIZADO");
 
-    // 2. Renderizar bloques con encabezados claros
-    Object.keys(gruposFecha).forEach(fechaHeader => {
-        const headerDiv = document.createElement("div");
-        headerDiv.className = "date-group-header";
-        headerDiv.style.cssText = "font-size: 7.8pt; font-weight: 800; color: #38BDF8; margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.04em;";
-        headerDiv.innerHTML = `📅 ${fechaHeader}`;
-        container.appendChild(headerDiv);
+    // ── Nivel 1: EN CURSO ─────────────────────────────────────────────────
+    if (enCurso.length > 0) {
+        _renderSeccionHeader(container, "🔴 En Juego Ahora", "header-live");
+        enCurso.forEach(f => _renderFixtureCard(container, f, false));
+    }
 
-        gruposFecha[fechaHeader].forEach((f) => {
-            const card = document.createElement("div");
-            card.className = "fixture-card";
-            card.id = `fixture-card-${f.id_partido}`;
-            
-            const esOperable = f.es_operable !== false && f.momios !== null;
-            
-            if (esOperable) {
-                card.style.cssText = "background: rgba(0,230,118,0.04); border: 1px solid #00E676; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
-                selectedMatchIds.push(f.id_partido);
-            } else {
-                card.style.cssText = "background: rgba(255,255,255,0.02); border: 1px dashed #475569; border-radius: 6px; padding: 10px; margin-bottom: 6px; opacity: 0.7;";
-            }
-
-            const checkboxAttr = esOperable
-                ? 'checked style="accent-color: #38BDF8; cursor: pointer; width: 15px; height: 15px;"'
-                : 'disabled style="cursor: not-allowed; opacity: 0.4; width: 15px; height: 15px;" title="Caliente.mx aún no publica cuotas para este encuentro."';
-
-            let cuotasHtml = '';
-            if (f.momios && f.momios.L) {
-                const paBadge = f.momios.pago_anticipado ? '<span style="color: #00E676; font-weight: 700; font-size: 6.8pt; margin-left: 4px;">🏷️ PA Activo</span>' : '';
-                cuotasHtml = `
-                    <span>L <strong style="color: #38BDF8;">${Number(f.momios.L).toFixed(2)}</strong></span>
-                    <span>E <strong style="color: #94A3B8;">${Number(f.momios.E).toFixed(2)}</strong></span>
-                    <span>V <strong style="color: #94A3B8;">${Number(f.momios.V).toFixed(2)}</strong></span>
-                    ${paBadge}
-                `;
-            } else {
-                cuotasHtml = `<span style="color: #94A3B8; font-size: 6.8pt; font-style: italic;">L — | E — | V — &nbsp;<span class="badge-pending" style="color: #94A3B8; font-weight: 600;">⏳ Momios Pendientes</span></span>`;
-            }
-
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <span style="font-size: 7pt; color: #94A3B8;">⏰ ${f.horario}</span>
-                    <input type="checkbox" ${checkboxAttr} value="${f.id_partido}"
-                           class="fixture-checkbox"
-                           onchange="toggleFixtureCheckbox(this, '${f.id_partido}')">
-                </div>
-                <div style="font-size: 9.2pt; font-weight: 700; color: #FFFFFF; margin-bottom: 4px;">${f.local} vs ${f.visitante}</div>
-                <div style="font-size: 7pt; color: #cbd5e1; display: flex; gap: 8px; align-items: center;">
-                    ${cuotasHtml}
-                </div>
-            `;
-            container.appendChild(card);
+    // ── Nivel 2: PROGRAMADOS — agrupados por fecha (con prefijo HOY dinámico) ──
+    if (programados.length > 0) {
+        // Agrupar programados por fecha_bloque
+        const grupos = {};
+        programados.forEach(f => {
+            const hoy = f.fecha_dt ? _esHoyDinamico(f.fecha_dt) : false;
+            const label = hoy
+                ? `HOY — ${f.fecha_bloque || "Jornada Activa"}`
+                : (f.fecha_bloque || "Jornada Activa");
+            if (!grupos[label]) grupos[label] = [];
+            grupos[label].push(f);
         });
-    });
+        Object.keys(grupos).forEach(label => {
+            _renderSeccionHeader(container, `📅 ${label}`, "");
+            grupos[label].forEach(f => _renderFixtureCard(container, f, false));
+        });
+    }
+
+    // ── Nivel 3: REPROGRAMADOS ────────────────────────────────────────────
+    if (reprogramados.length > 0) {
+        _renderSeccionHeader(container, "⏳ Partidos Reprogramados / Fecha Lejana", "header-postponed");
+        reprogramados.forEach(f => _renderFixtureCard(container, f, true));
+    }
+
+    // ── Nivel 4: FINALIZADOS al fondo ─────────────────────────────────────
+    if (finalizados.length > 0) {
+        _renderSeccionHeader(container, "🏁 Partidos Concluidos de la Jornada", "header-finished");
+        finalizados.forEach(f => _renderFixtureCard(container, f, true));
+    }
 
     actualizarContadorSeleccionados();
+
+    // Habilitar clicabilidad total de tarjeta [DES-QBE-016-C]
+    habilitarClicTarjetaCompleta();
 }
 
+/** Evalúa dinámicamente si una fecha ISO 8601 corresponde al día de hoy [ARCH-1.6.3] */
+function _esHoyDinamico(fechaDtStr) {
+    if (!fechaDtStr) return false;
+    try {
+        const dt = new Date(fechaDtStr);
+        const hoy = new Date();
+        return dt.getFullYear() === hoy.getFullYear() &&
+               dt.getMonth() === hoy.getMonth() &&
+               dt.getDate() === hoy.getDate();
+    } catch (e) {
+        return false;
+    }
+}
 
-// [DES-QBE-016] Selector único: feedback visual por borde cian, sin texto redundante
+/** Renderiza un encabezado de sección con clase de color opcional */
+function _renderSeccionHeader(container, texto, claseAdicional) {
+    const div = document.createElement("div");
+    div.className = `fixture-section-header ${claseAdicional}`.trim();
+    div.textContent = texto;
+    container.appendChild(div);
+}
+
+/** Renderiza una tarjeta de fixture según su estado semántico [DES-QBE-016-C] */
+function _renderFixtureCard(container, f, deshabilitada) {
+    const card = document.createElement("div");
+    card.className = "fixture-card" + (deshabilitada ? " fixture-disabled" : "");
+    card.id = `fixture-card-${f.id_partido}`;
+    card.dataset.estado = f.estado || "PROGRAMADO";
+    card.dataset.matchId = f.id_partido;
+
+    const estado = f.estado || "PROGRAMADO";
+    const esSeleccionable = !deshabilitada && estado === "PROGRAMADO" && f.disponible_para_seleccion !== false;
+
+    // Estilo base de la tarjeta según estado
+    if (estado === "EN_CURSO") {
+        card.style.cssText = "background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; padding: 10px; margin-bottom: 6px;";
+    } else if (estado === "FINALIZADO") {
+        card.style.cssText = "background: rgba(255,255,255,0.015); border: 1px dashed #475569; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
+    } else if (estado === "REPROGRAMADO") {
+        card.style.cssText = "background: rgba(255,255,255,0.01); border: 1px dashed #334155; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
+    } else {
+        // PROGRAMADO — operable
+        card.style.cssText = "background: rgba(0,230,118,0.04); border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
+        if (esSeleccionable) {
+            selectedMatchIds.push(f.id_partido);
+        }
+    }
+
+    // Badge de estado
+    let badgeHtml = "";
+    if (estado === "EN_CURSO") {
+        const minuto = f.minuto_juego || "En Juego";
+        badgeHtml = `<span class="badge-status-live"><span class="badge-pulse"></span>${minuto}</span>`;
+    } else if (estado === "FINALIZADO") {
+        badgeHtml = `<span class="badge-status-finished">🏁 FINALIZADO</span>`;
+    } else if (estado === "REPROGRAMADO") {
+        badgeHtml = `<span class="badge-status-postponed">⏳ Fecha Lejana</span>`;
+    }
+
+    // Checkbox — solo visible y habilitado si es PROGRAMADO
+    const checkboxHtml = esSeleccionable
+        ? `<input type="checkbox" checked
+               style="accent-color: #38BDF8; cursor: pointer; width: 15px; height: 15px;"
+               value="${f.id_partido}"
+               class="fixture-checkbox"
+               onchange="toggleFixtureCheckbox(this, '${f.id_partido}')">`
+        : `<input type="checkbox" disabled
+               style="cursor: not-allowed; opacity: 0.25; width: 15px; height: 15px;"
+               value="${f.id_partido}"
+               class="fixture-checkbox">`;
+
+    // Marcador (EN_CURSO o FINALIZADO)
+    let marcadorHtml = "";
+    if (f.marcador_actual) {
+        const cls = estado === "EN_CURSO" ? "score-live" : "score-final";
+        marcadorHtml = `<span class="${cls}">${f.marcador_actual}</span>`;
+    }
+
+    // Escudos de ambos equipos
+    const localEscudo = f.local_escudo_url
+        ? `<img src="${f.local_escudo_url}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
+        : "";
+    const visEscudo = f.visitante_escudo_url
+        ? `<img src="${f.visitante_escudo_url}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
+        : "";
+
+    // Nombre del partido con escudos
+    const partidoHtml = `
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+            ${localEscudo}<span style="color:#FFFFFF;font-weight:700;">${f.local}</span>
+        </span>
+        <span style="color:#64748B;font-size:8pt;margin:0 4px;">vs</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+            ${visEscudo}<span style="color:#FFFFFF;font-weight:700;">${f.visitante}</span>
+        </span>
+    `;
+
+    // Cuotas 1X2 (solo para operables o como referencia en finalizados)
+    let cuotasHtml = "";
+    if (f.momios && f.momios.L) {
+        const paBadge = f.momios.pago_anticipado
+            ? `<span style="color:#00E676;font-weight:700;font-size:6.8pt;margin-left:4px;">🏷️ PA</span>` : "";
+        const cuotaColor = estado === "FINALIZADO" ? "#64748B" : "#38BDF8";
+        cuotasHtml = `
+            <span>L <strong style="color:${cuotaColor};">${Number(f.momios.L).toFixed(2)}</strong></span>
+            <span>E <strong style="color:#94A3B8;">${Number(f.momios.E).toFixed(2)}</strong></span>
+            <span>V <strong style="color:#94A3B8;">${Number(f.momios.V).toFixed(2)}</strong></span>
+            ${paBadge}
+        `;
+    } else if (estado === "PROGRAMADO") {
+        cuotasHtml = `<span style="color:#94A3B8;font-size:6.8pt;font-style:italic;">⏳ Cuotas Pendientes</span>`;
+    }
+
+    card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:7pt;color:#94A3B8;">⏰ ${f.horario}</span>
+                ${badgeHtml}
+                ${marcadorHtml}
+            </div>
+            ${checkboxHtml}
+        </div>
+        <div style="font-size:9.2pt;font-weight:700;margin-bottom:4px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+            ${partidoHtml}
+        </div>
+        <div style="font-size:7pt;color:#cbd5e1;display:flex;gap:8px;align-items:center;">
+            ${cuotasHtml}
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+
+// [DES-QBE-016-C] Clicabilidad Total de Tarjeta (Card-Level Clickability)
+function habilitarClicTarjetaCompleta() {
+    document.querySelectorAll('.fixture-card').forEach(card => {
+        // Evitar doble registro de listeners
+        if (card.dataset.listenerBound) return;
+        card.dataset.listenerBound = "true";
+
+        card.addEventListener("click", (e) => {
+            const estado = card.dataset.estado;
+
+            // Bloquear interacción en tarjetas deshabilitadas
+            if (card.classList.contains("fixture-disabled") ||
+                estado === "FINALIZADO" || estado === "REPROGRAMADO") {
+                return;
+            }
+
+            const checkbox = card.querySelector("input[type='checkbox']");
+            if (!checkbox || checkbox.disabled) return;
+
+            // Clic en área de tarjeta (no directamente en el checkbox): alternar manualmente
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+            }
+
+            // Actualizar estilo visual de selección
+            const matchId = card.dataset.matchId;
+            if (checkbox.checked) {
+                card.classList.add("selected");
+                card.style.borderColor = "#38BDF8";
+                if (matchId && !selectedMatchIds.includes(matchId)) {
+                    selectedMatchIds.push(matchId);
+                }
+            } else {
+                card.classList.remove("selected");
+                card.style.borderColor = "#334155";
+                if (matchId) {
+                    selectedMatchIds = selectedMatchIds.filter(id => id !== matchId);
+                }
+            }
+
+            // Actualizar contador (sin disparar change para evitar doble-toggle)
+            actualizarContadorSeleccionados();
+        });
+    });
+}
+
+// [DES-QBE-016] Selector único: feedback visual por borde cian (manejador de evento nativo)
 function toggleFixtureCheckbox(checkbox, matchId) {
     const card = document.getElementById(`fixture-card-${matchId}`);
     if (checkbox.checked) {
         if (!selectedMatchIds.includes(matchId)) selectedMatchIds.push(matchId);
         if (card) {
+            card.classList.add("selected");
             card.style.borderColor = "#38BDF8";
-            card.style.background = "rgba(56, 189, 248, 0.05)";
+            card.style.backgroundColor = "rgba(56, 189, 248, 0.05)";
         }
     } else {
         selectedMatchIds = selectedMatchIds.filter(id => id !== matchId);
         if (card) {
-            card.style.borderColor = "rgba(255, 255, 255, 0.08)";
-            card.style.background = "#0f172a";
+            card.classList.remove("selected");
+            card.style.borderColor = "#334155";
+            card.style.backgroundColor = "rgba(0,230,118,0.04)";
         }
     }
     actualizarContadorSeleccionados();

@@ -9,77 +9,111 @@ from src.storage.crest_resolver import resolver_escudo_canonico
 logger = logging.getLogger(__name__)
 
 
-# Catálogo canónico de Jornada 7 agrupado por bloques de fecha [ARCH-1.6.2 / DES-QBE-016]
+# Catálogo canónico de Jornada 7 con Máquina de Estados [ARCH-1.6.3] [DES-QBE-016-C]
+# fecha_dt en ISO 8601 local (America/Mexico_City UTC-6)
 LIGA_MX_JORNADA_7_FIXTURES = [
+    # ── FINALIZADOS (Viernes 04-Sep) ─────────────────────────────────────────
     {
         "id_partido": "LIGAMX-07-01",
         "local": "FC Juárez",
         "visitante": "Club Pachuca",
-        "horario": "Hoy 21:00 hrs",
-        "fecha_bloque": "HOY — VIERNES 04 DE SEPTIEMBRE",
-        "es_operable": True,
+        "horario": "21:00 hrs",
+        "fecha_dt": "2026-09-04T21:00:00",
+        "fecha_bloque": "VIERNES 04 DE SEPTIEMBRE",
+        "estado": "FINALIZADO",
+        "marcador_actual": "0 - 2",
+        "minuto_juego": "Final",
+        "es_operable": False,
         "es_pospuesto": False,
+        "disponible_para_seleccion": False,
         "momios": {"L": 3.40, "E": 3.30, "V": 1.95, "pago_anticipado": True},
-        "es_viable_triaje": True,
-        "motivo_triaje": "Ventana de Valor"
+        "es_viable_triaje": False,
+        "motivo_triaje": "Partido Finalizado"
     },
+    # ── FINALIZADOS (Sábado 05-Sep) ──────────────────────────────────────────
     {
         "id_partido": "LIGAMX-07-02",
         "local": "Atlético San Luis",
         "visitante": "Chivas Guadalajara",
         "horario": "17:00 hrs",
+        "fecha_dt": "2026-09-05T17:00:00",
         "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "es_operable": True,
+        "estado": "FINALIZADO",
+        "marcador_actual": "0 - 3",
+        "minuto_juego": "Final",
+        "es_operable": False,
         "es_pospuesto": False,
+        "disponible_para_seleccion": False,
         "momios": {"L": 3.60, "E": 3.70, "V": 1.80, "pago_anticipado": True},
-        "es_viable_triaje": True,
-        "motivo_triaje": "Ventana de Valor"
+        "es_viable_triaje": False,
+        "motivo_triaje": "Partido Finalizado"
     },
     {
         "id_partido": "LIGAMX-07-03",
         "local": "Tigres UANL",
         "visitante": "Necaxa",
         "horario": "19:00 hrs",
+        "fecha_dt": "2026-09-05T19:00:00",
         "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "es_operable": True,
+        "estado": "FINALIZADO",
+        "marcador_actual": "1 - 1",
+        "minuto_juego": "Final",
+        "es_operable": False,
         "es_pospuesto": False,
+        "disponible_para_seleccion": False,
         "momios": {"L": 1.80, "E": 3.70, "V": 3.60, "pago_anticipado": True},
-        "es_viable_triaje": True,
-        "motivo_triaje": "Ventana de Valor"
+        "es_viable_triaje": False,
+        "motivo_triaje": "Partido Finalizado"
     },
     {
         "id_partido": "LIGAMX-07-04",
         "local": "Atlas FC",
         "visitante": "Atlante",
         "horario": "21:00 hrs",
+        "fecha_dt": "2026-09-05T21:00:00",
         "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "es_operable": True,
+        "estado": "FINALIZADO",
+        "marcador_actual": "1 - 1",
+        "minuto_juego": "Final",
+        "es_operable": False,
         "es_pospuesto": False,
+        "disponible_para_seleccion": False,
         "momios": {"L": 1.85, "E": 3.65, "V": 4.10, "pago_anticipado": True},
-        "es_viable_triaje": True,
-        "motivo_triaje": "Ventana de Valor"
+        "es_viable_triaje": False,
+        "motivo_triaje": "Partido Finalizado"
     },
+    # ── PROGRAMADO (Domingo 06-Sep — HOY según fecha real del sistema) ────────
     {
         "id_partido": "LIGAMX-07-05",
         "local": "Cruz Azul",
         "visitante": "Santos Laguna",
         "horario": "17:00 hrs",
-        "fecha_bloque": "DOMINGO 06 DE SEPTIEMBRE",
+        "fecha_dt": "2026-09-06T17:00:00",
+        "fecha_bloque": "DOMINGO 06 DE SEPTIEMBRE",  # Frontend evaluará es_hoy dinámicamente
+        "estado": "PROGRAMADO",
+        "marcador_actual": None,
+        "minuto_juego": None,
         "es_operable": True,
         "es_pospuesto": False,
+        "disponible_para_seleccion": True,
         "momios": {"L": 1.40, "E": 4.35, "V": 6.00, "pago_anticipado": True},
         "es_viable_triaje": True,
         "motivo_triaje": "Ventana de Valor"
     },
-    # Partidos Pospuestos (> 14 días)
+    # ── REPROGRAMADOS (Fecha Lejana > 14 días) ───────────────────────────────
     {
         "id_partido": "LIGAMX-07-06",
         "local": "Pumas UNAM",
         "visitante": "Club León",
         "horario": "10-Sep 21:00 hrs",
+        "fecha_dt": "2026-09-10T21:00:00",
         "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
+        "estado": "REPROGRAMADO",
+        "marcador_actual": None,
+        "minuto_juego": None,
         "es_operable": False,
         "es_pospuesto": True,
+        "disponible_para_seleccion": False,
         "momios": None,
         "es_viable_triaje": False,
         "motivo_triaje": "Reprogramado"
@@ -89,9 +123,14 @@ LIGA_MX_JORNADA_7_FIXTURES = [
         "local": "Club Puebla",
         "visitante": "Deportivo Toluca",
         "horario": "15-Sep 19:00 hrs",
+        "fecha_dt": "2026-09-15T19:00:00",
         "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
+        "estado": "REPROGRAMADO",
+        "marcador_actual": None,
+        "minuto_juego": None,
         "es_operable": False,
         "es_pospuesto": True,
+        "disponible_para_seleccion": False,
         "momios": None,
         "es_viable_triaje": False,
         "motivo_triaje": "Reprogramado"
@@ -101,9 +140,14 @@ LIGA_MX_JORNADA_7_FIXTURES = [
         "local": "Club América",
         "visitante": "Club Tijuana",
         "horario": "28-Oct 21:00 hrs",
+        "fecha_dt": "2026-10-28T21:00:00",
         "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
+        "estado": "REPROGRAMADO",
+        "marcador_actual": None,
+        "minuto_juego": None,
         "es_operable": False,
         "es_pospuesto": True,
+        "disponible_para_seleccion": False,
         "momios": None,
         "es_viable_triaje": False,
         "motivo_triaje": "Reprogramado"

@@ -55,3 +55,4 @@ src/web/static/img/crests/tijuana.png
 src/web/static/img/crests/toluca.png
 src/web/static/img/crests/unam.png
 src/web/static/img/crests/xolos.png
+scripts/probar_extraccion_caliente_y_ligamx.py

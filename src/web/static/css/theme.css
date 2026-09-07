@@ -281,3 +281,129 @@ table.fintech-table {
     gap: 1rem;
 }
 
+/* ── [DES-QBE-016-C] Fixture Card — Interacción y Ciclo de Vida ─────────── */
+
+/* Tarjeta base interactiva: clicabilidad total del contenedor rectangular */
+.fixture-card {
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.fixture-card:hover:not(.fixture-disabled) {
+    border-color: #38BDF8 !important;
+    background-color: rgba(56, 189, 248, 0.04) !important;
+}
+
+/* Estado seleccionado — feedback visual cian [DES-QBE-016] */
+.fixture-card.selected {
+    border-color: #38BDF8 !important;
+    background-color: rgba(56, 189, 248, 0.05) !important;
+}
+
+/* Nivel 4: Partidos FINALIZADO o REPROGRAMADO — bloqueados */
+.fixture-card.fixture-disabled {
+    cursor: not-allowed !important;
+    opacity: 0.65;
+    filter: grayscale(0.2);
+}
+
+.fixture-card.fixture-disabled:hover {
+    border-color: inherit !important;
+    background-color: inherit !important;
+}
+
+/* Nivel 1: Encabezado de sección EN CURSO */
+.fixture-section-header {
+    font-size: 7.8pt;
+    font-weight: 800;
+    color: #38BDF8;
+    margin: 8px 0 4px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.fixture-section-header.header-live {
+    color: #EF4444;
+}
+
+.fixture-section-header.header-finished {
+    color: #64748B;
+}
+
+.fixture-section-header.header-postponed {
+    color: #64748B;
+    opacity: 0.8;
+}
+
+/* Badges de estado del partido */
+.badge-status-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #EF4444;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 7.2pt;
+    font-weight: 700;
+}
+
+/* Animación pulsante para badge EN CURSO */
+@keyframes pulse-red {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.badge-pulse {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #EF4444;
+    animation: pulse-red 1.4s ease-in-out infinite;
+}
+
+.badge-status-finished {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #94A3B8;
+    border: 1px solid #475569;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 7.2pt;
+    font-weight: 600;
+}
+
+.badge-status-postponed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(100, 116, 139, 0.1);
+    color: #64748B;
+    border: 1px solid #334155;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 7.2pt;
+    font-weight: 600;
+}
+
+/* Marcador en tiempo real (EN_CURSO) */
+.score-live {
+    font-family: var(--font-mono);
+    font-size: 14pt;
+    font-weight: 700;
+    color: #EF4444;
+}
+
+/* Marcador definitivo (FINALIZADO) */
+.score-final {
+    font-family: var(--font-mono);
+    font-size: 12pt;
+    font-weight: 700;
+    color: #94A3B8;
+}
