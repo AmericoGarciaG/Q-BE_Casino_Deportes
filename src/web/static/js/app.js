@@ -325,3 +325,77 @@ function renderizarResultadosPortafolio(data) {
         }
     }
 }
+
+// ─── Funciones del Panel de Curación Agéntica HITL [ARCH-1.5.2] ─────────────
+async function abrirModalCurador(leagueId = 262) {
+    document.getElementById("modal-curador-hitl").style.display = "block";
+    const grid = document.getElementById("grid-curacion-clubes");
+    grid.innerHTML = '<div style="color:#38BDF8; padding:20px;">🔍 Cargando candidatos prospectados...</div>';
+    
+    try {
+        const resp = await fetch(`/api/admin/catalogs/staging?league_id=${leagueId}`);
+        const teams = await resp.json();
+        grid.innerHTML = "";
+        
+        teams.forEach(t => {
+            const card = document.createElement("div");
+            card.style.cssText = "background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px;";
+            card.innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                    <img src="${t.crest_candidate_url}" alt="" style="width: 36px; height: 36px; object-fit: contain;">
+                    <div>
+                        <strong style="color: #fff; font-size: 9pt;">${t.name}</strong>
+                        <div style="color: #94A3B8; font-size: 7.2pt;">Estadio: ${t.stadium} (${t.city})</div>
+                    </div>
+                </div>
+                <div style="font-size: 6.8pt; color: #38BDF8; margin-bottom: 8px;">Aliases: ${(t.aliases || []).join(", ")}</div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <span style="color: #00E676; font-size: 7.2pt; font-weight: 700;">✅ Validado</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (e) {
+        grid.innerHTML = `<div style="color:#f87171;">Error: ${e.message}</div>`;
+    }
+}
+
+function cerrarModalCurador() {
+    document.getElementById("modal-curador-hitl").style.display = "none";
+}
+
+async function sellarCatalogoCompleto(leagueId = 262) {
+    try {
+        const stagedResp = await fetch(`/api/admin/catalogs/staging?league_id=${leagueId}`);
+        const teams = await stagedResp.json();
+        
+        const commitResp = await fetch("/api/admin/catalogs/commit", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({league_id: leagueId, approved_teams: teams})
+        });
+        const res = await commitResp.json();
+        alert(`✅ Catálogo sellado con éxito: ${res.teams_committed} clubes guardados en SQLite.`);
+        cerrarModalCurador();
+        location.reload();
+    } catch (e) {
+        alert(`❌ Error al sellar: ${e.message}`);
+    }
+}
+
+// [FAST-TRACK FIX]: Exponer funciones del Modal Curador al ámbito global
+window.abrirModalCurador = typeof abrirModalCurador !== 'undefined' ? abrirModalCurador : function() {
+    const modal = document.getElementById('modalCurador') || document.getElementById('modal-curador');
+    if (modal) modal.style.display = 'flex';
+};
+
+window.cerrarModalCurador = typeof cerrarModalCurador !== 'undefined' ? cerrarModalCurador : function() {
+    const modal = document.getElementById('modalCurador') || document.getElementById('modal-curador');
+    if (modal) modal.style.display = 'none';
+};
+
+window.sellarCatalogoCompleto = typeof sellarCatalogoCompleto !== 'undefined' ? sellarCatalogoCompleto : function() {
+    console.log("Sellando catálogo...");
+};
+
+

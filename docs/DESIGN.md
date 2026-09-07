@@ -71,3 +71,17 @@
 * **Prohibición de Redundancias:** Queda estrictamente prohibido colocar emojis de verificación (`✅`) o textos estáticos como `"Seleccionado"` junto al checkbox. La indicación de selección se refleja limpiamente por el estado del propio checkbox y el borde sutil de la tarjeta.
 * **Indicador de selección:** El estado activo se comunica únicamente mediante `border: 1px solid #38BDF8` en la `.fixture-card` y el atributo `checked` del `<input type="checkbox">`.
 * **[Binding Rationale]:** La duplicidad de controles de selección genera confusión UX y viola el principio de selector único enunciado en DES-QBE-016 v1.0.
+
+---
+
+### [DES-QBE-018] Panel Administrativo de Curación HITL (Catálogos y Bóveda) [UX-MANDATE]
+
+* **Propósito:** Interfaz de control y auditoría donde el Director visualiza la prospección de clubes antes de incorporarlos a la base de datos definitiva.
+* **Componentes de Interfaz:**
+  1. **Barra Superior de Control:** Selector de Liga, Botón `[ 🔍 Prospección Agéntica con Gemini ]` y Botón Maestro `[ 🔒 Sellar Catálogo en Base de Datos ]`.
+  2. **Cuadrícula de Tarjetas de Club (Grid de 18 tarjetas):**
+     - Pre-visualización del Escudo oficial (`48x48px`).
+     - Nombre Oficial y Nombre Corto.
+     - Píldoras de Aliases reconocidos (`"Águilas"`, `"América"`, etc.).
+     - Estadio y Sede.
+     - Botón de Estado Dual: `[ ✅ Aprobado ]` (verde) / `[ 🔄 Cambiar Fuente ]` (azul).

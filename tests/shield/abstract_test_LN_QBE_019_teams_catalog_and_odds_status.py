@@ -38,7 +38,7 @@ class AbstractTestTeamsCatalogAndOddsStatus(abc.ABC):
         for t in teams:
             assert "name" in t and "canonical_slug" in t
             assert "crest_url" in t and t["crest_url"] is not None
-            assert t["crest_url"].startswith("http"), f"Escudo inválido para {t.get('name')}: {t.get('crest_url')}"
+            assert t["crest_url"].startswith("http") or t["crest_url"].startswith("/static"), f"Escudo inválido para {t.get('name')}: {t.get('crest_url')}"
 
     def test_standings_reflects_apertura_2026_real_leader(self):
         """[SHIELD-INVARIANTE] La tabla de posiciones de Liga MX debe tener al Club América como líder con 16 puntos."""

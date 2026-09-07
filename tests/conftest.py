@@ -4,12 +4,20 @@ Provee datos canónicos de prueba anclados a la Liga MX y Leagues Cup.
 """
 
 import pytest
+from fastapi.testclient import TestClient
+from src.web.app import app
 from src.models.raw_input import (
     RawMatchInput, MasterTableSnapshot, MasterTablePosition,
     IdentidadPartido, ContextoTablaPosiciones, ContextoEquipoTabla,
     MetricasResumenDatos, Promedios10P, RadarCualitativoEntorno, RadarEquipo,
     MomiosSnapshot, CuotasPagoAnticipado, H2HMatchRaw
 )
+
+
+@pytest.fixture
+def client() -> TestClient:
+    """Fixture global de TestClient para la aplicación FastAPI."""
+    return TestClient(app)
 
 
 @pytest.fixture

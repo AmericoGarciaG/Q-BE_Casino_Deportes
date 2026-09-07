@@ -39,5 +39,6 @@ def test_health_endpoint(client):
 def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Q-BE CASINO DEPORTES" in response.text
+    assert "Q-BE" in response.text
+    assert "Casino Deportes" in response.text
 

@@ -339,5 +339,39 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** `AuditReleaseVerdict` (`AUTHORIZED` / `BLOCKED`).
 
 ---
+
+### ID: [LN-QBE-015] Curador Agéntico de Catálogos y Bóveda de Activos
+
+* **Ω (Resumen):** Prospección multimodal de identidades de clubes, validación de coherencia semántica mediante IA, aprobación humana por tarjeta y sellado inmutable en la base de datos local.
+* **I (Input):** Identificador de liga (`league_id`), fuentes de federación oficial.
+* **P (Process) [ARCH-PILLAR] [GOVERNANCE]:**
+  1. Prospección agéntica: Detección de nombre oficial, nombre corto, slugs, ciudad y escudo oficial en formato PNG transparente.
+  2. Staging de revisión: Presentación de tarjetas de pre-visualización al Director Humano.
+  3. Bucle HITL: El Director aprueba clubes individualmente (`[✅ Confirmar]`) o solicita reintento agéntico (`[🔄 Re-consultar fuente]`).
+  4. Descarga y Hash de Integridad: Al confirmar, Python descarga los archivos de imagen a disco local calculando su hash SHA256 para verificar que el activo no esté vacío ni corrupto.
+  5. Commit en SQLite: Inserción en la base de datos `teams` cerrando el catálogo.
+* **O (Output):** `SealedCatalogTransaction` y archivos de escudo locales listos para servir.
+* **Φ (Transición):** Hacia **[LN-QBE-012]** (Normalizador Canónico).
+* **[SHIELD]:** `tests/shield/abstract_test_LN_QBE_022_catalog_curation_hitl.py`
+
+---
+
+### ID: [LN-QBE-019] Resolutor Canónico de Escudos y Activos Visuales
+
+* **Ω (Resumen):** Resolver la URI de imagen para cada club garantizando disponibilidad visual absoluta en el frontend, erradicando el bloqueo por anti-hotlinking HTTP 403 mediante el uso estricto de la Bóveda Soberana Local o placeholders deterministas.
+* **I (Input):** `equipo_nombre` (str), `fotmob_id` (int), `db_session` (SQLAlchemy Session opcional).
+* **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
+  1. **Resolución de Identidad:** Normalizar `equipo_nombre` mediante `[LN-QBE-012]` y obtener el `slug` canónico (ej. `"america"`, `"cruz-azul"`).
+  2. **Escalera de Precedencia Determinista:**
+     - **Nivel 1 (Bóveda Física Local):** Verificar si el archivo local `src/web/static/img/crests/{slug}.png` existe en disco y tiene tamaño $> 0$ bytes. Si existe $\implies$ retornar la URL servida `/static/img/crests/{slug}.png`.
+     - **Nivel 2 (Persistencia SQLite):** Consultar la tabla `teams`. Si existe un registro con `local_crest_url` no nulo y accesible $\implies$ retornar dicho valor.
+     - **Nivel 3 (Fallback SVG Local Inmutable):** Si el activo físico no existe en disco $\implies$ generar y retornar un SVG embebido Data-URI (`data:image/svg+xml;utf8,...`) estilizado con las iniciales del club (2 o 3 caracteres) sobre fondo Slate 800 (`#1C2541`) y borde Cian (`#38BDF8`).
+  3. **Mandato Anti-Hotlinking [ANTI-BUG]:** Queda terminantemente prohibido que la salida `escudo_url` contenga enlaces directos a `images.fotmob.com` o cualquier CDN externo con restricciones de referer.
+* **O (Output):** `safe_crest_url: str` (Garantizada accesible localmente o mediante data-uri).
+* **Φ (Transición):** Hacia `StandingRowOut.escudo_url` y `MatchFixtureOut`.
+* **[SHIELD]:** `tests/shield/test_LN_QBE_019_crest_pipeline.py`
+* **[Binding Rationale]:** `[ANTI-BUG]` `[UX-MANDATE]` Elimina los errores visuales por bloqueo de terceros y garantiza autonomía visual en despliegues offline/locales.
+
+---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
 ```

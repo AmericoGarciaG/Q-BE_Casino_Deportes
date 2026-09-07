@@ -117,6 +117,15 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.5.3] Política de Servido de Activos Visuales y Mitigación Anti-Hotlinking [ARCH-PILLAR] [ANTI-BUG]
+
+* **Aislamiento de Red:** Los navegadores de clientes no deben realizar peticiones GET de imágenes a servidores externos no autorizados (`images.fotmob.com`).
+* **Montaje Estático de FastAPI:** La aplicación monta el directorio estático en `/static` (`app.mount("/static", StaticFiles(directory="src/web/static"), name="static")`).
+* **Integración en Live Board:** El pipeline de ensamble de `GET /api/leagues/{id}/live-board` debe invocar obligatoriamente el servicio resolutor `[LN-QBE-019]` al poblar `StandingRowOut.escudo_url` y los escudos de la cartelera, sustituyendo cualquier URL de scraping remota por la ruta local canónica (`/static/img/crests/{slug}.png`) o su SVG representativo.
+* **Seed Automático:** El arranque de la aplicación (`seeder.py`) debe asegurar que el directorio `src/web/static/img/crests/` contenga los 18 escudos base de la Liga MX precargados.
+
+---
+
 ### [ARCH-1.6.0] Arquitectura del Live Board Reactivo y Sincronización SQLite [ARCH-PILLAR]
 
 * **Propósito:** Desacoplar la ingesta deportiva viva de la compilación de reportes, permitiendo que la interfaz SPA explore ligas, consulte tablas completas de 18 clubes en FotMob y seleccione partidos de forma interactiva persistiendo el estado en SQLite local.
@@ -451,6 +460,23 @@ class PortfolioExecutionPlan(BaseModel):
 2. **Invarianza de Clamps (`[ALGO-PROTECTED]`):** Todo multiplicador o factor sintético ($FCF, E_{\text{att}}, \Omega_{\text{perf}}, \theta^*$) debe pasar por funciones `np.clip` o `min/max` antes de ingresar a los modelos de Poisson o Kelly.
 3. **Audit Hard-Stop (`[GOVERNANCE]`):** Si `auditor.py` detecta una violación a las 8 Pruebas del Shield, el pipeline lanza `ShieldInvariantException`, abortando la emisión de boletos y la compilación del PDF de forma atómica.
 4. **Zero-Mock Policy en Runtime (`[GOVERNANCE-01]`):** Queda prohibida la fabricación de partidos o fechas H2H falsas ante caídas de red. Si una fuente falla, el partido se declara en `CUARENTENA` y se preserva el capital en $0.00 MXN.
+
+---
+
+### [ARCH-1.5.2] Módulo Administrativo de Curación Agéntica HITL y Bóveda de Activos [ARCH-PILLAR]
+
+* **Propósito:** Automatizar la prospección de catálogos deportivos mediante agentes de IA y proporcionar una interfaz de validación humana (Human-in-the-Loop) para aprobar, auditar y sellar permanentemente en SQLite los clubes, estadios, aliases y escudos oficiales.
+* **Flujo de Endpoints Administrativos (`src/web/routes/admin.py`):**
+  1. `POST /api/admin/catalogs/discover?league_id={id}`:
+     - El Agente Curador (Gemini 3.6 Search) rastrea fuentes oficiales, localiza los 18 clubes, sus estadios, aliases y URLs de escudos en alta resolución.
+     - Guarda los resultados en un estado temporal de prospección (`data/.staging_catalogs_{id}.json`).
+  2. `GET /api/admin/catalogs/staging?league_id={id}`:
+     - Retorna los clubes prospectados para su inspección visual en la interfaz de usuario.
+  3. `POST /api/admin/catalogs/commit`:
+     - Recibe la confirmación humana de los clubes aprobados.
+     - Descarga físicamente los escudos validados al almacén soberano local (`src/web/static/img/crests/{slug}.png`).
+     - Inserta/actualiza de forma inmutable los registros en las tablas `teams`, `venues` y `aliases` de SQLite.
+* **Aislamiento de Producción:** Ningún club en estado de prospección (*staging*) es visible en los endpoints públicos de Live Board (`/api/leagues/{id}/live-board`) hasta haber sido sellado mediante el commit administrativo.
 
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**

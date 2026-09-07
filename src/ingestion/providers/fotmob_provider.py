@@ -31,7 +31,7 @@ LIGA_MX_MATCHES_DEFAULT = [
     {"id": "LIGAMX-07-01", "home": "FC Juárez", "away": "Club Pachuca", "home_odd": 3.40, "draw_odd": 3.30, "away_odd": 1.95, "time": "21:00", "date": "2026-09-04"},
     {"id": "LIGAMX-07-02", "home": "Atlético San Luis", "away": "Chivas Guadalajara", "home_odd": 3.60, "draw_odd": 3.70, "away_odd": 1.80, "time": "17:00", "date": "2026-09-05"},
     {"id": "LIGAMX-07-03", "home": "Tigres UANL", "away": "Necaxa", "home_odd": 1.80, "draw_odd": 3.70, "away_odd": 3.60, "time": "19:00", "date": "2026-09-05"},
-    {"id": "LIGAMX-07-04", "home": "Atlas FC", "away": "Atlante", "home_odd": 1.85, "draw_odd": 3.65, "away_odd": 4.10, "time": "21:00", "date": "2026-09-05"},
+    {"id": "LIGAMX-07-04", "home": "Atlas FC", "away": "Club América", "home_odd": 1.85, "draw_odd": 3.65, "away_odd": 4.10, "time": "21:00", "date": "2026-09-05"},
     {"id": "LIGAMX-07-05", "home": "Cruz Azul", "away": "Santos Laguna", "home_odd": 1.40, "draw_odd": 4.35, "away_odd": 6.00, "time": "17:00", "date": "2026-09-06"}
 ]
 

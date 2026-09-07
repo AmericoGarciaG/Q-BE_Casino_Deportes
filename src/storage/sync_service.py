@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from src.storage.database import SessionLocal
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, Team
 from src.ingestion.providers.fotmob_provider import FotMobProvider
+from src.storage.crest_resolver import resolver_escudo_canonico
 
 logger = logging.getLogger(__name__)
 
@@ -190,21 +191,16 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
         pos = int(t.get("pos") or t.get("rank") or idx)
         equipo = str(t.get("equipo") or t.get("name") or f"Club {idx}")
         
-        # Buscar escudo URL oficial
-        escudo_id = t.get("escudo_id")
-        escudo_url = t.get("escudo_url")
-        if escudo_id:
-            escudo_url = f"https://images.fotmob.com/image_resources/logo/teamlogo/{escudo_id}.png"
-        elif not escudo_url:
-            escudo_url = crests_map.get(equipo.lower())
-        if not escudo_url:
-            for k, v in crests_map.items():
-                if k in equipo.lower() or equipo.lower() in k:
-                    escudo_url = v
-                    break
+        # Buscar escudo URL oficial mediante [LN-QBE-019]
+        escudo_id = t.get("escudo_id") or t.get("fotmob_id")
+        escudo_url = resolver_escudo_canonico(equipo, fotmob_id=escudo_id, db=db)
 
-        proximo_escudo_id = t.get("proximo_escudo_id")
-        proximo_escudo_url = f"https://images.fotmob.com/image_resources/logo/teamlogo/{proximo_escudo_id}.png" if proximo_escudo_id else None
+        proximo_rival = t.get("proximo_rival")
+        if not proximo_rival or proximo_rival == "vs Rival":
+            proximo_rival = _resolver_proximo_rival(equipo)
+
+        proximo_equipo_clean = proximo_rival.replace("vs ", "").strip() if proximo_rival else ""
+        proximo_escudo_url = resolver_escudo_canonico(proximo_equipo_clean, db=db) if proximo_equipo_clean else None
 
         pj = int(t.get("pj") or t.get("played") or 0)
         pg = int(t.get("pg") or t.get("win") or 0)
