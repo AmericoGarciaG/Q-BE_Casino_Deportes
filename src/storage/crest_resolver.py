@@ -4,10 +4,13 @@ Módulo de Resolución Canónica de Escudos y Bóveda Soberana [LN-QBE-019]
 Base de Gobierno: Kybern Framework v8.0 / v12.0
 """
 import os
+import logging
 import urllib.parse
 from typing import Optional
 from sqlalchemy.orm import Session
 from src.ingestion.normalizer import canonicalize_team_name
+
+logger = logging.getLogger("CrestResolver")
 
 # Directorio raíz del proyecto y carpeta de assets estáticos
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -54,10 +57,9 @@ def resolver_escudo_canonico(
 ) -> str:
     """
     [LN-QBE-019] Resuelve la URI de escudo bajo la escalera de precedencia legislada:
-    1. Bóveda Local (/static/img/crests/{slug}.png) con verificación de archivo en disco.
-    2. Registro en tabla `teams` (SQLite).
-    3. Generador determinista de SVG Data URI.
-    PROHIBIDO retornar enlaces externos a CDN de terceros.
+    1. Bóveda Local (/static/img/crests/{slug}.png) con verificación física (>= 3 KB).
+    2. Consulta en base de datos SQLite (Team.canonical_slug y Team.name).
+    3. Fallback a SVG Data URI.
     """
     if not equipo_nombre:
         return _generar_svg_fallback("QBE", "Club")
@@ -65,27 +67,32 @@ def resolver_escudo_canonico(
     slug = obtener_slug_club(equipo_nombre)
     os.makedirs(STATIC_CRESTS_DIR, exist_ok=True)
 
-    # Nivel 1: Verificación de archivo físico en disco (anti-fantasma: mín 3 KB)
+    # Nivel 1: Verificación de archivo primario en disco
     archivo_fisico = os.path.join(STATIC_CRESTS_DIR, f"{slug}.png")
     if os.path.exists(archivo_fisico) and os.path.getsize(archivo_fisico) > 3000:
         return f"/static/img/crests/{slug}.png"
 
-    # Nivel 2: Consulta en base de datos SQLite si hay sesión disponible
+    # Nivel 1B: Verificación de aliases conocidos en disco
+    for extension in [f"club-{slug}.png", f"{slug}-fc.png", f"deportivo-{slug}.png"]:
+        alias_fisico = os.path.join(STATIC_CRESTS_DIR, extension)
+        if os.path.exists(alias_fisico) and os.path.getsize(alias_fisico) > 3000:
+            return f"/static/img/crests/{extension}"
+
+    # Nivel 2: Consulta en base de datos SQLite
     if db is not None:
         try:
             from src.storage.models import Team
-            # Buscar por slug o nombre canónico
+            # [CORRECCIÓN INDUSTRIAL]: Usar Team.canonical_slug y Team.name reales
             team_rec = db.query(Team).filter(
-                (Team.slug == slug) | (Team.canonical_name == equipo_nombre)
+                (Team.canonical_slug == slug) | (Team.name == equipo_nombre) | (Team.short_name == equipo_nombre)
             ).first()
             if team_rec and team_rec.crest_url:
                 c_url = team_rec.crest_url
-                # Solo aceptar si es ruta estática local o data uri (cero fotmob hotlinks)
                 if "fotmob.com" not in c_url.lower():
                     if c_url.startswith("/static/") or c_url.startswith("data:image/svg+xml"):
                         return c_url
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.warning(f"Aviso en consulta SQLite para '{equipo_nombre}': {ex}")
 
     # Nivel 3: Fallback a SVG determinista estilizado
     palabras = equipo_nombre.strip().split()

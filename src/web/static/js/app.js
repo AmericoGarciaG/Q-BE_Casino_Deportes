@@ -80,7 +80,7 @@ async function cargarLigasDesdeBD() {
 async function seleccionarLiga(fotmobId) {
     switchView("view-matchday-selection");
     const tbody = document.querySelector(".table-panel-left table tbody");
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando los 18 clubes con FotMob...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando datos oficiales en tiempo real...</td></tr>';
 
     try {
         const resp = await fetch(`/api/leagues/${fotmobId}/live-board`);
@@ -90,7 +90,7 @@ async function seleccionarLiga(fotmobId) {
         const lblTabla = document.getElementById("lbl-nombre-tabla");
         if (lblTabla) lblTabla.textContent = currentLiveBoard.league_name || "Liga MX";
         const lblJornada = document.getElementById("lbl-nombre-jornada");
-        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada 7";
+        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada Activa";
 
         renderizarTabla18Clubes(currentLiveBoard.standings);
         renderizarCartelera(currentLiveBoard.fixtures);
@@ -502,9 +502,13 @@ async function abrirModalCurador(leagueId = 262) {
         teams.forEach(t => {
             const card = document.createElement("div");
             card.style.cssText = "background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px;";
+            
+            // Priorizar ruta local soberana con fallback a candidate_url
+            const imgSrc = t.crest_url || t.crest_candidate_url;
+
             card.innerHTML = `
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
-                    <img src="${t.crest_candidate_url}" alt="" style="width: 36px; height: 36px; object-fit: contain;">
+                    <img src="${imgSrc}" onerror="this.src='${t.crest_candidate_url}'" referrerpolicy="no-referrer" alt="" style="width: 36px; height: 36px; object-fit: contain;">
                     <div>
                         <strong style="color: #fff; font-size: 9pt;">${t.name}</strong>
                         <div style="color: #94A3B8; font-size: 7.2pt;">Estadio: ${t.stadium} (${t.city})</div>
@@ -560,4 +564,35 @@ window.sellarCatalogoCompleto = typeof sellarCatalogoCompleto !== 'undefined' ? 
     console.log("Sellando catálogo...");
 };
 
+// Funciones globales para control masivo de selección en cartelera
+function seleccionarTodosPartidos() {
+    selectedMatchIds = [];
+    document.querySelectorAll('.fixture-card:not(.fixture-disabled)').forEach(card => {
+        const checkbox = card.querySelector("input[type='checkbox']");
+        const matchId = card.dataset.matchId;
+        if (checkbox && !checkbox.disabled) {
+            checkbox.checked = true;
+            card.classList.add("selected");
+            card.style.borderColor = "#38BDF8";
+            if (matchId) selectedMatchIds.push(matchId);
+        }
+    });
+    actualizarContadorSeleccionados();
+}
 
+function deseleccionarTodosPartidos() {
+    selectedMatchIds = [];
+    document.querySelectorAll('.fixture-card').forEach(card => {
+        const checkbox = card.querySelector("input[type='checkbox']");
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        card.classList.remove("selected");
+        card.style.borderColor = "#334155";
+    });
+    actualizarContadorSeleccionados();
+}
+
+// Exponer al ámbito global
+window.seleccionarTodosPartidos = seleccionarTodosPartidos;
+window.deseleccionarTodosPartidos = deseleccionarTodosPartidos;

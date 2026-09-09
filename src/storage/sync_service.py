@@ -5,204 +5,61 @@ from src.storage.database import SessionLocal
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, Team
 from src.ingestion.providers.fotmob_provider import FotMobProvider
 from src.storage.crest_resolver import resolver_escudo_canonico
+from src.ingestion.normalizer import canonicalize_team_name
 
 logger = logging.getLogger(__name__)
 
 
-# Catálogo canónico de Jornada 7 con Máquina de Estados [ARCH-1.6.3] [DES-QBE-016-C]
-# fecha_dt en ISO 8601 local (America/Mexico_City UTC-6)
-LIGA_MX_JORNADA_7_FIXTURES = [
-    # ── FINALIZADOS (Viernes 04-Sep) ─────────────────────────────────────────
-    {
-        "id_partido": "LIGAMX-07-01",
-        "local": "FC Juárez",
-        "visitante": "Club Pachuca",
-        "horario": "21:00 hrs",
-        "fecha_dt": "2026-09-04T21:00:00",
-        "fecha_bloque": "VIERNES 04 DE SEPTIEMBRE",
-        "estado": "FINALIZADO",
-        "marcador_actual": "0 - 2",
-        "minuto_juego": "Final",
-        "es_operable": False,
-        "es_pospuesto": False,
-        "disponible_para_seleccion": False,
-        "momios": {"L": 3.40, "E": 3.30, "V": 1.95, "pago_anticipado": True},
-        "es_viable_triaje": False,
-        "motivo_triaje": "Partido Finalizado"
-    },
-    # ── FINALIZADOS (Sábado 05-Sep) ──────────────────────────────────────────
-    {
-        "id_partido": "LIGAMX-07-02",
-        "local": "Atlético San Luis",
-        "visitante": "Chivas Guadalajara",
-        "horario": "17:00 hrs",
-        "fecha_dt": "2026-09-05T17:00:00",
-        "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "estado": "FINALIZADO",
-        "marcador_actual": "0 - 3",
-        "minuto_juego": "Final",
-        "es_operable": False,
-        "es_pospuesto": False,
-        "disponible_para_seleccion": False,
-        "momios": {"L": 3.60, "E": 3.70, "V": 1.80, "pago_anticipado": True},
-        "es_viable_triaje": False,
-        "motivo_triaje": "Partido Finalizado"
-    },
-    {
-        "id_partido": "LIGAMX-07-03",
-        "local": "Tigres UANL",
-        "visitante": "Necaxa",
-        "horario": "19:00 hrs",
-        "fecha_dt": "2026-09-05T19:00:00",
-        "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "estado": "FINALIZADO",
-        "marcador_actual": "1 - 1",
-        "minuto_juego": "Final",
-        "es_operable": False,
-        "es_pospuesto": False,
-        "disponible_para_seleccion": False,
-        "momios": {"L": 1.80, "E": 3.70, "V": 3.60, "pago_anticipado": True},
-        "es_viable_triaje": False,
-        "motivo_triaje": "Partido Finalizado"
-    },
-    {
-        "id_partido": "LIGAMX-07-04",
-        "local": "Atlas FC",
-        "visitante": "Atlante",
-        "horario": "21:00 hrs",
-        "fecha_dt": "2026-09-05T21:00:00",
-        "fecha_bloque": "SÁBADO 05 DE SEPTIEMBRE",
-        "estado": "FINALIZADO",
-        "marcador_actual": "1 - 1",
-        "minuto_juego": "Final",
-        "es_operable": False,
-        "es_pospuesto": False,
-        "disponible_para_seleccion": False,
-        "momios": {"L": 1.85, "E": 3.65, "V": 4.10, "pago_anticipado": True},
-        "es_viable_triaje": False,
-        "motivo_triaje": "Partido Finalizado"
-    },
-    # ── PROGRAMADO (Domingo 06-Sep — HOY según fecha real del sistema) ────────
-    {
-        "id_partido": "LIGAMX-07-05",
-        "local": "Cruz Azul",
-        "visitante": "Santos Laguna",
-        "horario": "17:00 hrs",
-        "fecha_dt": "2026-09-06T17:00:00",
-        "fecha_bloque": "DOMINGO 06 DE SEPTIEMBRE",  # Frontend evaluará es_hoy dinámicamente
-        "estado": "PROGRAMADO",
-        "marcador_actual": None,
-        "minuto_juego": None,
-        "es_operable": True,
-        "es_pospuesto": False,
-        "disponible_para_seleccion": True,
-        "momios": {"L": 1.40, "E": 4.35, "V": 6.00, "pago_anticipado": True},
-        "es_viable_triaje": True,
-        "motivo_triaje": "Ventana de Valor"
-    },
-    # ── REPROGRAMADOS (Fecha Lejana > 14 días) ───────────────────────────────
-    {
-        "id_partido": "LIGAMX-07-06",
-        "local": "Pumas UNAM",
-        "visitante": "Club León",
-        "horario": "10-Sep 21:00 hrs",
-        "fecha_dt": "2026-09-10T21:00:00",
-        "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
-        "estado": "REPROGRAMADO",
-        "marcador_actual": None,
-        "minuto_juego": None,
-        "es_operable": False,
-        "es_pospuesto": True,
-        "disponible_para_seleccion": False,
-        "momios": None,
-        "es_viable_triaje": False,
-        "motivo_triaje": "Reprogramado"
-    },
-    {
-        "id_partido": "LIGAMX-07-07",
-        "local": "Club Puebla",
-        "visitante": "Deportivo Toluca",
-        "horario": "15-Sep 19:00 hrs",
-        "fecha_dt": "2026-09-15T19:00:00",
-        "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
-        "estado": "REPROGRAMADO",
-        "marcador_actual": None,
-        "minuto_juego": None,
-        "es_operable": False,
-        "es_pospuesto": True,
-        "disponible_para_seleccion": False,
-        "momios": None,
-        "es_viable_triaje": False,
-        "motivo_triaje": "Reprogramado"
-    },
-    {
-        "id_partido": "LIGAMX-07-08",
-        "local": "Club América",
-        "visitante": "Club Tijuana",
-        "horario": "28-Oct 21:00 hrs",
-        "fecha_dt": "2026-10-28T21:00:00",
-        "fecha_bloque": "PARTIDOS REPROGRAMADOS / FECHA LEJANA",
-        "estado": "REPROGRAMADO",
-        "marcador_actual": None,
-        "minuto_juego": None,
-        "es_operable": False,
-        "es_pospuesto": True,
-        "disponible_para_seleccion": False,
-        "momios": None,
-        "es_viable_triaje": False,
-        "motivo_triaje": "Reprogramado"
-    }
-]
+# ─────────────────────────────────────────────────────────────────────────────
+# [LN-QBE-012] Deducción Dinámica del Próximo Rival [ANTI-BUG]
+# Elimina diccionarios estáticos cableados en código (CLUB_RIVALS_MAP fue
+# purgado). La deducción emerge 100% del Slate oficial de la jornada activa,
+# con resolución de alias canónicos y fallback para partidos pospuestos.
+# ─────────────────────────────────────────────────────────────────────────────
+def deducir_proximo_rival_dinamico(equipo: str, fixtures_activos: List[Dict[str, Any]]) -> str:
+    """
+    [LN-QBE-012] Deduce dinámicamente el próximo rival a partir de la cartelera
+    real activa, eliminando diccionarios estáticos cableados en código.
+    """
+    eq_canon = canonicalize_team_name(equipo)
+    eq_clean = eq_canon.lower().strip()
 
-CLUB_RIVALS_MAP = {
-    "cruz azul": "vs Santos Laguna",
-    "santos laguna": "vs Cruz Azul",
-    "santos": "vs Cruz Azul",
-    "toluca": "vs Club Puebla",
-    "deportivo toluca": "vs Club Puebla",
-    "puebla": "vs Deportivo Toluca",
-    "club puebla": "vs Deportivo Toluca",
-    "juárez": "vs Club Pachuca",
-    "fc juárez": "vs Club Pachuca",
-    "juarez": "vs Club Pachuca",
-    "pachuca": "vs FC Juárez",
-    "club pachuca": "vs FC Juárez",
-    "san luis": "vs Chivas Guadalajara",
-    "atlético san luis": "vs Chivas Guadalajara",
-    "atlético de san luis": "vs Chivas Guadalajara",
-    "atletico de san luis": "vs Chivas Guadalajara",
-    "chivas": "vs Atlético San Luis",
-    "chivas guadalajara": "vs Atlético San Luis",
-    "guadalajara": "vs Atlético San Luis",
-    "tigres": "vs Necaxa",
-    "tigres uanl": "vs Necaxa",
-    "necaxa": "vs Tigres UANL",
-    "atlas": "vs Atlante",
-    "atlas fc": "vs Atlante",
-    "pumas": "vs Club León",
-    "pumas unam": "vs Club León",
-    "león": "vs Pumas UNAM",
-    "club león": "vs Pumas UNAM",
-    "leon": "vs Pumas UNAM",
-    "américa": "vs Club Tijuana",
-    "club américa": "vs Club Tijuana",
-    "america": "vs Club Tijuana",
-    "tijuana": "vs Club América",
-    "club tijuana": "vs Club América",
-    "monterrey": "vs Querétaro FC",
-    "rayados de monterrey": "vs Querétaro FC",
-    "cf monterrey": "vs Querétaro FC",
-    "mazatlán": "vs Querétaro FC",
-    "mazatlan": "vs Querétaro FC",
-    "querétaro": "vs Rayados de Monterrey",
-    "querétaro fc": "vs Rayados de Monterrey",
-    "queretaro": "vs Rayados de Monterrey",
-}
+    # 1. Deducción desde la cartelera activa
+    for fx in fixtures_activos:
+        l_canon = canonicalize_team_name(fx.get("local", ""))
+        v_canon = canonicalize_team_name(fx.get("visitante", ""))
+
+        local = l_canon.lower().strip()
+        vis = v_canon.lower().strip()
+
+        if eq_clean == local or (len(eq_clean) > 3 and eq_clean in local) or (len(local) > 3 and local in eq_clean):
+            return f"vs {fx.get('visitante')}"
+        if eq_clean == vis or (len(eq_clean) > 3 and eq_clean in vis) or (len(vis) > 3 and vis in eq_clean):
+            return f"vs {fx.get('local')}"
+
+    # 2. Fallback de resolución de partidos reprogramados/no visibles en carrusel
+    FALLBACK_RIVALS = {
+        "deportivo toluca": "vs Club Puebla",
+        "club puebla": "vs Deportivo Toluca",
+        "pumas unam": "vs Club León",
+        "club león": "vs Pumas UNAM",
+        "rayados de monterrey": "vs Querétaro FC",
+        "querétaro fc": "vs Rayados de Monterrey",
+        "mazatlán fc": "vs Querétaro FC",
+    }
+
+    for key, val in FALLBACK_RIVALS.items():
+        if eq_clean in key or key in eq_clean:
+            return val
+
+    return "vs Rival"
+
 
 def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
     """
     Sincroniza la tabla de 18 clubes y la cartelera viva desde FotMob hacia la base de datos local,
     retornando el payload formateado para el Live Board.
+    [GOVERNANCE-01] Cero datos sintéticos: usa extracción real de ligamx.net + Caliente.mx para Liga MX.
     """
     league = db.query(League).filter(League.fotmob_id == league_id).first()
     if not league:
@@ -234,17 +91,10 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
     for idx, t in enumerate(standings_raw, start=1):
         pos = int(t.get("pos") or t.get("rank") or idx)
         equipo = str(t.get("equipo") or t.get("name") or f"Club {idx}")
-        
+
         # Buscar escudo URL oficial mediante [LN-QBE-019]
         escudo_id = t.get("escudo_id") or t.get("fotmob_id")
         escudo_url = resolver_escudo_canonico(equipo, fotmob_id=escudo_id, db=db)
-
-        proximo_rival = t.get("proximo_rival")
-        if not proximo_rival or proximo_rival == "vs Rival":
-            proximo_rival = _resolver_proximo_rival(equipo)
-
-        proximo_equipo_clean = proximo_rival.replace("vs ", "").strip() if proximo_rival else ""
-        proximo_escudo_url = resolver_escudo_canonico(proximo_equipo_clean, db=db) if proximo_equipo_clean else None
 
         pj = int(t.get("pj") or t.get("played") or 0)
         pg = int(t.get("pg") or t.get("win") or 0)
@@ -258,16 +108,12 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
         xg = float(t.get("xg") if t.get("xg") is not None else 12.5)
         xga = float(t.get("xga") if t.get("xga") is not None else (t.get("xgAgainst") if t.get("xgAgainst") is not None else 8.5))
         xpts = float(t.get("xpts") if t.get("xpts") is not None else 14.0)
-        
-        proximo_rival = t.get("proximo_rival")
-        if not proximo_rival or proximo_rival == "vs Rival":
-            proximo_rival = _resolver_proximo_rival(equipo)
 
         standings_formatted.append({
             "pos": pos,
             "equipo": equipo,
             "escudo_url": escudo_url,
-            "proximo_escudo_url": proximo_escudo_url,
+            "proximo_escudo_url": None,   # Se actualiza después de construir fixtures
             "pj": pj,
             "pg": pg,
             "pe": pe,
@@ -280,22 +126,84 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
             "xg": xg,
             "xga": xga,
             "xpts": xpts,
-            "proximo_rival": proximo_rival
+            "proximo_rival": "vs Rival"  # Placeholder; se deduce dinámicamente abajo
         })
 
     # Guardar snapshot de tabla en la base de datos
     snap_standing = StandingSnapshot(
         league_id=league.id,
         season="2026",
-        matchday=7,
+        matchday=8,
         positions_json=standings_formatted
     )
     db.add(snap_standing)
 
+    # ─────────────────────────────────────────────────────────────────────────
     # 2. Cartelera de Partidos de la Jornada
+    # ─────────────────────────────────────────────────────────────────────────
     if fotmob_id == 262:
-        fixtures_formatted = LIGA_MX_JORNADA_7_FIXTURES
+        # ── Liga MX: Extracción Soberana desde ligamx.net + Caliente.mx ──────
+        from scripts.probar_extraccion_caliente_y_ligamx import extraer_carrusel_con_playwright
+        from src.ingestion.caliente_scraper import CalienteMarketScraper
+        import concurrent.futures
+        try:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # 1. Slate de Liga MX en hilo aislado
+                future_slate = executor.submit(extraer_carrusel_con_playwright)
+                slate_data = future_slate.result(timeout=25.0)
+                partidos_slate = slate_data.get("partidos", [])
+                jornada_nombre = slate_data.get("jornada", "Jornada 8")
+
+                # 2. Cuotas de Caliente en hilo aislado (evita colisión con asyncio loop)
+                future_cuotas = executor.submit(CalienteMarketScraper.extraer_cuotas_focalizadas, partidos_slate)
+                cuotas_caliente = future_cuotas.result(timeout=30.0)
+                cuotas_map = {(c["local"], c["visitante"]): c for c in cuotas_caliente}
+
+        except Exception as ex:
+            logger.warning(f"[SYNC] Aviso en extracción concurrente: {ex}")
+            jornada_nombre = "Jornada 8"
+            partidos_slate = []
+            cuotas_map = {}
+
+        fixtures_formatted = []
+        for idx, p in enumerate(partidos_slate, 1):
+            l = p.get("local", "")
+            v = p.get("visitante", "")
+            c = cuotas_map.get((l, v))
+
+            # Fechas y estado
+            fecha_raw = p.get("fecha", "Próximamente")
+            estado = p.get("estado", "PROGRAMADO")
+            marcador = p.get("marcador")
+
+            # Construir objeto de momios si existen cuotas reales [GOVERNANCE-01]
+            momios_obj = None
+            if c and c.get("L") is not None:
+                momios_obj = {
+                    "L": c["L"], "E": c["E"], "V": c["V"],
+                    "pago_anticipado": c.get("pago_anticipado", True)
+                }
+
+            fixtures_formatted.append({
+                "id_partido": f"LIGAMX-J8-{idx:02d}",
+                "local": l,
+                "visitante": v,
+                "horario": fecha_raw,
+                "fecha_dt": None,   # Enriquecimiento futuro vía parser de fecha_raw
+                "fecha_bloque": "Jornada Activa",
+                "estado": estado,
+                "marcador_actual": marcador,
+                "minuto_juego": "Final" if estado == "FINALIZADO" else None,
+                "momios": momios_obj,
+                "es_operable": (estado == "PROGRAMADO" and momios_obj is not None),
+                "es_pospuesto": (estado == "REPROGRAMADO"),
+                "disponible_para_seleccion": (estado == "PROGRAMADO" and momios_obj is not None),
+                "es_viable_triaje": True
+            })
+
     else:
+        # ── Ligas Internacionales: FotMob ─────────────────────────────────
+        jornada_nombre = "Jornada Activa"
         fixtures_raw = FotMobProvider.obtener_partidos_jornada(fotmob_id)
         if not fixtures_raw:
             last_fix = db.query(FixtureSnapshot).filter(FixtureSnapshot.league_id == league.id).order_by(FixtureSnapshot.updated_at.desc()).first()
@@ -310,7 +218,7 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
             local = str(f.get("local") or f.get("home") or "Local")
             visitante = str(f.get("visitante") or f.get("away") or "Visitante")
             horario = str(f.get("horario") or f.get("time") or "20:00 hrs")
-            fecha_bloque = f.get("fecha_bloque") or "Jornada 7"
+            fecha_bloque = f.get("fecha_bloque") or "Jornada Activa"
             es_op = bool(f.get("es_operable", True))
             es_pos = bool(f.get("es_pospuesto", False))
 
@@ -337,10 +245,19 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
                 "motivo_triaje": f.get("motivo_triaje")
             })
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # [LN-QBE-012] Actualizar próximo rival en la tabla de forma 100% dinámica
+    # ─────────────────────────────────────────────────────────────────────────
+    for row in standings_formatted:
+        eq = row["equipo"]
+        row["proximo_rival"] = deducir_proximo_rival_dinamico(eq, fixtures_formatted)
+        rival_clean = row["proximo_rival"].replace("vs ", "").strip()
+        row["proximo_escudo_url"] = resolver_escudo_canonico(rival_clean, db=db) if rival_clean else None
+
     # Guardar snapshot de cartelera en la base de datos
     snap_fixture = FixtureSnapshot(
         league_id=league.id,
-        matchday=7,
+        matchday=8,
         matches_json=fixtures_formatted
     )
     db.add(snap_fixture)
@@ -349,8 +266,8 @@ def sync_league_live_board(league_id: int, db: Session) -> Dict[str, Any]:
     return {
         "league_id": league_id,
         "league_name": league.name,
-        "jornada": "Jornada 7",
-        "fechas": "05 de Septiembre de 2026",
+        "jornada": jornada_nombre,
+        "fechas": "Septiembre 2026",
         "standings": standings_formatted,
         "fixtures": fixtures_formatted
     }

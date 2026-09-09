@@ -82,9 +82,6 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
                     if not marcador:
                         marcador = "0 - 0"
 
-            # Bloqueo financiero: solo PROGRAMADO puede seleccionarse [BIZ-LOGIC]
-            disponible = (estado == "PROGRAMADO")
-
             # Resolver escudos de ambos equipos [ARCH-1.5.3]
             local_escudo = resolver_escudo_canonico(fx.get("local", ""), db=db)
             vis_escudo = resolver_escudo_canonico(fx.get("visitante", ""), db=db)
@@ -104,8 +101,10 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
                 except Exception:
                     momios_obj = None
 
+            # [CORRECCIÓN FINANCIERA]: Solo es operable si está PROGRAMADO Y TIENE CUOTAS REALES
+            disponible = (estado == "PROGRAMADO" and momios_obj is not None)
+            es_operable = disponible
             es_pospuesto = bool(fx.get("es_pospuesto", estado == "REPROGRAMADO"))
-            es_operable = bool(fx.get("es_operable", disponible and not es_pospuesto))
 
             fixtures_procesados.append(MatchFixtureOut(
                 id_partido=fx.get("id_partido", ""),

@@ -1,8 +1,9 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.storage.seeder import seed_initial_leagues
@@ -50,3 +51,10 @@ def health_check():
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    favicon_path = os.path.join(os.path.dirname(__file__), "static", "img", "crests", "america.png")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    return Response(status_code=204)

@@ -11,11 +11,10 @@ Endpoints:
 /api/leagues/{id}/live-board hasta el commit administrativo. [LN-QBE-015]
 """
 
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-
-from pydantic import BaseModel
 
 from src.storage.database import get_db
 from src.storage.curation_service import (
@@ -27,10 +26,22 @@ from src.storage.curation_service import (
 router = APIRouter(prefix="/api/admin/catalogs", tags=["Admin Curation HITL"])
 
 
+class TeamCatalogItemIn(BaseModel):
+    name: str
+    short_name: str
+    canonical_slug: str
+    crest_url: Optional[str] = None
+    crest_candidate_url: Optional[str] = None
+    stadium: Optional[str] = "Estadio Oficial"
+    city: Optional[str] = "México"
+    aliases: Optional[List[str]] = Field(default_factory=list)
+    fotmob_id: Optional[int] = None
+
+
 class CommitCatalogRequest(BaseModel):
-    """Contrato de entrada para el sellado de catálogo [ARCH-1.5.2]."""
-    league_id: int
-    approved_teams: List[Dict[str, Any]]
+    """Contrato de entrada para el sellado de catálogo [ARCH-1.5.2] (Protocolo Nexus)."""
+    league_id: int = 262
+    approved_teams: List[TeamCatalogItemIn]
 
 
 @router.post("/discover")
@@ -38,8 +49,6 @@ def discover_catalogs(league_id: int = Query(default=262)) -> Dict[str, Any]:
     """
     [ARCH-1.5.2 — Endpoint 1]
     Inicia la prospección agéntica y prepara el staging temporal de clubes candidatos.
-    El agente curador (Catálogo Canónico v1.0) detecta nombre oficial, slug, estadio,
-    ciudad, aliases y URL de escudo en alta resolución.
     """
     try:
         return ejecutar_prospeccion_liga(league_id)
@@ -52,7 +61,6 @@ def get_staging_catalogs(league_id: int = Query(default=262)) -> List[Dict[str, 
     """
     [ARCH-1.5.2 — Endpoint 2]
     Retorna los clubes en prospección temporal para revisión e inspección visual HITL.
-    Si el staging no existe, auto-ejecuta la prospección primero.
     """
     try:
         return obtener_staging_liga(league_id)
@@ -67,13 +75,11 @@ def commit_catalogs(
 ) -> Dict[str, Any]:
     """
     [ARCH-1.5.2 — Endpoint 3]
-    Sella los clubes confirmados por el Director Humano:
-    - Descarga física de escudos a src/web/static/img/crests/{slug}.png
-    - Verificación SHA256 de integridad de activos
-    - Inserción/actualización inmutable en tabla `teams` de SQLite
+    Sella los clubes confirmados por el Director Humano.
     """
     try:
-        return sellar_catalogo_en_db(payload.league_id, payload.approved_teams, db)
+        teams_data = [t.model_dump() for t in payload.approved_teams]
+        return sellar_catalogo_en_db(payload.league_id, teams_data, db)
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as exc:

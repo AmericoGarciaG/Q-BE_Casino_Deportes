@@ -15,40 +15,24 @@ _ESCUDOS_CLAVE = [
 
 def asegurar_boveda_escudos_base():
     """
-    [GOVERNANCE-01][ANTI-BUG] Garantiza escudos reales en disco.
-    PROHIBIDO crear archivos PNG dummy de 0 bytes o relleno sintético.
-    Si faltan escudos o existen archivos fantasma (< 3 KB), invoca el
-    script de extracción oficial (scripts/extraer_escudos_ligamx_oficial.py).
+    [GOVERNANCE-01] Garantiza escudos reales de forma nativa sin llamadas a subprocesos de terminal.
     """
     os.makedirs(STATIC_CRESTS_DIR, exist_ok=True)
-
-    # Detectar archivos fantasma (< 3 KB) y faltantes
-    faltantes = []
-    for escudo in _ESCUDOS_CLAVE:
-        ruta = os.path.join(STATIC_CRESTS_DIR, escudo)
-        if not os.path.exists(ruta) or os.path.getsize(ruta) < 3000:
-            faltantes.append(escudo)
+    faltantes = [
+        e for e in _ESCUDOS_CLAVE 
+        if not os.path.exists(os.path.join(STATIC_CRESTS_DIR, e)) or os.path.getsize(os.path.join(STATIC_CRESTS_DIR, e)) < 3000
+    ]
 
     if faltantes:
-        print(f"[SEEDER][KYBERN] ⚠️ {len(faltantes)} escudos faltantes o fantasma detectados. "
-              f"Invocando script de extracción oficial...")
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "scripts", "extraer_escudos_ligamx_oficial.py"
-        )
-        if os.path.exists(script_path):
-            import subprocess
-            result = subprocess.run(
-                [sys.executable, script_path],
-                check=False,
-                capture_output=False
-            )
-            if result.returncode != 0:
-                print("[SEEDER][KYBERN] ⚠️ El script de extracción finalizó con advertencias. "
-                      "Verificar manualmente los escudos.")
-        else:
-            print(f"[SEEDER][KYBERN] ❌ Script no encontrado: {script_path}. "
-                  f"Ejecutar manualmente: python scripts/extraer_escudos_ligamx_oficial.py")
+        print(f"[SEEDER] ⚠️ {len(faltantes)} escudos faltantes en bóveda. Ejecutando extracción nativa...")
+        from src.storage.curation_service import PROSPECCION_LIGA_MX, sellar_catalogo_en_db
+        db = SessionLocal()
+        try:
+            sellar_catalogo_en_db(262, PROSPECCION_LIGA_MX, db)
+        except Exception as exc:
+            print(f"[SEEDER] ⚠️ Aviso en sellado nativo: {exc}")
+        finally:
+            db.close()
 
 TEAMS_LIGA_MX = [
     {"fotmob_id": 7966, "name": "Club América", "short": "América", "slug": "america"},

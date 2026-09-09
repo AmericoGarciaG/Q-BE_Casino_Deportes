@@ -270,3 +270,79 @@ class CalienteMarketScraper:
             })
 
         return normalized
+
+    @classmethod
+    def extraer_cuotas_focalizadas(cls, partidos_slate: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        [FASE 2 SOBERANA]
+        Navega a Caliente.mx y extrae momios 1X2 y Pago Anticipado ÚNICAMENTE para los
+        partidos que coincidan con los pares (local, visitante) del Slate oficial de la liga.
+        [GOVERNANCE-01] Cero equipos sintéticos: solo se retorna lo encontrado en el sitio real.
+        """
+        if not partidos_slate:
+            return []
+
+        partidos_a_buscar = {(p["local"], p["visitante"]): p for p in partidos_slate}
+        mercado_encontrado = []
+        url_caliente = "https://sports.caliente.mx/es_MX/F%C3%BAtbol-Mexicano"
+
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as pw:
+                browser, context, page = cls.iniciar_navegador_stealth(pw, headed=False)
+                try:
+                    page.goto(url_caliente, timeout=25000, wait_until="domcontentloaded")
+                    page.wait_for_timeout(4000)
+
+                    if "attention" in page.title().lower() or "cloudflare" in page.title().lower():
+                        print("[CALIENTE] ⚠️ Bloqueo perimetral detectado.")
+                        return []
+
+                    html = page.content()
+                    if BeautifulSoup:
+                        soup = BeautifulSoup(html, "html.parser")
+                        filas = soup.find_all(lambda tag: tag.name in ["tr", "div", "li"] and len(tag.get_text()) < 1000 and any(
+                            kw in tag.get_text() for kw in ["América", "Chivas", "Cruz Azul", "Tigres", "Puebla", "Santos", "Toluca", "Pachuca", "Atlas", "Necaxa", "Juárez", "Mazatlán", "Tijuana", "San Luis", "León", "Querétaro", "Pumas"]
+                        ))
+
+                        for fila in filas:
+                            texto = fila.get_text(" | ", strip=True)
+                            for (l_target, v_target) in partidos_a_buscar.keys():
+                                palabras_l = l_target.lower().split()
+                                palabras_v = v_target.lower().split()
+                                match_l = any(w in texto.lower() for w in palabras_l if len(w) > 3)
+                                match_v = any(w in texto.lower() for w in palabras_v if len(w) > 3)
+
+                                if match_l and match_v:
+                                    momios = re.findall(r'\b\d+\.\d{2}\b', texto)
+                                    tiene_pa = any(kw in texto.lower() for kw in ["pago anticipado", "2 goles de ventaja", "pa"])
+
+                                    if len(momios) >= 3:
+                                        item = {
+                                            "local": l_target,
+                                            "visitante": v_target,
+                                            "L": float(momios[0]),
+                                            "E": float(momios[1]),
+                                            "V": float(momios[2]),
+                                            "pago_anticipado": tiene_pa,
+                                            "encontrado_en_caliente": True
+                                        }
+                                        if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
+                                            mercado_encontrado.append(item)
+                finally:
+                    browser.close()
+        except Exception as e:
+            print(f"[CALIENTE] ⚠️ Error en extracción focalizada: {e}")
+
+        # Rellenar con None los partidos no cotizados [GOVERNANCE-01: sin datos sintéticos]
+        for (l_target, v_target) in partidos_a_buscar.keys():
+            if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
+                mercado_encontrado.append({
+                    "local": l_target,
+                    "visitante": v_target,
+                    "L": None, "E": None, "V": None,
+                    "pago_anticipado": False,
+                    "encontrado_en_caliente": False
+                })
+
+        return mercado_encontrado

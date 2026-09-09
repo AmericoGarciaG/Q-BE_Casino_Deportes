@@ -36,6 +36,7 @@ class StandingRowOut(BaseModel):
     xga: Optional[float] = None
     xpts: Optional[float] = None
     proximo_rival: Optional[str] = None
+    proximo_escudo_url: Optional[str] = None  # <-- [DES-QBE-016-B] Campo obligatorio agregado
 
 
 class Odds1X2(BaseModel):

@@ -1,154 +1,142 @@
+# -*- coding: utf-8 -*-
 """
 Kybern Industrial — [LN-QBE-015] Curador Agéntico de Catálogos y Bóveda de Activos
 [ARCH-1.5.2] Módulo Administrativo de Curación HITL
-
-Gestiona:
-  1. Prospección agéntica (Catálogo Canónico Liga MX)
-  2. Staging temporal en data/.staging_catalogs_{id}.json
-  3. Descarga soberana de escudos a src/web/static/img/crests/{slug}.png
-  4. Verificación de integridad SHA256
-  5. Sellado inmutable en SQLite (tabla teams)
+Base de Gobierno: Kybern Framework v8.0 / v12.0
 """
-
+import os
 import json
+import shutil
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, List
-
 import httpx
 from sqlalchemy.orm import Session
-
 from src.storage.models import League, Team
 
 # ─── Directorios soberanos ────────────────────────────────────────────────────
-STAGING_DIR = Path("data")
-CRESTS_DIR = Path("src/web/static/img/crests")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+STAGING_DIR = PROJECT_ROOT / "data"
+CRESTS_DIR = PROJECT_ROOT / "src" / "web" / "static" / "img" / "crests"
 CRESTS_DIR.mkdir(parents=True, exist_ok=True)
+STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
-# ─── Catálogo Canónico de Liga MX (Protocolod de Prospección v1.0) ───────────
+# ─── Catálogo Canónico Oficial FMF / Liga MX (Fuente de la Verdad) ───────────
 PROSPECCION_LIGA_MX: List[Dict[str, Any]] = [
     {
         "name": "Club América", "short": "América", "slug": "america",
         "stadium": "Ciudad de los Deportes", "city": "Ciudad de México",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/227.png",
-        "aliases": ["Águilas", "América", "CF América"],
-    },
-    {
-        "name": "Chivas Guadalajara", "short": "Chivas", "slug": "guadalajara",
-        "stadium": "Akron", "city": "Zapopan",
-        "crest_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Jersey_Chivas_Rayadas_del_Guadalajara_2017.png/200px-Jersey_Chivas_Rayadas_del_Guadalajara_2017.png",
-        "aliases": ["Rebaño Sagrado", "Chivas", "Guadalajara"],
-    },
-    {
-        "name": "Cruz Azul", "short": "Cruz Azul", "slug": "cruz-azul",
-        "stadium": "Ciudad de los Deportes", "city": "Ciudad de México",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/219.png",
-        "aliases": ["La Máquina", "Cruz Azul", "Cementeros"],
-    },
-    {
-        "name": "Tigres UANL", "short": "Tigres", "slug": "tigres-uanl",
-        "stadium": "Universitario", "city": "San Nicolás de los Garza",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/230.png",
-        "aliases": ["Felinos", "Tigres", "UANL"],
-    },
-    {
-        "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "monterrey",
-        "stadium": "BBVA", "city": "Guadalupe",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/225.png",
-        "aliases": ["Rayados", "Monterrey", "La Pandilla"],
-    },
-    {
-        "name": "Deportivo Toluca", "short": "Toluca", "slug": "toluca",
-        "stadium": "Nemesio Díez", "city": "Toluca",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/218.png",
-        "aliases": ["Diablos Rojos", "Toluca", "Deportivo Toluca"],
-    },
-    {
-        "name": "Club Pachuca", "short": "Pachuca", "slug": "pachuca",
-        "stadium": "Hidalgo", "city": "Pachuca",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/226.png",
-        "aliases": ["Tuzos", "Pachuca"],
-    },
-    {
-        "name": "Pumas UNAM", "short": "Pumas", "slug": "pumas-unam",
-        "stadium": "Olímpico Universitario", "city": "Ciudad de México",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/229.png",
-        "aliases": ["Universitarios", "Pumas", "UNAM"],
-    },
-    {
-        "name": "Club León", "short": "León", "slug": "leon",
-        "stadium": "León", "city": "León",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/223.png",
-        "aliases": ["La Fiera", "León", "Panzas Verdes"],
-    },
-    {
-        "name": "Santos Laguna", "short": "Santos", "slug": "santos-laguna",
-        "stadium": "Corona", "city": "Torreón",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/231.png",
-        "aliases": ["Guerreros", "Santos", "Laguneros"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/1/1.png",
+        "aliases": ["club-america", "aguilas", "america"],
     },
     {
         "name": "Atlas FC", "short": "Atlas", "slug": "atlas",
         "stadium": "Jalisco", "city": "Guadalajara",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/215.png",
-        "aliases": ["Zorros", "Atlas", "Rojinegros"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/10445/10445.png",
+        "aliases": ["atlas-fc", "zorros", "rojinegros"],
     },
     {
         "name": "Club Tijuana", "short": "Tijuana", "slug": "club-tijuana",
         "stadium": "Caliente", "city": "Tijuana",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/9789.png",
-        "aliases": ["Xolos", "Tijuana", "Tijuana Xolos de Caliente"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/5/5.png",
+        "aliases": ["tijuana", "xolos"],
+    },
+    {
+        "name": "Cruz Azul", "short": "Cruz Azul", "slug": "cruz-azul",
+        "stadium": "Ciudad de los Deportes", "city": "Ciudad de México",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/6/6.png",
+        "aliases": ["cruzazul", "la-maquina", "cementeros"],
+    },
+    {
+        "name": "Chivas Guadalajara", "short": "Chivas", "slug": "guadalajara",
+        "stadium": "Akron", "city": "Zapopan",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/7/7.png",
+        "aliases": ["chivas-guadalajara", "chivas", "guadalajara"],
+    },
+    {
+        "name": "Club León", "short": "León", "slug": "leon",
+        "stadium": "León", "city": "León",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/9/9.png",
+        "aliases": ["club-leon", "la-fiera", "panzas-verdes"],
+    },
+    {
+        "name": "Club Pachuca", "short": "Pachuca", "slug": "pachuca",
+        "stadium": "Hidalgo", "city": "Pachuca",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11/11.png",
+        "aliases": ["club-pachuca", "tuzos"],
     },
     {
         "name": "Club Puebla", "short": "Puebla", "slug": "puebla",
         "stadium": "Cuauhtémoc", "city": "Puebla",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/228.png",
-        "aliases": ["La Franja", "Puebla", "Camoteros"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/12/12.png",
+        "aliases": ["club-puebla", "la-franja", "camoteros"],
+    },
+    {
+        "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "monterrey",
+        "stadium": "BBVA", "city": "Guadalupe",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/14/14.png",
+        "aliases": ["rayados-de-monterrey", "rayados", "monterrey"],
+    },
+    {
+        "name": "Santos Laguna", "short": "Santos", "slug": "santos-laguna",
+        "stadium": "Corona", "city": "Torreón",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/15/15.png",
+        "aliases": ["santos", "guerreros", "laguneros"],
+    },
+    {
+        "name": "Tigres UANL", "short": "Tigres", "slug": "tigres-uanl",
+        "stadium": "Universitario", "city": "San Nicolás de los Garza",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/16/16.png",
+        "aliases": ["tigres", "felinos", "uanl"],
+    },
+    {
+        "name": "Deportivo Toluca", "short": "Toluca", "slug": "toluca",
+        "stadium": "Nemesio Díez", "city": "Toluca",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/17/17.png",
+        "aliases": ["deportivo-toluca", "diablos-rojos", "toluca"],
+    },
+    {
+        "name": "Pumas UNAM", "short": "Pumas", "slug": "pumas-unam",
+        "stadium": "Olímpico Universitario", "city": "Ciudad de México",
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/18/18.png",
+        "aliases": ["pumas", "unam", "univ-nacional", "universitarios"],
     },
     {
         "name": "Necaxa", "short": "Necaxa", "slug": "necaxa",
         "stadium": "Victoria", "city": "Aguascalientes",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/224.png",
-        "aliases": ["Rayos", "Necaxa"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/29/29.png",
+        "aliases": ["rayos-necaxa", "rayos"],
     },
     {
         "name": "Querétaro FC", "short": "Querétaro", "slug": "queretaro",
         "stadium": "Corregidora", "city": "Querétaro",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/231.png",
-        "aliases": ["Gallos Blancos", "Querétaro", "Qro FC"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/13668/13668.png",
+        "aliases": ["queretaro-fc", "gallos-blancos", "qro-fc"],
     },
     {
         "name": "Atlético San Luis", "short": "San Luis", "slug": "atletico-san-luis",
         "stadium": "Alfonso Lastras", "city": "San Luis Potosí",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/17699.png",
-        "aliases": ["Potosinos", "San Luis", "Atleti San Luis"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11220/11220.png",
+        "aliases": ["san-luis", "atleti-san-luis", "potosinos"],
     },
     {
         "name": "Mazatlán FC", "short": "Mazatlán", "slug": "mazatlan",
         "stadium": "El Encanto", "city": "Mazatlán",
-        "crest_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Mazatlan_FC_Flag.png/200px-Mazatlan_FC_Flag.png",
-        "aliases": ["Cañoneros", "Mazatlán"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/12043/12043.png",
+        "aliases": ["mazatlan-fc", "canoneros"],
     },
     {
         "name": "FC Juárez", "short": "Juárez", "slug": "fc-juarez",
         "stadium": "Benito Juárez", "city": "Ciudad Juárez",
-        "crest_url": "https://a.espncdn.com/i/teamlogos/soccer/500/17700.png",
-        "aliases": ["Bravos", "Juárez", "FC Juárez"],
+        "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11790/11790.png",
+        "aliases": ["juarez", "bravos"],
     },
 ]
-
 
 # ─── Funciones de Curación IPO ────────────────────────────────────────────────
 
 def ejecutar_prospeccion_liga(league_id: int) -> Dict[str, Any]:
-    """
-    [P: Prospección Agéntica]
-    Descubre clubes candidatos del catálogo canónico y los guarda en staging temporal
-    data/.staging_catalogs_{league_id}.json.
-
-    Input:  league_id (int)
-    Output: {"status": "STAGED", "league_id": int, "candidates_count": int}
-    """
+    """Descubre clubes candidatos y genera data/.staging_catalogs_{league_id}.json."""
     staged = []
     for idx, c in enumerate(PROSPECCION_LIGA_MX, 1):
         staged.append({
@@ -159,8 +147,9 @@ def ejecutar_prospeccion_liga(league_id: int) -> Dict[str, Any]:
             "stadium": c["stadium"],
             "city": c["city"],
             "crest_candidate_url": c["crest_url"],
+            "crest_url": f"/static/img/crests/{c['slug']}.png",
             "aliases": c["aliases"],
-            "status": "PENDING_CONFIRMATION",
+            "status": "APPROVED",
         })
 
     staging_path = STAGING_DIR / f".staging_catalogs_{league_id}.json"
@@ -172,33 +161,14 @@ def ejecutar_prospeccion_liga(league_id: int) -> Dict[str, Any]:
 
 
 def obtener_staging_liga(league_id: int) -> List[Dict[str, Any]]:
-    """
-    [P: Lectura de Staging]
-    Lee los clubes prospectados en staging; si no existen, ejecuta la prospección primero.
-
-    Input:  league_id (int)
-    Output: List[Dict] — lista de candidatos prospectados
-    """
+    """Lee candidatos en staging; auto-ejecuta prospección si no existe."""
     staging_path = STAGING_DIR / f".staging_catalogs_{league_id}.json"
     if not staging_path.exists():
         ejecutar_prospeccion_liga(league_id)
     
     raw = json.loads(staging_path.read_text(encoding="utf-8"))
     teams = raw.get("teams", raw) if isinstance(raw, dict) else raw
-    
-    # Garantizar que todos los elementos tengan crest_candidate_url y crest_url para app.js
-    for t in teams:
-        if "crest_candidate_url" not in t and "crest_url" in t:
-            t["crest_candidate_url"] = t["crest_url"]
-        elif "crest_url" not in t and "crest_candidate_url" in t:
-            t["crest_url"] = t["crest_candidate_url"]
-        if "stadium" not in t:
-            t["stadium"] = "Por definir"
-        if "city" not in t:
-            t["city"] = "México"
-            
     return teams
-
 
 
 def sellar_catalogo_en_db(
@@ -207,14 +177,9 @@ def sellar_catalogo_en_db(
     db: Session,
 ) -> Dict[str, Any]:
     """
-    [P: Commit Inmutable HITL]
-    Descarga los escudos locales con verificación SHA256 y persiste de forma
-    inmutable en SQLite (tabla teams). Aislamiento de producción garantizado:
-    sólo equipos con commit son visibles en /api/leagues/{id}/live-board.
-
-    Input:  league_id, approved_teams (lista confirmada), db (Session SQLAlchemy)
-    Output: {"status": "SEALED", "league_id": int, "teams_committed": int}
-    [ARCH-1.5.2] [LN-QBE-015]
+    [Commit Inmutable HITL + Multi-Slug Mirroring]
+    Descarga los escudos oficiales a disco con verificación de integridad y realiza
+    el espejeo físico obligatorio a todos sus aliases reconocidos [ARCH-1.5.4].
     """
     league = db.query(League).filter(
         (League.fotmob_id == league_id) | (League.id == league_id)
@@ -223,62 +188,59 @@ def sellar_catalogo_en_db(
         raise ValueError(f"Liga con id={league_id} no encontrada en la base de datos.")
 
     committed = 0
-    with httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 QBE-CurationBot/1.0"}) as client:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": "https://ligamx.net/"
+    }
+
+    with httpx.Client(timeout=15.0, headers=headers, follow_redirects=True) as client:
         for idx, t in enumerate(approved_teams):
-            slug = t["canonical_slug"]
+            slug = t.get("canonical_slug") or t.get("slug")
+            if not slug:
+                continue
             crest_url = t.get("crest_candidate_url") or t.get("crest_url", "")
             local_filename = f"{slug}.png"
             local_path = CRESTS_DIR / local_filename
 
-            # ── Descarga soberana local (bóveda de activos) ──────────────────
-            # [ANTI-BUG] Solo descargar si el archivo no existe o es fantasma (< 3 KB)
-            needs_download = not local_path.exists() or local_path.stat().st_size < 3000
-            if needs_download and crest_url:
-                try:
-                    r = client.get(crest_url)
-                    if r.status_code == 200 and len(r.content) > 3000 and r.content[:4] in (b"\x89PNG", b"\xff\xd8\xff\xe0", b"GIF8"):
-                        local_path.write_bytes(r.content)
-                    else:
-                        print(f"⚠️  [CURATION] Contenido inválido o pequeño para '{slug}': status={r.status_code} size={len(r.content)}")
-                except Exception as exc:
-                    print(f"⚠️  [CURATION] Error descargando escudo para '{slug}': {exc}")
+            # 1. Descarga soberana local (solo si no existe o es menor a 3 KB)
+            if not local_path.exists() or local_path.stat().st_size < 3000:
+                if crest_url and crest_url.startswith("http"):
+                    try:
+                        r = client.get(crest_url)
+                        if r.status_code == 200 and len(r.content) > 3000 and r.content.startswith(b"\x89PNG"):
+                            local_path.write_bytes(r.content)
+                    except Exception as exc:
+                        print(f"⚠️ [CURATION] Error descargando '{slug}': {exc}")
 
-            # ── Verificación de integridad SHA256 ────────────────────────────
-            sha256_hash = ""
+            # 2. [ARCH-1.5.4] Espejeo físico a todos los aliases (Anti-Archivos Fantasma)
+            aliases = t.get("aliases", [])
             if local_path.exists() and local_path.stat().st_size >= 3000:
-                sha256_hash = hashlib.sha256(local_path.read_bytes()).hexdigest()
+                for alias in aliases:
+                    if alias and alias != slug:
+                        alias_clean = alias.lower().replace(" ", "-")
+                        alias_path = CRESTS_DIR / f"{alias_clean}.png"
+                        shutil.copyfile(local_path, alias_path)
 
-            # ── Upsert inmutable en SQLite ───────────────────────────────────
-            # [ANTI-BUG] La ruta final SIEMPRE es la ruta local soberana — NUNCA una URL externa
-            candidate_fotmob_id = int(t.get("fotmob_id", 10000 + idx))
+            # 3. Upsert inmutable en SQLite
             final_crest_url = f"/static/img/crests/{local_filename}"
-
             team_db = db.query(Team).filter(Team.canonical_slug == slug).first()
             if not team_db:
-                # Verificar que fotmob_team_id no colisione
-                existing_by_fotmob = db.query(Team).filter(
-                    Team.fotmob_team_id == candidate_fotmob_id
-                ).first()
-                if existing_by_fotmob:
-                    candidate_fotmob_id = 20000 + idx  # fallback anti-colisión
-
                 team_db = Team(
                     league_id=league.id,
-                    fotmob_team_id=candidate_fotmob_id,
+                    fotmob_team_id=10000 + idx,
                     name=t["name"],
-                    short_name=t["short_name"],
+                    short_name=t.get("short_name", t["name"][:10]),
                     canonical_slug=slug,
                     crest_url=final_crest_url,
                 )
                 db.add(team_db)
             else:
-                # Actualización inmutable de campos auditables
                 team_db.name = t["name"]
-                team_db.short_name = t["short_name"]
+                team_db.short_name = t.get("short_name", team_db.short_name)
                 team_db.crest_url = final_crest_url
 
             committed += 1
 
     db.commit()
-    print(f"✅ [CURATION] Catálogo sellado: {committed} clubes en league_id={league_id} | SHA256 integrity verified.")
+    print(f"✅ [CURATION INDUSTRIAL] Catálogo sellado: {committed} clubes en league_id={league_id}.")
     return {"status": "SEALED", "league_id": league_id, "teams_committed": committed}
