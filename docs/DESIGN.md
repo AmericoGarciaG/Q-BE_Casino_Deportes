@@ -99,6 +99,16 @@
 
 ---
 
+### [DES-QBE-016-D] Erradicación de Prefijos Redundantes en Columna Próximo Rival [UX-MANDATE]
+
+* **Axioma de Pulcritud Visual:** Queda terminantemente prohibido anteponer el prefijo `"vs "` o `"contra "` al nombre del club rival en la tabla de posiciones.
+* **Composición Geométrica:** La celda `td.col-rival` se estructura exclusivamente como:
+  `[Escudo miniatura 14x14px] [Nombre Canónico del Club]`
+  *(Ejemplo: `<img src="/static/img/crests/cruz-azul.png" width="14" height="14"> Cruz Azul`)*.
+* **Binding Rationale:** Al existir la identidad gráfica del escudo y el encabezado explícito **PRÓX. RIVAL**, la palabra *"vs"* constituía ruido semántico redundante que sobrecargaba la línea visual.
+
+---
+
 ### [DES-QBE-018] Panel Administrativo de Curación HITL (Catálogos y Bóveda) [UX-MANDATE]
 
 * **Propósito:** Interfaz de control y auditoría donde el Director visualiza la prospección de clubes antes de incorporarlos a la base de datos definitiva.

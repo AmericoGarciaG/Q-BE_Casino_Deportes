@@ -140,6 +140,16 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.5.5] Modelo de Datos Relacional para Aprendizaje Cuantitativo (Puente PM-FACE) [ARCH-PILLAR] [BIZ-LOGIC]
+
+* **Propósito Institucional:** La base de datos SQLite (`data/qbe_database.db`) opera como ledger histórico inmutable para el Motor de Calibración Post-Jornada y Atribución Factorial (`PM-FACE` — Fase 7).
+* **Entidades Relacionales Soberanas:**
+  1. `MatchdayState`: Registra `league_id`, `matchday_num`, `estado` (`ACTIVA`, `CONCLUIDA`), `last_scraped_at`, total de partidos y partidos finalizados. Opera como centinela de caché para evitar re-evaluaciones desde cero.
+  2. `FixtureRecord`: Almacena de forma normalizada cada encuentro con sus atributos estructurados: `id_partido`, `matchday`, `local_id`, `visitante_id`, `fecha_dt`, `estado`, `marcador_local`, `marcador_visitante`, momios $L, E, V$ y cláusula de `pago_anticipado`.
+* **Gobernanza de Cierre de Jornada:** Una jornada se declara `CONCLUIDA` cuando el 100% de sus partidos regulares tienen estatus `FINALIZADO` con marcador verificado. Una vez concluida, su registro queda congelado para auditoría de Brier Score y se habilita la transición a la jornada $N+1$.
+
+---
+
 ### [ARCH-1.6.0] Arquitectura del Live Board Reactivo y Sincronización SQLite [ARCH-PILLAR]
 
 * **Propósito:** Desacoplar la ingesta deportiva viva de la compilación de reportes, permitiendo que la interfaz SPA explore ligas, consulte tablas completas de 18 clubes en FotMob y seleccione partidos de forma interactiva persistiendo el estado en SQLite local.
@@ -183,6 +193,20 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   El backend debe entregar la lista ordenada y agrupada cronológicamente bajo la jerarquía:
   $$\text{Partidos EN\_CURSO} \longrightarrow \text{Partidos PROGRAMADOS (por fecha)} \longrightarrow \text{Partidos REPROGRAMADOS} \longrightarrow \text{Partidos FINALIZADOS (al fondo)}$$
 * **Integridad de Snapshot:** Los partidos finalizados de la jornada en curso actualizan dinámicamente la columna de puntos de la tabla general sin romper la correlación estocástica de los partidos restantes.
+
+---
+
+### [ARCH-1.6.4] Política Cache-First con TTL y Erradicación de Ingesta Redundante [ARCH-PILLAR] [PERF-MANDATE]
+
+* **Axioma de Desacoplamiento de Ingesta:** Queda estrictamente prohibido que la navegación del usuario en el frontend (`GET /api/leagues/{id}/live-board`) dispare scrapers externos síncronos de Playwright si existe un snapshot válido en SQLite dentro de su ventana de validez (*Time-To-Live, TTL*).
+* **Ventanas de Validez (TTL):**
+  - **Ventana Pre-Partido:** TTL de **15 minutos** cuando todos los partidos están `PROGRAMADOS`.
+  - **Ventana En Vivo:** TTL de **2 minutos** si existen partidos con estado `EN_CURSO`.
+  - **Jornada Concluida:** TTL infinito (datos históricos inmutables).
+* **Mecánica de Consulta:**
+  1. El endpoint lee prioritariamente desde SQLite. Si el snapshot existe y `now() - last_scraped_at < TTL`, entrega el payload en $\le 25\text{ ms}$.
+  2. Solo ante `cold_start` (base de datos vacía) o si el usuario envía el parámetro explícito `?force_refresh=true`, se autoriza la invocación controlada de los sensores de red.
+* **Ciclo de Vida en Arranque (`lifespan`):** Al iniciar el servidor, el seeder valida si SQLite ya contiene la jornada activa fresca. Si los datos existen y están en TTL, el servidor concluye su arranque en $\le 500\text{ ms}$ sin abrir navegadores headless.
 
 ---
 

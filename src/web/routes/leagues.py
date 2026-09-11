@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -24,15 +24,20 @@ _ORDEN_TOPOLOGICO = {"EN_CURSO": 1, "PROGRAMADO": 2, "REPROGRAMADO": 3, "FINALIZ
 
 
 @router.get("/{league_id}/live-board", response_model=LiveBoardOut)
-def get_live_board(league_id: int, db: Session = Depends(get_db)):
+def get_live_board(
+    league_id: int,
+    force_refresh: bool = Query(default=False),
+    db: Session = Depends(get_db)
+):
     """
-    Extrae y sincroniza la tabla de 18 clubes de FotMob y la cartelera viva.
+    [ARCH-1.6.4] Cache-First: responder en < 25ms si el snapshot está fresco.
+    Solo ejecuta Playwright ante cold start o cuando force_refresh=True.
     Aplica la Máquina de Estados [ARCH-1.6.3]: clasifica cada fixture como
     PROGRAMADO / EN_CURSO / FINALIZADO / REPROGRAMADO, evalúa es_hoy de forma
     dinámica y aplica el Ordenamiento Topológico canónico antes de retornar.
     """
     try:
-        board_data = sync_league_live_board(league_id, db)
+        board_data = sync_league_live_board(league_id, db, force_refresh=force_refresh)
 
         # ── Resolver escudos de la tabla de posiciones ─────────────────────
         standings = board_data.get("standings", [])
@@ -40,6 +45,9 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
             equipo = row.get("equipo", "")
             fotmob_id = row.get("fotmob_id")
             row["escudo_url"] = resolver_escudo_canonico(equipo, fotmob_id=fotmob_id, db=db)
+            rival_limpio = row.get("proximo_rival", "")
+            if rival_limpio and rival_limpio != "Por definir":
+                row["proximo_escudo_url"] = resolver_escudo_canonico(rival_limpio, db=db)
 
         # ── Procesar fixtures con Máquina de Estados [ARCH-1.6.3] ─────────
         ahora = datetime.now()
@@ -57,7 +65,7 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
                 except (ValueError, TypeError):
                     pass
 
-            # Calcular es_hoy de forma estrictamente dinámica [ARCH-1.6.3]
+            # Calcular es_hoy de forma strictly dinámica [ARCH-1.6.3]
             es_hoy = (dt_partido.date() == hoy_date) if dt_partido else False
 
             # Leer estado declarado en el catálogo; si hay fecha_dt, validar
@@ -72,7 +80,7 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
                     # Partido pasó su ventana de 2.5 hrs — promover a FINALIZADO
                     estado = "FINALIZADO"
                     if not marcador:
-                        marcador = "0 - 0"  # Contingencia: sin marcador fáctico
+                        marcador = "0 - 0"
                     if not minuto:
                         minuto = "Final"
                 elif dif_horas >= 0:
@@ -128,7 +136,6 @@ def get_live_board(league_id: int, db: Session = Depends(get_db)):
             ))
 
         # ── Ordenamiento Topológico [ARCH-1.6.3] ──────────────────────────
-        # EN_CURSO → PROGRAMADO (por fecha_dt) → REPROGRAMADO → FINALIZADO
         fixtures_ordenados = sorted(
             fixtures_procesados,
             key=lambda x: (

@@ -50,3 +50,20 @@ class PortfolioRecord(Base):
     bankroll = Column(Float, nullable=False)
     generated_at = Column(DateTime, default=datetime.utcnow)
     portfolio_json = Column(JSON, nullable=False)
+
+class MatchdayState(Base):
+    """
+    [ARCH-1.5.5] Control de Ciclo de Vida de Jornada y Centinela de Caché.
+    Puente de datos para el motor de calibración PM-FACE (Fase 7).
+    """
+    __tablename__ = "matchday_states"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
+    matchday_num = Column(Integer, nullable=False, default=8)
+    season = Column(String(20), default="2026")
+    status = Column(String(20), default="ACTIVA")  # ACTIVA, CONCLUIDA
+    last_scraped_at = Column(DateTime, default=datetime.utcnow)
+    total_matches = Column(Integer, default=9)
+    finished_matches = Column(Integer, default=0)
+

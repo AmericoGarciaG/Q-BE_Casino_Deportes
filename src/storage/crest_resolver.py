@@ -6,7 +6,7 @@ Base de Gobierno: Kybern Framework v8.0 / v12.0
 import os
 import logging
 import urllib.parse
-from typing import Optional
+from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from src.ingestion.normalizer import canonicalize_team_name
 
@@ -50,6 +50,9 @@ def obtener_slug_club(nombre: str) -> str:
     )
     return slug
 
+# Memoria Caché In-Memory para resolución ultrarrápida (< 1ms) de escudos
+_CREST_CACHE: Dict[str, str] = {}
+
 def resolver_escudo_canonico(
     equipo_nombre: str,
     fotmob_id: Optional[int] = None,
@@ -64,22 +67,28 @@ def resolver_escudo_canonico(
     if not equipo_nombre:
         return _generar_svg_fallback("QBE", "Club")
 
+    cache_key = f"{equipo_nombre}:{fotmob_id}"
+    if cache_key in _CREST_CACHE:
+        return _CREST_CACHE[cache_key]
+
     slug = obtener_slug_club(equipo_nombre)
     os.makedirs(STATIC_CRESTS_DIR, exist_ok=True)
 
+    res_url = None
     # Nivel 1: Verificación de archivo primario en disco
     archivo_fisico = os.path.join(STATIC_CRESTS_DIR, f"{slug}.png")
     if os.path.exists(archivo_fisico) and os.path.getsize(archivo_fisico) > 3000:
-        return f"/static/img/crests/{slug}.png"
+        res_url = f"/static/img/crests/{slug}.png"
 
-    # Nivel 1B: Verificación de aliases conocidos en disco
-    for extension in [f"club-{slug}.png", f"{slug}-fc.png", f"deportivo-{slug}.png"]:
-        alias_fisico = os.path.join(STATIC_CRESTS_DIR, extension)
-        if os.path.exists(alias_fisico) and os.path.getsize(alias_fisico) > 3000:
-            return f"/static/img/crests/{extension}"
+    if not res_url:
+        # Nivel 1B: Verificación de aliases conocidos en disco
+        for extension in [f"club-{slug}.png", f"{slug}-fc.png", f"deportivo-{slug}.png"]:
+            alias_fisico = os.path.join(STATIC_CRESTS_DIR, extension)
+            if os.path.exists(alias_fisico) and os.path.getsize(alias_fisico) > 3000:
+                res_url = f"/static/img/crests/{extension}"
+                break
 
-    # Nivel 2: Consulta en base de datos SQLite
-    if db is not None:
+    if not res_url and db is not None:
         try:
             from src.storage.models import Team
             # [CORRECCIÓN INDUSTRIAL]: Usar Team.canonical_slug y Team.name reales
@@ -90,15 +99,18 @@ def resolver_escudo_canonico(
                 c_url = team_rec.crest_url
                 if "fotmob.com" not in c_url.lower():
                     if c_url.startswith("/static/") or c_url.startswith("data:image/svg+xml"):
-                        return c_url
+                        res_url = c_url
         except Exception as ex:
             logger.warning(f"Aviso en consulta SQLite para '{equipo_nombre}': {ex}")
 
-    # Nivel 3: Fallback a SVG determinista estilizado
-    palabras = equipo_nombre.strip().split()
-    if len(palabras) >= 2:
-        iniciales = f"{palabras[0][0]}{palabras[1][0]}".upper()
-    else:
-        iniciales = equipo_nombre[:3].upper()
+    if not res_url:
+        # Nivel 3: Fallback a SVG determinista estilizado
+        palabras = equipo_nombre.strip().split()
+        if len(palabras) >= 2:
+            iniciales = f"{palabras[0][0]}{palabras[1][0]}".upper()
+        else:
+            iniciales = equipo_nombre[:3].upper()
+        res_url = _generar_svg_fallback(iniciales, equipo_nombre)
 
-    return _generar_svg_fallback(iniciales, equipo_nombre)
+    _CREST_CACHE[cache_key] = res_url
+    return res_url

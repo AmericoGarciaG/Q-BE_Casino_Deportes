@@ -96,6 +96,12 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Heurística de Resolución de Próximo Rival (Safe Rival Lookup):**
   1. Si la fuente estructurada omite el rival o devuelve texto genérico (`"vs Rival"` o vacío), el normalizador deducirá el club rival a partir del fixture cruzado de la jornada activa.
   2. Si no es posible identificar con certeza al rival en la jornada, se resolverá como `"Por Definir"` asociando el placeholder SVG institucional. Prohibido el renderizado de cadenas vacías o términos no procesados.
+* **Deducción Dinámica del Rival Sin Prefijo:**
+  $$\text{proximo\_rival} = \begin{cases} 
+  \text{visitante} & \text{si } \text{equipo} == \text{local} \\ 
+  \text{local} & \text{si } \text{equipo} == \text{visitante} 
+  \end{cases}$$
+  El valor de salida debe ser el nombre canónico puro del rival (sin `"vs "`), asociando de inmediato su URL local de escudo `/static/img/crests/{rival_slug}.png`.
 * **O (Output):** `EquipoCanónico` validado y unificado.
 * **Φ (Transición):** Hacia **[LN-QBE-005]** y **[LN-QBE-010]**.
 * **[SHIELD]:** `tests/shield/test_LN_QBE_012_normalizer.py`

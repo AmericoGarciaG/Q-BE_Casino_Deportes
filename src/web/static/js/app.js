@@ -77,13 +77,15 @@ async function cargarLigasDesdeBD() {
 }
 
 // 2. Seleccionar Liga y Cargar Live Board en Vista 2
-async function seleccionarLiga(fotmobId) {
+async function seleccionarLiga(fotmobId, forceRefresh = false) {
     switchView("view-matchday-selection");
     const tbody = document.querySelector(".table-panel-left table tbody");
     if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando datos oficiales en tiempo real...</td></tr>';
 
     try {
-        const resp = await fetch(`/api/leagues/${fotmobId}/live-board`);
+        let url = `/api/leagues/${fotmobId}/live-board`;
+        if (forceRefresh) url += "?force_refresh=true";
+        const resp = await fetch(url);
         if (!resp.ok) throw new Error("Error al obtener Live Board");
         currentLiveBoard = await resp.json();
 
@@ -99,6 +101,15 @@ async function seleccionarLiga(fotmobId) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#f87171;">❌ Error al conectar: ${e.message}</td></tr>`;
     }
 }
+
+async function refrescarCuotasEnVivo() {
+    if (!currentLiveBoard) return;
+    const btn = document.getElementById("btn-force-refresh");
+    if (btn) btn.innerHTML = "⏳ Refrescando...";
+    await seleccionarLiga(currentLiveBoard.league_id, true);
+    if (btn) btn.innerHTML = "🔄 Refrescar Cuotas";
+}
+window.refrescarCuotasEnVivo = refrescarCuotasEnVivo;
 
 // 3. Renderizar Tabla de 18 Clubes Completa (Panel Izquierdo)
 function renderizarTabla18Clubes(standings) {
