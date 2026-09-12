@@ -137,6 +137,32 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-017] Ingesta Fáctica Soberana de la Tabla General (Liga MX / FMF Engine)
+
+* **Ω (Resumen):** Extracción determinista y estructurada de la Tabla General de Clasificación oficial directamente desde el portal de la Federación Mexicana de Fútbol (`https://ligamx.net/cancha/tablas/tablaGeneralClasificacion/`), garantizando paridad matemática absoluta (Posición, JJ, JG, JE, JP, GF, GC, Dif, PTS) con el torneo activo y erradicando cualquier lista de respaldo estática.
+* **I (Input):** `league_id: int` (262 para Liga MX), `db_session` (SQLAlchemy Session opcional).
+* **P (Process) [ARCH-PILLAR] [GOVERNANCE-01] [ANTI-BUG]:**
+  1. **Extracción Soberana Directa:**
+     - Consumir el HTML oficial de `https://ligamx.net/cancha/tablas/tablaGeneralClasificacion/`.
+     - Parsear la tabla principal extrayendo para cada uno de los 18 clubes:
+       `pos`, `club_raw`, `pj`, `pg`, `pe`, `pp`, `gf`, `gc`, `dif`, `puntos`.
+  2. **Normalización Canónica (`[LN-QBE-012]`):**
+     - Mapear cada nombre de club a su `canonical_slug` y asociar la ruta local soberana `/static/img/crests/{slug}.png` (con verificación física en disco).
+  3. **Aduana de Integridad Aritmética de la Liga:**
+     - Verificar que el total de clubes sea exactamente 18.
+     - Validar coherencia contable: $\text{Puntos} == (\text{PG} \times 3) + \text{PE}$.
+     - Validar simetría global: $\sum \text{GF} == \sum \text{GC}$ y $\sum \text{PG} == \sum \text{PP}$.
+  4. **Acoplamiento de Métricas Avanzadas ($xG, xGA, xPTS$):**
+     - Si la API de FotMob está disponible, se acoplan sus métricas Opta.
+     - Si FotMob no responde o está bloqueado, se derivan analíticamente mediante los promedios reales de goles (`[LN-QBE-030]`), prohibiendo estrictamente alterar los puntos o posiciones oficiales de la Federación.
+  5. **Axioma de Cero Fallbacks Estáticos [GOVERNANCE-01]:**
+     - Queda formalmente prohibido mantener diccionarios de posiciones con datos preconcebidos en código (`LIGA_MX_CLUBS_DYNAMIC_FALLBACK`). Ante fallo total de red, el sistema levanta `DataQuarantineException` y preserva el último snapshot certificado de SQLite.
+* **O (Output):** `OfficialStandingsSnapshot` con los 18 clubes oficiales de la federación.
+* **Φ (Transición):** Hacia `[LN-QBE-010]` (Aduana de Sanidad), `[LN-QBE-040]` (Poisson Bivariado) y persistencia en `StandingSnapshot`.
+* **[SHIELD]:** `tests/shield/test_LN_QBE_017_standings_pipeline.py`
+
+---
+
 ### ID: [LN-QBE-002] Sensor Fáctico Grounded (Gemini Search Engine)
 
 * **Ω (Resumen):** Extracción complementaria y auditoría cualitativa mediante Gemini 3.6 Flash con Google Search Grounding asistida por la Rueda de Inferencia y Circuit Breaker de 4 llaves.

@@ -171,7 +171,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                 es_lejana = "28/10" in fecha_raw or "octubre" in fecha_raw.lower()
 
                 momios_obj = None
-                if c and c.get("L") is not None:
+                if c and c.get("L") is not None and not es_lejana:
                     momios_obj = {
                         "L": c["L"], "E": c["E"], "V": c["V"],
                         "pago_anticipado": c.get("pago_anticipado", True)
@@ -185,7 +185,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     "visitante": v,
                     "horario": fecha_raw,
                     "fecha_dt": f"2026-09-{11 + (idx // 4)}T19:00:00" if not es_lejana else "2026-10-28T21:00:00",
-                    "fecha_bloque": "Jornada Activa",
+                    "fecha_bloque": "Jornada Activa" if not es_lejana else "Partidos Reprogramados",
                     "estado": "REPROGRAMADO" if es_lejana else estado,
                     "marcador_actual": p.get("marcador"),
                     "minuto_juego": "Final" if estado == "FINALIZADO" else None,
@@ -193,7 +193,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     "es_operable": disponible,
                     "es_pospuesto": es_lejana,
                     "disponible_para_seleccion": disponible,
-                    "es_viable_triaje": True
+                    "es_viable_triaje": disponible
                 })
     else:
         # ── Ligas Internacionales: FotMob ─────────────────────────────────

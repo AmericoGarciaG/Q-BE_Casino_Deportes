@@ -108,6 +108,16 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.4.2] Pipeline de Ingesta Soberana de Tabla de Posiciones (Liga MX FMF) [ARCH-PILLAR] [GOVERNANCE-01]
+
+* **Fuente de Verdad Soberana:** La única fuente fáctica autorizada para nutrir la tabla de posiciones de la Liga MX (ID: 262) es la Federación Mexicana de Fútbol a través de `https://ligamx.net/cancha/tablas/tablaGeneralClasificacion/`.
+* **Erradicación de Fallbacks Mockeados:** Queda terminantemente prohibido el uso de constantes con listas de clubes y puntos predefinidos (`LIGA_MX_CLUBS_DYNAMIC_FALLBACK`). Todo dato de tabla debe emerger de la red oficial viva o del snapshot certificado en SQLite.
+* **Invalidación de Caché por Cierre de Jornada (Matchday Rollover):**
+  - Cuando el centinela `MatchdayState` detecta el avance de la jornada activa ($N \rightarrow N+1$), invalida de forma inmediata el `StandingSnapshot` previo en SQLite.
+  - Esto obliga al sistema a ejecutar la ingesta fresca de la tabla general para reflejar los ascensos, descensos y puntos de los partidos recién concluidos.
+
+---
+
 ### [ARCH-1.5.0] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
 
 * **Motor:** SQLAlchemy 2.0 conectado a `sqlite:///data/qbe_database.db` con `check_same_thread=False`.
