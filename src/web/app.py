@@ -1,6 +1,15 @@
 import os
+import sys
+import io
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, Response
@@ -15,15 +24,16 @@ from src.web.routes.admin import router as admin_router
 async def lifespan(app: FastAPI):
     # STARTUP: Inicializar BD y sincronizar
     print("\n" + "=" * 70)
-    print("🏛️  Q-BE CASINO DEPORTES — INICIANDO PLATAFORMA WEB INDUSTRIAL")
+    print("[Q-BE] PLATAFORMA WEB INDUSTRIAL")
     print("=" * 70)
     seed_initial_leagues()
     sync_active_leagues_data()
-    print("🚀 [LIFESPAN]: Servidor listo y base de datos sincronizada.")
+    print("[LIFESPAN]: Servidor listo y base de datos sincronizada.")
     print("=" * 70 + "\n")
     yield
     # SHUTDOWN
-    print("🛑 [LIFESPAN]: Deteniendo servidor Q-BE.")
+    print("[LIFESPAN]: Deteniendo servidor Q-BE.")
+
 
 app = FastAPI(title="Q-BE Casino Deportes Web Platform", lifespan=lifespan)
 

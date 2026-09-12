@@ -55,6 +55,12 @@ class Promedios10P(BaseModel):
     promedio_gc: float = Field(default=1.0, ge=0.0)
     xg_promedio: Optional[float] = None
     xga_promedio: Optional[float] = None
+    gf: Optional[int] = None
+    gc: Optional[int] = None
+    sot: Optional[float] = None
+    sota: Optional[float] = None
+    poss_pct: Optional[float] = None
+
 
 
 class MetricasResumenDatos(BaseModel):
@@ -85,7 +91,9 @@ class CuotasPagoAnticipado(BaseModel):
 
 class MomiosSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    estandar: Optional[CuotasPagoAnticipado] = None
     pago_anticipado: CuotasPagoAnticipado = Field(default_factory=CuotasPagoAnticipado)
+
 
 
 class H2HMatchRaw(BaseModel):
@@ -137,3 +145,13 @@ class MasterTableSnapshot(BaseModel):
     jornada_concluida: Optional[int] = None
     torneo: Optional[str] = "Liga MX - Torneo Apertura 2026"
     posiciones: List[MasterTablePosition] = Field(default_factory=list)
+
+
+# Aliases de compatibilidad [ARCH-PILLAR]
+MatchIdentity = IdentidadPartido
+ContextoFavorito = ContextoEquipoTabla
+ContextoUnderdog = ContextoEquipoTabla
+Odds1X2WithPA = CuotasPagoAnticipado
+OddsContainer = MomiosSnapshot
+Form10PRaw = Promedios10P
+EvaluacionCualitativaClub = RadarEquipo

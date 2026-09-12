@@ -1,10 +1,18 @@
 import os
 import sys
+import io
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import webbrowser
 import threading
 import time
 import uvicorn
 from pathlib import Path
+
 
 # Añadir raíz a sys.path
 root_dir = Path(__file__).resolve().parent
@@ -13,8 +21,9 @@ if str(root_dir) not in sys.path:
 
 def abrir_navegador(url: str):
     time.sleep(1.5)
-    print(f"🌐 Abriendo navegador en: {url}")
+    print(f"[Q-BE] Abriendo navegador en: {url}")
     webbrowser.open(url)
+
 
 def main():
     host = os.getenv("SERVER_HOST", "127.0.0.1")

@@ -1,13 +1,21 @@
-# Q-BE Casino Deportes — Pipeline Orchestrator Engine (src/pipeline/engine.py)
-"""
-Orquestador Determinista del Pipeline Q-BE con Telemetría de Diagnóstico y Generación Narrativa.
-[LN-QBE-010 .. LN-QBE-090] [ARCH-PILLAR]
-Orquesta el flujo determinista completo desde la sanidad de entrada hasta el ensamblado del payload consolidado.
-"""
+import sys
+import io
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from src.models.raw_input import RawMatchInput, MasterTableSnapshot
+
 from src.models.decision import PortfolioExecutionPlan, PortfolioControl, PortfolioBalance, SatelliteModule
 from src.models.consolidated import ConsolidatedPayload
 from src.core.sanitizer import SanitizerEngine
