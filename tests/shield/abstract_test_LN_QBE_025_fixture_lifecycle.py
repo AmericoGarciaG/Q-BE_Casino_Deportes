@@ -89,19 +89,27 @@ class AbstractTestLN_QBE_025_FixtureLifecycle(abc.ABC):
     def test_invariante_bloqueo_seleccion_partidos_no_operables(self):
         """
         [INVARIANZA 4 - BIZ-LOGIC]
-        Los partidos 'FINALIZADO' o 'REPROGRAMADO' deben tener su bandera 'disponible_para_seleccion'
-        en False, impidiendo que el usuario o el motor asignen capital a eventos ya ocurridos.
+        [LEY DE OPERABILIDAD TOTAL]:
+        Los partidos 'FINALIZADO' o sin cuotas válidas deben tener su bandera 'disponible_para_seleccion'
+        en False. Todo partido no finalizado con cuotas reales válidas debe ser operable y seleccionable.
         """
         fixtures = self.obtener_fixtures_live_board(league_id=262)
         for f in fixtures:
             estado = f.get("estado")
             disponible = f.get("disponible_para_seleccion", True)
+            momios = f.get("momios")
+            tiene_cuotas = bool(momios and isinstance(momios, dict) and float(momios.get("L", 0) or 0) > 1.0)
             partido = f"{f.get('local')} vs {f.get('visitante')}"
 
-            if estado in ["FINALIZADO", "REPROGRAMADO"]:
+            if estado == "FINALIZADO" or not tiene_cuotas:
                 assert disponible is False, (
                     f"Riesgo Financiero: El partido '{partido}' con estado '{estado}' "
-                    f"permite ser seleccionado para cálculo de portafolio."
+                    f"permite ser seleccionado sin ser operable."
+                )
+            else:
+                assert disponible is True, (
+                    f"Riesgo Financiero: El partido '{partido}' con estado '{estado}' y cuotas válidas "
+                    f"debe ser disponible para selección."
                 )
 
     def test_invariante_anti_partidos_pasados_disfrazados(self):

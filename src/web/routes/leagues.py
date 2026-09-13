@@ -106,8 +106,8 @@ def get_live_board(
                 except Exception:
                     momios_obj = None
 
-            # [CORRECCIÓN FINANCIERA]: Solo es operable si está PROGRAMADO Y TIENE CUOTAS REALES
-            disponible = (estado == "PROGRAMADO" and momios_obj is not None)
+            # [LEY DE OPERABILIDAD TOTAL]:
+            disponible = (estado != "FINALIZADO" and momios_obj is not None)
             es_operable = disponible
             es_pospuesto = bool(fx.get("es_pospuesto", estado == "REPROGRAMADO"))
 

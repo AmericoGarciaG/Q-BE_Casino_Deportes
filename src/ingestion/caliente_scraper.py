@@ -301,34 +301,44 @@ class CalienteMarketScraper:
                     html = page.content()
                     if BeautifulSoup:
                         soup = BeautifulSoup(html, "html.parser")
-                        filas = soup.find_all(lambda tag: tag.name in ["tr", "div", "li"] and len(tag.get_text()) < 1000 and any(
-                            kw in tag.get_text() for kw in ["América", "Chivas", "Cruz Azul", "Tigres", "Puebla", "Santos", "Toluca", "Pachuca", "Atlas", "Necaxa", "Juárez", "Mazatlán", "Tijuana", "San Luis", "León", "Querétaro", "Pumas"]
-                        ))
+                        filas = soup.find_all(lambda tag: tag.name in ["tr", "div"] and any(
+                            c in tag.get("class", []) for c in ["event-row", "coupon-row", "mkt-item", "item-row"]
+                        ) or (tag.name == "tr" and len(tag.find_all("td")) >= 4))
+
+                        if not filas:
+                            # Fallback a contenedores individuales de partido
+                            filas = soup.find_all("tr", class_=lambda c: c and "event" in c.lower())
 
                         for fila in filas:
-                            texto = fila.get_text(" | ", strip=True)
+                            texto_fila = fila.get_text(" | ", strip=True)
+                            
                             for (l_target, v_target) in partidos_a_buscar.keys():
-                                palabras_l = l_target.lower().split()
-                                palabras_v = v_target.lower().split()
-                                match_l = any(w in texto.lower() for w in palabras_l if len(w) > 3)
-                                match_v = any(w in texto.lower() for w in palabras_v if len(w) > 3)
+                                palabras_l = [w for w in l_target.lower().split() if len(w) > 3]
+                                palabras_v = [w for w in v_target.lower().split() if len(w) > 3]
+                                
+                                # Comprobar que AMBOS clubes pertenezcan unívocamente a ESTA fila
+                                match_l = any(w in texto_fila.lower() for w in palabras_l)
+                                match_v = any(w in texto_fila.lower() for w in palabras_v)
 
                                 if match_l and match_v:
-                                    momios = re.findall(r'\b\d+\.\d{2}\b', texto)
-                                    tiene_pa = any(kw in texto.lower() for kw in ["pago anticipado", "2 goles de ventaja", "pa"])
+                                    # Extraer únicamente los momios contenidos dentro de esta fila atómica
+                                    momios_raw = re.findall(r'\b\d+\.\d{2}\b', texto_fila)
+                                    tiene_pa = any(kw in texto_fila.lower() for kw in ["pago anticipado", "2 goles", "pa activo", "pa"])
 
-                                    if len(momios) >= 3:
+                                    if len(momios_raw) >= 3:
                                         item = {
                                             "local": l_target,
                                             "visitante": v_target,
-                                            "L": float(momios[0]),
-                                            "E": float(momios[1]),
-                                            "V": float(momios[2]),
+                                            "L": float(momios_raw[0]),
+                                            "E": float(momios_raw[1]),
+                                            "V": float(momios_raw[2]),
                                             "pago_anticipado": tiene_pa,
                                             "encontrado_en_caliente": True
                                         }
+                                        # Evitar sobrescrituras
                                         if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
                                             mercado_encontrado.append(item)
+                                            print(f"  💰 Cuota Asignada: {l_target} vs {v_target} -> L:{item['L']} E:{item['E']} V:{item['V']} | PA:{item['pago_anticipado']}")
                 finally:
                     browser.close()
         except Exception as e:

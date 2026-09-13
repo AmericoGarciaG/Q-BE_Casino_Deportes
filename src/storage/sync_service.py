@@ -423,8 +423,10 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     "pago_anticipado": bool(c.get("pago_anticipado", True))
                 }
 
-            # En reprogramados la selección está deshabilitada (Grupo 4)
-            disponible = (estado == "PROGRAMADO" and momios_obj is not None and not es_pospuesto)
+            # [LEY DE OPERABILIDAD TOTAL]:
+            # Todo partido no finalizado con momios válidos de casino es operable para el motor Q-BE
+            tiene_momios_validos = bool(momios_obj and float(momios_obj.get("L", 0)) > 1.0)
+            disponible = (estado != "FINALIZADO" and tiene_momios_validos)
 
             marcador_actual = p.get("marcador")
             if estado == "FINALIZADO" and not marcador_actual:

@@ -208,7 +208,7 @@ function renderizarCartelera(fixtures) {
     // ── Nivel 3: REPROGRAMADOS ────────────────────────────────────────────
     if (reprogramados.length > 0) {
         _renderSeccionHeader(container, "⏳ Partidos Reprogramados / Fecha Lejana", "header-postponed");
-        reprogramados.forEach(f => _renderFixtureCard(container, f, true));
+        reprogramados.forEach(f => _renderFixtureCard(container, f, false));
     }
 
     // ── Nivel 4: FINALIZADOS al fondo ─────────────────────────────────────
@@ -247,14 +247,20 @@ function _renderSeccionHeader(container, texto, claseAdicional) {
 
 /** Renderiza una tarjeta de fixture según su estado semántico [DES-QBE-016-C] */
 function _renderFixtureCard(container, f, deshabilitada) {
+    const estado = f.estado || "PROGRAMADO";
+    // [LEY DE OPERABILIDAD TOTAL]: Seleccionable si no está finalizado y tiene cuotas reales
+    const esSeleccionable = !deshabilitada && f.disponible_para_seleccion === true && estado !== "FINALIZADO";
+
     const card = document.createElement("div");
-    card.className = "fixture-card" + (deshabilitada ? " fixture-disabled" : "");
+    card.className = "fixture-card" + (!esSeleccionable ? " fixture-disabled" : "");
     card.id = `fixture-card-${f.id_partido}`;
     card.dataset.estado = f.estado || "PROGRAMADO";
     card.dataset.matchId = f.id_partido;
 
-    const estado = f.estado || "PROGRAMADO";
-    const esSeleccionable = !deshabilitada && estado === "PROGRAMADO" && f.disponible_para_seleccion !== false;
+    // Si es operable con cuotas, incluir en selección inicial por defecto si aún no está agregado
+    if (esSeleccionable && !selectedMatchIds.includes(f.id_partido)) {
+        selectedMatchIds.push(f.id_partido);
+    }
 
     // Estilo base de la tarjeta según estado
     if (estado === "EN_CURSO") {
@@ -367,9 +373,8 @@ function habilitarClicTarjetaCompleta() {
         card.addEventListener("click", (e) => {
             const estado = card.dataset.estado;
 
-            // Bloquear interacción en tarjetas deshabilitadas
-            if (card.classList.contains("fixture-disabled") ||
-                estado === "FINALIZADO" || estado === "REPROGRAMADO") {
+            // Bloquear interacción ÚNICAMENTE si está finalizado o no tiene cuotas disponibles
+            if (card.classList.contains("fixture-disabled") || estado === "FINALIZADO") {
                 return;
             }
 
