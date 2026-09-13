@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from src.storage.database import SessionLocal
-from src.storage.models import League, StandingSnapshot, FixtureSnapshot, Team, MatchdayState
+from src.storage.models import League, StandingSnapshot, FixtureSnapshot, Team, MatchdayState, CurrentTeamStanding
 from src.ingestion.providers.fotmob_provider import FotMobProvider
 from src.storage.crest_resolver import resolver_escudo_canonico, STATIC_CRESTS_DIR
 from src.ingestion.normalizer import canonicalize_team_name
@@ -68,6 +68,66 @@ def deducir_proximo_rival_dinamico(equipo: str, fixtures_activos: List[Dict[str,
     return "Rival por Definir"
 
 
+def sync_current_team_standings_table(db: Session, league_id: int, standings_formatted: List[Dict[str, Any]], ahora: datetime):
+    """
+    [ARCH-1.5.6] Persiste o actualiza relacionalmente cada fila en la tabla current_team_standings.
+    """
+    for row in standings_formatted:
+        eq = row["equipo"]
+        slug = canonicalize_team_name(eq).lower().replace(" ", "-").replace(".", "")
+        
+        standing_rec = db.query(CurrentTeamStanding).filter(
+            CurrentTeamStanding.league_id == league_id,
+            CurrentTeamStanding.canonical_slug == slug
+        ).first()
+
+        forma = row.get("forma", [])
+        forma_str = "-".join(forma) if isinstance(forma, list) else str(forma or "")
+
+        if not standing_rec:
+            standing_rec = CurrentTeamStanding(
+                league_id=league_id,
+                team_name=eq,
+                canonical_slug=slug,
+                pos=int(row["pos"]),
+                puntos=int(row["puntos"]),
+                pj=int(row["pj"]),
+                pg=int(row["pg"]),
+                pe=int(row["pe"]),
+                pp=int(row["pp"]),
+                gf=int(row["gf"]),
+                gc=int(row["gc"]),
+                dif=int(row["dif"]),
+                forma_reciente=forma_str,
+                xg=float(row.get("xg", 10.0)),
+                xga=float(row.get("xga", 8.0)),
+                xpts=float(row.get("xpts", 10.0)),
+                proximo_rival=row.get("proximo_rival"),
+                proximo_escudo_url=row.get("proximo_escudo_url"),
+                last_updated_at=ahora
+            )
+            db.add(standing_rec)
+        else:
+            standing_rec.pos = int(row["pos"])
+            standing_rec.puntos = int(row["puntos"])
+            standing_rec.pj = int(row["pj"])
+            standing_rec.pg = int(row["pg"])
+            standing_rec.pe = int(row["pe"])
+            standing_rec.pp = int(row["pp"])
+            standing_rec.gf = int(row["gf"])
+            standing_rec.gc = int(row["gc"])
+            standing_rec.dif = int(row["dif"])
+            standing_rec.forma_reciente = forma_str
+            standing_rec.xg = float(row.get("xg", standing_rec.xg))
+            standing_rec.xga = float(row.get("xga", standing_rec.xga))
+            standing_rec.xpts = float(row.get("xpts", standing_rec.xpts))
+            standing_rec.proximo_rival = row.get("proximo_rival")
+            standing_rec.proximo_escudo_url = row.get("proximo_escudo_url")
+            standing_rec.last_updated_at = ahora
+
+    db.commit()
+
+
 def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = False) -> Dict[str, Any]:
     """
     [ARCH-1.6.4] Política Cache-First con TTL Dinámico.
@@ -91,6 +151,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
+            sync_current_team_standings_table(db, league.id, last_snap.positions_json, ahora)
             return {
                 "league_id": league_id,
                 "league_name": league.name,
@@ -114,6 +175,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
             tiempo_snap = (ahora - (last_fix.updated_at or last_snap.captured_at)).total_seconds() / 60.0
             if tiempo_snap < TTL_CACHE_MINUTOS:
+                sync_current_team_standings_table(db, league.id, last_snap.positions_json, ahora)
                 # [SERVIR DESDE SQLITE EN < 20 MS]: Cero llamadas a Playwright
                 return {
                     "league_id": league_id,
@@ -293,7 +355,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                                 partidos_extraidos.append(item)
 
                     # ── B. ACTIVAR Y EXTRAER SECCIÓN 'PARTIDOS REPROGRAMADOS' ──
-                    print("🎯 [SYNC] Localizando píldora 'PARTIDOS REPROGRAMADOS'...")
+                    logger.info("[SYNC] Localizando pildora 'PARTIDOS REPROGRAMADOS'...")
                     clic_rep = page.evaluate("""() => {
                         const els = Array.from(document.querySelectorAll('a, button, span, div'));
                         for (let el of els) {
@@ -310,7 +372,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
 
                     # Tarjetas de reprogramados (usando selector específico de marquesina)
                     tarjetas_rep = page.query_selector_all("li[id^='MrcdrPrtd_'], .item, .slide, .partido")
-                    print(f"  Analizando tarjetas tras activar reprogramados: {len(tarjetas_rep)}")
+                    logger.info(f"Analizando tarjetas tras activar reprogramados: {len(tarjetas_rep)}")
 
                     for t in tarjetas_rep:
                         if not t.is_visible(): continue
@@ -354,16 +416,18 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                                 }
                                 if not any(p["local"] == item_rep["local"] and p["visitante"] == item_rep["visitante"] for p in partidos_extraidos):
                                     partidos_extraidos.append(item_rep)
-                                    print(f"  ⏳ [SYNC-REPROG] {item_rep['local']} vs {item_rep['visitante']} ({item_rep['fecha']})")
+                                    logger.info(f"[SYNC-REPROG] {item_rep['local']} vs {item_rep['visitante']} ({item_rep['fecha']})")
 
                 except Exception as e_liga:
-                    print(f"⚠️ [SYNC-PLAYWRIGHT] Error en ligamx.net: {e_liga}")
+                    logger.warning(f"[SYNC-PLAYWRIGHT] Error en ligamx.net: {e_liga}")
                 finally:
                     browser.close()
 
             return jornada_txt, partidos_extraidos
 
         # [AISLAMIENTO TOTAL]: Ejecutar Playwright síncrono en un Thread aislado con timeout estricto
+        partidos_slate = []
+        cuotas_map = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             try:
                 # 2. Extraer Slate Oficial de ligamx.net (incluyendo los 3 reprogramados y marcadores reales)
@@ -376,8 +440,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                 cuotas_map = {(c["local"], c["visitante"]): c for c in cuotas_caliente}
             except Exception as ex:
                 import traceback
-                print(f"❌ [SYNC-ERROR] Exception in ligamx/caliente: {ex}\n{traceback.format_exc()}", flush=True)
-                logger.warning(f"[SYNC] Aviso en extracción ligamx/caliente: {ex}")
+                logger.warning(f"[SYNC-ERROR] Exception in ligamx/caliente: {ex}\n{traceback.format_exc()}")
 
         fixtures_formatted = []
         dias_semana = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
@@ -505,6 +568,9 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             row["proximo_escudo_url"] = resolver_escudo_canonico(rival_limpio, db=db)
 
     try:
+        # Guardar o Actualizar en la tabla relacional auditable current_team_standings
+        sync_current_team_standings_table(db, league.id, standings_formatted, ahora)
+
         # Guardar Snapshots y Ledger en SQLite
         snap_standing = StandingSnapshot(league_id=league.id, season="2026", matchday=jornada_num, positions_json=standings_formatted)
         snap_fixture = FixtureSnapshot(league_id=league.id, matchday=jornada_num, matches_json=fixtures_formatted, updated_at=ahora)
@@ -524,7 +590,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         db.commit()
     except Exception as e_save:
         import traceback
-        print(f"❌ [SAVE-ERROR] Failed to save snapshots: {e_save}\n{traceback.format_exc()}", flush=True)
+        logger.error(f"[SAVE-ERROR] Failed to save snapshots: {e_save}\n{traceback.format_exc()}")
 
     return {
         "league_id": league_id,
@@ -544,9 +610,9 @@ def sync_active_leagues_data():
         active_leagues = db.query(League).filter(League.is_active == True).all()
         for league in active_leagues:
             try:
-                print(f"🔄 [SYNC-STARTUP]: Sincronizando datos vivos para {league.name} (FotMob ID: {league.fotmob_id})...")
+                logger.info(f"[SYNC-STARTUP]: Sincronizando datos vivos para {league.name} (FotMob ID: {league.fotmob_id})...")
                 sync_league_live_board(league.fotmob_id, db)
-                print(f"   ✅ [SYNC-OK]: Tabla y cartelera guardadas en BD para {league.name}.")
+                logger.info(f"[SYNC-OK]: Tabla y cartelera guardadas en BD para {league.name}.")
             except Exception as e:
                 logger.error(f"Error sincronizando liga {league.id} en startup: {e}")
                 db.rollback()

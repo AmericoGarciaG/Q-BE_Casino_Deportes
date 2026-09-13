@@ -35,6 +35,34 @@ def construir_master_table_snapshot(positions_json: List[Dict[str, Any]], jornad
     return MasterTableSnapshot(jornada_concluida=max(1, jornada - 1), posiciones=posiciones)
 
 
+def construir_master_table_desde_db(db_session, league_id: int = 1, jornada: int = 8) -> MasterTableSnapshot:
+    """Lee directamente la tabla relacional current_team_standings con datos en vivo."""
+    from src.storage.models import CurrentTeamStanding, StandingSnapshot
+    registros = db_session.query(CurrentTeamStanding).filter(CurrentTeamStanding.league_id == league_id).order_by(CurrentTeamStanding.pos.asc()).all()
+    
+    if not registros:
+        # Fallback de resiliencia a StandingSnapshot si no se han cargado registros relacionales
+        last_snap = db_session.query(StandingSnapshot).filter(StandingSnapshot.league_id == league_id).order_by(StandingSnapshot.captured_at.desc()).first()
+        if last_snap and last_snap.positions_json:
+            return construir_master_table_snapshot(last_snap.positions_json, jornada=jornada)
+
+    posiciones = []
+    for r in registros:
+        pts_pj = round(r.puntos / max(1, r.pj), 2)
+        posiciones.append(MasterTablePosition(
+            pos=r.pos,
+            equipo=r.team_name,
+            puntos=r.puntos,
+            pj=r.pj,
+            gf=r.gf,
+            gc=r.gc,
+            dif=r.dif,
+            pts_por_partido=pts_pj
+        ))
+    return MasterTableSnapshot(jornada_concluida=max(1, jornada - 1), posiciones=posiciones)
+
+
+
 def hidratar_partidos_cuantitativos(
     selected_fixtures: List[Dict[str, Any]],
     master_table: MasterTableSnapshot,

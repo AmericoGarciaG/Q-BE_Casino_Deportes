@@ -94,6 +94,11 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
         if (lblTabla) lblTabla.textContent = currentLiveBoard.league_name || "Liga MX";
         const lblJornada = document.getElementById("lbl-nombre-jornada");
         if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada Activa";
+        const lblTime = document.getElementById("lbl-timestamp-tabla");
+        if (lblTime) {
+            const horaStr = new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+            lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo desde FMF y FotMob (${horaStr})`;
+        }
 
         renderizarTabla18Clubes(currentLiveBoard.standings);
         renderizarCartelera(currentLiveBoard.fixtures);
@@ -104,11 +109,11 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
 }
 
 async function refrescarCuotasEnVivo() {
-    if (!currentLiveBoard) return;
+    const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
     const btn = document.getElementById("btn-force-refresh");
     if (btn) btn.innerHTML = "⏳ Refrescando...";
-    await seleccionarLiga(currentLiveBoard.league_id, true);
-    if (btn) btn.innerHTML = "🔄 Refrescar Cuotas";
+    await seleccionarLiga(targetId, true);
+    if (btn) btn.innerHTML = "🔄 Refrescar Tabla";
 }
 window.refrescarCuotasEnVivo = refrescarCuotasEnVivo;
 

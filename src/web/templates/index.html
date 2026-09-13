@@ -47,13 +47,18 @@
             <div class="split-view">
                 <!-- Panel Izquierdo: Tabla de 18 Clubes con 3 Pestañas -->
                 <div class="card table-panel-left">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                         <h3 style="margin: 0;">🛡️ <span id="lbl-nombre-tabla">Liga MX</span></h3>
                         <div style="display: flex; gap: 6px;">
                             <button id="btn-tab-general" class="subtab-btn active" onclick="switchTableTab('general')">📋 General</button>
                             <button id="btn-tab-forma" class="subtab-btn" onclick="switchTableTab('forma')">📈 Forma</button>
                             <button id="btn-tab-xg" class="subtab-btn" onclick="switchTableTab('xg')">🎯 xG Opta</button>
                         </div>
+                    </div>
+
+                    <div style="font-size: 7.2pt; color: #94A3B8; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                        <span id="lbl-timestamp-tabla">🕒 Tabla Oficial: Sincronizada en vivo desde la FMF y FotMob</span>
+                        <button id="btn-force-refresh" onclick="refrescarCuotasEnVivo()" style="background: transparent; border: none; color: #38BDF8; font-size: 7.2pt; cursor: pointer; text-decoration: underline;">🔄 Refrescar Tabla</button>
                     </div>
 
                     <div style="overflow-x: auto;">

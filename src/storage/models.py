@@ -70,3 +70,33 @@ class MatchdayState(Base):
     total_matches = Column(Integer, default=9)
     finished_matches = Column(Integer, default=0)
 
+
+class CurrentTeamStanding(Base):
+    """
+    [ARCH-1.5.6] Tabla Relacional Auditable de Posiciones y Métricas en Vivo.
+    Centraliza número por número los datos exactos que alimentan el motor de cálculo.
+    """
+    __tablename__ = "current_team_standings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
+    team_name = Column(String, nullable=False, index=True)
+    canonical_slug = Column(String, nullable=False, index=True)
+    pos = Column(Integer, nullable=False)
+    puntos = Column(Integer, nullable=False)
+    pj = Column(Integer, nullable=False)
+    pg = Column(Integer, nullable=False)
+    pe = Column(Integer, nullable=False)
+    pp = Column(Integer, nullable=False)
+    gf = Column(Integer, nullable=False)
+    gc = Column(Integer, nullable=False)
+    dif = Column(Integer, nullable=False)
+    forma_reciente = Column(String, nullable=False) # Ej. "G-E-G-P-G"
+    xg = Column(Float, default=10.0)
+    xga = Column(Float, default=8.0)
+    xpts = Column(Float, default=10.0)
+    proximo_rival = Column(String, nullable=True)
+    proximo_escudo_url = Column(String, nullable=True)
+    last_updated_at = Column(DateTime, default=datetime.utcnow)
+
+

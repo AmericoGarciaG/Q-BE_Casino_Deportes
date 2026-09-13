@@ -7,9 +7,12 @@ con Playwright Stealth y BeautifulSoup. Cero generación de equipos sintéticos.
 
 import re
 import json
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 from src.ingestion.normalizer import canonicalize_team_name
+
+logger = logging.getLogger(__name__)
 
 try:
     from bs4 import BeautifulSoup
@@ -338,11 +341,11 @@ class CalienteMarketScraper:
                                         # Evitar sobrescrituras
                                         if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
                                             mercado_encontrado.append(item)
-                                            print(f"  💰 Cuota Asignada: {l_target} vs {v_target} -> L:{item['L']} E:{item['E']} V:{item['V']} | PA:{item['pago_anticipado']}")
+                                            logger.info(f"Cuota Asignada: {l_target} vs {v_target} -> L:{item['L']} E:{item['E']} V:{item['V']} | PA:{item['pago_anticipado']}")
                 finally:
                     browser.close()
         except Exception as e:
-            print(f"[CALIENTE] ⚠️ Error en extracción focalizada: {e}")
+            logger.warning(f"[CALIENTE] Error en extraccion focalizada: {e}")
 
         # Rellenar con None los partidos no cotizados [GOVERNANCE-01: sin datos sintéticos]
         for (l_target, v_target) in partidos_a_buscar.keys():

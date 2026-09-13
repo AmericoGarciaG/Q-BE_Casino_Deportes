@@ -9,8 +9,9 @@ from datetime import datetime
 from src.storage.database import get_db
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, PortfolioRecord
 from src.models.web_schemas import GeneratePortfolioRequest
-from src.pipeline.adapter import construir_master_table_snapshot, hidratar_partidos_cuantitativos
+from src.pipeline.adapter import construir_master_table_snapshot, construir_master_table_desde_db, hidratar_partidos_cuantitativos
 from src.pipeline.engine import QBEPipelineEngine
+
 
 router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
 
@@ -58,7 +59,7 @@ def generate_portfolio(req: GeneratePortfolioRequest, db: Session = Depends(get_
     jornada_activa = fixture_snap.matchday or 8
 
     # 4. Construir contratos matemáticos vía Adaptador
-    master_table = construir_master_table_snapshot(standing_snap.positions_json, jornada=jornada_activa)
+    master_table = construir_master_table_desde_db(db, league.id, jornada_activa)
     raw_matches = hidratar_partidos_cuantitativos(seleccionados, master_table, jornada=jornada_activa)
 
     # 5. Ejecutar Motor Cuantitativo E2E (Poisson 6x6, Kelly, Dutching V=0, The Shield Gate)
