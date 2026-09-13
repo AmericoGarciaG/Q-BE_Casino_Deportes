@@ -31,8 +31,8 @@ class PoissonModulationResult(BaseModel):
     lambda_local: float = Field(ge=0.05, le=6.00)
     mu_visitante: float = Field(ge=0.05, le=6.00)
     goles_esperados_totales: float
-    peso_h2h: float = Field(ge=0.15, le=0.50)
-    peso_liga: float = Field(ge=0.50, le=0.85)
+    peso_h2h: float = Field(ge=0.0, le=1.0)
+    peso_liga: float = Field(ge=0.0, le=1.0)
     omega_perf_local: float = Field(ge=0.40, le=1.60)
     omega_perf_vis: float = Field(ge=0.40, le=1.60)
 

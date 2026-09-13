@@ -128,11 +128,17 @@ class PortfolioEngine:
         bankroll: float,
         mode: str = "BANKROLL"
     ) -> PortfolioExecutionPlan:
+        # ── 1. Ordenamiento Jerárquico Doble (Probabilidad de Éxito y ROI) ──
+        approved_matches = sorted(
+            approved_matches,
+            key=lambda x: (-(1.0 - x["psi_downside"]), -x["ev_neto_roi"])
+        )
+
         k_count = len(approved_matches)
         if k_count == 0:
             raise ValueError("No hay partidos aprobados para construir el portafolio.")
 
-        # 1. Ruina Multi-Activo
+        # Ruina conjunta multi-activo
         prod_psi = 1.0
         for m in approved_matches:
             prod_psi *= m["psi_downside"]
@@ -308,7 +314,42 @@ class PortfolioEngine:
         ganancia_esperada_core = round(min(ganancia_maxima_posible, max(0.0, ganancia_esperada_core)), 2)
         roi_global_esp = round((ganancia_esperada_core / total_inv_core) * 100.0, 2) if total_inv_core > 0 else 0.0
 
-        return PortfolioExecutionPlan(
+        # ── 5. Análisis de Resiliencia y Cascada de Reveses (Stress-Testing) ──
+        cascada_reveses = []
+        ganancias_premios = [o.proyecciones.ganancia_neta_principal_mxn for o in orders]
+        inversiones_ordenes = [o.boletos.inversion_partido_A_i for o in orders]
+        
+        # Simulación de fallos desde 0 hasta K (asumiendo que fallan los activos de mayor riesgo primero)
+        reveses_tolerados = 0
+        pnl_acumulado = sum(ganancias_premios)
+        
+        cascada_reveses.append({
+            "nivel": 0,
+            "escenario": "Pleno Éxito (0 Fallos)",
+            "pnl_mxn": round(pnl_acumulado, 2),
+            "roi_pct": round((pnl_acumulado / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0,
+            "estado": "PLENO_POSITIVO"
+        })
+
+        for m_fallos in range(1, k_count + 1):
+            # Fallan los m_fallos últimos (los de menor probabilidad o mayor riesgo)
+            ganancia_restante = sum(ganancias_premios[:k_count - m_fallos])
+            perdida_reveses = sum(inversiones_ordenes[k_count - m_fallos:])
+            pnl_nivel = round(ganancia_restante - perdida_reveses, 2)
+            roi_nivel = round((pnl_nivel / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0
+            
+            if pnl_nivel >= 0:
+                reveses_tolerados = m_fallos
+
+            cascada_reveses.append({
+                "nivel": m_fallos,
+                "escenario": f"{m_fallos} Reves{'es' if m_fallos > 1 else ''} Simultáneo{'s' if m_fallos > 1 else ''}",
+                "pnl_mxn": pnl_nivel,
+                "roi_pct": roi_nivel,
+                "estado": "SUPERAVIT" if pnl_nivel > 0 else ("BREAKEVEN" if pnl_nivel == 0 else "DEFICIT")
+            })
+
+        plan_ejecucion = PortfolioExecutionPlan(
             control_portafolio=PortfolioControl(
                 modalidad="BANKROLL" if mode == "BANKROLL" else "VAQUITA",
                 total_partidos_core_aprobados=k_count,
@@ -316,7 +357,13 @@ class PortfolioEngine:
                 probabilidad_ruina_total_porcentaje=round(p_ruina_total, 4),
                 blindaje_global_preservacion_porcentaje=round(blindaje, 4),
                 desglose_vaquita={"activa": mode == "VAQUITA", "cuota_fija_por_partido_mxn": 10.0, "numero_socios": 5},
-                desglose_bankroll={"activa": mode == "BANKROLL", "bankroll_total": bankroll, "porcentaje_total_arriesgado": round((total_inv_core / bankroll) * 100.0, 2)}
+                desglose_bankroll={
+                    "activa": mode == "BANKROLL",
+                    "bankroll_total": bankroll,
+                    "porcentaje_total_arriesgado": round((total_inv_core / bankroll) * 100.0, 2),
+                    "reveses_maximos_tolerados": reveses_tolerados,
+                    "cascada_resiliencia": cascada_reveses
+                }
             ),
             ordenes_ejecucion_partidos=orders,
             modulo_satelite_asimetrico=sat_module,
@@ -326,3 +373,4 @@ class PortfolioEngine:
                 roi_global_esperado_porcentaje=roi_global_esp
             )
         )
+        return plan_ejecucion

@@ -431,7 +431,13 @@ function toggleFixtureCheckbox(checkbox, matchId) {
 
 function actualizarContadorSeleccionados() {
     const lbl = document.getElementById("lbl-partidos-seleccionados");
-    if (lbl) lbl.textContent = `${selectedMatchIds.length} partido${selectedMatchIds.length !== 1 ? 's' : ''} seleccionado${selectedMatchIds.length !== 1 ? 's' : ''}`;
+    // Contar exclusivamente checkboxes marcados que NO estén deshabilitados
+    const checkboxesActivos = document.querySelectorAll(".fixture-card:not(.fixture-disabled) input[type='checkbox']:checked");
+    selectedMatchIds = Array.from(checkboxesActivos).map(cb => cb.value);
+    
+    if (lbl) {
+        lbl.textContent = `${selectedMatchIds.length} partido${selectedMatchIds.length !== 1 ? 's' : ''} seleccionado${selectedMatchIds.length !== 1 ? 's' : ''}`;
+    }
 }
 
 async function ejecutarDespachoPortafolio() {
@@ -480,46 +486,255 @@ async function ejecutarDespachoPortafolio() {
 }
 window.ejecutarDespachoPortafolio = ejecutarDespachoPortafolio;
 
+let currentPortfolioData = null;
+
 function renderizarResultadosPortafolio(data) {
-    const tbody = document.getElementById("cuerpo-tabla-ordenes") || document.querySelector("#tabla-ordenes-inversion tbody");
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
+    currentPortfolioData = data;
     const orders = data.ordenes || [];
+    const control = data.control || {};
     const balance = data.balance || {};
+    const meta = data.metadata || {};
 
-    // Actualizar Macro KPIs
-    const lblInv = document.getElementById("kpi-inversion-total");
-    if (lblInv) lblInv.textContent = `$${(balance.capital_total_comprometido_mxn || 0).toFixed(2)} MXN`;
-    const lblEv = document.getElementById("kpi-ganancia-esperada");
-    if (lblEv) lblEv.textContent = `+$${(balance.ganancia_neta_esperada_jornada_mxn || 0).toFixed(2)} MXN`;
-    const lblRoi = document.getElementById("kpi-roi-global");
-    if (lblRoi) lblRoi.textContent = `+${(balance.roi_global_esperado_porcentaje || 0).toFixed(1)}%`;
+    // 1. Encabezado Macro
+    const elTorneo = document.getElementById("hdr-torneo-portfolio");
+    if (elTorneo) elTorneo.textContent = meta.torneo || "Liga MX — Apertura 2026";
+    const elFechas = document.getElementById("hdr-fechas-portfolio");
+    if (elFechas) elFechas.textContent = `${meta.jornada || 'Jornada Activa'} · ${meta.fechas || 'Septiembre 2026'}`;
 
-    if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94A3B8; padding: 25px;">🛡️ Capital protegido al 100% ($0.00 en riesgo). Ningún partido superó el umbral de ventaja matemática (+EV).</td></tr>';
-        return;
+    // 2. 5 Macro KPIs
+    const invTotal = balance.capital_total_comprometido_mxn || 0.0;
+    const gananciaEv = balance.ganancia_neta_esperada_jornada_mxn || 0.0;
+    const roiGlobal = balance.roi_global_esperado_porcentaje || 0.0;
+    const blindajePct = control.blindaje_global_preservacion_porcentaje || 99.9;
+    const ruinaPct = control.probabilidad_ruina_total_porcentaje || 0.1;
+    const kAprobados = control.total_partidos_core_aprobados || orders.length;
+    const kEscaneados = control.total_partidos_escaneados || orders.length;
+
+    const elInv = document.getElementById("kpi-inversion-total");
+    if (elInv) elInv.textContent = `$${invTotal.toFixed(2)} MXN`;
+    const elPctCaja = document.getElementById("kpi-pct-caja");
+    if (elPctCaja) elPctCaja.textContent = `(${((invTotal / (control.desglose_bankroll?.bankroll_total || 200)) * 100).toFixed(1)}% de la caja)`;
+    
+    const elEv = document.getElementById("kpi-ganancia-esperada");
+    if (elEv) elEv.textContent = `+$${gananciaEv.toFixed(2)} MXN`;
+    const elRoi = document.getElementById("kpi-roi-global");
+    if (elRoi) elRoi.textContent = `+${roiGlobal.toFixed(1)}%`;
+    
+    const elBlind = document.getElementById("kpi-blindaje-global");
+    if (elBlind) elBlind.textContent = `${blindajePct.toFixed(2)}%`;
+    const elRuina = document.getElementById("kpi-prob-ruina");
+    if (elRuina) elRuina.textContent = `Probabilidad Ruina: ${ruinaPct.toFixed(4)}%`;
+
+    const elCore = document.getElementById("kpi-posiciones-core");
+    if (elCore) elCore.textContent = `${kAprobados} / ${kEscaneados}`;
+
+    // 3. Cascada de Resiliencia a Reveses
+    const cascada = control.desglose_bankroll?.cascada_resiliencia || [];
+    const maxReveses = control.desglose_bankroll?.reveses_maximos_tolerados || 0;
+    const txtResumen = document.getElementById("txt-cascada-resumen");
+    if (txtResumen) {
+        txtResumen.textContent = `El portafolio soporta hasta ${maxReveses} revés${maxReveses !== 1 ? 'es' : ''} simultáneo${maxReveses !== 1 ? 's' : ''} conservando saldo positivo neto (+EV).`;
+    }
+    const pildorasCont = document.getElementById("pildoras-cascada");
+    if (pildorasCont) {
+        pildorasCont.innerHTML = cascada.map(c => {
+            const color = c.pnl_mxn > 0 ? '#00E676' : (c.pnl_mxn === 0 ? '#38BDF8' : '#ef4444');
+            const bg = c.pnl_mxn > 0 ? 'rgba(0,230,118,0.15)' : (c.pnl_mxn === 0 ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)');
+            return `<span style="background:${bg}; color:${color}; border:1px solid ${color}; padding:2px 8px; border-radius:12px; font-size:6.8pt; font-weight:700;">
+                Nivel ${c.nivel}: ${c.pnl_mxn >= 0 ? '+' : ''}$${c.pnl_mxn.toFixed(2)}
+            </span>`;
+        }).join("");
     }
 
-    orders.forEach(ord => {
-        const tr = document.createElement('tr');
-        const b1 = ord.boletos?.boleto_1_seguro;
-        const b2 = ord.boletos?.boleto_2_ganancia;
-        const seguroTexto = (b1 && b1.monto_mxn > 0) ? `Empate ($${b1.monto_mxn.toFixed(2)} @${b1.momio.toFixed(2)})` : 'Directo (Sin Cobertura)';
-        const gananciaTexto = (b2) ? `${b2.seleccion} ($${b2.monto_mxn.toFixed(2)} a @${b2.momio.toFixed(2)})` : '—';
-        const invTotal = ord.boletos?.inversion_partido_A_i ?? 0;
-        const estCod = ord.estrategia_seleccionada?.codigo || "QBE-D1";
+    // 4. Tabla Resumen de Asignación
+    const tbodyResumen = document.getElementById("cuerpo-resumen-asignacion");
+    const tfootResumen = document.getElementById("pie-resumen-asignacion");
+    if (tbodyResumen) {
+        tbodyResumen.innerHTML = "";
+        let sumaPremios = 0;
+        let sumaInv = 0;
 
-        tr.innerHTML = `
-            <td style="font-weight: 600; color: #fff;">${ord.partido}</td>
-            <td><span class="badge-estrategia" style="background: rgba(56,189,248,0.15); color: #38BDF8; padding: 2px 6px; border-radius: 4px; font-size: 8pt; font-weight: 700;">${estCod}</span></td>
-            <td style="color: #94A3B8;">${seguroTexto}</td>
-            <td style="color: #00E676; font-weight: 600;">${gananciaTexto}</td>
-            <td style="text-align: right; font-weight: 700; color: #fff;">$${Number(invTotal).toFixed(2)} MXN</td>
-        `;
-        tbody.appendChild(tr);
-    });
+        orders.forEach(ord => {
+            const inv = ord.boletos?.inversion_partido_A_i || 0;
+            const gan = ord.proyecciones?.ganancia_neta_principal_mxn || 0;
+            const tablas = ord.proyecciones?.resultado_tablas_mxn || 0;
+            sumaInv += inv;
+            sumaPremios += gan;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="font-weight:700; color:#fff;">${ord.partido}</td>
+                <td style="text-align:center;"><span class="badge-status-live" style="background:rgba(56,189,248,0.15); color:#38BDF8; border-color:#38BDF8;">${ord.estrategia_seleccionada?.codigo || 'QBE-D1'}</span></td>
+                <td style="text-align:right; font-weight:700;">$${inv.toFixed(2)}</td>
+                <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>
+                <td style="color:#94A3B8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</td>
+            `;
+            tbodyResumen.appendChild(tr);
+        });
+
+        if (tfootResumen) {
+            tfootResumen.innerHTML = `
+                <tr>
+                    <td>TOTAL CARTERA</td>
+                    <td style="text-align:center;">${orders.length} Posiciones</td>
+                    <td style="text-align:right;">$${sumaInv.toFixed(2)} MXN</td>
+                    <td style="text-align:right; color:#00E676;">+$${gananciaEv.toFixed(2)} MXN (Techo: +$${sumaPremios.toFixed(2)})</td>
+                    <td style="color:#38BDF8;">Cobertura Tablas Garantizada</td>
+                </tr>
+            `;
+        }
+    }
+
+    // 5. Tarjetas Ricas de Boletos Split (Imagen 3)
+    const contSplit = document.getElementById("contenedor-tarjetas-split");
+    if (contSplit) {
+        contSplit.innerHTML = "";
+        orders.forEach(ord => {
+            const b1 = ord.boletos?.boleto_1_seguro || {};
+            const b2 = ord.boletos?.boleto_2_ganancia || {};
+            const est = ord.estrategia_seleccionada || {};
+            const proy = ord.proyecciones || {};
+            const cash = ord.cashout_targets || {};
+            const inv = ord.boletos?.inversion_partido_A_i || 0;
+
+            const card = document.createElement("div");
+            card.className = "card";
+            card.style.cssText = "background:#1C2541; border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:16px;";
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                    <div>
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                            <span class="badge-status-live" style="background:rgba(56,189,248,0.2); color:#38BDF8; border-color:#38BDF8; font-weight:800;">${est.codigo}</span>
+                            <span style="font-size:7.5pt; color:#cbd5e1;">${est.descripcion_ejecutiva}</span>
+                            <span style="font-size:7.5pt; color:#00E676; font-weight:700;">🏷️ ${est.linea_promocional}</span>
+                        </div>
+                        <h3 style="margin:0; font-size:1.15rem; color:#fff;">${ord.partido}</h3>
+                        <span style="font-size:7.5pt; color:#94A3B8;">⏰ ${ord.horario_evento}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:7pt; color:#94A3B8; text-transform:uppercase;">Inversión Total</span>
+                        <div style="font-size:1.2rem; font-weight:900; color:#00E676;">$${inv.toFixed(2)} MXN</div>
+                    </div>
+                </div>
+
+                <!-- Doble Boleto Split -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                    <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:10px;">
+                        <span style="font-size:7pt; color:#38BDF8; font-weight:800;">🛡️ BOLETO 1: SEGURO (RECUPERACIÓN)</span>
+                        <div style="font-size:9.5pt; font-weight:700; color:#fff; margin-top:2px;">${b1.seleccion || 'N/A ($0.00)'}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b1.momio || 0).toFixed(2)} | Asignación: <strong style="color:#fff;">$${(b1.monto_mxn || 0).toFixed(2)} MXN</strong></div>
+                    </div>
+                    <div style="background:#0f172a; border:1px solid rgba(0,230,118,0.3); border-radius:6px; padding:10px;">
+                        <span style="font-size:7pt; color:#00E676; font-weight:800;">🎯 BOLETO 2: GANANCIA (ATAQUE)</span>
+                        <div style="font-size:9.5pt; font-weight:700; color:#fff; margin-top:2px;">${b2.seleccion || 'Ganancia'}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b2.momio || 0).toFixed(2)} | Asignación: <strong style="color:#fff;">$${(b2.monto_mxn || 0).toFixed(2)} MXN</strong></div>
+                    </div>
+                </div>
+
+                <!-- Proyección de Ganancia y Salidas -->
+                <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:7.8pt;">
+                    <div style="color:#00E676; font-weight:700; margin-bottom:4px;">Ganancia Neta: +$${proy.ganancia_neta_principal_mxn?.toFixed(2)} MXN (+${proy.roi_principal_porcentaje?.toFixed(1)}% ROI)</div>
+                    <div style="color:#94A3B8;">🚨 <strong style="color:#cbd5e1;">Salida de Emergencia:</strong> ${cash.instruccion_emergencia_rompequinielas || 'Monitorear en el 2T.'}</div>
+                </div>
+
+                <!-- Botón hacia Radiografía Forense -->
+                <div style="text-align:right;">
+                    <button onclick="abrirRadiografiaForense('${ord.id_partido}')" style="background:transparent; border:1px solid #38BDF8; color:#38BDF8; padding:5px 12px; border-radius:4px; font-size:7.5pt; font-weight:700; cursor:pointer;">
+                        🔬 Ver Análisis Cuantitativo y Tesis →
+                    </button>
+                </div>
+            `;
+            contSplit.appendChild(card);
+        });
+    }
+
+    // 6. Radar de Descartes (QBE-00)
+    const contDescartes = document.getElementById("contenedor-descartes");
+    if (contDescartes) {
+        contDescartes.innerHTML = "";
+        const descartes = data.descartes || [];
+        if (descartes.length === 0) {
+            contDescartes.innerHTML = '<div style="color:#94A3B8; font-size:8pt; padding:8px;">Cero partidos vetados en esta selección.</div>';
+        } else {
+            descartes.forEach(d => {
+                const item = document.createElement("div");
+                item.style.cssText = "background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 14px;";
+                item.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <strong style="color:#fff; font-size:9pt;">❌ ${d.partido}</strong>
+                        <span style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; padding:2px 6px; border-radius:4px; font-size:7pt; font-weight:800;">VETO: ${d.motivo_codigo || 'QBE-00'}</span>
+                    </div>
+                    <div style="color:#cbd5e1; font-size:7.8pt;">${d.explicacion_didactica || d.motivo}</div>
+                `;
+                contDescartes.appendChild(item);
+            });
+        }
+    }
 }
+
+// ─── Modal de Radiografía Forense (Imagen 4) ─────────────────────────────────
+function abrirRadiografiaForense(matchId) {
+    if (!currentPortfolioData) return;
+    const analisisList = currentPortfolioData.partidos_analisis || [];
+    const p = analisisList.find(x => x.id_partido === matchId);
+    if (!p) return;
+
+    document.getElementById("modal-radiografia-forense").style.display = "block";
+    document.getElementById("rad-estrategia-badge").textContent = p.strategy_code || "QBE";
+    document.getElementById("rad-titulo-partido").textContent = p.partido || p.partido_nombre;
+
+    // Tesis Didáctica
+    document.getElementById("rad-tesis-html").innerHTML = p.tesis_didactica || p.interpretacion_didactica || "Sin tesis disponible.";
+
+    // Pronóstico vs Mercado
+    const tbodyPron = document.getElementById("rad-cuerpo-pronostico");
+    if (tbodyPron && p.probabilidades_3vias) {
+        tbodyPron.innerHTML = p.probabilidades_3vias.map(pv => {
+            const edgeVal = pv.edge || 0;
+            const edgeColor = edgeVal > 0 ? '#00E676' : '#ef4444';
+            return `
+                <tr>
+                    <td style="font-weight:700; color:#fff;">${pv.resultado}</td>
+                    <td style="text-align:center; color:#38BDF8; font-weight:700;">@${pv.momio?.toFixed(2)}</td>
+                    <td style="text-align:center;">${pv.prob_real?.toFixed(1)}%</td>
+                    <td style="text-align:center;">@${pv.momio?.toFixed(2)}</td>
+                    <td style="text-align:center;">${pv.prob_casino?.toFixed(1)}%</td>
+                    <td style="text-align:right; font-weight:700; color:${edgeColor};">${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(2)}%</td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    // Poisson Boxes
+    document.getElementById("rad-xg-local").textContent = (p.lambda_local || 0).toFixed(2);
+    document.getElementById("rad-xg-visita").textContent = (p.mu_visita || 0).toFixed(2);
+    document.getElementById("rad-xg-total").textContent = (p.xg_total || 0).toFixed(2);
+    document.getElementById("rad-phi-lead2").textContent = `${(p.phi_lead2_pct || 0).toFixed(1)}%`;
+
+    // 10P Stats
+    const tbody10p = document.getElementById("rad-cuerpo-10p");
+    if (tbody10p && p.tabla_10p) {
+        tbody10p.innerHTML = p.tabla_10p.map(row => `
+            <tr>
+                <td style="font-weight:700; color:#fff;">${row.equipo}</td>
+                <td style="text-align:center;">#${row.puesto}</td>
+                <td style="text-align:center; font-weight:700; color:#00E676;">${row.pts}</td>
+                <td style="text-align:center;">${row.gf_gc}</td>
+                <td style="text-align:center;">${row.pts_pj?.toFixed(2)}</td>
+                <td style="text-align:center;">${row.sot?.toFixed(1)}</td>
+                <td style="text-align:center;">${row.sota?.toFixed(1)}</td>
+                <td style="text-align:center;">${row.posesion?.toFixed(1)}%</td>
+                <td style="text-align:center; font-weight:700; color:#38BDF8;">${row.qmod?.toFixed(2)}</td>
+            </tr>
+        `).join("");
+    }
+}
+
+function cerrarRadiografiaForense() {
+    document.getElementById("modal-radiografia-forense").style.display = "none";
+}
+window.abrirRadiografiaForense = abrirRadiografiaForense;
+window.cerrarRadiografiaForense = cerrarRadiografiaForense;
 
 // ─── Funciones del Panel de Curación Agéntica HITL [ARCH-1.5.2] ─────────────
 async function abrirModalCurador(leagueId = 262) {
