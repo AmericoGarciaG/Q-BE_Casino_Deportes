@@ -83,3 +83,11 @@ src/web/static/img/crests/zorros.png
 src/web/static/img/crests/atlante-fc.png
 src/web/static/img/crests/potros.png
 src/web/static/img/crests/atlante.png
+scripts/resolver_forma_y_rival_tabla.py
+scripts/resolver_goles_partidos_terminados.py
+scripts/resolver_logo_liga_mx.py
+scripts/resolver_partidos_reprogramados.py
+src/web/static/img/leagues/league_262.png
+src/web/static/img/leagues/league_262.svg
+src/web/static/img/favicon.svg
+scratch/test_portfolio_post.py

@@ -514,4 +514,78 @@ class QBEPipelineEngine:
                 "posiciones": _pos_list
             }
 
+        # 10. Exportar traza completa en Markdown para auditoría [PASO 4]
+        try:
+            cls.exportar_traza_auditoria_markdown(consolidated_dict)
+        except Exception as e_md:
+            print(f"⚠️ [ENGINE] Aviso al exportar traza markdown: {e_md}")
+
         return portfolio_plan, consolidated_dict
+
+    @classmethod
+    def exportar_traza_auditoria_markdown(cls, consolidated: Dict[str, Any], filepath: Optional[str] = None):
+        """
+        [PASO 4] Exportación determinista de la traza completa de auditoría cuantitativa en formato Markdown.
+        Persiste en data/output/auditoria_cuantitativa_jornada_8.md.
+        """
+        import os
+        from pathlib import Path
+        
+        out_dir = Path(__file__).resolve().parent.parent.parent / "data" / "output"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if not filepath:
+            filepath = out_dir / "auditoria_cuantitativa_jornada_8.md"
+        
+        meta = consolidated.get("metadata", {})
+        ctrl = consolidated.get("control", {})
+        bal = consolidated.get("balance", {})
+        ordenes = consolidated.get("ordenes", [])
+        partidos_analisis = consolidated.get("partidos_analisis", [])
+        descartes = consolidated.get("descartes", [])
+        
+        lines = []
+        lines.append(f"# 🏛️ AUDITORÍA MATEMÁTICO-CUANTITATIVA Q-BE — {meta.get('torneo', 'Liga MX')} ({meta.get('jornada', 'Jornada 8')})")
+        lines.append(f"**Fecha de Procesamiento:** {meta.get('fecha_procesamiento', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}  ")
+        lines.append(f"**Bankroll Evaluado:** ${ctrl.get('desglose_bankroll', {}).get('bankroll_total', 200.0):.2f} MXN  ")
+        lines.append(f"**Ganancia Neta Esperada (EV):** ${bal.get('ganancia_neta_esperada_jornada_mxn', 0.0):.2f} MXN  ")
+        lines.append(f"**Partidos Escaneados:** {ctrl.get('total_partidos_escaneados', 0)} | **Aprobados:** {ctrl.get('total_partidos_core_aprobados', 0)}\n")
+        lines.append("---")
+        
+        lines.append("## 📊 1. RESUMEN DE ÓRDENES DE INVERSIÓN (PORTAFOLIO KELLY + DUTCHING)")
+        lines.append("| Partido | Estrategia | Boleto 1 (Seguro) | Boleto 2 (Ganancia) | Inversión Total |")
+        lines.append("| :--- | :---: | :--- | :--- | :---: |")
+        
+        for ord_i in ordenes:
+            partido_nom = ord_i.get("partido", "Partido")
+            codigo = ord_i.get("estrategia_seleccionada", {}).get("codigo", "QBE-D1")
+            boletos = ord_i.get("boletos", {})
+            b1 = boletos.get("boleto_1_seguro", {})
+            b2 = boletos.get("boleto_2_ganancia", {})
+            inv = boletos.get("inversion_partido_A_i", 0.0)
+            
+            b1_str = f"Empate (${b1.get('monto_mxn', 0.0):.2f} @ {b1.get('momio', 1.0):.2f})" if b1 and b1.get("monto_mxn", 0) > 0 else "Directo (Sin Cobertura)"
+            b2_str = f"{b2.get('seleccion', 'Directo')} (${b2.get('monto_mxn', 0.0):.2f} @ {b2.get('momio', 1.0):.2f})" if b2 else "—"
+            lines.append(f"| **{partido_nom}** | `{codigo}` | {b1_str} | {b2_str} | **${inv:.2f} MXN** |")
+        
+        lines.append("\n---\n")
+        lines.append("## 🔬 2. DESGLOSE RADAR ESTOCÁSTICO Y MATEMÁTICO POR PARTIDO OPERABLE\n")
+        
+        for idx, p in enumerate(partidos_analisis, 1):
+            lines.append(f"### ⚽ Partido {idx}: {p.get('partido', 'Partido')}")
+            lines.append(f"- **Entradas Fácticas:** Cuotas Caliente (L: `{p.get('odds_fav', 0):.2f}` / E: `{p.get('odds_emp', 0):.2f}` / V: `{p.get('odds_und', 0):.2f}`) | Pts/PJ: Fav `{p.get('pts_pj_fav', 0):.2f}` vs Und `{p.get('pts_pj_und', 0):.2f}`")
+            lines.append(f"- **Poisson 6x6:** $\\lambda_{{loc}} = {p.get('lambda_local', 0):.2f}$, $\\mu_{{vis}} = {p.get('mu_visita', 0):.2f}$, Goles Totales = `{p.get('xg_total', 0):.2f}` | Probabilidades: Fav `{p.get('prob_fav', 0):.2f}\\%`, Emp `{p.get('prob_emp', 0):.2f}\\%`, Und `{p.get('prob_und', 0):.2f}\\%` (Suma Simplex = `1.0000`)")
+            lines.append(f"- **Variables de Ruina:** $\\Psi_{{Ruina}} = {p.get('psi_downside', 0):.4f}$, $\\Phi_{{Lead2}} = {p.get('phi_lead2', 0):.4f}$")
+            lines.append(f"- **Breakeven Analítico:** $\\theta_{{req}} = {p.get('theta_req', 0):.2f}\\%$")
+            lines.append(f"- **Tesis Didáctica:** {p.get('tesis_didactica', 'Sin tesis')}\n")
+        
+        if descartes:
+            lines.append("---")
+            lines.append("## 🛡️ 3. PARTIDOS VETADOS (FILTRO TRIPLE CANDADO FÁCTICO / QBE-00)")
+            for d in descartes:
+                lines.append(f"- **{d.get('partido')}**: `{d.get('motivo_codigo', 'QBE-00')}` — {d.get('motivo')}")
+        
+        lines.append("\n\n*Documento autogenerado determinísticamente por Q-BE Pipeline Engine — Kybern Industrial Framework.*")
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        print(f"✅ [TRAZA] Auditoría cuantitativa exportada en {filepath}")

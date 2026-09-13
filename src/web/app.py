@@ -64,7 +64,7 @@ def read_root(request: Request):
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
-    favicon_path = os.path.join(os.path.dirname(__file__), "static", "img", "crests", "america.png")
+    favicon_path = os.path.join(os.path.dirname(__file__), "static", "img", "favicon.svg")
     if os.path.exists(favicon_path):
-        return FileResponse(favicon_path)
-    return Response(status_code=204)
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+    return Response(status_code=404)

@@ -167,6 +167,8 @@ def seed_initial_leagues():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        from src.storage.curation_service import asegurar_logo_liga_incremental
         seed_initial_data(db)
+        asegurar_logo_liga_incremental(262, db)
     finally:
         db.close()

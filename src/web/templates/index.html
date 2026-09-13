@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Q-BE Casino Deportes — Quantitative Betting Engine</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/theme.css">
 </head>
 <body>
@@ -23,7 +24,6 @@
     <nav class="tab-nav">
         <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Hub de Ligas</button>
         <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Jornada y Tabla de Posiciones</button>
-        <button class="tab-btn" data-tab="tab-ingestion">📥 Ingesta & Captura</button>
         <button class="tab-btn" data-tab="tab-portfolio">⚙️ Cartera Cuantitativa</button>
         <button class="tab-btn" data-tab="tab-reporting">📜 Tesis & Reporte PDF</button>
     </nav>
@@ -120,49 +120,53 @@
             </div>
         </section>
 
-        <!-- VISTA 3: INGESTA -->
-        <section id="tab-ingestion" class="view-section">
-            <div class="card">
-                <h3>📥 Carga Directa de Momios (Caliente.mx)</h3>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">Módulo de captura y extracción de cuotas en tiempo real.</p>
-                <div style="display: flex; gap: 1rem;">
-                    <input type="text" placeholder="URL de evento Caliente.mx" style="flex: 1; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px;">
-                    <button class="btn-primary">Extraer Cuotas</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- VISTA 4: CARTERA CUANTITATIVA -->
+        <!-- VISTA 3: CARTERA CUANTITATIVA -->
         <section id="tab-portfolio" class="view-section">
             <div class="card" style="margin-bottom: 1.5rem;">
                 <h3>⚙️ Configuración del Router de Cartera</h3>
-                <div style="display: flex; gap: 1rem; align-items: center;">
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <label>Bankroll Total ($):</label>
                     <input type="number" id="bankroll-input" value="200" style="padding: 0.5rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px;">
-                    <button class="btn-primary" onclick="ejecutarDespachoPortafolio()">Recalcular Cartera (Kelly + Dutching)</button>
+                    <button class="btn-primary" onclick="ejecutarDespachoPortafolio()">⚡ Recalcular Cartera (Kelly + Dutching)</button>
+                </div>
+            </div>
+
+            <!-- Macro KPIs de Cartera Q-BE -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 1.5rem;">
+                <div class="card" style="padding: 12px; border-left: 3px solid #38BDF8;">
+                    <div style="font-size: 7.5pt; color: #94A3B8; text-transform: uppercase;">Inversión Total</div>
+                    <div id="kpi-inversion-total" style="font-size: 1.2rem; font-weight: 800; color: #fff;">$0.00 MXN</div>
+                </div>
+                <div class="card" style="padding: 12px; border-left: 3px solid #00E676;">
+                    <div style="font-size: 7.5pt; color: #94A3B8; text-transform: uppercase;">Ganancia Neta (EV)</div>
+                    <div id="kpi-ganancia-esperada" style="font-size: 1.2rem; font-weight: 800; color: #00E676;">+$0.00 MXN</div>
+                </div>
+                <div class="card" style="padding: 12px; border-left: 3px solid #00E676;">
+                    <div style="font-size: 7.5pt; color: #94A3B8; text-transform: uppercase;">ROI Global Esperado</div>
+                    <div id="kpi-roi-global" style="font-size: 1.2rem; font-weight: 800; color: #00E676;">+0.0%</div>
                 </div>
             </div>
 
             <div class="card">
                 <h3>📋 Órdenes Sugeridas de Inversión</h3>
-                <table class="fintech-table">
+                <table class="fintech-table" id="tabla-ordenes-inversion">
                     <thead>
                         <tr>
-                            <th>Encuentro</th>
-                            <th>Selección</th>
-                            <th>Momio</th>
-                            <th>Seguro</th>
-                            <th>Inversión (MXN)</th>
+                            <th>Partido</th>
+                            <th>Estrategia</th>
+                            <th>Seguro (Boleto 1)</th>
+                            <th>Ganancia (Boleto 2)</th>
+                            <th style="text-align: right;">Inversión Total</th>
                         </tr>
                     </thead>
-                    <tbody id="portfolio-orders-body">
-                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Seleccione partidos en el Live Board y presione "Generar Portafolio Q-BE".</td></tr>
+                    <tbody id="cuerpo-tabla-ordenes">
+                        <!-- Hidratación dinámica reactiva -->
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- VISTA 5: REPORTE & EXPORTACIÓN -->
+        <!-- VISTA 4: REPORTE & EXPORTACIÓN -->
         <section id="tab-reporting" class="view-section">
             <div class="card">
                 <h3>📜 Generador de Tesis Institucional</h3>

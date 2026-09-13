@@ -58,8 +58,9 @@ async function cargarLigasDesdeBD() {
             const card = document.createElement("div");
             card.className = "league-card active";
             card.style.cssText = "background: #1C2541; border: 1px solid #00E676; border-radius: 8px; padding: 14px; cursor: pointer; transition: transform 0.15s ease;";
+            const logoHtml = l.flag ? `<img src="${l.flag}" alt="" onerror="this.src='/static/img/favicon.svg'" style="width: 32px; height: 32px; object-fit: contain; margin-bottom: 8px;">` : `<div style="font-size: 14pt; font-weight: 800; color: #38BDF8; margin-bottom: 6px;">MX</div>`;
             card.innerHTML = `
-                <div style="font-size: 20pt; margin-bottom: 6px;">${l.flag}</div>
+                <div style="margin-bottom: 4px;">${logoHtml}</div>
                 <div class="league-info">
                     <h3 style="margin: 0; color: #ffffff; font-size: 1.05rem;">${l.name}</h3>
                     <span style="font-size: 7.5pt; color: #94A3B8;">${l.country}</span>
@@ -191,13 +192,10 @@ function renderizarCartelera(fixtures) {
 
     // ── Nivel 2: PROGRAMADOS — agrupados por fecha (con prefijo HOY dinámico) ──
     if (programados.length > 0) {
-        // Agrupar programados por fecha_bloque
         const grupos = {};
         programados.forEach(f => {
             const hoy = f.fecha_dt ? _esHoyDinamico(f.fecha_dt) : false;
-            const label = hoy
-                ? `HOY — ${f.fecha_bloque || "Jornada Activa"}`
-                : (f.fecha_bloque || "Jornada Activa");
+            const label = hoy ? `HOY — ${f.fecha_bloque}` : f.fecha_bloque;
             if (!grupos[label]) grupos[label] = [];
             grupos[label].push(f);
         });
@@ -296,11 +294,12 @@ function _renderFixtureCard(container, f, deshabilitada) {
                value="${f.id_partido}"
                class="fixture-checkbox">`;
 
-    // Marcador (EN_CURSO o FINALIZADO)
+    // Marcador (EN_CURSO o FINALIZADO con números reales)
     let marcadorHtml = "";
     if (f.marcador_actual) {
         const cls = estado === "EN_CURSO" ? "score-live" : "score-final";
-        marcadorHtml = `<span class="${cls}">${f.marcador_actual}</span>`;
+        const textoMarcador = (f.marcador_actual === "MARCADOR_PENDIENTE") ? "Finalizado" : f.marcador_actual;
+        marcadorHtml = `<span class="${cls}" style="font-weight: 800; font-size: 8.5pt; color: ${estado === 'EN_CURSO' ? '#EF4444' : '#38BDF8'}; margin-left: 6px;">${textoMarcador}</span>`;
     }
 
     // Escudos de ambos equipos
@@ -444,8 +443,10 @@ async function ejecutarDespachoPortafolio() {
     const bankroll = bankrollInput ? parseFloat(bankrollInput.value) : 200.0;
 
     switchView("tab-portfolio");
-    const tbody = document.getElementById('portfolio-orders-body');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #38BDF8;">⏳ Ejecutando motor cuantitativo (Poisson 6x6, Kelly & Dutching)...</td></tr>';
+    const tbody = document.getElementById("cuerpo-tabla-ordenes") || document.querySelector("#tabla-ordenes-inversion tbody");
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #38BDF8; padding: 25px;">⏳ Ejecutando motor cuantitativo (Poisson 6x6, Kelly & Dutching V=0)...</td></tr>';
+    }
 
     try {
         const resp = await fetch('/api/portfolio/generate', {
@@ -459,44 +460,60 @@ async function ejecutarDespachoPortafolio() {
             })
         });
 
-        if (!resp.ok) throw new Error("Error en cálculo de portafolio");
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.detail || "Error en cálculo de portafolio");
+        }
         const data = await resp.json();
         renderizarResultadosPortafolio(data);
     } catch (e) {
         console.error("Error generando portafolio:", e);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444;">❌ Error: ${e.message}</td></tr>`;
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 25px;">❌ Error en motor: ${e.message}</td></tr>`;
+        }
     }
 }
+window.ejecutarDespachoPortafolio = ejecutarDespachoPortafolio;
 
 function renderizarResultadosPortafolio(data) {
-    const tbody = document.getElementById('portfolio-orders-body');
+    const tbody = document.getElementById("cuerpo-tabla-ordenes") || document.querySelector("#tabla-ordenes-inversion tbody");
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const orders = data.ordenes || data.orders || [];
+    const orders = data.ordenes || [];
+    const balance = data.balance || {};
+
+    // Actualizar Macro KPIs
+    const lblInv = document.getElementById("kpi-inversion-total");
+    if (lblInv) lblInv.textContent = `$${(balance.capital_total_comprometido_mxn || 0).toFixed(2)} MXN`;
+    const lblEv = document.getElementById("kpi-ganancia-esperada");
+    if (lblEv) lblEv.textContent = `+$${(balance.ganancia_neta_esperada_jornada_mxn || 0).toFixed(2)} MXN`;
+    const lblRoi = document.getElementById("kpi-roi-global");
+    if (lblRoi) lblRoi.textContent = `+${(balance.roi_global_esperado_porcentaje || 0).toFixed(1)}%`;
+
     if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No se generaron órdenes de inversión.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94A3B8; padding: 25px;">🛡️ Capital protegido al 100% ($0.00 en riesgo). Ningún partido superó el umbral de ventaja matemática (+EV).</td></tr>';
         return;
     }
 
     orders.forEach(ord => {
         const tr = document.createElement('tr');
+        const b1 = ord.boletos?.boleto_1_seguro;
+        const b2 = ord.boletos?.boleto_2_ganancia;
+        const seguroTexto = (b1 && b1.monto_mxn > 0) ? `Empate ($${b1.monto_mxn.toFixed(2)} @${b1.momio.toFixed(2)})` : 'Directo (Sin Cobertura)';
+        const gananciaTexto = (b2) ? `${b2.seleccion} ($${b2.monto_mxn.toFixed(2)} a @${b2.momio.toFixed(2)})` : '—';
+        const invTotal = ord.boletos?.inversion_partido_A_i ?? 0;
+        const estCod = ord.estrategia_seleccionada?.codigo || "QBE-D1";
+
         tr.innerHTML = `
-            <td><strong>${ord.partido || (ord.local + ' vs ' + ord.visitante)}</strong></td>
-            <td style="color: var(--accent-cyan); font-weight: 700;">${ord.estrategia_codigo || ord.estrategia || "QBE-D1"}</td>
-            <td class="numeric">${ord.momio || "2.10"}</td>
-            <td style="color: #00E676;">${ord.seguro || "Cubierto"}</td>
-            <td class="numeric" style="font-weight: 700; color: var(--accent-cyan-deep);">$${ord.inversion || ord.stake || "50.00"}</td>
+            <td style="font-weight: 600; color: #fff;">${ord.partido}</td>
+            <td><span class="badge-estrategia" style="background: rgba(56,189,248,0.15); color: #38BDF8; padding: 2px 6px; border-radius: 4px; font-size: 8pt; font-weight: 700;">${estCod}</span></td>
+            <td style="color: #94A3B8;">${seguroTexto}</td>
+            <td style="color: #00E676; font-weight: 600;">${gananciaTexto}</td>
+            <td style="text-align: right; font-weight: 700; color: #fff;">$${Number(invTotal).toFixed(2)} MXN</td>
         `;
         tbody.appendChild(tr);
     });
-
-    if (data.portfolio_id) {
-        const exportBtn = document.getElementById('export-pdf-btn');
-        if (exportBtn) {
-            exportBtn.onclick = () => window.open(`/api/portfolio/${data.portfolio_id}/pdf`, '_blank');
-        }
-    }
 }
 
 // ─── Funciones del Panel de Curación Agéntica HITL [ARCH-1.5.2] ─────────────

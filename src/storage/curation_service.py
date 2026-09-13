@@ -244,3 +244,55 @@ def sellar_catalogo_en_db(
     db.commit()
     print(f"✅ [CURATION INDUSTRIAL] Catálogo sellado: {committed} clubes en league_id={league_id}.")
     return {"status": "SEALED", "league_id": league_id, "teams_committed": committed}
+
+
+# ─── Subsistema Incremental de Logos de Ligas ──────────────────────────────────
+LEAGUES_DIR = PROJECT_ROOT / "src" / "web" / "static" / "img" / "leagues"
+LEAGUES_DIR.mkdir(parents=True, exist_ok=True)
+
+OFFICIAL_LEAGUE_LOGOS = {
+    262: [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Liga_MX_logo.svg/500px-Liga_MX_logo.svg.png",
+        "https://upload.wikimedia.org/wikipedia/commons/2/22/Liga_MX_logo.svg"
+    ]
+}
+
+def asegurar_logo_liga_incremental(league_id: int, db: Session) -> str:
+    """
+    [ARCH-1.5.1] Inspección delta e ingesta nativa del emblema oficial de la competencia.
+    """
+    local_path = LEAGUES_DIR / f"league_{league_id}.png"
+    relative_url = f"/static/img/leagues/league_{league_id}.png"
+
+    if local_path.exists() and local_path.stat().st_size > 1000:
+        return relative_url
+
+    urls = OFFICIAL_LEAGUE_LOGOS.get(league_id, [])
+    if isinstance(urls, str): urls = [urls]
+
+    headers = {
+        "User-Agent": "Q-BE-SportsEngine/3.0 (https://qbe.local; admin@qbe.local) Mozilla/5.0",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+    }
+
+    descargado = False
+    with httpx.Client(timeout=15.0, headers=headers, follow_redirects=True) as client:
+        for u in urls:
+            try:
+                r = client.get(u)
+                if r.status_code == 200 and len(r.content) > 1000:
+                    local_path.write_bytes(r.content)
+                    print(f"✅ [ASSET] Logo oficial de liga {league_id} guardado en {local_path} ({len(r.content)/1024:.1f} KB)")
+                    descargado = True
+                    break
+            except Exception as e:
+                print(f"  ⚠️ Intento fallido para logo liga {league_id} desde {u}: {e}")
+
+    if descargado and local_path.exists():
+        league = db.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
+        if league:
+            league.flag = relative_url
+            db.commit()
+
+    return relative_url
+

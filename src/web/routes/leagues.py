@@ -77,18 +77,15 @@ def get_live_board(
             if dt_partido and estado not in ("REPROGRAMADO", "FINALIZADO", "EN_CURSO"):
                 dif_horas = (ahora - dt_partido).total_seconds() / 3600.0
                 if dif_horas > 2.5:
-                    # Partido pasó su ventana de 2.5 hrs — promover a FINALIZADO
                     estado = "FINALIZADO"
                     if not marcador:
-                        marcador = "0 - 0"
+                        marcador = "MARCADOR_PENDIENTE"  # CERO "0 - 0" INVENTADOS
                     if not minuto:
                         minuto = "Final"
                 elif dif_horas >= 0:
                     estado = "EN_CURSO"
                     if not minuto:
                         minuto = "En Juego"
-                    if not marcador:
-                        marcador = "0 - 0"
 
             # Resolver escudos de ambos equipos [ARCH-1.5.3]
             local_escudo = resolver_escudo_canonico(fx.get("local", ""), db=db)
