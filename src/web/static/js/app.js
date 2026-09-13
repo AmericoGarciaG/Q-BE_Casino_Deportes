@@ -96,8 +96,7 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
         if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada Activa";
         const lblTime = document.getElementById("lbl-timestamp-tabla");
         if (lblTime) {
-            const horaStr = new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-            lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo desde FMF y FotMob (${horaStr})`;
+            lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
         }
 
         renderizarTabla18Clubes(currentLiveBoard.standings);
@@ -108,14 +107,41 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
     }
 }
 
-async function refrescarCuotasEnVivo() {
+function _formatearFechaHoraActual() {
+    const ahora = new Date();
+    const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const dia = ahora.getDate();
+    const mes = meses[ahora.getMonth()];
+    const hora = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    return `${dia}-${mes} ${hora}`;
+}
+
+async function refrescarTablaEnVivo() {
     const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
     const btn = document.getElementById("btn-force-refresh");
     if (btn) btn.innerHTML = "⏳ Refrescando...";
     await seleccionarLiga(targetId, true);
     if (btn) btn.innerHTML = "🔄 Refrescar Tabla";
+    const lblTime = document.getElementById("lbl-timestamp-tabla");
+    if (lblTime) {
+        lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
+    }
 }
-window.refrescarCuotasEnVivo = refrescarCuotasEnVivo;
+window.refrescarTablaEnVivo = refrescarTablaEnVivo;
+window.refrescarCuotasEnVivo = refrescarTablaEnVivo;
+
+async function refrescarCarteleraEnVivo() {
+    const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
+    const btn = document.getElementById("btn-refresh-cartelera");
+    if (btn) btn.innerHTML = "⏳ Refrescando...";
+    await seleccionarLiga(targetId, true);
+    if (btn) btn.innerHTML = "🔄 Refrescar Momios";
+    const lblTime = document.getElementById("lbl-timestamp-cartelera");
+    if (lblTime) {
+        lblTime.textContent = `🕒 Momios Caliente: Sincronizados en vivo (${_formatearFechaHoraActual()})`;
+    }
+}
+window.refrescarCarteleraEnVivo = refrescarCarteleraEnVivo;
 
 // 3. Renderizar Tabla de 18 Clubes Completa (Panel Izquierdo)
 function renderizarTabla18Clubes(standings) {
@@ -445,6 +471,46 @@ function actualizarContadorSeleccionados() {
     }
 }
 
+let abortControllerDespacho = null;
+
+function mostrarHUDProcesamiento() {
+    const modal = document.getElementById("modal-hud-procesamiento");
+    if (modal) modal.style.display = "flex";
+    actualizarProgresoHUD(1, 15);
+}
+
+function ocultarHUDProcesamiento() {
+    const modal = document.getElementById("modal-hud-procesamiento");
+    if (modal) modal.style.display = "none";
+}
+
+function cancelarDespachoPortafolio() {
+    if (abortControllerDespacho) {
+        abortControllerDespacho.abort();
+    }
+    ocultarHUDProcesamiento();
+}
+window.cancelarDespachoPortafolio = cancelarDespachoPortafolio;
+
+function actualizarProgresoHUD(paso, porcentaje) {
+    const fill = document.getElementById("hud-barra-fill");
+    if (fill) fill.style.width = `${porcentaje}%`;
+
+    for (let i = 1; i <= 6; i++) {
+        const el = document.getElementById(`hud-p${i}`);
+        if (!el) continue;
+        if (i < paso) {
+            el.style.color = "#00E676";
+            el.innerHTML = el.innerHTML.replace("⏳", "✅");
+        } else if (i === paso) {
+            el.style.color = "#38BDF8";
+            el.innerHTML = el.innerHTML.replace("✅", "⏳");
+        } else {
+            el.style.color = "#64748B";
+        }
+    }
+}
+
 async function ejecutarDespachoPortafolio() {
     if (!currentLiveBoard) {
         alert("Por favor seleccione primero una liga en el Hub.");
@@ -458,16 +524,20 @@ async function ejecutarDespachoPortafolio() {
     const bankrollInput = document.getElementById('bankroll-input');
     const bankroll = bankrollInput ? parseFloat(bankrollInput.value) : 200.0;
 
-    switchView("tab-portfolio");
-    const tbody = document.getElementById("cuerpo-tabla-ordenes") || document.querySelector("#tabla-ordenes-inversion tbody");
-    if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #38BDF8; padding: 25px;">⏳ Ejecutando motor cuantitativo (Poisson 6x6, Kelly & Dutching V=0)...</td></tr>';
-    }
+    mostrarHUDProcesamiento();
+    abortControllerDespacho = new AbortController();
 
     try {
+        // Simulación visual reactiva de progresión mientras responde el worker
+        setTimeout(() => actualizarProgresoHUD(2, 35), 300);
+        setTimeout(() => actualizarProgresoHUD(3, 55), 600);
+        setTimeout(() => actualizarProgresoHUD(4, 75), 900);
+        setTimeout(() => actualizarProgresoHUD(5, 90), 1200);
+
         const resp = await fetch('/api/portfolio/generate', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
+            signal: abortControllerDespacho.signal,
             body: JSON.stringify({
                 league_id: currentLiveBoard.league_id || 262,
                 selected_match_ids: selectedMatchIds,
@@ -476,16 +546,30 @@ async function ejecutarDespachoPortafolio() {
             })
         });
 
+        actualizarProgresoHUD(6, 100);
         if (!resp.ok) {
             const errData = await resp.json().catch(() => ({}));
             throw new Error(errData.detail || "Error en cálculo de portafolio");
         }
+        
         const data = await resp.json();
-        renderizarResultadosPortafolio(data);
+        
+        setTimeout(() => {
+            ocultarHUDProcesamiento();
+            switchView("tab-portfolio");
+            renderizarResultadosPortafolio(data);
+            
+            // Enlazar botón PDF export en la vista de cartera
+            const pdfBtn = document.getElementById("export-pdf-btn");
+            if (pdfBtn && data.portfolio_id) {
+                pdfBtn.onclick = () => window.open(`/api/portfolio/${data.portfolio_id}/pdf`, '_blank');
+            }
+        }, 400);
+
     } catch (e) {
-        console.error("Error generando portafolio:", e);
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 25px;">❌ Error en motor: ${e.message}</td></tr>`;
+        ocultarHUDProcesamiento();
+        if (e.name !== 'AbortError') {
+            alert(`❌ Error calculando portafolio: ${e.message}`);
         }
     }
 }

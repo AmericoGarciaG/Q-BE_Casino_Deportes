@@ -25,7 +25,6 @@
         <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Hub de Ligas</button>
         <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Jornada y Tabla de Posiciones</button>
         <button class="tab-btn" data-tab="tab-portfolio">⚙️ Cartera Cuantitativa</button>
-        <button class="tab-btn" data-tab="tab-reporting">📜 Tesis & Reporte PDF</button>
     </nav>
 
     <main class="content">
@@ -58,7 +57,7 @@
 
                     <div style="font-size: 7.2pt; color: #94A3B8; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
                         <span id="lbl-timestamp-tabla">🕒 Tabla Oficial: Sincronizada en vivo desde la FMF y FotMob</span>
-                        <button id="btn-force-refresh" onclick="refrescarCuotasEnVivo()" style="background: transparent; border: none; color: #38BDF8; font-size: 7.2pt; cursor: pointer; text-decoration: underline;">🔄 Refrescar Tabla</button>
+                        <button id="btn-force-refresh" onclick="refrescarTablaEnVivo()" style="background: transparent; border: none; color: #38BDF8; font-size: 7.2pt; cursor: pointer; text-decoration: underline;">🔄 Refrescar Tabla</button>
                     </div>
 
                     <div style="overflow-x: auto;">
@@ -96,6 +95,11 @@
                 <div class="card fixture-panel-right">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <h3 style="margin: 0;">⚽ <span id="lbl-nombre-jornada">Jornada Activa</span></h3>
+                    </div>
+
+                    <div style="font-size: 7.2pt; color: #94A3B8; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                        <span id="lbl-timestamp-cartelera">🕒 Momios Caliente: Sincronizados en vivo</span>
+                        <button id="btn-refresh-cartelera" onclick="refrescarCarteleraEnVivo()" style="background: transparent; border: none; color: #38BDF8; font-size: 7.2pt; cursor: pointer; text-decoration: underline;">🔄 Refrescar Momios</button>
                     </div>
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
@@ -138,6 +142,7 @@
                         <label style="font-size: 8.5pt; color: #cbd5e1;">Bankroll Total ($):</label>
                         <input type="number" id="bankroll-input" value="200" style="padding: 6px 12px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 100px; font-weight: 700;">
                         <button class="btn-primary" onclick="ejecutarDespachoPortafolio()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;">⚡ Recalcular Cartera</button>
+                        <button id="export-pdf-btn" class="btn-primary" style="background: rgba(56,189,248,0.15); border: 1px solid #38BDF8; color: #38BDF8; padding: 7px 16px; font-size: 8.5pt; font-weight: 700; margin-left: 8px;">📄 Exportar Reporte PDF A4</button>
                     </div>
                 </div>
             </div>
@@ -227,15 +232,6 @@
             <div class="card" style="border-top: 3px solid #ef4444;">
                 <h3 style="color: #ef4444; font-size: 1rem; margin-bottom: 0.8rem;">🚫 Radar de Descartes — Auditoría de Vetos (QBE-00)</h3>
                 <div id="contenedor-descartes" style="display: flex; flex-direction: column; gap: 8px;"></div>
-            </div>
-        </section>
-
-        <!-- VISTA 4: REPORTE & EXPORTACIÓN -->
-        <section id="tab-reporting" class="view-section">
-            <div class="card">
-                <h3>📜 Generador de Tesis Institucional</h3>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">Descarga del reporte de inversión en PDF A4 certificado.</p>
-                <button id="export-pdf-btn" class="btn-primary">Exportar Reporte PDF A4</button>
             </div>
         </section>
     </main>
@@ -329,6 +325,38 @@
                 </thead>
                 <tbody id="rad-cuerpo-10p"></tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- MODAL HUD: PROCESAMIENTO CUANTITATIVO EN VIVO (DARK FINTECH) -->
+    <div id="modal-hud-procesamiento" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(5px); z-index: 20000; justify-content: center; align-items: center;">
+        <div style="background: #1C2541; border: 1px solid #38BDF8; border-radius: 10px; width: 500px; max-width: 90%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h3 style="margin: 0; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #00E676; display: inline-block;"></span>
+                    Motor Cuantitativo Q-BE en Ejecución
+                </h3>
+                <button onclick="cancelarDespachoPortafolio()" style="background: transparent; border: none; color: #94A3B8; font-size: 1.1rem; cursor: pointer;">✕</button>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <div style="height: 4px; background: #0f172a; border-radius: 2px; overflow: hidden;">
+                    <div id="hud-barra-fill" style="width: 15%; height: 100%; background: linear-gradient(90deg, #38BDF8, #00E676); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+
+            <div id="hud-pasos-lista" style="display: flex; flex-direction: column; gap: 99px; font-size: 8pt; color: #cbd5e1; display: flex; flex-direction: column; gap: 9px;">
+                <div id="hud-p1" style="color: #94A3B8;">⏳ [1/6] Sanitizando contexto y anclaje a tabla maestra...</div>
+                <div id="hud-p2" style="color: #94A3B8;">⏳ [2/6] Proyectando Poisson Bivariado 6x6 con calibración Opta xG...</div>
+                <div id="hud-p3" style="color: #94A3B8;">⏳ [3/6] Derivando umbrales analíticos de equilibrio continuo (θ* Breakeven)...</div>
+                <div id="hud-p4" style="color: #94A3B8;">⏳ [4/6] Evaluando catálogo de 9 estrategias y Triple Candado Fáctico...</div>
+                <div id="hud-p5" style="color: #94A3B8;">⏳ [5/6] Optimizando asignación de capital (Kelly fraccional & Dutching V=0)...</div>
+                <div id="hud-p6" style="color: #94A3B8;">⏳ [6/6] Verificando compuertas de The Shield (8 Invarianzas Numéricas)...</div>
+            </div>
+
+            <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
+                <button onclick="cancelarDespachoPortafolio()" style="background: #0f172a; border: 1px solid #334155; color: #94A3B8; padding: 5px 14px; border-radius: 4px; font-size: 7.5pt; cursor: pointer;">Cancelar</button>
+            </div>
         </div>
     </div>
 
