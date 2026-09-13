@@ -40,6 +40,32 @@ class TestLN_QBE_019_CrestPipeline_Concrete(AbstractTestLN_QBE_019_CrestPipeline
                     "puntos": 30 - idx
                 })
         return resultado
+    def get_teams_from_db(self, league_id: int = 262) -> List[Dict[str, Any]]:
+        from sqlalchemy import text
+        from src.storage.models import League
+        db = SessionLocal()
+        try:
+            league = db.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
+            lid = league.id if league else league_id
+            result = db.execute(
+                text(
+                    "SELECT id, league_id, fotmob_team_id, name, short_name, canonical_slug, crest_url FROM teams WHERE league_id = :lid"
+                ),
+                {"lid": lid},
+            )
+            return [dict(row._mapping) for row in result.fetchall()]
+        except Exception:
+            return []
+        finally:
+            db.close()
+
+    def get_live_board_payload(self, league_id: int = 262) -> Dict[str, Any]:
+        from fastapi.testclient import TestClient
+        from src.web.app import app
+        client = TestClient(app)
+        resp = client.get(f"/api/leagues/{league_id}/live-board")
+        assert resp.status_code == 200, f"Error al consultar live-board: {resp.text}"
+        return resp.json()
 
 
 def test_invariante_cero_archivos_fantasma_o_vacios():

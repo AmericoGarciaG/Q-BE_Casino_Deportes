@@ -15,11 +15,11 @@
 - **Fuente Principal:** Inter / Outfit / System Sans-Serif.
 - **Fuente Monospaciada:** JetBrains Mono / Fira Code (para números, probabilidades y cuotas).
 
-## 3. Estructura de Vistas SPA (4 Vistas)
-1. **Live Board (Dashboard principal):** Selector de liga, cartelera activa, tabla de posiciones.
-2. **Ingesta & Captura:** Carga de cuotas e inputs de mercado.
-3. **Motor Cuantitativo & Cartera:** Matriz de valor, Kelly y sugerencias de Dutching.
-4. **Reporte & Tesis:** Vista previa del reporte A4 y botón de exportación PDF.
+## 3. Estructura de Vistas SPA (4 Vistas Canónicas)
+1. **Hub de Ligas (`view-leagues-hub`):** Selector de competencia con tarjetas interactivas y logos oficiales de torneos.
+2. **Jornada y Tabla de Posiciones (`view-matchday-selection`):** Split-View con la tabla de 18 clubes (pestañas General, Forma y xG Opta) y Cartelera en 4 Niveles con checkboxes de selección.
+3. **Cartera Cuantitativa (`tab-portfolio`):** Dashboard Ejecutivo con Macro KPIs (Inversión, EV, ROI) y tabla reactiva de Órdenes de Inversión con boletos split calculados.
+4. **Tesis & Reporte PDF (`tab-reporting`):** Generador y descargador de reporte formal A4 con Playwright.
 
 ---
 
@@ -62,6 +62,11 @@
   - El botón `SYSTEM ONLINE` se mantiene discreto con borde cian tenue (`#38BDF8` a 40% opacidad).
   - Prohibido aplicar `color: #f59e0b`, `color: #fbbf24` o cualquier variante ámbar al nombre de la marca.
 * **[Binding Rationale]:** La identidad invasiva compite cognitivamente con los datos de análisis. Un branding discreto refuerza la autoridad profesional de la plataforma.
+
+### [DES-QBE-012] Isotipo Institucional y Favicon Dark Fintech [UX-MANDATE]
+
+* **Identidad Vectorial:** El favicon institucional se sirve como SVG vectorial puro en `/static/img/favicon.svg` (Fondo Slate 900 `#0B132B`, anillo exterior Cian `#38BDF8` y monograma `Q` geométrico en blanco puro).
+* **Política de Cache-Buster:** En el HTML, el tag `<link rel="icon">` debe invocar obligatoriamente el parámetro de versión `?v=2026QBE` para forzar a Chromium a invalidar cachés residuales y garantizar que ningún escudo de club aparezca en la pestaña del navegador.
 
 ---
 
@@ -120,4 +125,35 @@
      - Píldoras de Aliases reconocidos (`"Águilas"`, `"América"`, etc.).
      - Estadio y Sede.
      - Botón de Estado Dual: `[ ✅ Aprobado ]` (verde) / `[ 🔄 Cambiar Fuente ]` (azul).
+
+### [DES-QBE-019] Vista 5: Radiografía Forense Interactiva en UI (Backlog / PM-FACE) [UX-MANDATE]
+
+* **Propósito:** Vista modal interactiva orientada a la auditoría estocástica profunda.
+* **Componentes Previstos:**
+  1. Mapa de calor interactivo de la matriz Poisson 6x6.
+  2. Gráfico de dispersión: Momios Implícitos del Casino vs. Momio Justo Q-BE (Edge Visual).
+  3. Desglose analítico de los 4 umbrales de Breakeven ($\theta^*$).
+  4. Curva de liquidación en vivo y disparadores de CashOut al minuto 85'.
+
+### [DES-QBE-020] Dashboard Ejecutivo de Cartera (Vista 3 Reactiva) [UX-MANDATE]
+
+* **Geometría de Macro KPIs:** Tres tarjetas elevadas en Slate 800 (`#1E293B`) con acentos de color semántico:
+  - *Inversión Total Comprometida:* Borde izquierdo cian (`#38BDF8`), texto en blanco puro.
+  - *Ganancia Neta Esperada (EV):* Borde izquierdo verde esmeralda (`#00E676`), texto en verde con signo `+$`.
+  - *ROI Global Esperado:* Borde izquierdo verde esmeralda (`#00E676`), porcentaje con un decimal.
+* **Inviolabilidad Reactiva de la Tabla:** Queda estrictamente prohibido el uso de filas fijas de ejemplo (*mocks*) en `#tabla-ordenes-inversion`. El `<tbody>` se hidrata exclusivamente a partir del array `data.ordenes` recibido de `POST /api/portfolio/generate`. Si la cartera no genera órdenes aprobadas, se renderiza un banner informativo de capital protegido al 100% ($0.00 en riesgo).
+
+---
+
+### [DES-QBE-017-B] Jerarquía de Resolución de Emblemas por Variantes de Disco y SVG Fallback [UX-MANDATE]
+
+* **Búsqueda Proactiva de Variantes:** Si el archivo primario `{slug}.png` no existe o pesa $\le 3,000$ bytes, el resolutor inspecciona en disco variantes físicas reconocidas (`club-{slug}.png`, `{slug}-fc.png`, `deportivo-{slug}.png`) antes de invocar la red.
+* **Componente SVG Fallback Autocontenido:** Ante ausencia total de activo físico, se genera un Data URI SVG determinista (`data:image/svg+xml;utf8,...`) con gradiente Dark Fintech (`#1C2541` a `#0B132B`), anillo Cian `#38BDF8` y monograma de 2 a 3 iniciales, garantizando renderizado perfecto sin peticiones de red.
+
+---
+
+### [DES-QBE-021] Bloqueo Semántico en DOM y Cronometría Dinámica [UX-MANDATE]
+
+* **Inviolabilidad de Selección en DOM:** Los controladores de eventos en `app.js` bloquean cualquier interacción de selección si la tarjeta porta `dataset.estado === 'FINALIZADO'`, `dataset.estado === 'REPROGRAMADO'` o la clase CSS `.fixture-disabled`.
+* **Función `_esHoyDinamico()`:** Compara de forma estricta año, mes y día de la cadena ISO 8601 contra `new Date()` del sistema cliente para gobernar el prefijo `"HOY — "`, prohibiendo agrupamientos erróneos.
 

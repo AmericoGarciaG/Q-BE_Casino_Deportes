@@ -1,6 +1,6 @@
 ```markdown
 # Q-BE Casino Deportes — Governance Book (GOVERNANCE.md)
-**Versión:** 9.0 (Kybern Industrial - Local Full-Stack Web Platform Edition)  
+**Versión:** 12.0 (Kybern Industrial - Production Multi-Engine Edition)  
 **Estado:** [ALGO-PROTECTED] - Base de Gobierno Sellada (2026-09)  
 **Proyecto:** `Q_BE_CD_WEB` (Quantitative Betting Engine — Web Platform)  
 **Autoridad Suprema:** Américo García Guerrero (Director Humano)  
@@ -32,8 +32,18 @@ Si un conector de API externa, scraper o sensor de búsqueda falla en recuperar 
 
 La inyección de datos mockeados o simulados en producción se clasifica como **Violación Crítica de Integridad Institucional**, sujeta a reversión inmediata de código.
 
+### 1.5 Axioma de Abstracción Universal y No-Sobreajuste [GOVERNANCE-02] [ANTI-BUG]
+> **"Queda terminantemente prohibido codificar reglas condicionales particulares sobreajustadas a partidos, equipos o resultados específicos de una fecha en disputa."**
+
+Toda rutina de scraping, parsing o procesamiento estocástico debe ser una **función general abstracta** capaz de gobernar $N$ elementos dinámicos ($N \ge 0$). Los partidos, marcadores o fechas particulares de una jornada activa actúan exclusivamente como **instancias de prueba fácticas para verificar la ley general**, jamás como constantes o condicionales rígidos en el código fuente de producción.
+
 ### 1.4 Mandato de Fallo Ruidoso (Fail-Loud Mandate) [GOVERNANCE] [ARCH-PILLAR]
 En sistemas financieros y cuantitativos de asignación de capital, **la degradación silenciosa es inaceptable**. Quedan estrictamente prohibidas las capturas genéricas de error (`except Exception: return fallback_data()`) que oculten fallos de conexión inventando estados ficticios. Es preferible que un proceso falle de forma explícita y visible a que opere con datos corruptos.
+
+### 1.6 Umbral de Integridad Fail-Loud para Ingestas Externas [GOVERNANCE-03] [ARCH-PILLAR]
+
+* **Axioma de Integridad de Catálogo:** Si una rutina de extracción de datos vivos (FotMob o Liga MX) retorna un conjunto de clubes inferior a 15 entidades (`len(datos) < 15`), el sistema tiene estrictamente prohibido parchar los registros faltantes con datos sintéticos.
+* **Acción Inmediata:** La rutina debe lanzar `RuntimeError("FAIL-LOUD: Ingesta incompleta detectada")`, preservando el estado previo certificado en SQLite y manteniendo el capital en riesgo en $0.00 MXN.
 
 ---
 
@@ -152,6 +162,26 @@ Todo cambio estructural en `Q_BE_CD_WEB` DEBE ejecutarse mediante el **Motor de 
 * **Definición:** Violación de invariantes matemáticas (ej. sumatoria de probabilidades $\ne 1.0$, alteración de fórmulas de Poisson, hardcodeo de ganancias esperadas, o desalineación geométrica de tablas).
 * **Vía de Resolución:** **Asedio Metodológico (Motor de 3 Pasos Obligatorio).** Prohibida la corrección directa sin antes legislar y crear el test abstracto.
 
+### 5.3 Matriz de Fases y Roadmap Operativo (v12.0)
+
+```text
+ ┌────────────────────────────────────────────────────────────────────────────────────────┐
+ │                              MATRIZ DE FASES Q_BE_CD_WEB (v12.0)                       │
+ ├──────────┬──────────────────────────────────────────┬───────────┬──────────────────────┤
+ │ FASE     │ ALCANCE PRINCIPAL                        │ ESTADO    │ IMPACTO EN PRODUCTO  │
+ ├──────────┼──────────────────────────────────────────┼───────────┼──────────────────────┤
+ │ FASE 0   │ Cimientos Web y Purga Crisol             │ ✅ SELLADA│ Monolito FastAPI+DB  │
+ │ FASE 1   │ Curación Agéntica y Bóveda Soberana      │ ✅ SELLADA│ 18 escudos FMF disco │
+ │ FASE 2   │ Ingesta Real ligamx/Caliente & Cache-1st │ ✅ SELLADA│ Cero mocks, <20ms BD │
+ │ FASE 3   │ Despacho Cuantitativo, Poisson y Dutching│ 🟡 SELLADO│ Portafolio activo    │
+ │ FASE 4   │ Orquestación StateGraph / LangGraph      │ 📋 Planeado│ Micro-agentes async  │
+ │ FASE 5   │ Consola Bankroll, Slippage y Vaquita     │ 📋 Planeado│ WhatsApp & Sindicato │
+ │ FASE 6   │ Expansión Multi-Torneo Internacional     │ 📋 Planeado│ Premier / Champions  │
+ │ FASE 7   │ PM-FACE: Calibración y Brier Score       │ 📋 Bases  │ MatchdayState activo │
+ │ FASE 8   │ Ejecución Desatendida In-Play            │ 🔭 Visión │ Apuestas automáticas │
+ └────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 6. ETIQUETAS DE PRESERVACIÓN DE INTENCIÓN (BINDING RATIONALE)
@@ -187,6 +217,51 @@ Ninguna orden de inversión ni reporte interactivo puede ser despachado sin supe
  │ 8. Linaje Cronológico Real H2H      ➔ Fechas reales decrecientes, >= 60d y alternancia │
  └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 7.1 DOCTRINA CANÓNICA DE PRUEBAS: THE SHIELD TESTING DOCTRINE
+
+> **"Una suite de pruebas lenta, frágil o acoplada a la red no es un escudo de calidad; es un freno a la innovación y una fuente constante de falsa seguridad."**
+
+Toda suite de pruebas construida bajo el Kybern Framework debe regirse obligatoriamente por los siguientes siete mandatos universales, aplicables a cualquier dominio o tecnología:
+
+### [GOV-TEST-01] Axioma de Desacoplamiento Absoluto de Red e I/O en Pruebas Unitarias [ARCH-PILLAR]
+* **Principio:** Los Jueces Abstractos (`abstract_test_*.py`) y las pruebas unitarias concretas de `tests/shield/` tienen **terminantemente prohibido realizar llamadas de red externas en tiempo de ejecución**.
+* **Mecanismo:** Deben ejecutarse exclusivamente contra bases de datos efímeras en memoria (`sqlite:///:memory:`), transacciones con rollback automático, o snapshots estáticos fácticos congelados en disco.
+* **Binding Rationale:** Una prueba unitaria que depende de que un servidor de terceros responda a través de internet es intrínsecamente no determinista, lenta y propensa a fallos falsos positivos por problemas de conectividad ajenos al software.
+
+### [GOV-TEST-02] Presupuesto de Rendimiento y Segregación de Niveles (Performance SLA) [PERF-MANDATE]
+Toda suite de pruebas debe segmentarse en dos niveles operativos estrictamente separados por su tiempo de ejecución:
+1. **Nivel 1: The Shield Core (`tests/shield/`):**  
+   - **SLA de Velocidad:** La suite completa debe ejecutarse en **menos de 5.0 segundos acumulados** (promedio $< 100\text{ ms}$ por prueba; las pruebas de matemática pura deben responder en $< 5\text{ ms}$).
+   - **Frecuencia:** Se ejecuta de forma obligatoria en cada commit local, antes de cada push y en el pre-vuelo de cada refactorización.
+2. **Nivel 2: Integración y Verificación E2E (`tests/e2e/`):**  
+   - **Alcance:** Pruebas que validan navegadores headless (Playwright/Selenium), scrapers vivos, servicios externos o compilación pesada de documentos (PDFs).
+   - **Frecuencia:** Se ejecutan **únicamente bajo demanda explícita o en compuertas de liberación final (Release Gates)**, jamás dentro del bucle rápido de desarrollo.
+
+### [GOV-TEST-03] Principio de Unicidad del Juez (1 Nodo Lógico = 1 Juez Abstracto) [ARCH-PILLAR]
+* **Prohibición de Fragmentación:** Queda prohibida la proliferación de múltiples clases abstractas o scripts duplicados para auditar un mismo Nodo Lógico IPO.
+* **Consolidación:** Todas las aserciones de un nodo (`[LN-XXX]`) deben concentrarse en una única clase abstracta canónica (`AbstractTestLN_XXX`). Si se requiere evaluar aspectos complementarios (ej. contratos vs. presentación), se estructuran como métodos distintos dentro del mismo archivo maestro, erradicando archivos espejo redundantes.
+
+### [GOV-TEST-04] Invarianza Semántica vs. Sobreajuste de Pruebas (Anti-Vibe Testing) [ANTI-BUG]
+* **Aserciones Robustas:** Las pruebas deben evaluar **invariantes matemáticas, leyes de conservación y transiciones de estado**, no cadenas de texto efímeras ni detalles de implementación volátiles.
+* **Prohibición de Sobreajuste:** Queda prohibido que un test verifique constantes sobreajustadas a un caso particular (ej. esperar un partido específico de un mes calendario). Las aserciones deben evaluar propiedades abstractas válidas para $N$ elementos (ej. sumas simplex $= 1.0000$, límites numéricos acotados en $[0, 1]$, o consistencia contable $\text{Activos} == \text{Pasivos} + \text{Capital}$).
+
+### [GOV-TEST-05] Diseño Obligatorio de la Frustración (Sad Paths First) [ANTI-BUG]
+* **Cobertura de la Adversidad:** Ningún Juez Abstracto es válido si únicamente prueba el camino feliz (*Happy Path*).
+* **Casos Límite Exigidos:** Todo test debe incorporar aserciones para entradas vacías (`None`, `[]`), división por cero, valores fuera de rango, fechas expiradas y datos incompletos, certificando que el sistema se degrada de forma predecible, controlada y bajo el **Mandato de Fallo Ruidoso (`Fail-Loud`)**.
+
+### [GOV-TEST-06] Idempotencia, Aislamiento y Cero Efectos Secundarios [ARCH-PILLAR]
+* **Reversibilidad Absoluta:** La ejecución de un test no debe alterar el estado persistente del entorno de desarrollo ni de producción.
+* **Aislamiento:** Ningún test debe depender de que otro se haya ejecutado previamente. El orden de ejecución debe ser intercambiable y aleatorizable sin alterar el veredicto.
+* **Limpieza de Residuos:** Queda prohibido que una prueba genere archivos temporales que no sean eliminados automáticamente al concluir (`teardown` / fixtures efímeros).
+
+### [GOV-TEST-07] Centinelas Forenses AST (Linters Sintácticos de Integridad) [GOVERNANCE]
+Toda suite de The Shield debe incluir pruebas de inspección estática del Árbol de Sintaxis Abstracta (AST Linters, ej. `test_shield_anti_patterns_ast.py`) para verificar algorítmicamente en el código de producción:
+1. Ausencia de datos mockeados o simulados en producción (`[GOVERNANCE-01]`).
+2. Ausencia de números mágicos hardcodeados sin constante descriptiva.
+3. Ausencia de capturas de error genéricas y silenciosas (`except Exception: pass`).
 
 ---
 

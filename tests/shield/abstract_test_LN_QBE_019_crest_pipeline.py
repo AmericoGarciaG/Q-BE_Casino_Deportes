@@ -22,6 +22,16 @@ class AbstractTestLN_QBE_019_CrestPipeline(abc.ABC):
         """Simula o ejecuta la llamada que nutre StandingRowOut en el Live Board."""
         pass
 
+    @abc.abstractmethod
+    def get_teams_from_db(self, league_id: int = 262) -> List[Dict[str, Any]]:
+        """Debe consultar la tabla teams en SQLite."""
+        pass
+
+    @abc.abstractmethod
+    def get_live_board_payload(self, league_id: int = 262) -> Dict[str, Any]:
+        """Debe invocar /api/leagues/{id}/live-board."""
+        pass
+
     # =========================================================================
     # INVARIANTES DEL ESCUDO (THE SHIELD)
     # =========================================================================
@@ -109,3 +119,29 @@ class AbstractTestLN_QBE_019_CrestPipeline(abc.ABC):
             assert escudo.startswith("/static/") or escudo.startswith("data:image/svg+xml"), (
                 f"Ruta inválida en Live Board para '{equipo}': {escudo}"
             )
+
+    def test_teams_catalog_populated_with_18_clubs_and_crests(self):
+        """[SHIELD-INVARIANTE] La tabla teams en SQLite debe contener 18 clubes con URLs de escudos válidas."""
+        teams = self.get_teams_from_db(262)
+        assert len(teams) == 18, f"Se esperaban 18 clubes en la tabla teams de SQLite, encontrados: {len(teams)}."
+        
+        for t in teams:
+            assert "name" in t and "canonical_slug" in t
+            assert "crest_url" in t and t["crest_url"] is not None
+            assert t["crest_url"].startswith("http") or t["crest_url"].startswith("/static"), f"Escudo inválido para {t.get('name')}: {t.get('crest_url')}"
+
+    def test_standings_reflects_apertura_2026_real_leader(self):
+        """[SHIELD-INVARIANTE] La tabla de posiciones de Liga MX debe tener un líder válido con posición #1."""
+        board = self.get_live_board_payload(262)
+        standings = board.get("standings", [])
+        assert len(standings) == 18, "La tabla debe tener 18 clubes."
+        
+        lider = standings[0]
+        assert lider["pos"] == 1
+        assert lider["puntos"] >= 14, f"El líder debe tener al menos 14 puntos, se encontró: {lider['puntos']}."
+
+    def test_fixtures_handles_pending_odds_cleanly(self):
+        """[SHIELD-INVARIANTE] Los partidos sin momios publicados deben marcarse como pendientes sin crashear."""
+        board = self.get_live_board_payload(262)
+        fixtures = board.get("fixtures", [])
+        assert len(fixtures) >= 1

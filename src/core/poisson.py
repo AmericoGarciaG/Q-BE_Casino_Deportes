@@ -48,9 +48,14 @@ class PoissonBivariateEngine:
         loc_xg = xg_local_prom if xg_local_prom is not None else local_xg
         v_xga = xga_vis_prom if xga_vis_prom is not None else vis_xga
 
-        # 1. Ponderación adaptativa H2H vs Liga
-        w_h2h = max(0.15, 0.50 * math.exp(-h2h.antiguedad_promedio_dias / 300.0))
-        w_liga = 1.0 - w_h2h
+        # 1. Ponderación adaptativa H2H vs Liga — [LN-QBE-020-B] Ley Zero-H2H
+        if h2h.antiguedad_promedio_dias >= 9000.0:
+            # Sin antecedentes H2H reales: 100% métricas de liga
+            w_h2h = 0.0
+            w_liga = 1.0
+        else:
+            w_h2h = max(0.15, 0.50 * math.exp(-h2h.antiguedad_promedio_dias / 300.0))
+            w_liga = 1.0 - w_h2h
 
         # 2. Modulador de tabla
         madurez = min(1.0, float(jornada_tabla) / 6.0)

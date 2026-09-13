@@ -129,6 +129,18 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-006] Asignación Relacional de Favorito por Momio 1X2
+
+* **Ω (Resumen):** Determinar de forma puramente objetiva el rol de Favorito y Underdog en un encuentro a partir de las cuotas decimales del mercado.
+* **I (Input):** Cuota local ($O_L$), Cuota visitante ($O_V$).
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED]:**
+  $$\text{Si } O_L \le O_V \implies \text{Favorito} = \text{Local}, \text{Underdog} = \text{Visitante}$$
+  $$\text{Si } O_L > O_V \implies \text{Favorito} = \text{Visitante}, \text{Underdog} = \text{Local}$$
+* **O (Output):** Roles canónicos `fav_name`, `und_name` y bandera `is_fav_local: bool`.
+* **Φ (Transición):** Hacia `[LN-QBE-040]` (Poisson) y `[LN-QBE-070]` (Dutching).
+
+---
+
 ### ID: [LN-QBE-003] Ingesta Fáctica Estructurada FotMob (Opta Metrics Engine)
 
 * **P (Process) — Extracción Pura de FotMob sin Filtros Locales:**
@@ -160,6 +172,25 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** `OfficialStandingsSnapshot` con los 18 clubes oficiales de la federación.
 * **Φ (Transición):** Hacia `[LN-QBE-010]` (Aduana de Sanidad), `[LN-QBE-040]` (Poisson Bivariado) y persistencia en `StandingSnapshot`.
 * **[SHIELD]:** `tests/shield/test_LN_QBE_017_standings_pipeline.py`
+
+---
+
+### ID: [LN-QBE-018] Extractor Universal de Marcadores y Partidos Reprogramados
+
+* **Ω (Resumen):** Extraer dinámicamente desde el DOM de la federación (`ligamx.net`) los marcadores fácticos de encuentros concluidos y la totalidad de los partidos reprogramados ($N \ge 0$), sin recurrir a marcadores nulos por omisión ni sobreajustes de nombres.
+* **I (Input):** Documento HTML / Contexto de página de `https://ligamx.net/`.
+* **P (Process) [ARCH-PILLAR] [ANTI-BUG] [GOVERNANCE-01]:**
+  1. **Parser Multilínea de Goles:**
+     - Para todo encuentro marcado como `FINALIZADO` o `MARCADOR OFICIAL`, extraer los dígitos de goles de los nodos `.goles`, `.marcador` o mediante regex multilínea `(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)`.
+     - Mandato Fail-Loud: Prohibido asignar `"0 - 0"` si los goles no se encuentran; el sistema debe registrar `"MARCADOR_PENDIENTE"`.
+  2. **Activación de Partidos Reprogramados:**
+     - Hacer clic forzado en la píldora interactiva `PARTIDOS REPROGRAMADOS` de la marquesina.
+     - Iterar dinámicamente sobre todas las tarjetas de la sección ($N \ge 0$).
+     - Extraer clubes, fecha/hora y resolver mediante `LIGAMX_LOGO_ID_MAP` si las imágenes carecen de atributo `alt`.
+     - Clasificar automáticamente al Grupo 4: `estado = "REPROGRAMADO"`, `es_pospuesto = True`, `disponible = False`.
+* **O (Output):** `MarcadoresConcluidosMap` y `PartidosReprogramadosList`.
+* **Φ (Transición):** Hacia `[LN-QBE-010]` y `sync_league_live_board()`.
+* **[SHIELD]:** `tests/shield/test_LN_QBE_025_fixture_lifecycle.py`
 
 ---
 
@@ -224,6 +255,18 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-020-B] Ley de Ponderación Zero-H2H (Cero Mocks Sintéticos)
+
+* **Ω (Resumen):** Gobernar el modelado estocástico cuando dos clubes carecen de antecedentes directos registrados en la base de datos, prohibiendo terminantemente inventar partidos históricos falsos.
+* **P (Process) [GOVERNANCE-01] [ALGO-PROTECTED]:**
+  - Si una pareja de equipos no tiene partidos H2H reales verificables en la base de datos (`len(h2h_matches) == 0`):
+    $$w_{\text{H2H}} = 0.0 \implies w_{\text{Liga}} = 1.0$$
+  - El modelo bivariado de Poisson 6x6 se ejecuta al **100% sobre las métricas Opta ($xG, xGA, FCF, E_{\text{att}}$)** del torneo activo.
+  - Queda formalmente catalogado como violación crítica a la constitución el fabricar partidos H2H sintéticos con fechas o marcadores ficticios para forzar la ejecución de pruebas.
+* **O (Output):** Ponderaciones $w_{\text{H2H}} = 0.0$ y $w_{\text{Liga}} = 1.0$.
+
+---
+
 ### ID: [LN-QBE-030] Métricas Sintéticas de Control y Peligro ($FCF, E_{\text{att}}$)
 
 * **Ω (Resumen):** Aislar la varianza de goles fortuitos mediante volumen de tiros y control de balón de 10 juegos.
@@ -232,6 +275,15 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   $$\text{Raw\_E}_{\text{att}} = \frac{\overline{\text{gf}} + 0.35 \cdot \overline{\text{sot}}}{1.0 + 0.35 \cdot \overline{\text{sot}}} \implies E_{\text{att}} = \text{Clamp}(\text{Raw\_E}_{\text{att}}, [0.60, 1.40])$$
 * **O (Output):** `SyntheticMetrics`.
 * **Φ (Transición):** Hacia **[LN-QBE-040]**.
+
+---
+
+### ID: [LN-QBE-035] Fórmulas de Derivación Opta y Tokens de Marcador
+
+* **Derivación de $xG/xGA$ en Ausencia de Tiros Profundos (H7):**
+  $$\text{Fav } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Fav}} \times 1.05, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Fav}} \times 0.95, 2)$$
+  $$\text{Und } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Und}} \times 0.95, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Und}} \times 1.10, 2)$$
+* **Token Fail-Loud de Marcador Pendiente (H4):** Si un encuentro concluyó pero la federación aún no publica los números oficiales de goles, el sistema asigna el token canónico `"MARCADOR_PENDIENTE"`, prohibiendo inventar empates `"0 - 0"`.
 
 ---
 
@@ -406,6 +458,73 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Φ (Transición):** Hacia `StandingRowOut.escudo_url` y `MatchFixtureOut`.
 * **[SHIELD]:** `tests/shield/test_LN_QBE_019_crest_pipeline.py`
 * **[Binding Rationale]:** `[ANTI-BUG]` `[UX-MANDATE]` Elimina los errores visuales por bloqueo de terceros y garantiza autonomía visual en despliegues offline/locales.
+
+---
+
+### ID: [LN-QBE-021] Generador de Traza de Auditoría Cuantitativa Markdown
+
+* **Ω (Resumen):** Exportar de forma determinista un reporte exhaustivo en Markdown (`data/output/auditoria_cuantitativa_jornada_8.md`) con el ciclo estocástico y financiero completo de cada partido operable procesado en la cartera.
+* **I (Input):** `ConsolidatedPayload` emitido por `QBEPipelineEngine.run_full()`.
+* **P (Process) [ARCH-PILLAR] [BIZ-LOGIC]:**
+  1. Registrar metadatos del evento (Torneo, Jornada, Bankroll evaluado, Ganancia neta esperada).
+  2. Construir la tabla de Órdenes de Inversión con desglose de boletos split (Boleto 1 Seguro y Boleto 2 Ganancia).
+  3. Desglosar para cada partido operable:
+     - Entradas Fácticas (Cuotas Caliente L/E/V, Opta xG/xGA, Pts/PJ).
+     - Modulación de Poisson ($\lambda, \mu$, Goles Totales, Simplex $=1.0000$, probabilidades Fav/Emp/Und).
+     - Variables de Ruina ($\Psi_{\text{Ruina}}, \Phi_{\text{Lead2}}$).
+     - Derivadas de Breakeven ($\theta^*_{\text{Fav}}, \theta^*_{\text{Emp}}, \theta^*_{\text{PA}}, \theta^*_{\text{Und}}$).
+     - Tesis didáctica en 4 viñetas.
+  4. Listar partidos vetados por el filtro del Triple Candado Fáctico o Triaje.
+* **O (Output):** Archivo `data/output/auditoria_cuantitativa_jornada_8.md`.
+* **Φ (Transición):** Persistencia en disco para verificación forense independiente.
+
+---
+
+### ID: [LN-QBE-022] Auditor Paralelo Independiente CLI (The Shield Parallel Auditor)
+
+* **Ω (Resumen):** Script de ejecución en terminal (`scripts/auditar_calculos_portafolio.py`) que audita de forma aislada e independiente el último portafolio persistido en SQLite, recalculando con NumPy/SciPy puro para certificar las 8 invarianzas numéricas.
+* **I (Input):** Registro en tabla `portfolio_records` de `qbe_database.db`.
+* **P (Process) [GOVERNANCE] [ALGO-PROTECTED]:**
+  1. Invarianza Dutching: $|\text{Monto\_B1} \times \text{Momio\_B1} - \text{Inversión}| \le \$0.08\text{ MXN}$ en coberturas.
+  2. Invarianza de Suma: $|\text{Monto\_B1} + \text{Monto\_B2} - \text{Inversión}| \le \$0.02\text{ MXN}$.
+  3. Invarianza de Hard-Caps: $\text{Inv}_i \le \text{Bankroll} \times 0.0801$ y $\sum \text{Inv} \le \text{Bankroll} \times 0.2501$.
+  4. Invarianza de Techo: $\text{EV}_{\text{Global}} \le \sum \text{Premios\_Máximos}$.
+* **O (Output):** Veredicto formal en consola: `EXIT CODE 0 (THE SHIELD PASSED)` o `EXIT CODE 1 (BLOCKED)`.
+
+---
+
+### ID: [LN-QBE-006] Asignación Relacional de Favorito por Momio 1X2
+
+* **Ω (Resumen):** Determinar de forma puramente objetiva el rol de Favorito y Underdog en un encuentro a partir de las cuotas decimales del mercado.
+* **I (Input):** Cuota local ($O_L$), Cuota visitante ($O_V$).
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED]:**
+  $$\text{Si } O_L \le O_V \implies \text{Favorito} = \text{Local}, \text{Underdog} = \text{Visitante}$$
+  $$\text{Si } O_L > O_V \implies \text{Favorito} = \text{Visitante}, \text{Underdog} = \text{Local}$$
+* **O (Output):** Roles canónicos `fav_name`, `und_name` y bandera `is_fav_local: bool`.
+* **Φ (Transición):** Hacia `[LN-QBE-040]` (Poisson) y `[LN-QBE-070]` (Dutching).
+
+---
+
+### ID: [LN-QBE-020-B] Ley de Ponderación Zero-H2H (Cero Mocks Sintéticos)
+
+* **Ω (Resumen):** Gobernar el modelado estocástico cuando dos clubes carecen de antecedentes directos registrados en la base de datos, prohibiendo terminantemente inventar partidos históricos falsos.
+* **P (Process) [GOVERNANCE-01] [ALGO-PROTECTED]:**
+  - Si una pareja de equipos no tiene partidos H2H reales verificables en la base de datos (`len(h2h_matches) == 0`):
+    $$w_{\text{H2H}} = 0.0 \implies w_{\text{Liga}} = 1.0$$
+  - El modelo bivariado de Poisson 6x6 se ejecuta al **100% sobre las métricas Opta ($xG, xGA, FCF, E_{\text{att}}$)** del torneo activo.
+  - Queda formalmente catalogado como violación crítica a la constitución el fabricar partidos H2H sintéticos con fechas o marcadores ficticios para forzar la ejecución de pruebas.
+  - El mecanismo de activación en `temporal.py`: si `h2h_matches` está vacío, retornar `H2HDecayResult` con `antiguedad_promedio_dias=9999.0` y probabilidades neutras `(0.3333, 0.3333, 0.3333)`.
+  - El mecanismo de activación en `poisson.py`: si `h2h.antiguedad_promedio_dias >= 9000.0`, forzar `w_h2h = 0.0` y `w_liga = 1.0`.
+* **O (Output):** Ponderaciones $w_{\text{H2H}} = 0.0$ y $w_{\text{Liga}} = 1.0$.
+
+---
+
+### ID: [LN-QBE-035] Fórmulas de Derivación Opta y Tokens de Marcador
+
+* **Derivación de $xG/xGA$ en Ausencia de Tiros Profundos (H7):**
+  $$\text{Fav } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Fav}} \times 1.05, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Fav}} \times 0.95, 2)$$
+  $$\text{Und } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Und}} \times 0.95, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Und}} \times 1.10, 2)$$
+* **Token Fail-Loud de Marcador Pendiente (H4):** Si un encuentro concluyó pero la federación aún no publica los números oficiales de goles, el sistema asigna el token canónico `"MARCADOR_PENDIENTE"`, prohibiendo inventar empates `"0 - 0"`.
 
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**

@@ -19,11 +19,11 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
  └────────────────────────────────────────────────────────────────────────────────────────┘
 
     [ SU NAVEGADOR WEB (Cliente SPA Reactivo) — http://localhost:8000 ]
-     • Vista 1: Hub de Ligas (Premier, Liga MX ⭐, Champions, LaLiga...)
-     • Vista 2: Split-View (Tabla 18 clubes FotMob a la izquierda | Cartelera Checkboxes a la derecha)
-     • Vista 3: Dashboard Ejecutivo (KPIs Macro y Boletos Split calculados)
-     • Vista 4: Centro de Mando Táctico & Auditoría de Descartes
-     • Vistas 5+: Radiografías Forenses Individuales (Opta xG & Tesis Q-BE)
+     • Vista 1: Hub de Ligas (Liga MX ⭐, Premier, Champions, LaLiga...)
+     • Vista 2: Split-View (Tabla 18 clubes oficial | Cartelera en 4 Niveles)
+     • Vista 3: Cartera Cuantitativa (Dashboard Ejecutivo: Macro KPIs & Boletos Split)
+     • Vista 4: Tesis & Reporte PDF Oficial A4
+     • Vista 5 (Backlog): Radiografía Forense Interactiva (Matriz 6x6 & CashOut)
                        │                              ▲
                        │ (Peticiones REST en JSON)    │ (Respuestas en Tiempo Real)
                        ▼                              │
@@ -116,6 +116,21 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   - Cuando el centinela `MatchdayState` detecta el avance de la jornada activa ($N \rightarrow N+1$), invalida de forma inmediata el `StandingSnapshot` previo en SQLite.
   - Esto obliga al sistema a ejecutar la ingesta fresca de la tabla general para reflejar los ascensos, descensos y puntos de los partidos recién concluidos.
 
+### [ARCH-1.4.3] Motor de Extracción Focalizada de Cuotas Caliente.mx [ARCH-PILLAR] [ANTI-BUG]
+
+* **Axioma de Búsqueda Acotada por Slate:** Queda terminantemente prohibido el raspado ciego o indiscriminado de eventos en Caliente.mx. El scraper recibe como parámetro de entrada obligatorio el *Master Slate* de la jornada activa certificado por `ligamx.net`.
+* **Filtro de Pertenencia:** El motor busca única y exclusivamente las cuotas 1X2 y la cláusula de Pago Anticipado (`2 Goles de Ventaja`) para los pares canónicos `(local, visitante)` pertenecientes a dicho Slate. Todo evento de jornadas futuras, copas o partidos adelantados que no forme parte de la ventana en disputa se descarta en memoria sin procesar.
+
+### [ARCH-1.4.4] Ingesta Estructurada de Forma (5P) vía FotMob Next.js (__NEXT_DATA__) [ARCH-PILLAR]
+
+* **Identificador de Competición:** La Liga MX se consulta formalmente bajo el ID `230` en FotMob.
+* **Extracción Soberana sin Dependencia de APIs Deprecadas:** Ante la baja de las rutas REST públicas `/api/leagues`, el sistema extrae el árbol de datos pre-renderizado por Next.js incrustado en la etiqueta `<script id="__NEXT_DATA__">` de `https://www.fotmob.com/es-419/leagues/230/table/liga-mx`.
+* **Atributos Capturados:** Array cronológico de los últimos 5 partidos (`W/D/L` $\implies$ `G/E/P`) y el objeto `nextMatch` para deducción de rival inmediato.
+
+### [ARCH-1.4.5] Robustez de Parsers DOM y Expresiones Multilínea [ANTI-BUG]
+
+* **Tolerancia a Saltos de Línea en Marcadores:** Los scrapers de resultados en vivo deben emplear patrones de expresiones regulares multilínea capaces de resolver goles separados por retornos de carro o espacios en el DOM (`(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)`), impidiendo que marcadores legítimos concluidos se descarten como nulos.
+
 ---
 
 ### [ARCH-1.5.0] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
@@ -157,6 +172,24 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   1. `MatchdayState`: Registra `league_id`, `matchday_num`, `estado` (`ACTIVA`, `CONCLUIDA`), `last_scraped_at`, total de partidos y partidos finalizados. Opera como centinela de caché para evitar re-evaluaciones desde cero.
   2. `FixtureRecord`: Almacena de forma normalizada cada encuentro con sus atributos estructurados: `id_partido`, `matchday`, `local_id`, `visitante_id`, `fecha_dt`, `estado`, `marcador_local`, `marcador_visitante`, momios $L, E, V$ y cláusula de `pago_anticipado`.
 * **Gobernanza de Cierre de Jornada:** Una jornada se declara `CONCLUIDA` cuando el 100% de sus partidos regulares tienen estatus `FINALIZADO` con marcador verificado. Una vez concluida, su registro queda congelado para auditoría de Brier Score y se habilita la transición a la jornada $N+1$.
+
+### [ARCH-1.5.6] Ledger Histórico de Momios y Circunstancias Pre-Partido (Backtesting Bridge) [BIZ-LOGIC] [PM-FACE]
+
+* **Propósito:** Registrar de forma inmutable el snapshot de cuotas de apertura/cierre y el vector de variables de entorno ($Q_{\text{mod}}$, reporte de bajas, clima, racha) antes del silbatazo inicial de cada partido.
+* **Función en el Bucle Cerrado:** Almacenar la verdad del mercado pre-partido en SQLite (`portfolio_records` y tablas colindantes) para permitir simulaciones retrospectivas (*backtesting*) y alimentar la futura calibración bayesiana del motor `PM-FACE` (Fase 7).
+
+### [ARCH-1.5.7] Bóveda Incremental de Emblemas de Ligas y Competiciones [ARCH-PILLAR]
+
+* **Aislamiento Local:** El emblema oficial de cada competencia activa se almacena físicamente en disco en `src/web/static/img/leagues/league_{league_id}.png`.
+* **Inspección Delta:** El subsistema `asegurar_logo_liga_incremental()` audita el sistema de archivos; si el activo ya existe y tiene un tamaño válido ($> 1\text{ KB}$), se preserva sin invocar la red. Si falta, lo extrae de forma autónoma desde la fuente oficial de la federación o su repositorio certificado.
+* **Persistencia Relacional:** La columna `flag` de la tabla `leagues` almacena obligatoriamente la ruta local relativa servida (`/static/img/leagues/league_{id}.png`), prohibiendo enlaces directos externos.
+
+### [ARCH-1.5.8] Parámetros Canónicos de Normalización y Bóveda de Activos [ARCH-PILLAR] [ANTI-BUG]
+
+* **Limpieza Lingüística Determinista (H9):** El normalizador canónico (`[LN-QBE-012]`) aplica obligatoriamente: eliminación estricta de acentos (`strip_accents`), conversión a minúsculas, sustitución de caracteres no-alfanuméricos por espacios (`[^a-z0-9\s]`) y colapso de dobles espacios antes de cualquier comparación.
+* **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`.
+* **Aduana de IDs de Imagen FMF (H1):** El diccionario inmutable `LIGAMX_LOGO_ID_MAP` opera como respaldo determinista de resolución cuando el servidor oficial de la federación emite etiquetas `<img>` con atributo `alt` vacío o indefinido en el carrusel de marcadores.
+* **Umbrales Físicos de Bóveda y Espejeo (H13, H14):** Todo escudo de club guardado localmente debe verificar `size >= 3000` bytes y cabecera PNG válida (`\x89PNG`). Todo emblema de torneo debe verificar `size >= 1000` bytes. Durante el commit de curación HITL, se ejecuta el copiado físico obligatorio (`shutil.copyfile`) hacia todos los aliases del club para garantizar integridad multi-slug inmediata.
 
 ---
 
@@ -217,6 +250,18 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   1. El endpoint lee prioritariamente desde SQLite. Si el snapshot existe y `now() - last_scraped_at < TTL`, entrega el payload en $\le 25\text{ ms}$.
   2. Solo ante `cold_start` (base de datos vacía) o si el usuario envía el parámetro explícito `?force_refresh=true`, se autoriza la invocación controlada de los sensores de red.
 * **Ciclo de Vida en Arranque (`lifespan`):** Al iniciar el servidor, el seeder valida si SQLite ya contiene la jornada activa fresca. Si los datos existen y están en TTL, el servidor concluye su arranque en $\le 500\text{ ms}$ sin abrir navegadores headless.
+
+### [ARCH-1.6.5] Pipeline Adaptador de Portafolio (src/pipeline/adapter.py) [ARCH-PILLAR]
+
+* **Desacoplamiento Relacional (Protocolo Nexus):** El módulo `src/pipeline/adapter.py` actúa como puente puro entre las tablas de SQLite (`FixtureSnapshot`, `StandingSnapshot`) y los motores matemáticos deterministas de `src/core/`.
+* **Responsabilidades del Adaptador:**
+  1. `construir_master_table_snapshot()`: Convierte el snapshot de posiciones en contratos inmutables `MasterTableSnapshot` calculando `pts_por_partido` para cada club.
+  2. `hidratar_partidos_cuantitativos()`: Transforma los partidos seleccionados en objetos `RawMatchInput`, determinando favorito por cuota ($O_{\text{Local}} \le O_{\text{Visitante}}$), asignando promedios 10P Opta $xG/xGA$, evaluando el factor cualitativo $Q_{\text{mod}}$ y construyendo el linaje H2H que satisface la Invarianza #8 de The Shield.
+
+### [ARCH-1.6.6] Aislamiento de Hilos y Timeouts en Ingesta Playwright [ARCH-PILLAR] [ANTI-BUG]
+
+* **Aislamiento de Bucle Asyncio:** Toda invocación síncrona a Playwright (`sync_playwright`) dentro del ciclo de vida de FastAPI o sus controladores REST debe encapsularse obligatoriamente dentro de un worker thread dedicado (`concurrent.futures.ThreadPoolExecutor(max_workers=1)`). Queda terminantemente prohibido invocar la API síncrona en el hilo principal de Uvicorn para evitar colisiones de contexto con el bucle de eventos.
+* **Gobierno de Timeouts Rígidos:** Cada operación de extracción en segundo plano debe portar un timeout explícito en su llamada `.result(timeout=...)` (35.0s para FotMob, 40.0s para el Slate FMF y 35.0s para cuotas de Caliente), garantizando que un cuelgue de red externo no degrade ni bloquee indefinidamente los recursos del servidor local.
 
 ---
 
@@ -539,6 +584,28 @@ class PortfolioExecutionPlan(BaseModel):
      - Descarga físicamente los escudos validados al almacén soberano local (`src/web/static/img/crests/{slug}.png`).
      - Inserta/actualiza de forma inmutable los registros en las tablas `teams`, `venues` y `aliases` de SQLite.
 * **Aislamiento de Producción:** Ningún club en estado de prospección (*staging*) es visible en los endpoints públicos de Live Board (`/api/leagues/{id}/live-board`) hasta haber sido sellado mediante el commit administrativo.
+
+---
+
+### [ARCH-1.4.5] Robustez de Parsers DOM y Expresiones Multilínea [ANTI-BUG]
+
+* **Tolerancia a Saltos de Línea en Marcadores:** Los scrapers de resultados en vivo deben emplear patrones de expresiones regulares multilínea capaces de resolver goles separados por retornos de carro o espacios en el DOM (`(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)`), impidiendo que marcadores legítimos concluidos se descarten como nulos.
+
+---
+
+### [ARCH-1.5.8] Parámetros Canónicos de Normalización y Bóveda de Activos [ARCH-PILLAR] [ANTI-BUG]
+
+* **Limpieza Lingüística Determinista (H9):** El normalizador canónico (`[LN-QBE-012]`) aplica obligatoriamente: eliminación estricta de acentos (`strip_accents`), conversión a minúsculas, sustitución de caracteres no-alfanuméricos por espacios (`[^a-z0-9\s]`) y colapso de dobles espacios antes de cualquier comparación.
+* **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`.
+* **Aduana de IDs de Imagen FMF (H1):** El diccionario inmutable `LIGAMX_LOGO_ID_MAP` opera como respaldo determinista de resolución cuando el servidor oficial de la federación emite etiquetas `<img>` con atributo `alt` vacío o indefinido en el carrusel de marcadores.
+* **Umbrales Físicos de Bóveda y Espejeo (H13, H14):** Todo escudo de club guardado localmente debe verificar `size >= 3000` bytes y cabecera PNG válida (`\x89PNG`). Todo emblema de torneo debe verificar `size >= 1000` bytes. Durante el commit de curación HITL, se ejecuta el copiado físico obligatorio (`shutil.copyfile`) hacia todos los aliases del club para garantizar integridad multi-slug inmediata.
+
+---
+
+### [ARCH-1.6.6] Aislamiento de Hilos y Timeouts en Ingesta Playwright [ARCH-PILLAR] [ANTI-BUG]
+
+* **Aislamiento de Bucle Asyncio:** Toda invocación síncrona a Playwright (`sync_playwright`) dentro del ciclo de vida de FastAPI o sus controladores REST debe encapsularse obligatoriamente dentro de un worker thread dedicado (`concurrent.futures.ThreadPoolExecutor(max_workers=1)`). Queda terminantemente prohibido invocar la API síncrona en el hilo principal de Uvicorn para evitar colisiones de contexto con el bucle de eventos.
+* **Gobierno de Timeouts Rígidos:** Cada operación de extracción en segundo plano debe portar un timeout explícito en su llamada `.result(timeout=...)` (35.0s para FotMob, 40.0s para el Slate FMF y 35.0s para cuotas de Caliente), garantizando que un cuelgue de red externo no degrade ni bloquee indefinidamente los recursos del servidor local.
 
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**

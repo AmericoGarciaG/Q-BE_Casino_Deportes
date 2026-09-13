@@ -1,7 +1,10 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from src.storage.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class League(Base):
     __tablename__ = "leagues"
@@ -12,7 +15,7 @@ class League(Base):
     fotmob_id = Column(Integer, unique=True, nullable=False)
     caliente_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class Team(Base):
     __tablename__ = "teams"
@@ -23,7 +26,7 @@ class Team(Base):
     short_name = Column(String, nullable=False)
     canonical_slug = Column(String, nullable=False)
     crest_url = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class StandingSnapshot(Base):
     __tablename__ = "standings_snapshots"
@@ -31,7 +34,7 @@ class StandingSnapshot(Base):
     league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
     season = Column(String, nullable=False)
     matchday = Column(Integer, nullable=False)
-    captured_at = Column(DateTime, default=datetime.utcnow)
+    captured_at = Column(DateTime, default=utc_now)
     positions_json = Column(JSON, nullable=False) # Lista con los 18 clubes completos
 
 class FixtureSnapshot(Base):
@@ -39,7 +42,7 @@ class FixtureSnapshot(Base):
     id = Column(Integer, primary_key=True, index=True)
     league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
     matchday = Column(Integer, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now)
     matches_json = Column(JSON, nullable=False) # Lista de partidos de la jornada
 
 class PortfolioRecord(Base):
@@ -48,7 +51,7 @@ class PortfolioRecord(Base):
     league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
     matchday = Column(Integer, nullable=False)
     bankroll = Column(Float, nullable=False)
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=utc_now)
     portfolio_json = Column(JSON, nullable=False)
 
 class MatchdayState(Base):
@@ -63,7 +66,7 @@ class MatchdayState(Base):
     matchday_num = Column(Integer, nullable=False, default=8)
     season = Column(String(20), default="2026")
     status = Column(String(20), default="ACTIVA")  # ACTIVA, CONCLUIDA
-    last_scraped_at = Column(DateTime, default=datetime.utcnow)
+    last_scraped_at = Column(DateTime, default=utc_now)
     total_matches = Column(Integer, default=9)
     finished_matches = Column(Integer, default=0)
 

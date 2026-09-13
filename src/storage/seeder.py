@@ -150,16 +150,15 @@ def seed_initial_data(db):
             "proximo_rival": "Por definir"
         })
 
-    # Guardar o actualizar StandingSnapshot de arranque
-    snaps = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == liga.id).all()
-    if not snaps:
+    # Guardar snapshot solo si la base de datos está totalmente vacía (Cold Start)
+    snap_existente = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == liga.id).first()
+    if not snap_existente:
         db.add(StandingSnapshot(league_id=liga.id, season="2026", matchday=8, positions_json=standings_iniciales))
+        db.commit()
+        print("[SEEDER]: Snapshot inicial sembrado en SQLite.")
     else:
-        for s in snaps:
-            s.positions_json = standings_iniciales
-            s.matchday = 8
-    db.commit()
-    print("[SEEDER]: 18 Clubes de Liga MX sembrados en SQLite con escudos oficiales y paridad fáctica J7.")
+        # [INMUNIZACIÓN]: Si ya existe un snapshot con datos reales, NO SOBRESCRIBIR con 'Por definir'
+        print("[SEEDER]: Snapshot de posiciones existente preservado en SQLite.")
 
 
 def seed_initial_leagues():

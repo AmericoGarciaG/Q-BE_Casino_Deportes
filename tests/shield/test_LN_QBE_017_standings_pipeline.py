@@ -9,7 +9,18 @@ from src.storage.sync_service import sync_league_live_board
 from src.storage.database import SessionLocal
 import src.ingestion.providers.fotmob_provider as f_module
 
+from fastapi.testclient import TestClient
+from src.web.app import app
+from src.storage.seeder import seed_initial_leagues
+
 class TestLN_QBE_017_StandingsPipeline_Concrete(AbstractTestLN_QBE_017_StandingsPipeline):
+
+    def setup_method(self):
+        seed_initial_leagues()
+
+    @property
+    def client(self) -> TestClient:
+        return TestClient(app)
 
     def obtener_tabla_posiciones_liga_mx(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         with SessionLocal() as db:
@@ -19,3 +30,13 @@ class TestLN_QBE_017_StandingsPipeline_Concrete(AbstractTestLN_QBE_017_Standings
     def verificar_presencia_mock_estatico(self) -> bool:
         # Verifica que la constante LIGA_MX_CLUBS_DYNAMIC_FALLBACK ya no exista en fotmob_provider
         return hasattr(f_module, "LIGA_MX_CLUBS_DYNAMIC_FALLBACK")
+
+    def get_rendered_web_html(self) -> str:
+        resp = self.client.get("/")
+        assert resp.status_code == 200, f"Error al renderizar HTML raíz '/': {resp.text}"
+        return resp.text
+
+    def get_live_board_payload(self) -> Dict[str, Any]:
+        resp = self.client.get("/api/leagues/262/live-board")
+        assert resp.status_code == 200, f"Error al consultar live-board: {resp.text}"
+        return resp.json()

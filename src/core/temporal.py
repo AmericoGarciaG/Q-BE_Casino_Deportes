@@ -27,8 +27,17 @@ class TemporalDecayEngine:
         Calcula las probabilidades ponderadas por decaimiento exponencial para 5 partidos H2H.
         Invarianza: p_fav + p_emp + p_und == 1.0000.
         """
-        if not h2h_matches or len(h2h_matches) != 5:
-            raise ValueError(f"H2H requiere exactamente 5 partidos (recibidos: {len(h2h_matches) if h2h_matches else 0})")
+        if not h2h_matches:
+            # [LN-QBE-020-B] LEY ZERO-H2H: Sin antecedentes reales, retornar resultado neutro.
+            # La antigüedad de 9999 días activa la guarda w_h2h=0.0 en poisson.py.
+            return H2HDecayResult(
+                p_fav=0.3333, p_emp=0.3333, p_und=0.3334,
+                gf_h2h_local=0.0, gf_h2h_visita=0.0,
+                antiguedad_promedio_dias=9999.0
+            )
+
+        if len(h2h_matches) != 5:
+            raise ValueError(f"H2H requiere exactamente 5 partidos (recibidos: {len(h2h_matches)})")
 
         fav_norm = fav.strip().lower()
         local_norm = local.strip().lower()

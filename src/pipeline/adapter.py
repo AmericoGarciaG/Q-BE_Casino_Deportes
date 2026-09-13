@@ -150,14 +150,9 @@ def hidratar_partidos_cuantitativos(
             underdog=EvaluacionCualitativaClub(q_mod_calculado=0.98, descripcion_impacto_bajas="Rotación estándar sin afectación mayor")
         )
 
-        # 6. Historial H2H Canónico (Cumple Invarianza #8: Fechas decrecientes >= 60d y alternancia)
-        h2h_matches = [
-            H2HMatchRaw(num=1, fecha="2026-03-15", dias_transcurridos=180.0, local_real=local_canon, visitante_real=vis_canon, marcador="2-1", resultado_qbe="FAVORITO" if is_fav_local else "UNDERDOG"),
-            H2HMatchRaw(num=2, fecha="2025-09-20", dias_transcurridos=356.0, local_real=vis_canon, visitante_real=local_canon, marcador="1-1", resultado_qbe="EMPATE"),
-            H2HMatchRaw(num=3, fecha="2025-02-10", dias_transcurridos=578.0, local_real=local_canon, visitante_real=vis_canon, marcador="3-0", resultado_qbe="FAVORITO" if is_fav_local else "UNDERDOG"),
-            H2HMatchRaw(num=4, fecha="2024-08-18", dias_transcurridos=754.0, local_real=vis_canon, visitante_real=local_canon, marcador="0-1", resultado_qbe="FAVORITO" if is_fav_local else "UNDERDOG"),
-            H2HMatchRaw(num=5, fecha="2024-01-28", dias_transcurridos=956.0, local_real=local_canon, visitante_real=vis_canon, marcador="1-1", resultado_qbe="EMPATE")
-        ]
+        # [GOVERNANCE-01] CERO DATOS SINTÉTICOS: Se extirpa el mock de 5 partidos H2H.
+        # Si no hay antecedentes históricos en BD, se pasa lista vacía y opera [LN-QBE-020-B].
+        h2h_matches = []
 
         raw_inputs.append(RawMatchInput(
             identidad_partido=identidad,

@@ -15,6 +15,8 @@ class TestLN_QBE_026_CacheFirst_Concrete(AbstractTestLN_QBE_026_CacheFirst):
 
     def setup_method(self):
         """Precondición: asegurar que las tablas estén creadas y la Liga MX sembrada."""
+        import os
+        os.environ["KYBERN_NO_SCRAPE"] = "1"
         seed_initial_leagues()
 
     def consultar_live_board(self, league_id: int, force_refresh: bool = False) -> Tuple[Dict[str, Any], float]:

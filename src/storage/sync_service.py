@@ -1,17 +1,44 @@
 import logging
+import os
 import re
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from src.storage.database import SessionLocal
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, Team, MatchdayState
 from src.ingestion.providers.fotmob_provider import FotMobProvider
-from src.storage.crest_resolver import resolver_escudo_canonico
+from src.storage.crest_resolver import resolver_escudo_canonico, STATIC_CRESTS_DIR
 from src.ingestion.normalizer import canonicalize_team_name
 
 logger = logging.getLogger(__name__)
 
 TTL_CACHE_MINUTOS = 15  # Ventana pre-partido [ARCH-1.6.4]
+
+
+# Mapeo oficial de IDs de CDN de ligamx.net (Resuelve clubes con alt vacío en DOM)
+LIGAMX_LOGO_ID_MAP = {
+    "1":     "Club América",
+    "2":     "Atlas FC",
+    "5":     "Club Tijuana",
+    "6":     "Cruz Azul",
+    "7":     "Chivas Guadalajara",
+    "9":     "Club León",
+    "11":    "Club Pachuca",
+    "12":    "Club Puebla",
+    "14":    "Rayados de Monterrey",
+    "15":    "Santos Laguna",
+    "16":    "Tigres UANL",
+    "17":    "Deportivo Toluca",
+    "18":    "Pumas UNAM",
+    "29":    "Necaxa",
+    "10445": "Atlas FC",
+    "11220": "Atlético San Luis",
+    "11550": "Club Puebla",
+    "11790": "FC Juárez",
+    "12043": "Mazatlán FC",
+    "13668": "Querétaro FC",
+    "14257": "Atlante",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -36,21 +63,8 @@ def deducir_proximo_rival_dinamico(equipo: str, fixtures_activos: List[Dict[str,
         if eq_clean == vis or (len(eq_clean) > 3 and eq_clean in vis) or (len(vis) > 3 and vis in eq_clean):
             return str(fx.get("local"))
 
-    # 2. Fallback sin prefijo 'vs '
-    FALLBACK_RIVALS = {
-        "deportivo toluca": "Club Puebla",
-        "club puebla": "Deportivo Toluca",
-        "pumas unam": "Club León",
-        "club león": "Pumas UNAM",
-        "rayados de monterrey": "Querétaro FC",
-        "querétaro fc": "Rayados de Monterrey",
-        "mazatlán fc": "Querétaro FC",
-    }
-
-    for key, val in FALLBACK_RIVALS.items():
-        if eq_clean in key or key in eq_clean:
-            return val
-
+    # [GOVERNANCE-02] PURGA H2: Diccionario estático de pareos eliminado — sobreajuste prohibido.
+    # Si ningún fixture de la cartelera activa coincide, se retorna directamente.
     return "Rival por Definir"
 
 
@@ -64,7 +78,28 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
     if not league:
         raise ValueError(f"Liga con ID {league_id} no encontrada en base de datos.")
 
-    ahora = datetime.utcnow()
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # ── [GUARD TEST]: Si KYBERN_NO_SCRAPE=1, retornar inmediatamente desde SQLite sin Playwright ──
+    if os.environ.get("KYBERN_NO_SCRAPE", "0") == "1":
+        last_snap = db.query(StandingSnapshot).filter(
+            StandingSnapshot.league_id == league.id
+        ).order_by(StandingSnapshot.captured_at.desc()).first()
+
+        last_fix = db.query(FixtureSnapshot).filter(
+            FixtureSnapshot.league_id == league.id
+        ).order_by(FixtureSnapshot.updated_at.desc()).first()
+
+        if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
+            return {
+                "league_id": league_id,
+                "league_name": league.name,
+                "jornada": f"Jornada {last_snap.matchday or 8}",
+                "fechas": "Septiembre 2026",
+                "standings": last_snap.positions_json,
+                "fixtures": last_fix.matches_json,
+                "desde_cache": True
+            }
 
     # ── [CACHE-FIRST]: Verificar si existen snapshots frescos en SQLite ──────
     if not force_refresh:
@@ -102,18 +137,40 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         else:
             raise RuntimeError(f"No se pudo extraer la tabla de 18 clubes para {league.name}.")
 
+    # Obtener formas y rivales en vivo desde FotMob __NEXT_DATA__ (en hilo aislado)
+    datos_fotmob = {}
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        try:
+            from scripts.resolver_forma_y_rival_tabla import extraer_forma_y_rival_fotmob_real
+            fut_fm = executor.submit(extraer_forma_y_rival_fotmob_real)
+            datos_fotmob = fut_fm.result(timeout=35.0)
+        except Exception as e_fm:
+            logger.warning(f"[SYNC] Aviso en extracción de formas: {e_fm}")
+
     standings_formatted = []
     for idx, t in enumerate(standings_raw, start=1):
         pos = int(t.get("pos") or t.get("rank") or idx)
         equipo = str(t.get("equipo") or t.get("name") or f"Club {idx}")
+        eq_key = canonicalize_team_name(equipo).lower().strip()
         escudo_id = t.get("escudo_id") or t.get("fotmob_id")
         escudo_url = resolver_escudo_canonico(equipo, fotmob_id=escudo_id, db=db)
+
+        # Rescatar forma y rival vivos
+        fm_info = datos_fotmob.get(eq_key, {})
+        forma_real = fm_info.get("forma") or t.get("forma") or ["G", "E", "P"]
+        rival_real = fm_info.get("rival") or "Rival por Definir"
+
+        # Resolver escudo local del rival
+        rival_slug = canonicalize_team_name(rival_real).lower().replace(" ", "-").replace(".", "")
+        local_file = os.path.join(STATIC_CRESTS_DIR, f"{rival_slug}.png")
+        prox_escudo = f"/static/img/crests/{rival_slug}.png" if (os.path.exists(local_file) and os.path.getsize(local_file) > 3000) else None
 
         standings_formatted.append({
             "pos": pos,
             "equipo": equipo,
             "escudo_url": escudo_url,
-            "proximo_escudo_url": None,
+            "proximo_escudo_url": prox_escudo,
             "pj": int(t.get("pj") or 0),
             "pg": int(t.get("pg") or 0),
             "pe": int(t.get("pe") or 0),
@@ -122,17 +179,32 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             "gc": int(t.get("gc") or 0),
             "dif": int(t.get("dif") if "dif" in t and t["dif"] is not None else (int(t.get("gf") or 0) - int(t.get("gc") or 0))),
             "puntos": int(t.get("puntos") or 0),
-            "forma": t.get("forma") or ["G", "E", "P", "G", "W"],
+            "forma": forma_real,
             "xg": float(t.get("xg") or 12.5),
             "xga": float(t.get("xga") or 8.5),
             "xpts": float(t.get("xpts") or 14.0),
-            "proximo_rival": "Por definir"
+            "proximo_rival": rival_real  # CERO 'vs '
         })
 
     # 2. Cartelera de Partidos Oficial (concurrente en hilo aislado)
     fixtures_formatted = []
     jornada_nombre = "Jornada 8"
     jornada_num = 8
+
+    # ── [GUARD TEST] Si KYBERN_NO_SCRAPE=1, retornar desde última caché disponible ──
+    if os.environ.get("KYBERN_NO_SCRAPE", "0") == "1":
+        last_snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
+        last_fix = db.query(FixtureSnapshot).filter(FixtureSnapshot.league_id == league.id).order_by(FixtureSnapshot.updated_at.desc()).first()
+        logger.info("[SYNC] KYBERN_NO_SCRAPE activo — sirviendo desde SQLite sin Playwright.")
+        return {
+            "league_id": league_id,
+            "league_name": league.name,
+            "jornada": f"Jornada {last_snap.matchday if last_snap else 8}",
+            "fechas": "Septiembre 2026",
+            "standings": standings_formatted,
+            "fixtures": (last_fix.matches_json if last_fix and last_fix.matches_json else []),
+            "desde_cache": True
+        }
 
     if fotmob_id == 262:
         from src.ingestion.caliente_scraper import CalienteMarketScraper
@@ -221,6 +293,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                                 partidos_extraidos.append(item)
 
                     # ── B. ACTIVAR Y EXTRAER SECCIÓN 'PARTIDOS REPROGRAMADOS' ──
+                    print("🎯 [SYNC] Localizando píldora 'PARTIDOS REPROGRAMADOS'...")
                     clic_rep = page.evaluate("""() => {
                         const els = Array.from(document.querySelectorAll('a, button, span, div'));
                         for (let el of els) {
@@ -235,25 +308,40 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     }""")
                     page.wait_for_timeout(2500)
 
+                    # Tarjetas de reprogramados (usando selector específico de marquesina)
                     tarjetas_rep = page.query_selector_all("li[id^='MrcdrPrtd_'], .item, .slide, .partido")
+                    print(f"  Analizando tarjetas tras activar reprogramados: {len(tarjetas_rep)}")
+
                     for t in tarjetas_rep:
                         if not t.is_visible(): continue
                         txt = t.inner_text().strip()
                         txt_up = txt.upper()
                         if "JORNADA 8" in txt_up: continue
 
-                        if ("JORNADA 7" in txt_up or "15/09" in txt or "28/10" in txt or "14/11" in txt or "REPROGRAMADO" in txt_up):
+                        if ("JORNADA 7" in txt_up or "15/09" in txt or "28/10" in txt or "14/11" in txt or "REPROGRAMADO" in txt_up or "POSPUESTO" in txt_up or "PRÓXIMAMENTE" in txt_up):
                             f_match = re.search(r'(\d{1,2}/\d{1,2})\s*(\d{1,2}:\d{2})\s*hr', txt)
                             fecha_str = f_match.group(0) if f_match else "Fecha por Definir"
 
                             imgs = t.query_selector_all("img")
                             clubes_rep = []
                             for img in imgs:
+                                src = img.get_attribute("src") or ""
                                 alt = (img.get_attribute("alt") or img.get_attribute("title") or "").strip()
-                                if alt and alt != "undefined":
-                                    c_clean = canonicalize_team_name(alt)
-                                    if c_clean and c_clean not in clubes_rep:
-                                        clubes_rep.append(c_clean)
+
+                                nombre_club = None
+                                if alt and alt != "undefined" and len(alt) > 2:
+                                    nombre_club = canonicalize_team_name(alt)
+                                else:
+                                    # Fallback infalible al ID del CDN de la imagen
+                                    m_id = re.search(r'logos(?:64x64)?/(\d+)/', src)
+                                    if m_id:
+                                        logo_id = m_id.group(1)
+                                        raw_name = LIGAMX_LOGO_ID_MAP.get(logo_id)
+                                        if raw_name:
+                                            nombre_club = canonicalize_team_name(raw_name)
+
+                                if nombre_club and nombre_club not in clubes_rep:
+                                    clubes_rep.append(nombre_club)
 
                             if len(clubes_rep) >= 2:
                                 item_rep = {
@@ -275,15 +363,21 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
 
             return jornada_txt, partidos_extraidos
 
-        # Ejecutar en hilo de fondo
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            fut = executor.submit(_extraer_todo_en_hilo_aislado)
-            jornada_nombre, partidos_slate = fut.result(timeout=40.0)
+        # [AISLAMIENTO TOTAL]: Ejecutar Playwright síncrono en un Thread aislado con timeout estricto
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            try:
+                # 2. Extraer Slate Oficial de ligamx.net (incluyendo los 3 reprogramados y marcadores reales)
+                fut_slate = executor.submit(_extraer_todo_en_hilo_aislado)
+                jornada_nombre, partidos_slate = fut_slate.result(timeout=40.0)
 
-            # Consultar cuotas focalizadas de Caliente
-            fut_c = executor.submit(CalienteMarketScraper.extraer_cuotas_focalizadas, partidos_slate)
-            cuotas_caliente = fut_c.result(timeout=35.0)
-            cuotas_map = {(c["local"], c["visitante"]): c for c in cuotas_caliente}
+                # 3. Extraer cuotas focalizadas de Caliente
+                fut_c = executor.submit(CalienteMarketScraper.extraer_cuotas_focalizadas, partidos_slate)
+                cuotas_caliente = fut_c.result(timeout=35.0)
+                cuotas_map = {(c["local"], c["visitante"]): c for c in cuotas_caliente}
+            except Exception as ex:
+                import traceback
+                print(f"❌ [SYNC-ERROR] Exception in ligamx/caliente: {ex}\n{traceback.format_exc()}", flush=True)
+                logger.warning(f"[SYNC] Aviso en extracción ligamx/caliente: {ex}")
 
         fixtures_formatted = []
         dias_semana = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
@@ -292,12 +386,11 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         for idx, p in enumerate(partidos_slate, 1):
             l = p.get("local", "")
             v = p.get("visitante", "")
-            c = cuotas_map.get((l, v))
+            c = cuotas_map.get((l, v)) or cuotas_map.get((v, l))
             estado = p.get("estado", "PROGRAMADO")
             fecha_raw = p.get("fecha", "12/09 17:00 hr")
             es_pospuesto = p.get("es_pospuesto", False)
 
-            # ── PARSEO REAL DE FECHA Y CRONOMETRÍA ──
             match_f = re.search(r'(\d{1,2})/(\d{1,2})\s*(\d{1,2}):(\d{2})', fecha_raw)
             if match_f:
                 dia = int(match_f.group(1))
@@ -312,23 +405,27 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             nombre_dia = dias_semana.get(dt_partido.weekday(), "Día")
             nombre_mes = meses_nom.get(mes, "Mes")
 
-            if es_pospuesto or mes > 9 or (dia > 15 and mes == 9):
+            # [GOVERNANCE-02] PURGA H5: Clasificación abstracta de reprogramados.
+            # Un partido es REPROGRAMADO si la federación lo declara explícitamente
+            # o si dista más de 7 días de la fecha actual del sistema.
+            dias_dif = (dt_partido.date() - datetime.now().date()).days
+            es_pospuesto = es_pospuesto or (estado == "REPROGRAMADO") or p.get("es_pospuesto", False) or (dias_dif > 7)
+            if es_pospuesto:
                 estado = "REPROGRAMADO"
-                es_pospuesto = True
                 fecha_bloque = "Partidos Reprogramados / Fecha Lejana"
             else:
                 fecha_bloque = f"{nombre_dia} {dia:02d} de {nombre_mes}"
 
             momios_obj = None
-            if c and c.get("L") is not None and not es_pospuesto and estado == "PROGRAMADO":
+            if c and c.get("L") is not None:
                 momios_obj = {
-                    "L": c["L"], "E": c["E"], "V": c["V"],
-                    "pago_anticipado": c.get("pago_anticipado", True)
+                    "L": float(c["L"]), "E": float(c["E"]), "V": float(c["V"]),
+                    "pago_anticipado": bool(c.get("pago_anticipado", True))
                 }
 
+            # En reprogramados la selección está deshabilitada (Grupo 4)
             disponible = (estado == "PROGRAMADO" and momios_obj is not None and not es_pospuesto)
 
-            # Marcador real o pendiente
             marcador_actual = p.get("marcador")
             if estado == "FINALIZADO" and not marcador_actual:
                 marcador_actual = "MARCADOR_PENDIENTE"
@@ -396,27 +493,36 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
     # Actualizar próximo rival en standings (100% dinámico y SIN 'vs ')
     for row in standings_formatted:
         eq = row["equipo"]
-        rival_limpio = deducir_proximo_rival_dinamico(eq, fixtures_formatted)
-        row["proximo_rival"] = rival_limpio  # CERO 'vs '
-        row["proximo_escudo_url"] = resolver_escudo_canonico(rival_limpio, db=db) if rival_limpio else None
+        if not row.get("proximo_rival") or row.get("proximo_rival") in ("Por definir", "Rival por Definir"):
+            rival_limpio = deducir_proximo_rival_dinamico(eq, fixtures_formatted)
+            row["proximo_rival"] = rival_limpio  # CERO 'vs '
+        else:
+            rival_limpio = row["proximo_rival"]
 
-    # Guardar Snapshots y Ledger en SQLite
-    snap_standing = StandingSnapshot(league_id=league.id, season="2026", matchday=jornada_num, positions_json=standings_formatted)
-    snap_fixture = FixtureSnapshot(league_id=league.id, matchday=jornada_num, matches_json=fixtures_formatted, updated_at=ahora)
-    
-    # [PM-FACE]: Actualizar MatchdayState
-    m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
-    if not m_state:
-        m_state = MatchdayState(league_id=league.id, matchday_num=jornada_num, status="ACTIVA", last_scraped_at=ahora)
-        db.add(m_state)
-    else:
-        m_state.matchday_num = jornada_num
-        m_state.last_scraped_at = ahora
-        m_state.status = "ACTIVA"
+        if not row.get("proximo_escudo_url") and rival_limpio:
+            row["proximo_escudo_url"] = resolver_escudo_canonico(rival_limpio, db=db)
 
-    db.add(snap_standing)
-    db.add(snap_fixture)
-    db.commit()
+    try:
+        # Guardar Snapshots y Ledger en SQLite
+        snap_standing = StandingSnapshot(league_id=league.id, season="2026", matchday=jornada_num, positions_json=standings_formatted)
+        snap_fixture = FixtureSnapshot(league_id=league.id, matchday=jornada_num, matches_json=fixtures_formatted, updated_at=ahora)
+        
+        # [PM-FACE]: Actualizar MatchdayState
+        m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
+        if not m_state:
+            m_state = MatchdayState(league_id=league.id, matchday_num=jornada_num, status="ACTIVA", last_scraped_at=ahora)
+            db.add(m_state)
+        else:
+            m_state.matchday_num = jornada_num
+            m_state.last_scraped_at = ahora
+            m_state.status = "ACTIVA"
+
+        db.add(snap_standing)
+        db.add(snap_fixture)
+        db.commit()
+    except Exception as e_save:
+        import traceback
+        print(f"❌ [SAVE-ERROR] Failed to save snapshots: {e_save}\n{traceback.format_exc()}", flush=True)
 
     return {
         "league_id": league_id,

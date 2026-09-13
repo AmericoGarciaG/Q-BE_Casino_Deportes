@@ -3,7 +3,9 @@ Fixtures globales inmutables para The Shield (Kybern Framework v12.0).
 Provee datos canónicos de prueba anclados a la Liga MX y Leagues Cup.
 """
 
+import os
 import pytest
+os.environ["KYBERN_NO_SCRAPE"] = "1"
 from fastapi.testclient import TestClient
 from src.web.app import app
 from src.models.raw_input import (
