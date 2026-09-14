@@ -647,16 +647,28 @@ function renderizarResultadosPortafolio(data) {
             const inv = ord.boletos?.inversion_partido_A_i || 0;
             const gan = ord.proyecciones?.ganancia_neta_principal_mxn || 0;
             const tablas = ord.proyecciones?.resultado_tablas_mxn || 0;
+            const roi = ord.proyecciones?.roi_principal_porcentaje || 0;
+            const cod = ord.estrategia_seleccionada?.codigo || "";
             sumaInv += inv;
             sumaPremios += gan;
+
+            // [UX-MANDATE] Semántica precisa de cobertura por familia de estrategia (GOVERNANCE §8)
+            let coberturaHtml = `<span style="color:#94A3B8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
+            if (cod.startsWith("QBE-D1")) {
+                coberturaHtml = `<span style="color:#f87171; font-weight:600;">Sin cobertura (Riesgo Directo: -$${inv.toFixed(2)})</span>`;
+            } else if (cod === "QBE-R2") {
+                coberturaHtml = `<span style="color:#00E676; font-weight:600;">Ambos boletos ganan (+${roi.toFixed(1)}% ROI)</span>`;
+            } else if (cod.startsWith("QBE-H1") || cod.startsWith("QBE-H2") || cod.startsWith("QBE-R1")) {
+                coberturaHtml = `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
+            }
 
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td style="font-weight:700; color:#fff;">${ord.partido}</td>
-                <td style="text-align:center;"><span class="badge-status-live" style="background:rgba(56,189,248,0.15); color:#38BDF8; border-color:#38BDF8;">${ord.estrategia_seleccionada?.codigo || 'QBE-D1'}</span></td>
+                <td style="text-align:center;"><span class="badge-status-live" style="background:rgba(56,189,248,0.15); color:#38BDF8; border-color:#38BDF8;">${cod}</span></td>
                 <td style="text-align:right; font-weight:700;">$${inv.toFixed(2)}</td>
                 <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>
-                <td style="color:#94A3B8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</td>
+                <td>${coberturaHtml}</td>
             `;
             tbodyResumen.appendChild(tr);
         });

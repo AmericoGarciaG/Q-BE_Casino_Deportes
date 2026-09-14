@@ -256,8 +256,9 @@ class PortfolioEngine:
                 tablas_amt = 0.0
 
             # Contribución aritmética pura de EV (CERO pisos artificiales)
-            ev_factor = (ev_roi / 100.0) if ev_roi > 0 else 0.0
-            ganancia_esperada_core += (ganancia_neta * ev_factor)
+            # [CORRECCIÓN FINANCIERA][BIZ-LOGIC]: ev_roi es fracción decimal (ej. 0.4464 = 44.64%).
+            # Se multiplica directamente por la inversión; PROHIBIDO dividir entre 100 de nuevo.
+            ganancia_esperada_core += (inv_partido * ev_roi) if ev_roi > 0 else 0.0
 
             order = MatchExecutionOrder(
                 id_partido=m["id_partido"],
@@ -274,7 +275,7 @@ class PortfolioEngine:
                     peso_portafolio_w_i=round(weights[idx], 4),
                     phi_lead2_prob_ventaja_2_goles=round(phi, 4),
                     psi_downside_riesgo=round(psi, 4),
-                    ev_neto_roi_porcentaje=round(ev_roi, 2)
+                    ev_neto_roi_porcentaje=round(ev_roi * 100.0, 2)  # [BIZ-LOGIC] Escala porcentual para UI (ej. 44.65%)
                 ),
                 forma_reciente_auditada={
                     "fav_resumen": f"Posición #{m.get('fav_pos', 1)}, {m.get('fav_pts', 0)} pts | Q_mod: {m.get('q_mod_fav', 1.0)}",
