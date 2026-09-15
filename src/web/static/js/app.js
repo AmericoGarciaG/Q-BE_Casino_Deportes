@@ -116,29 +116,62 @@ function _formatearFechaHoraActual() {
     return `${dia}-${mes} ${hora}`;
 }
 
+// ── 1. Refrescar ÚNICAMENTE la Tabla de Posiciones (Panel Izquierdo) ─────────
 async function refrescarTablaEnVivo() {
     const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
     const btn = document.getElementById("btn-force-refresh");
+    const tbody = document.querySelector(".table-panel-left table tbody");
+
     if (btn) btn.innerHTML = "⏳ Refrescando...";
-    await seleccionarLiga(targetId, true);
-    if (btn) btn.innerHTML = "🔄 Refrescar Tabla";
-    const lblTime = document.getElementById("lbl-timestamp-tabla");
-    if (lblTime) {
-        lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando tabla oficial...</td></tr>';
+
+    try {
+        const resp = await fetch(`/api/leagues/${targetId}/refresh-tabla`, { method: "POST" });
+        if (!resp.ok) throw new Error("Error en respuesta del servidor");
+        const data = await resp.json();
+
+        // Actualizar ÚNICAMENTE el panel izquierdo
+        renderizarTabla18Clubes(data.standings);
+
+        const lblTime = document.getElementById("lbl-timestamp-tabla");
+        if (lblTime) {
+            lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
+        }
+    } catch (e) {
+        console.error("Error refrescando tabla:", e);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#f87171;">❌ Error al refrescar tabla: ${e.message}</td></tr>`;
+    } finally {
+        if (btn) btn.innerHTML = "🔄 Refrescar Tabla";
     }
 }
 window.refrescarTablaEnVivo = refrescarTablaEnVivo;
-window.refrescarCuotasEnVivo = refrescarTablaEnVivo;
 
+// ── 2. Refrescar ÚNICAMENTE la Cartelera de Momios (Panel Derecho) ──────────
 async function refrescarCarteleraEnVivo() {
     const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
     const btn = document.getElementById("btn-refresh-cartelera");
+    const container = document.querySelector(".fixtures-list");
+
     if (btn) btn.innerHTML = "⏳ Refrescando...";
-    await seleccionarLiga(targetId, true);
-    if (btn) btn.innerHTML = "🔄 Refrescar Momios";
-    const lblTime = document.getElementById("lbl-timestamp-cartelera");
-    if (lblTime) {
-        lblTime.textContent = `🕒 Momios Caliente: Sincronizados en vivo (${_formatearFechaHoraActual()})`;
+    if (container) container.innerHTML = '<div style="text-align:center; padding:25px; color:#38BDF8; font-size:8.5pt;">⏳ Sincronizando momios Caliente en vivo...</div>';
+
+    try {
+        const resp = await fetch(`/api/leagues/${targetId}/refresh-momios`, { method: "POST" });
+        if (!resp.ok) throw new Error("Error en respuesta del servidor");
+        const data = await resp.json();
+
+        // Actualizar ÚNICAMENTE la cartelera derecha (LA TABLA DE LA IZQUIERDA NO SE TOCA)
+        renderizarCartelera(data.fixtures);
+
+        const lblTime = document.getElementById("lbl-timestamp-cartelera");
+        if (lblTime) {
+            lblTime.textContent = `🕒 Momios Caliente: Sincronizados en vivo (${_formatearFechaHoraActual()})`;
+        }
+    } catch (e) {
+        console.error("Error refrescando cartelera:", e);
+        if (container) container.innerHTML = `<div style="text-align:center; color:#f87171; padding:20px;">❌ Error al refrescar momios: ${e.message}</div>`;
+    } finally {
+        if (btn) btn.innerHTML = "🔄 Refrescar Momios";
     }
 }
 window.refrescarCarteleraEnVivo = refrescarCarteleraEnVivo;
@@ -590,7 +623,7 @@ function renderizarResultadosPortafolio(data) {
     const elFechas = document.getElementById("hdr-fechas-portfolio");
     if (elFechas) elFechas.textContent = `${meta.jornada || 'Jornada Activa'} · ${meta.fechas || 'Septiembre 2026'}`;
 
-    // 2. 5 Macro KPIs
+    // 2. Macro KPIs Duales
     const invTotal = balance.capital_total_comprometido_mxn || 0.0;
     const gananciaEv = balance.ganancia_neta_esperada_jornada_mxn || 0.0;
     const roiGlobal = balance.roi_global_esperado_porcentaje || 0.0;
@@ -599,38 +632,53 @@ function renderizarResultadosPortafolio(data) {
     const kAprobados = control.total_partidos_core_aprobados || orders.length;
     const kEscaneados = control.total_partidos_escaneados || orders.length;
 
+    // Calcular suma de premios máximos netos (Ganancia Neta Potencial)
+    let sumaPremios = 0;
+    orders.forEach(o => {
+        sumaPremios += (o.proyecciones?.ganancia_neta_principal_mxn || 0);
+    });
+    const roiPotencial = invTotal > 0 ? (sumaPremios / invTotal) * 100.0 : 0.0;
+
     const elInv = document.getElementById("kpi-inversion-total");
     if (elInv) elInv.textContent = `$${invTotal.toFixed(2)} MXN`;
     const elPctCaja = document.getElementById("kpi-pct-caja");
-    if (elPctCaja) elPctCaja.textContent = `(${((invTotal / (control.desglose_bankroll?.bankroll_total || 200)) * 100).toFixed(1)}% de la caja)`;
+    if (elPctCaja) elPctCaja.textContent = `${((invTotal / (control.desglose_bankroll?.bankroll_total || 200)) * 100).toFixed(1)}% de la caja`;
     
+    // Ganancia Potencial
+    const elPot = document.getElementById("kpi-ganancia-potencial");
+    if (elPot) elPot.textContent = `+$${sumaPremios.toFixed(2)} MXN`;
+    const elRoiPot = document.getElementById("kpi-roi-potencial");
+    if (elRoiPot) elRoiPot.textContent = `+${roiPotencial.toFixed(1)}% Ganando todas las apuestas principales (sin dobles premios)`;
+
+    // Ganancia Esperada (EV)
     const elEv = document.getElementById("kpi-ganancia-esperada");
     if (elEv) elEv.textContent = `+$${gananciaEv.toFixed(2)} MXN`;
     const elRoi = document.getElementById("kpi-roi-global");
-    if (elRoi) elRoi.textContent = `+${roiGlobal.toFixed(1)}%`;
+    if (elRoi) elRoi.textContent = `+${roiGlobal.toFixed(1)}% ROI Esperado (+EV estrategia a largo plazo)`;
     
     const elBlind = document.getElementById("kpi-blindaje-global");
     if (elBlind) elBlind.textContent = `${blindajePct.toFixed(2)}%`;
     const elRuina = document.getElementById("kpi-prob-ruina");
-    if (elRuina) elRuina.textContent = `Probabilidad Ruina: ${ruinaPct.toFixed(4)}%`;
+    if (elRuina) elRuina.textContent = `Probabilidad Ruina: ${ruinaPct.toFixed(4)}%  (de perder todas las apuestas)`;
 
     const elCore = document.getElementById("kpi-posiciones-core");
     if (elCore) elCore.textContent = `${kAprobados} / ${kEscaneados}`;
 
-    // 3. Cascada de Resiliencia a Reveses
+    // 3. Cascada de Resiliencia a Reveses con porcentaje
     const cascada = control.desglose_bankroll?.cascada_resiliencia || [];
     const maxReveses = control.desglose_bankroll?.reveses_maximos_tolerados || 0;
     const txtResumen = document.getElementById("txt-cascada-resumen");
     if (txtResumen) {
-        txtResumen.textContent = `El portafolio soporta hasta ${maxReveses} revés${maxReveses !== 1 ? 'es' : ''} simultáneo${maxReveses !== 1 ? 's' : ''} conservando saldo positivo neto (+EV).`;
+        txtResumen.textContent = `El portafolio soporta hasta ${maxReveses} revés${maxReveses !== 1 ? 'es' : ''} simultáneo${maxReveses !== 1 ? 's' : ''} conservando saldo neto positivo (+EV).`;
     }
     const pildorasCont = document.getElementById("pildoras-cascada");
     if (pildorasCont) {
         pildorasCont.innerHTML = cascada.map(c => {
             const color = c.pnl_mxn > 0 ? '#00E676' : (c.pnl_mxn === 0 ? '#38BDF8' : '#ef4444');
             const bg = c.pnl_mxn > 0 ? 'rgba(0,230,118,0.15)' : (c.pnl_mxn === 0 ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)');
-            return `<span style="background:${bg}; color:${color}; border:1px solid ${color}; padding:2px 8px; border-radius:12px; font-size:6.8pt; font-weight:700;">
-                Nivel ${c.nivel}: ${c.pnl_mxn >= 0 ? '+' : ''}$${c.pnl_mxn.toFixed(2)}
+            const probStr = c.probabilidad_pct ? ` (${c.probabilidad_pct}%)` : '';
+            return `<span style="background:${bg}; color:${color}; border:1px solid ${color}; padding:3px 10px; border-radius:12px; font-size:7pt; font-weight:800;">
+                Nivel ${c.nivel}: ${c.pnl_mxn >= 0 ? '+' : ''}$${c.pnl_mxn.toFixed(2)}${probStr}
             </span>`;
         }).join("");
     }
@@ -676,17 +724,17 @@ function renderizarResultadosPortafolio(data) {
         if (tfootResumen) {
             tfootResumen.innerHTML = `
                 <tr>
-                    <td>TOTAL CARTERA</td>
+                    <td>TOTAL EN CARTERA</td>
                     <td style="text-align:center;">${orders.length} Posiciones</td>
-                    <td style="text-align:right;">$${sumaInv.toFixed(2)} MXN</td>
-                    <td style="text-align:right; color:#00E676;">+$${gananciaEv.toFixed(2)} MXN (Techo: +$${sumaPremios.toFixed(2)})</td>
-                    <td style="color:#38BDF8;">Cobertura Tablas Garantizada</td>
+                    <td style="text-align:right;">$${invTotal.toFixed(2)} MXN</td>
+                    <td style="text-align:right; color:#00E676;">+$${sumaPremios.toFixed(2)} MXN</td>
+                    <td></td>
                 </tr>
             `;
         }
     }
 
-    // 5. Tarjetas Ricas de Boletos Split (Imagen 3)
+    // 5. Tarjetas Ricas de Boletos Split (Ganancia a la Izquierda, Seguro a la Derecha, Escenarios Sobrios)
     const contSplit = document.getElementById("contenedor-tarjetas-split");
     if (contSplit) {
         contSplit.innerHTML = "";
@@ -695,8 +743,38 @@ function renderizarResultadosPortafolio(data) {
             const b2 = ord.boletos?.boleto_2_ganancia || {};
             const est = ord.estrategia_seleccionada || {};
             const proy = ord.proyecciones || {};
-            const cash = ord.cashout_targets || {};
             const inv = ord.boletos?.inversion_partido_A_i || 0;
+
+            // Momios 1X2 completos
+            const oddsObj = ord.momios_1x2 || {};
+            const oddL = oddsObj.L ? `L @${Number(oddsObj.L).toFixed(2)}` : '';
+            const oddE = oddsObj.E ? `E @${Number(oddsObj.E).toFixed(2)}` : '';
+            const oddV = oddsObj.V ? `V @${Number(oddsObj.V).toFixed(2)}` : '';
+            const momiosCompletos = [oddL, oddE, oddV].filter(Boolean).join(" | ");
+
+            const b1Monto = b1.monto_mxn || 0;
+            const b2Monto = b2.monto_mxn || 0;
+            const cobroPrincipal = (b2Monto * (b2.momio || 1)).toFixed(2);
+            const retornoTablas = (b1Monto * (b1.momio || 1)).toFixed(2);
+
+            // Escenarios desglosados en estilo sobrio y limpio (CERO balazos)
+            let escenariosHtml = `
+                <div style="font-size: 7.8pt; line-height: 1.6; color: #94A3B8; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                    <div>• <strong style="color: #e2e8f0;">Ganancia Principal:</strong> Cobro de $${cobroPrincipal} MXN (+$${proy.ganancia_neta_principal_mxn?.toFixed(2)} MXN netos, +${proy.roi_principal_porcentaje?.toFixed(1)}% ROI).</div>
+            `;
+
+            if (proy.freeroll_doble_ganancia_mxn > 0) {
+                escenariosHtml += `
+                    <div>• <strong style="color: #e2e8f0;">Doble Cobro (Pago Anticipado):</strong> Cobro de ambos boletos sumando +$${proy.freeroll_doble_ganancia_mxn?.toFixed(2)} MXN netos (+${proy.freeroll_roi_porcentaje?.toFixed(1)}% ROI).</div>
+                `;
+            }
+
+            if (b1Monto > 0) {
+                escenariosHtml += `
+                    <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${retornoTablas} MXN ($0.00 pérdida de capital).</div>
+                `;
+            }
+            escenariosHtml += `</div>`;
 
             const card = document.createElement("div");
             card.className = "card";
@@ -704,43 +782,53 @@ function renderizarResultadosPortafolio(data) {
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                     <div>
-                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
                             <span class="badge-status-live" style="background:rgba(56,189,248,0.2); color:#38BDF8; border-color:#38BDF8; font-weight:800;">${est.codigo}</span>
                             <span style="font-size:7.5pt; color:#cbd5e1;">${est.descripcion_ejecutiva}</span>
-                            <span style="font-size:7.5pt; color:#00E676; font-weight:700;">🏷️ ${est.linea_promocional}</span>
+                            <span style="font-size:7.5pt; color:#00E676; font-weight:700;">🏷️ ${est.linea_promocional || 'Pago Anticipado'}</span>
                         </div>
                         <h3 style="margin:0; font-size:1.15rem; color:#fff;">${ord.partido}</h3>
-                        <span style="font-size:7.5pt; color:#94A3B8;">⏰ ${ord.horario_evento}</span>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:3px;">⏰ ${ord.horario_evento} ${momiosCompletos ? `<span style="color:#64748B; margin:0 4px;">•</span> <span style="color:#38BDF8; font-weight:700;">${momiosCompletos}</span>` : ''}</div>
                     </div>
                     <div style="text-align:right;">
                         <span style="font-size:7pt; color:#94A3B8; text-transform:uppercase;">Inversión Total</span>
-                        <div style="font-size:1.2rem; font-weight:900; color:#00E676;">$${inv.toFixed(2)} MXN</div>
+                        <div style="font-size:1.35rem; font-weight:900; color:#00E676;">$${inv.toFixed(2)} MXN</div>
                     </div>
                 </div>
 
-                <!-- Doble Boleto Split -->
+                <!-- Doble Boleto: Ganancia PRIMERO (Izquierda), Seguro SEGUNDO (Derecha) -->
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
-                    <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:10px;">
-                        <span style="font-size:7pt; color:#38BDF8; font-weight:800;">🛡️ BOLETO 1: SEGURO (RECUPERACIÓN)</span>
-                        <div style="font-size:9.5pt; font-weight:700; color:#fff; margin-top:2px;">${b1.seleccion || 'N/A ($0.00)'}</div>
-                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b1.momio || 0).toFixed(2)} | Asignación: <strong style="color:#fff;">$${(b1.monto_mxn || 0).toFixed(2)} MXN</strong></div>
+                    <!-- BOLETO GANANCIA / ATAQUE (IZQUIERDA - VERDE) -->
+                    <div style="background:#0f172a; border:1px solid rgba(0,230,118,0.4); border-radius:6px; padding:12px;">
+                        <span style="font-size:7.2pt; color:#00E676; font-weight:800;">🎯 BOLETO 1: GANANCIA (ATAQUE)</span>
+                        <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b2.seleccion || 'Victoria Principal'}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b2.momio || 0).toFixed(2)}</div>
+                        <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
+                            <span style="font-size:7pt; color:#94A3B8;">APOSTAR EN VENTANILLA:</span>
+                            <span style="font-size:1.35rem; font-weight:900; color:#00E676;">$${(b2.monto_mxn || 0).toFixed(2)} MXN</span>
+                        </div>
                     </div>
-                    <div style="background:#0f172a; border:1px solid rgba(0,230,118,0.3); border-radius:6px; padding:10px;">
-                        <span style="font-size:7pt; color:#00E676; font-weight:800;">🎯 BOLETO 2: GANANCIA (ATAQUE)</span>
-                        <div style="font-size:9.5pt; font-weight:700; color:#fff; margin-top:2px;">${b2.seleccion || 'Ganancia'}</div>
-                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b2.momio || 0).toFixed(2)} | Asignación: <strong style="color:#fff;">$${(b2.monto_mxn || 0).toFixed(2)} MXN</strong></div>
+
+                    <!-- BOLETO SEGURO / RECUPERACIÓN (DERECHA - AZUL) -->
+                    <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:12px;">
+                        <span style="font-size:7.2pt; color:#38BDF8; font-weight:800;">🛡️ BOLETO 2: SEGURO (RECUPERACIÓN)</span>
+                        <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b1.seleccion || 'N/A ($0.00)'}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b1.momio || 0).toFixed(2)}</div>
+                        <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
+                            <span style="font-size:7pt; color:#94A3B8;">APOSTAR EN VENTANILLA:</span>
+                            <span style="font-size:1.35rem; font-weight:900; color:#38BDF8;">$${(b1.monto_mxn || 0).toFixed(2)} MXN</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Proyección de Ganancia y Salidas -->
-                <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:7.8pt;">
-                    <div style="color:#00E676; font-weight:700; margin-bottom:4px;">Ganancia Neta: +$${proy.ganancia_neta_principal_mxn?.toFixed(2)} MXN (+${proy.roi_principal_porcentaje?.toFixed(1)}% ROI)</div>
-                    <div style="color:#94A3B8;">🚨 <strong style="color:#cbd5e1;">Salida de Emergencia:</strong> ${cash.instruccion_emergencia_rompequinielas || 'Monitorear en el 2T.'}</div>
+                <!-- Escenarios Desglosados Sobrios -->
+                <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+                    ${escenariosHtml}
                 </div>
 
                 <!-- Botón hacia Radiografía Forense -->
                 <div style="text-align:right;">
-                    <button onclick="abrirRadiografiaForense('${ord.id_partido}')" style="background:transparent; border:1px solid #38BDF8; color:#38BDF8; padding:5px 12px; border-radius:4px; font-size:7.5pt; font-weight:700; cursor:pointer;">
+                    <button onclick="abrirRadiografiaForense('${ord.id_partido}')" style="background:transparent; border:1px solid #38BDF8; color:#38BDF8; padding:6px 14px; border-radius:4px; font-size:7.8pt; font-weight:700; cursor:pointer;">
                         🔬 Ver Análisis Cuantitativo y Tesis →
                     </button>
                 </div>
@@ -793,14 +881,17 @@ function abrirRadiografiaForense(matchId) {
         tbodyPron.innerHTML = p.probabilidades_3vias.map(pv => {
             const edgeVal = pv.edge || 0;
             const edgeColor = edgeVal > 0 ? '#00E676' : '#ef4444';
+            // [LN-QBE-011]: Momio Justo Teórico Q-BE = 100 / Prob_Real
+            const momioJustoQBE = (pv.prob_real && pv.prob_real > 0) ? (100.0 / pv.prob_real).toFixed(2) : '—';
+
             return `
                 <tr>
                     <td style="font-weight:700; color:#fff;">${pv.resultado}</td>
-                    <td style="text-align:center; color:#38BDF8; font-weight:700;">@${pv.momio?.toFixed(2)}</td>
-                    <td style="text-align:center;">${pv.prob_real?.toFixed(1)}%</td>
-                    <td style="text-align:center;">@${pv.momio?.toFixed(2)}</td>
+                    <td style="text-align:center; color:#38BDF8; font-weight:800;">@${momioJustoQBE}</td>
+                    <td style="text-align:center; font-weight:700;">${pv.prob_real?.toFixed(1)}%</td>
+                    <td style="text-align:center; color:#cbd5e1;">@${pv.momio?.toFixed(2)}</td>
                     <td style="text-align:center;">${pv.prob_casino?.toFixed(1)}%</td>
-                    <td style="text-align:right; font-weight:700; color:${edgeColor};">${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(2)}%</td>
+                    <td style="text-align:right; font-weight:800; color:${edgeColor};">${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(2)}%</td>
                 </tr>
             `;
         }).join("");

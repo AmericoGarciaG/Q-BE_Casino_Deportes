@@ -5,6 +5,7 @@ Transforma fixtures y standings de SQLite en RawMatchInput y MasterTableSnapshot
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+import logging
 from src.models.raw_input import (
     RawMatchInput, MasterTableSnapshot, MasterTablePosition,
     MatchIdentity, ContextoTablaPosiciones, ContextoFavorito, ContextoUnderdog,
@@ -12,6 +13,8 @@ from src.models.raw_input import (
     RadarCualitativoEntorno, EvaluacionCualitativaClub, H2HMatchRaw
 )
 from src.ingestion.normalizer import canonicalize_team_name
+
+logger = logging.getLogger(__name__)
 
 
 def construir_master_table_snapshot(positions_json: List[Dict[str, Any]], jornada: int = 8) -> MasterTableSnapshot:
@@ -71,6 +74,10 @@ def hidratar_partidos_cuantitativos(
     """
     Transforma la lista de fixtures seleccionados (con momios reales de Caliente)
     en objetos RawMatchInput listos para Poisson 6x6 y Kelly fraccional.
+    [GOVERNANCE-01] PURGA DE CUOTAS HUÉRFANAS: Si un partido no tiene momios publicados
+    en Caliente (momios=None o L<=1.0), se omite del procesamiento cuantitativo.
+    La bandera `disponible_para_seleccion=False` ya viene establecida desde sync_service;
+    aquí se aplica el filtro estricto antes de construir RawMatchInput.
     """
     table_map = {p.equipo.lower().strip(): p for p in master_table.posiciones}
     raw_inputs = []
@@ -85,11 +92,20 @@ def hidratar_partidos_cuantitativos(
         p_loc = table_map.get(local_canon.lower().strip())
         p_vis = table_map.get(vis_canon.lower().strip())
 
-        # Momios de Caliente
-        momios_dict = fx.get("momios") or {}
-        o_l = float(momios_dict.get("L", 2.10))
-        o_e = float(momios_dict.get("E", 3.30))
-        o_v = float(momios_dict.get("V", 3.40))
+        # [GOVERNANCE-01] PURGA DE CUOTAS HUÉRFANAS:
+        # Si el partido no está publicado en Caliente (momios=None o L<=1.0),
+        # se omite del ciclo de procesamiento cuantitativo. CERO fallbacks sintéticos.
+        momios_dict = fx.get("momios")
+        if not momios_dict or float(momios_dict.get("L") or 0) <= 1.0:
+            logger.warning(
+                f"[HUERFANO-PURGADO] Partido {fx.get('local','?')} vs "
+                f"{fx.get('visitante','?')} no tiene cuotas publicadas en Caliente. "
+                f"Excluido del portafolio cuantitativo."
+            )
+            continue
+        o_l = float(momios_dict["L"])
+        o_e = float(momios_dict["E"])
+        o_v = float(momios_dict["V"])
         pa_activo = bool(momios_dict.get("pago_anticipado", True))
 
         # Determinar favorito por cuota

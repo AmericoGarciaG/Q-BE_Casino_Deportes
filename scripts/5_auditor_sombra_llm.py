@@ -194,31 +194,31 @@ Recibes dos bloques de datos compactos:
 {traza_json}
 ```
 
-## INSTRUCCIONES DE AUDITORÍA CUANTITATIVA
+## INSTRUCCIONES DE AUDITORÍA CUANTITATIVA Y FINANCIERA
 
-**1. Validación de Momios (Margen Casino):**
-Para cada partido del BLOQUE A calcula: `prob_impl_total = (1/L) + (1/E) + (1/V)`.
-Verifica que cada suma sea > 1.0 (margen del casino presente) y reporta el Over-Round %.
-
-**2. Validación de Estrategia:**
-Para cada partido en `partidos_analisis` del BLOQUE B, evalúa si la estrategia elegida
-(QBE-D1, QBE-H1+, QBE-R2, QBE-00, etc.) es congruente con las probabilidades Q-BE y los momios.
-Nomenclatura oficial: QBE-D1=Favorito Directo, QBE-H1+=Favorito+Seguro Empate, QBE-R2=Doble Oportunidad X2.
-
-**3. Validación Financiera Hard-Caps:**
+**1. Validación de Capital Comprometido vs. Bankroll:**
+- Evalúa el capital total invertido vs el Bankroll disponible (${bankroll:.2f} MXN).
 - Hard-Cap individual: cada inversión ≤ ${bankroll * 0.08:.2f} MXN (8% de ${bankroll:.2f})
 - Hard-Cap global: suma total inversiones ≤ ${bankroll * 0.25:.2f} MXN (25% de ${bankroll:.2f})
-Verifica que `balance_global.capital_total_comprometido_mxn` respete ambos límites.
+- Verifica que `balance_global.capital_total_comprometido_mxn` respete ambos límites.
 
-**4. Validación Vetos QBE-00:**
-Para cada descarte en `descartes_veto_qbe00`, evalúa si el veto es matemáticamente
-justificado considerando los momios y la ausencia de edge positivo.
+**2. Validación de Ganancias y ROI:**
+- Audita la Ganancia Neta Potencial (Premio Bruto - Inversión) y la Ganancia Neta Esperada (+EV).
+- Verifica la coherencia de la tasa ROI % esperada en el portafolio.
+
+**3. Comparativa de Cuotas y Probabilidad Implícita:**
+- Compara cada cuota 1X2 capturada en Q-BE con la probabilidad implícita del sportsbook `(1/cuota)*100`.
+- Para cada partido calcula: `prob_impl_total = (1/L) + (1/E) + (1/V)` y verifica que `prob_impl_total > 1.0` (Vigorish del casino).
+
+**4. Validación del Piso Mínimo de Apuesta ($2.00 MXN):**
+- Revisa cada boleto individual en `ordenes_ejecucion` (`boleto_1_seguro` y `boleto_2_ganancia`).
+- Certifica que NINGÚN boleto activo con asignación de capital posea un monto menor a $2.00 MXN (salvo boletos de $0.00 MXN de contexto en QBE-D1/D1+).
 
 **5. TABLA DE CONCILIACIÓN — DELTA MATRIX:**
 Genera esta tabla en Markdown:
 
-| Partido | Estrategia Q-BE | Tu Veredicto | Coincidencia | Δ-Comentario |
-|---------|----------------|--------------|:------------:|--------------|
+| Partido | Estrategia Q-BE | Piso Min $2.00 | Tu Veredicto | Coincidencia | Δ-Comentario |
+|---------|----------------|:--------------:|--------------|:------------:|--------------|
 
 **6. PROTOCOLO BACKTRACKING:**
 Si detectas divergencias matemáticas (Δ > ε), señala el nodo del grafo responsable:

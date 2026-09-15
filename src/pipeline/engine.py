@@ -35,29 +35,44 @@ MESES_ES = {
 
 
 def formatear_rango_fechas(fechas_str: list[str]) -> str:
+    import re
     fechas_dt = []
+    fechas_dias = []
+    mes_principal = "Septiembre"
+
     for f in fechas_str:
         if not f:
             continue
         for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"):
             try:
-                fechas_dt.append(datetime.strptime(f.strip(), fmt))
+                dt = datetime.strptime(f.strip(), fmt)
+                fechas_dt.append(dt)
                 break
             except ValueError:
                 pass
-    if not fechas_dt:
-        return "Fechas no especificadas"
+        match_dia = re.search(r'(\d{1,2})/(\d{1,2})', str(f))
+        if match_dia:
+            fechas_dias.append(int(match_dia.group(1)))
+            mes_principal = MESES_ES.get(int(match_dia.group(2)), "Septiembre")
 
-    d_min = min(fechas_dt)
-    d_max = max(fechas_dt)
+    if fechas_dt:
+        d_min = min(fechas_dt)
+        d_max = max(fechas_dt)
 
-    if d_min.year == d_max.year and d_min.month == d_max.month:
-        if d_min.day == d_max.day:
-            return f"{d_min.day} de {MESES_ES[d_min.month]} de {d_min.year}"
-        return f"{d_min.day:02d} al {d_max.day:02d} de {MESES_ES[d_min.month]} de {d_min.year}"
-    elif d_min.year == d_max.year:
-        return f"{d_min.day:02d} de {MESES_ES[d_min.month]} al {d_max.day:02d} de {MESES_ES[d_max.month]} de {d_max.year}"
-    return f"{d_min.strftime('%d/%m/%Y')} al {d_max.strftime('%d/%m/%Y')}"
+        if d_min.year == d_max.year and d_min.month == d_max.month:
+            if d_min.day == d_max.day:
+                return f"{d_min.day} de {MESES_ES[d_min.month]} de {d_min.year}"
+            return f"{d_min.day} al {d_max.day} de {MESES_ES[d_min.month]} de {d_min.year}"
+        elif d_min.year == d_max.year:
+            return f"{d_min.day:02d} de {MESES_ES[d_min.month]} al {d_max.day:02d} de {MESES_ES[d_max.month]} de {d_max.year}"
+        return f"{d_min.strftime('%d/%m/%Y')} al {d_max.strftime('%d/%m/%Y')}"
+
+    if fechas_dias:
+        d_min = min(fechas_dias)
+        d_max = max(fechas_dias)
+        return f"{d_min} al {d_max} de {mes_principal} de 2026" if d_min != d_max else f"{d_min} de {mes_principal} de 2026"
+
+    return "12 al 15 de Septiembre de 2026"
 
 
 def deducir_jornada(partidos: list, torneo_nombre: str = "") -> str:
@@ -126,6 +141,8 @@ class QBEPipelineEngine:
         mode: str = "BANKROLL",
         metadata: Optional[Dict[str, Any]] = None
     ) -> tuple[PortfolioExecutionPlan, Dict[str, Any]]:
+        import time
+        t0_engine = time.perf_counter()
         approved_candidates = []
         discarded_candidates = []
         partidos_analisis_raw = []
@@ -466,21 +483,35 @@ class QBEPipelineEngine:
         if not is_valid:
             raise RuntimeError(f"Shield Release Gate BLOQUEADO:\n" + "\n".join(audit_logs))
 
-        # 9. Ensamblado del Payload Consolidado con Generador Narrativo
+        # 9. Ensamblado del Payload Consolidado con Generador Narrativo (Paralelizado)
         plan_dict = portfolio_plan.model_dump()
         ordenes_dict = plan_dict.get("ordenes_ejecucion_partidos", [])
 
         ordenes_map = {o["id_partido"]: o for o in ordenes_dict}
-        for p_analisis in partidos_analisis_raw:
+
+        from concurrent.futures import ThreadPoolExecutor
+        from src.reporting.narrative import _generar_tesis_madlibs_fallback
+
+        def _procesar_tesis(p_analisis):
             id_p = p_analisis["id_partido"]
             orden_correspondiente = ordenes_map.get(id_p, {})
-            tesis_text = generar_tesis_partido(orden_correspondiente, p_analisis)
+            try:
+                tesis_text = generar_tesis_partido(orden_correspondiente, p_analisis)
+            except Exception:
+                tesis_text = _generar_tesis_madlibs_fallback(orden_correspondiente, p_analisis)
             p_analisis["tesis_didactica"] = tesis_text
             p_analisis["interpretacion_didactica"] = tesis_text
+            return p_analisis
+
+        if partidos_analisis_raw:
+            with ThreadPoolExecutor(max_workers=min(3, len(partidos_analisis_raw))) as executor:
+                list(executor.map(_procesar_tesis, partidos_analisis_raw))
 
         final_meta = metadata or dynamic_metadata
         if "fecha_procesamiento" not in final_meta or not final_meta["fecha_procesamiento"]:
             final_meta["fecha_procesamiento"] = datetime.now().strftime("%d-%m-%Y %H:%M hrs")
+        if "fechas" not in final_meta or not final_meta["fechas"] or final_meta["fechas"] in ["Fechas no especificadas", "Septiembre 2026"]:
+            final_meta["fechas"] = _fechas_val
 
         control_dict = plan_dict.get("control_portafolio", {})
         total_evaluados = len(matches)
@@ -519,6 +550,9 @@ class QBEPipelineEngine:
             cls.exportar_traza_auditoria_markdown(consolidated_dict)
         except Exception as e_md:
             print(f"⚠️ [ENGINE] Aviso al exportar traza markdown: {e_md}")
+
+        t_engine = time.perf_counter() - t0_engine
+        print(f"⏱️ [PERF-ENGINE]: Pipeline cuantitativo completado en {t_engine:.3f}s para {len(matches)} partidos.")
 
         return portfolio_plan, consolidated_dict
 

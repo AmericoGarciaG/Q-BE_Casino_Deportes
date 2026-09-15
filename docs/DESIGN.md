@@ -157,3 +157,10 @@
 * **Inviolabilidad de Selección en DOM:** Los controladores de eventos en `app.js` bloquean cualquier interacción de selección si la tarjeta porta `dataset.estado === 'FINALIZADO'`, `dataset.estado === 'REPROGRAMADO'` o la clase CSS `.fixture-disabled`.
 * **Función `_esHoyDinamico()`:** Compara de forma estricta año, mes y día de la cadena ISO 8601 contra `new Date()` del sistema cliente para gobernar el prefijo `"HOY — "`, prohibiendo agrupamientos erróneos.
 
+---
+
+### [UX-CFG-01] Orden Configurable de Boletos en Tarjeta [UX-MANDATE] [BACKLOG]
+
+* **Criterio Vigente por Defecto (Prioridad Financiera):** Boleto 1 de Ganancia (Ataque) a la izquierda en verde, Boleto 2 de Seguro (Recuperación) a la derecha en azul.
+* **Criterio Opcional Futuro (Posición Canónica):** Vista conmutables por el usuario para alinear boletos por posición Local a la izquierda y Visitante a la derecha para facilitar la carga en interfaces de casas de apuestas que no admitan ordenamiento libre.
+

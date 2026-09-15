@@ -304,44 +304,59 @@ class CalienteMarketScraper:
                     html = page.content()
                     if BeautifulSoup:
                         soup = BeautifulSoup(html, "html.parser")
-                        filas = soup.find_all(lambda tag: tag.name in ["tr", "div"] and any(
-                            c in tag.get("class", []) for c in ["event-row", "coupon-row", "mkt-item", "item-row"]
-                        ) or (tag.name == "tr" and len(tag.find_all("td")) >= 4))
 
+                        # 1. Detección global de Pago Anticipado en el contenedor/cabecera de la liga
+                        texto_pagina = soup.get_text().lower()
+                        tiene_pa_global = any(kw in texto_pagina for kw in [
+                            "pago anticipado", "2 goles de ventaja", "pago anticipado activo", "adelanto 2 goles"
+                        ])
+
+                        # [ANTI-CONTAMINACION] Localizar filas individuales de mercado (tr específicos de evento)
+                        filas = soup.find_all("tr", class_=lambda c: c and any(k in str(c).lower() for k in ["event", "coupon", "mkt"]))
                         if not filas:
-                            # Fallback a contenedores individuales de partido
-                            filas = soup.find_all("tr", class_=lambda c: c and "event" in c.lower())
+                            filas = soup.find_all(lambda tag: tag.name in ["tr", "div"] and len(tag.find_all("td")) >= 3)
 
                         for fila in filas:
                             texto_fila = fila.get_text(" | ", strip=True)
-                            
+
                             for (l_target, v_target) in partidos_a_buscar.keys():
-                                palabras_l = [w for w in l_target.lower().split() if len(w) > 3]
-                                palabras_v = [w for w in v_target.lower().split() if len(w) > 3]
-                                
-                                # Comprobar que AMBOS clubes pertenezcan unívocamente a ESTA fila
-                                match_l = any(w in texto_fila.lower() for w in palabras_l)
-                                match_v = any(w in texto_fila.lower() for w in palabras_v)
+                                palabras_l = [w for w in l_target.lower().replace("club", "").replace("deportivo", "").split() if len(w) >= 4]
+                                palabras_v = [w for w in v_target.lower().replace("club", "").replace("deportivo", "").split() if len(w) >= 4]
+
+                                match_l = any(re.search(r'\b' + re.escape(w) + r'\b', texto_fila.lower()) for w in palabras_l)
+                                match_v = any(re.search(r'\b' + re.escape(w) + r'\b', texto_fila.lower()) for w in palabras_v)
 
                                 if match_l and match_v:
-                                    # Extraer únicamente los momios contenidos dentro de esta fila atómica
-                                    momios_raw = re.findall(r'\b\d+\.\d{2}\b', texto_fila)
-                                    tiene_pa = any(kw in texto_fila.lower() for kw in ["pago anticipado", "2 goles", "pa activo", "pa"])
+                                    # Descartar coincidencias cruzadas si la fila menciona clubes ajenos al partido
+                                    partido_completo_str = (l_target + " " + v_target).lower()
+                                    if "chivas" in texto_fila.lower() and "chivas" not in partido_completo_str:
+                                        continue
+                                    if "pachuca" in texto_fila.lower() and "pachuca" not in partido_completo_str:
+                                        continue
+                                    if "monterrey" in texto_fila.lower() and "monterrey" not in partido_completo_str:
+                                        continue
+                                    if "cruz azul" in texto_fila.lower() and "cruz azul" not in partido_completo_str:
+                                        continue
 
+                                    momios_raw = re.findall(r'\b\d+\.\d{2}\b', texto_fila)
                                     if len(momios_raw) >= 3:
-                                        item = {
-                                            "local": l_target,
-                                            "visitante": v_target,
-                                            "L": float(momios_raw[0]),
-                                            "E": float(momios_raw[1]),
-                                            "V": float(momios_raw[2]),
-                                            "pago_anticipado": tiene_pa,
-                                            "encontrado_en_caliente": True
-                                        }
-                                        # Evitar sobrescrituras
-                                        if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
-                                            mercado_encontrado.append(item)
-                                            logger.info(f"Cuota Asignada: {l_target} vs {v_target} -> L:{item['L']} E:{item['E']} V:{item['V']} | PA:{item['pago_anticipado']}")
+                                        l_odd = float(momios_raw[0])
+                                        e_odd = float(momios_raw[1])
+                                        v_odd = float(momios_raw[2])
+                                        overround = (1.0 / l_odd) + (1.0 / e_odd) + (1.0 / v_odd)
+
+                                        if 1.00 <= overround <= 1.35:
+                                            item = {
+                                                "local": l_target,
+                                                "visitante": v_target,
+                                                "L": l_odd,
+                                                "E": e_odd,
+                                                "V": v_odd,
+                                                "pago_anticipado": tiene_pa_global,
+                                                "encontrado_en_caliente": True
+                                            }
+                                            if not any(m["local"] == l_target and m["visitante"] == v_target for m in mercado_encontrado):
+                                                mercado_encontrado.append(item)
                 finally:
                     browser.close()
         except Exception as e:

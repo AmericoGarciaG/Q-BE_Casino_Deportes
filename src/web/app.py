@@ -45,6 +45,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import time
+
+@app.middleware("http")
+async def add_telemetry_middleware(request: Request, call_next):
+    t0_req = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - t0_req
+    if request.url.path.startswith("/api/"):
+        print(f"⏱️ [PERF-API]: {request.method} {request.url.path} procesado en {duration:.3f}s")
+    return response
+
 # Montar estáticos y plantillas
 app.mount("/static", StaticFiles(directory="src/web/static"), name="static")
 templates = Jinja2Templates(directory="src/web/templates")

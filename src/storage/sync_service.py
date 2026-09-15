@@ -259,9 +259,11 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         from src.ingestion.caliente_scraper import CalienteMarketScraper
         import concurrent.futures
         from playwright.sync_api import sync_playwright
+        import time
 
         def _extraer_todo_en_hilo_aislado():
             """Ejecuta Playwright en hilo aislado (evita colisión con asyncio de FastAPI)."""
+            t0_liga = time.perf_counter()
             partidos_extraidos = []
             jornada_txt = "Jornada 8"
             
@@ -481,6 +483,8 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                 finally:
                     browser.close()
 
+            t_liga = time.perf_counter() - t0_liga
+            logger.info(f"[PERF-LIGAMX]: Extracción de Slate y Reprogramados completada en {t_liga:.2f}s")
             return jornada_txt, partidos_extraidos, standings_vivos
 
         # [AISLAMIENTO TOTAL]: Ejecutar Playwright síncrono en un Thread aislado con timeout estricto
@@ -502,8 +506,11 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                             row["proximo_escudo_url"] = resolver_escudo_canonico(row["proximo_rival"], db=db)
 
                 # 3. Extraer cuotas focalizadas de Caliente
+                t0_cal = time.perf_counter()
                 fut_c = executor.submit(CalienteMarketScraper.extraer_cuotas_focalizadas, partidos_slate)
                 cuotas_caliente = fut_c.result(timeout=35.0)
+                t_cal = time.perf_counter() - t0_cal
+                logger.info(f"[PERF-CALIENTE]: Captura de mercado Caliente completada en {t_cal:.2f}s ({len(cuotas_caliente)} eventos)")
                 cuotas_map = {(c["local"], c["visitante"]): c for c in cuotas_caliente}
             except Exception as ex:
                 import traceback
@@ -512,6 +519,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         fixtures_formatted = []
         dias_semana = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
         meses_nom = {9: "Septiembre", 10: "Octubre", 11: "Noviembre"}
+        hoy_real = datetime.now().date()
 
         for idx, p in enumerate(partidos_slate, 1):
             l = p.get("local", "")
@@ -519,14 +527,12 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             c = cuotas_map.get((l, v)) or cuotas_map.get((v, l))
             estado = p.get("estado", "PROGRAMADO")
             fecha_raw = p.get("fecha", "12/09 17:00 hr")
-            es_pospuesto = p.get("es_pospuesto", False)
+            es_reprogramado_fmf = p.get("es_pospuesto", False) or (estado == "REPROGRAMADO")
 
-            match_f = re.search(r'(\d{1,2})/(\d{1,2})\s*(\d{1,2}):(\d{2})', fecha_raw)
-            if match_f:
-                dia = int(match_f.group(1))
-                mes = int(match_f.group(2))
-                hora = int(match_f.group(3))
-                minuto = int(match_f.group(4))
+            # Parsear fecha
+            m_f = re.search(r'(\d{1,2})/(\d{1,2})\s*(\d{1,2}):(\d{2})', fecha_raw)
+            if m_f:
+                dia, mes, hora, minuto = int(m_f.group(1)), int(m_f.group(2)), int(m_f.group(3)), int(m_f.group(4))
             else:
                 dia, mes, hora, minuto = 12, 9, 19, 0
 
@@ -534,17 +540,27 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             fecha_dt_iso = dt_partido.isoformat()
             nombre_dia = dias_semana.get(dt_partido.weekday(), "Día")
             nombre_mes = meses_nom.get(mes, "Mes")
+            dias_dif = (dt_partido.date() - hoy_real).days
 
-            # [GOVERNANCE-02] PURGA H5: Clasificación abstracta de reprogramados.
-            # Un partido es REPROGRAMADO si la federación lo declara explícitamente
-            # o si dista más de 7 días de la fecha actual del sistema.
-            dias_dif = (dt_partido.date() - datetime.now().date()).days
-            es_pospuesto = es_pospuesto or (estado == "REPROGRAMADO") or p.get("es_pospuesto", False) or (dias_dif > 7)
-            if es_pospuesto:
+            # [CRITERIO DETERMINISTA DE FECHA LEJANA]:
+            # Todo partido de la sección FMF es REPROGRAMADO.
+            # Solo si dista MÁS DE 14 DÍAS del presente se cataloga como "Fecha Lejana".
+            es_fecha_lejana = (dias_dif > 14)
+
+            if es_reprogramado_fmf:
                 estado = "REPROGRAMADO"
-                fecha_bloque = "Partidos Reprogramados / Fecha Lejana"
+                if es_fecha_lejana:
+                    fecha_bloque = "Partidos Reprogramados / Fecha Lejana"
+                    sub_badge = "Fecha Lejana"
+                else:
+                    # Reprogramado inmediato (ej. Puebla vs Toluca de hoy/mañana)
+                    es_hoy_flag = (dt_partido.date() == hoy_real)
+                    prefijo = "HOY — " if es_hoy_flag else ""
+                    fecha_bloque = f"{prefijo}Partidos Reprogramados ({dia:02d} de {meses_nom.get(mes, 'Mes')})"
+                    sub_badge = "Reprogramado"
             else:
                 fecha_bloque = f"{nombre_dia} {dia:02d} de {nombre_mes}"
+                sub_badge = None
 
             momios_obj = None
             if c and c.get("L") is not None:
@@ -553,14 +569,9 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     "pago_anticipado": bool(c.get("pago_anticipado", True))
                 }
 
-            # [LEY DE OPERABILIDAD TOTAL]:
-            # Todo partido no finalizado con momios válidos de casino es operable para el motor Q-BE
-            tiene_momios_validos = bool(momios_obj and float(momios_obj.get("L", 0)) > 1.0)
-            disponible = (estado != "FINALIZADO" and tiene_momios_validos)
-
-            marcador_actual = p.get("marcador")
-            if estado == "FINALIZADO" and not marcador_actual:
-                marcador_actual = "MARCADOR_PENDIENTE"
+            # DISPONIBLE PARA SELECCIÓN:
+            # Operable si no terminó, tiene cuotas reales de Caliente y NO es fecha lejana
+            disponible = (estado != "FINALIZADO") and (momios_obj is not None) and (not es_fecha_lejana)
 
             fixtures_formatted.append({
                 "id_partido": f"LIGAMX-J8-{idx:02d}",
@@ -569,12 +580,13 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                 "horario": fecha_raw,
                 "fecha_dt": fecha_dt_iso,
                 "fecha_bloque": fecha_bloque,
+                "sub_badge": sub_badge,
                 "estado": estado,
-                "marcador_actual": marcador_actual,
-                "minuto_juego": "Final" if estado == "FINALIZADO" else ("En Juego" if estado == "EN_CURSO" else None),
+                "marcador_actual": p.get("marcador"),
+                "minuto_juego": "Final" if estado == "FINALIZADO" else None,
                 "momios": momios_obj,
                 "es_operable": disponible,
-                "es_pospuesto": es_pospuesto,
+                "es_pospuesto": es_reprogramado_fmf,
                 "disponible_para_seleccion": disponible,
                 "es_viable_triaje": disponible
             })
@@ -659,11 +671,41 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         import traceback
         logger.error(f"[SAVE-ERROR] Failed to save snapshots: {e_save}\n{traceback.format_exc()}")
 
+    # Síntesis dinámica del rango de fechas desde los fixtures reales [BIZ-LOGIC]
+    fechas_str_list = [
+        fx.get("horario", "") for fx in fixtures_formatted
+        if fx.get("estado") not in ("FINALIZADO", "REPROGRAMADO") and fx.get("horario")
+    ]
+    if fechas_str_list:
+        import re as _re
+        dias_mes = []
+        mes_num = None
+        for fs in fechas_str_list:
+            m = _re.search(r'(\d{1,2})/(\d{1,2})', str(fs))
+            if m:
+                dias_mes.append(int(m.group(1)))
+                if mes_num is None:
+                    mes_num = int(m.group(2))
+        _meses_es = {9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
+        if dias_mes and mes_num:
+            d_min, d_max = min(dias_mes), max(dias_mes)
+            mes_str = _meses_es.get(mes_num, "Septiembre")
+            anno_actual = datetime.now().year
+            fechas_dinamicas = (
+                f"{d_min} al {d_max} de {mes_str} de {anno_actual}"
+                if d_min != d_max else
+                f"{d_min} de {mes_str} de {anno_actual}"
+            )
+        else:
+            fechas_dinamicas = "Jornada Activa"
+    else:
+        fechas_dinamicas = "Jornada Activa"
+
     return {
         "league_id": league_id,
         "league_name": league.name,
         "jornada": jornada_nombre,
-        "fechas": "Septiembre 2026",
+        "fechas": fechas_dinamicas,
         "standings": standings_formatted,
         "fixtures": fixtures_formatted,
         "desde_cache": False
@@ -671,17 +713,46 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
 
 
 def sync_active_leagues_data():
-    """Consulta FotMob y almacena en BD la tabla de posiciones y cartelera activa."""
+    """Consulta en vivo y almacena en BD datos frescos en el arranque [CERO CUOTAS OBSOLETAS]."""
     db = SessionLocal()
     try:
         active_leagues = db.query(League).filter(League.is_active == True).all()
         for league in active_leagues:
             try:
-                logger.info(f"[SYNC-STARTUP]: Sincronizando datos vivos para {league.name} (FotMob ID: {league.fotmob_id})...")
-                sync_league_live_board(league.fotmob_id, db)
-                logger.info(f"[SYNC-OK]: Tabla y cartelera guardadas en BD para {league.name}.")
+                logger.info(f"[SYNC-STARTUP]: Sincronizando datos vivos frescos para {league.name}...")
+                sync_league_live_board(league.fotmob_id, db, force_refresh=True)
+                logger.info(f"[SYNC-OK]: Tabla y cartelera en vivo guardadas para {league.name}.")
             except Exception as e:
                 logger.error(f"Error sincronizando liga {league.id} en startup: {e}")
                 db.rollback()
     finally:
         db.close()
+
+
+def sync_standings_only(league_id: int, db: Session) -> List[Dict[str, Any]]:
+    """Actualiza y retorna ÚNICAMENTE la tabla de posiciones en SQLite."""
+    league = db.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
+    if not league:
+        raise ValueError("Liga no encontrada en base de datos.")
+
+    standings_raw = FotMobProvider.obtener_tabla_posiciones(league.fotmob_id)
+    if not standings_raw:
+        snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
+        standings_raw = snap.positions_json if (snap and snap.positions_json) else []
+
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    sync_current_team_standings_table(db, league.id, standings_raw, ahora)
+
+    snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
+    if snap:
+        snap.positions_json = standings_raw
+        db.commit()
+
+    return standings_raw
+
+
+def sync_fixtures_only(league_id: int, db: Session) -> List[Dict[str, Any]]:
+    """Actualiza y retorna ÚNICAMENTE la cartelera con momios frescos de Caliente."""
+    board = sync_league_live_board(league_id, db, force_refresh=True)
+    return board.get("fixtures", [])
+

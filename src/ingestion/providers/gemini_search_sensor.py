@@ -492,13 +492,30 @@ def extraer_datos_partido_gemini(local: str, visitante: str, fecha: str = "", ma
 
 
 def redactar_tesis_dinamica_gemini(partido_data: Dict[str, Any]) -> str:
-    """Redacta la Tesis Q-BE estructurada en 4 bullets temáticos con lenguaje claro y accesible [DES-QBE-075]."""
+    """
+    [LN-QBE-014] Redacta la Tesis Q-BE en 4 bullets HTML con telemetría viva en consola.
+    Usa httpx directo con timeout de 12s y rotación 0ms ante 429 [ARCH-1.3.1].
+    """
+    import httpx
+
+    t0_llm = time.perf_counter()
+    partido_nom = partido_data.get("partido", "Partido")
+    print(f"\n🧠 [LLM-GEMINI] Redactando Tesis Q-BE para: {partido_nom}...")
+
+    keys_pool = get_discovered_keys()
+    if not keys_pool:
+        print(f"  ℹ️ [FALLBACK-MADLIBS] Sin llaves Gemini disponibles para {partido_nom}")
+        return ""
+
+    BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+    MODEL_CANONICAL = DEFAULT_GEMINI_MODEL
+
     prompt = f"""
     Actúa como 'Socio Analista Deportivo Principal' de Q-BE. Redacta la 'Tesis Q-BE' para el partido en un formato altamente escaneable y didáctico para público general.
-    
+
     DATOS DEL PARTIDO:
     {json.dumps(partido_data, indent=2, ensure_ascii=False)}
-    
+
     FORMATO OBLIGATORIO DE RESPUESTA (Debes devolver exactamente 4 viñetas HTML con <strong>):
     • <strong>Momento y Tabla:</strong> [Explica la posición, puntos acumulados y balance de goles de ambos equipos, destacando la diferencia de nivel en la tabla].
     • <strong>Dominio de Cancha:</strong> [Compara los tiros a puerta generados (SoT) vs tiros permitidos (SoTA), xG y la posesión de balón, explicando quién domina el trámite].
@@ -511,12 +528,40 @@ def redactar_tesis_dinamica_gemini(partido_data: Dict[str, Any]) -> str:
     - CERO variables crudas (prohibido 'prob_hibrida', 'phi_lead2'). Usa 'probabilidad real', 'ventaja de 2 goles'.
     - Resalta en <strong> las cifras clave (puestos, momios, montos en $ MXN, porcentajes).
     """
-    
-    def _invocar():
-        model = genai.GenerativeModel(model_name=DEFAULT_GEMINI_MODEL)
-        return model.generate_content(prompt)
 
-    response = ejecutar_llamada_gemini_resiliente(_invocar)
-    texto = response.text.strip()
-    lineas = [l.strip() for l in texto.split("\n") if l.strip()]
-    return "<br><br>".join(lineas)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1024}
+    }
+
+    # Invocar Gemini con rotación y timeout ágil de 12s
+    with httpx.Client(timeout=12.0) as client:
+        for idx, api_key in enumerate(keys_pool, 1):
+            url = f"{BASE_URL}/{MODEL_CANONICAL}:generateContent?key={api_key}"
+            try:
+                resp = client.post(url, json=payload)
+                if resp.status_code == 200:
+                    r_json = resp.json()
+                    candidates = r_json.get("candidates", [])
+                    if candidates and candidates[0].get("content", {}).get("parts"):
+                        texto = candidates[0]["content"]["parts"][0].get("text", "")
+                        if texto.strip():
+                            duracion = time.perf_counter() - t0_llm
+                            tokens_entrada = r_json.get("usageMetadata", {}).get("promptTokenCount", "?")
+                            tokens_salida = r_json.get("usageMetadata", {}).get("candidatesTokenCount", "?")
+                            print(f"  ✅ [LLM-GEMINI] Tesis para {partido_nom} completada en {duracion:.2f}s (Llave #{idx} | Tokens: {tokens_entrada}→{tokens_salida})")
+                            lineas = [l.strip() for l in texto.strip().split("\n") if l.strip()]
+                            return "<br><br>".join(lineas)
+                elif resp.status_code == 429:
+                    print(f"  ⚠️ [ROTATION-ALERT] Llave #{idx} en Cooldown (429). Rotando en 0ms...")
+                    continue
+                else:
+                    print(f"  ⚠️ [ROTATION-ALERT] Llave #{idx} HTTP {resp.status_code}. Rotando...")
+                    continue
+            except Exception as e_net:
+                print(f"  ⚠️ [ROTATION-ALERT] Timeout/Error en Llave #{idx}: {e_net}. Rotando...")
+                continue
+
+    duracion = time.perf_counter() - t0_llm
+    print(f"  ℹ️ [FALLBACK-MADLIBS] Pool agotado para {partido_nom} ({duracion:.2f}s) — activando generador paramétrico")
+    return ""

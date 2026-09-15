@@ -177,8 +177,6 @@ class PortfolioEngine:
             else:
                 inv_partido = 10.00
 
-            total_inv_core += inv_partido
-
             # Estructuración de Boletos (Dutching Exacto)
             if "H2" in code:
                 # Seguro en Fav, Ganancia en Empate
@@ -188,10 +186,6 @@ class PortfolioEngine:
                 b2_sel = "Empate" + (" + PA" if "+" in code else "")
                 b2_momio = o_emp
                 b2_monto = round(inv_partido - b1_monto, 2)
-                ganancia_neta = round((b2_monto * b2_momio) - inv_partido, 2)
-                roi_pct = round((ganancia_neta / inv_partido) * 100.0, 2)
-                freeroll_neta = round((b1_monto * b1_momio) + (b2_monto * b2_momio) - inv_partido, 2) if "+" in code else 0.0
-                freeroll_roi = round((freeroll_neta / inv_partido) * 100.0, 2) if "+" in code else 0.0
                 out_min85 = f"${round(b2_monto * b2_momio * 0.85, 2)} MXN (Asegurar ~85% del premio al minuto 85' si hay empate)"
                 tablas_amt = inv_partido
 
@@ -203,10 +197,6 @@ class PortfolioEngine:
                 b2_sel = f"Gana {fav_name}" + (" + PA" if "+" in code else "")
                 b2_momio = o_fav
                 b2_monto = round(inv_partido - b1_monto, 2)
-                ganancia_neta = round((b2_monto * b2_momio) - inv_partido, 2)
-                roi_pct = round((ganancia_neta / inv_partido) * 100.0, 2)
-                freeroll_neta = round((b1_monto * b1_momio) + (b2_monto * b2_momio) - inv_partido, 2) if "+" in code else 0.0
-                freeroll_roi = round((freeroll_neta / inv_partido) * 100.0, 2) if "+" in code else 0.0
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas o cobro anticipado por ventaja de 2 goles."
                 tablas_amt = inv_partido
 
@@ -218,9 +208,6 @@ class PortfolioEngine:
                 b2_sel = f"Gana {und_name} + PA"
                 b2_momio = o_und
                 b2_monto = round(inv_partido - b1_monto, 2)
-                ganancia_neta = round((b2_monto * b2_momio) - inv_partido, 2)
-                roi_pct = round((ganancia_neta / inv_partido) * 100.0, 2)
-                freeroll_neta, freeroll_roi = 0.0, 0.0
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas en empate o victoria de Underdog."
                 tablas_amt = inv_partido
 
@@ -236,24 +223,61 @@ class PortfolioEngine:
                 b2_sel = f"Gana {und_name}"
                 b2_momio = o_und
                 b2_monto = round(inv_partido - b1_monto, 2)
-                ganancia_neta = round(min(b1_monto * b1_momio, b2_monto * b2_momio) - inv_partido, 2)
-                roi_pct = round((ganancia_neta / inv_partido) * 100.0, 2)
-                freeroll_neta, freeroll_roi = 0.0, 0.0
                 out_min85 = "Dejar correr al 90'. Ambos boletos cubren el escenario X2."
                 tablas_amt = inv_partido
 
             else:  # QBE-D1 / QBE-D1+
-                b1_sel = "N/A ($0.00)"
-                b1_momio = 0.0
+                b1_sel = "Empate (Sin Cobertura)"
+                b1_momio = round(float(m.get("odd_emp") or o_emp or 3.70), 2)
                 b1_monto = 0.0
                 b2_sel = f"Gana {fav_name}" + (" + PA" if "+" in code else "")
                 b2_momio = o_fav
                 b2_monto = inv_partido
-                ganancia_neta = round((b2_monto * b2_momio) - inv_partido, 2)
-                roi_pct = round((ganancia_neta / inv_partido) * 100.0, 2)
-                freeroll_neta, freeroll_roi = 0.0, 0.0
                 out_min85 = "N/A (Dejar correr al 90' o cobrado anticipadamente por ventaja de 2 goles)."
                 tablas_amt = 0.0
+
+            # ── APLICACIÓN DEL PISO MÍNIMO DE VENTANILLA ($2.00 MXN) [BIZ-LOGIC] ──
+            PISO_MINIMO_BOLETO = 2.00
+
+            if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
+                # Si el boleto de seguro es menor a $2.00 MXN, escalar proporcionalmente
+                if 0.0 < b1_monto < PISO_MINIMO_BOLETO:
+                    b1_monto = PISO_MINIMO_BOLETO
+                    odd_seguro = m["odd_emp"] if any(f in code for f in ["H1", "H1+", "R1"]) else m["odd_fav"]
+                    # Escalar la inversión total para que el seguro garantice el 100% en tablas (V=0)
+                    inv_partido = round(b1_monto * odd_seguro, 2)
+                    b2_monto = round(inv_partido - b1_monto, 2)
+                elif 0.0 < b2_monto < PISO_MINIMO_BOLETO:
+                    b2_monto = PISO_MINIMO_BOLETO
+                    inv_partido = round(b1_monto + b2_monto, 2)
+
+            elif code == "QBE-R2":
+                if 0.0 < b1_monto < PISO_MINIMO_BOLETO or 0.0 < b2_monto < PISO_MINIMO_BOLETO:
+                    factor_escala = max(PISO_MINIMO_BOLETO / max(0.01, b1_monto), PISO_MINIMO_BOLETO / max(0.01, b2_monto))
+                    b1_monto = round(b1_monto * factor_escala, 2)
+                    b2_monto = round(b2_monto * factor_escala, 2)
+                    inv_partido = round(b1_monto + b2_monto, 2)
+
+            elif code in ["QBE-D1", "QBE-D1+"]:
+                if inv_partido < PISO_MINIMO_BOLETO:
+                    inv_partido = PISO_MINIMO_BOLETO
+                    b2_monto = inv_partido
+
+            # Recalcular métricas financieras con inv_partido y boletos finales
+            if code == "QBE-R2":
+                ganancia_neta = round(min(b1_monto * b1_momio, b2_monto * b2_momio) - inv_partido, 2)
+            else:
+                ganancia_neta = round((b2_monto * b2_momio) - inv_partido, 2)
+
+            roi_pct = round((ganancia_neta / max(0.01, inv_partido)) * 100.0, 2)
+            freeroll_neta = round((b1_monto * b1_momio) + (b2_monto * b2_momio) - inv_partido, 2) if "+" in code else 0.0
+            freeroll_roi = round((freeroll_neta / max(0.01, inv_partido)) * 100.0, 2) if "+" in code else 0.0
+            if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1", "R2"]):
+                tablas_amt = inv_partido
+            if "H2" in code:
+                out_min85 = f"${round(b2_monto * b2_momio * 0.85, 2)} MXN (Asegurar ~85% del premio al minuto 85' si hay empate)"
+
+            total_inv_core += inv_partido
 
             # Contribución aritmética pura de EV (CERO pisos artificiales)
             # [CORRECCIÓN FINANCIERA][BIZ-LOGIC]: ev_roi es fracción decimal (ej. 0.4464 = 44.64%).
@@ -324,29 +348,41 @@ class PortfolioEngine:
         reveses_tolerados = 0
         pnl_acumulado = sum(ganancias_premios)
         
+        # Probabilidad de Nivel 0 (Todos los activos cubiertos/ganadores tienen éxito)
+        p_exito_conjunto = 1.0
+        for m in approved_matches:
+            p_exito_conjunto *= (1.0 - m["psi_downside"])
+        prob_nivel_0_pct = round(p_exito_conjunto * 100.0, 1)
+
         cascada_reveses.append({
             "nivel": 0,
             "escenario": "Pleno Éxito (0 Fallos)",
             "pnl_mxn": round(pnl_acumulado, 2),
             "roi_pct": round((pnl_acumulado / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0,
+            "probabilidad_pct": prob_nivel_0_pct,
             "estado": "PLENO_POSITIVO"
         })
 
         for m_fallos in range(1, k_count + 1):
-            # Fallan los m_fallos últimos (los de menor probabilidad o mayor riesgo)
             ganancia_restante = sum(ganancias_premios[:k_count - m_fallos])
             perdida_reveses = sum(inversiones_ordenes[k_count - m_fallos:])
             pnl_nivel = round(ganancia_restante - perdida_reveses, 2)
             roi_nivel = round((pnl_nivel / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0
             
+            if m_fallos == k_count:
+                prob_escenario_pct = round(p_ruina_total, 2)
+            else:
+                prob_escenario_pct = round(max(0.1, (100.0 - prob_nivel_0_pct - p_ruina_total) / max(1, k_count - 1)), 1)
+
             if pnl_nivel >= 0:
                 reveses_tolerados = m_fallos
 
             cascada_reveses.append({
                 "nivel": m_fallos,
-                "escenario": f"{m_fallos} Reves{'es' if m_fallos > 1 else ''} Simultáneo{'s' if m_fallos > 1 else ''}",
+                "escenario": f"{m_fallos} Reves{'es' if m_fallos > 1 else ''}",
                 "pnl_mxn": pnl_nivel,
                 "roi_pct": roi_nivel,
+                "probabilidad_pct": prob_escenario_pct,
                 "estado": "SUPERAVIT" if pnl_nivel > 0 else ("BREAKEVEN" if pnl_nivel == 0 else "DEFICIT")
             })
 

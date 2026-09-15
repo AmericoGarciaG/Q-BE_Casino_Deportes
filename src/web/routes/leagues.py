@@ -152,3 +152,32 @@ def get_live_board(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{league_id}/refresh-tabla")
+def refresh_tabla_only(league_id: int, db: Session = Depends(get_db)):
+    """
+    [DESACOPLAMIENTO TOTAL] Actualiza exclusivamente la tabla de posiciones en SQLite
+    sin tocar la cartelera ni invocar a Caliente.mx.
+    """
+    try:
+        from src.storage.sync_service import sync_standings_only
+        standings = sync_standings_only(league_id, db)
+        return {"status": "SUCCESS", "standings": standings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refrescando tabla: {str(e)}")
+
+
+@router.post("/{league_id}/refresh-momios")
+def refresh_momios_only(league_id: int, db: Session = Depends(get_db)):
+    """
+    [DESACOPLAMIENTO TOTAL] Actualiza exclusivamente los momios de Caliente y cartelera
+    sin tocar la tabla de posiciones ni consultar FotMob.
+    """
+    try:
+        from src.storage.sync_service import sync_fixtures_only
+        fixtures = sync_fixtures_only(league_id, db)
+        return {"status": "SUCCESS", "fixtures": fixtures}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refrescando momios: {str(e)}")
+

@@ -178,7 +178,7 @@ class StrategyEvaluatorEngine:
             "viable": ninguna_viable,
             "ev_neto_roi": 0.0,
             "nombre_oficial": STRATEGY_CATALOG["QBE-00"].nombre_oficial,
-            "motivo_diagnostico": "Operación vetada: ninguna estrategia cumple checklist de seguridad (+EV)" if ninguna_viable else "Estrategias viables identificadas"
+            "motivo_diagnostico": "ninguna de las estrategias de inversión es aplicable(+EV)" if ninguna_viable else "Estrategias viables identificadas"
         }
 
         return results
