@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from src.storage.database import get_db
 from src.storage.models import League
@@ -26,6 +26,7 @@ _ORDEN_TOPOLOGICO = {"EN_CURSO": 1, "PROGRAMADO": 2, "REPROGRAMADO": 3, "FINALIZ
 @router.get("/{league_id}/live-board", response_model=LiveBoardOut)
 def get_live_board(
     league_id: int,
+    jornada: Optional[int] = Query(default=None, description="Número de jornada solicitada"),
     force_refresh: bool = Query(default=False),
     db: Session = Depends(get_db)
 ):
@@ -36,8 +37,11 @@ def get_live_board(
     PROGRAMADO / EN_CURSO / FINALIZADO / REPROGRAMADO, evalúa es_hoy de forma
     dinámica y aplica el Ordenamiento Topológico canónico antes de retornar.
     """
+    target_jornada = jornada if isinstance(jornada, int) else None
+    force_refresh_bool = force_refresh if isinstance(force_refresh, bool) else False
     try:
-        board_data = sync_league_live_board(league_id, db, force_refresh=force_refresh)
+        board_data = sync_league_live_board(league_id, db, target_jornada=target_jornada, force_refresh=force_refresh_bool)
+
 
         # ── Resolver escudos de la tabla de posiciones ─────────────────────
         standings = board_data.get("standings", [])
@@ -148,6 +152,9 @@ def get_live_board(
             "fechas": board_data.get("fechas", ""),
             "standings": standings,
             "fixtures": [f.model_dump() for f in fixtures_ordenados],
+            "jornada_actual": board_data.get("jornada_actual", 8),
+            "jornada_mostrada": board_data.get("jornada_mostrada", 8),
+            "jornadas_disponibles": board_data.get("jornadas_disponibles", [8, 9]),
         }
 
     except Exception as e:

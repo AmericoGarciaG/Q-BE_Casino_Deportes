@@ -186,3 +186,25 @@
 * **Momios 1X2 Completos:** El encabezado de la tarjeta muestra el resumen tripartito del mercado (`L @... | E @... | V @...`) para contexto completo de precios.
 * **Sobriedad de Escenarios:** La descripción de desenlaces (Ganancia Principal, Doble Cobro PA y Cobertura Tablas) se formatea en tipografía sobria limpia (`font-size: 7.8pt; color: #94A3B8`), erradicando insignias o balazos fluorescentes invasivos.
 
+---
+
+### [DES-QBE-026] Selector de Jornadas en Píldoras Continuas (Pill-Tabs) [UX-MANDATE]
+
+* **Geometría y Ubicación:** Montado en la cabecera superior de la Cartelera (`.cartelera-header`), sustituyendo el título plano anterior.
+* **Estructura DOM:**
+  ```html
+  <div class="matchday-pill-selector" style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+    <!-- Píldoras generadas dinámicamente -->
+    <button class="pill-tab" data-jornada="8">Jornada 8 <span class="badge-status">🏁 Concluida</span></button>
+    <button class="pill-tab active" data-jornada="9">Jornada 9 <span class="badge-status">🟢 Mercado Abierto ⭐</span></button>
+  </div>
+  ```
+* **Paleta y Estados Visuales:**
+  - **Píldora Inactiva:** Fondo Slate 800 (`#1E293B`), borde `1px solid #334155`, texto Gris Pizarra (`#94A3B8`). Al hover: borde cian tenue.
+  - **Píldora Activa (Seleccionada):** Fondo Azul Profundo (`#0284C7`), borde `1px solid #38BDF8`, texto Blanco Puro (`#FFFFFF`), tipografía peso 700.
+* **Invarianza de Selección Reactiva en Memoria (`state.selectedMatches`):**
+  - El usuario puede marcar un partido en la Jornada 8 y luego hacer clic en la píldora de la Jornada 9.
+  - **REGLA ABSOLUTA:** Conmutar entre píldoras **NO vacía** el set de partidos seleccionados.
+  - El contador de selección superior debe totalizar dinámicamente:
+    `"3 partidos seleccionados (1 de Jornada 8, 2 de Jornada 9)"`.
+  - Al regresar a una jornada visitada, las tarjetas previamente seleccionadas deben conservar su checkbox activo (`checked = true`) y el borde iluminado en `#38BDF8`.

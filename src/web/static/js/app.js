@@ -78,14 +78,18 @@ async function cargarLigasDesdeBD() {
 }
 
 // 2. Seleccionar Liga y Cargar Live Board en Vista 2
-async function seleccionarLiga(fotmobId, forceRefresh = false) {
+async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = null) {
     switchView("view-matchday-selection");
     const tbody = document.querySelector(".table-panel-left table tbody");
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando datos oficiales en tiempo real...</td></tr>';
+    if (tbody && !currentLiveBoard) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#38BDF8;">⏳ Sincronizando datos oficiales en tiempo real...</td></tr>';
 
     try {
         let url = `/api/leagues/${fotmobId}/live-board`;
-        if (forceRefresh) url += "?force_refresh=true";
+        const params = [];
+        if (targetJornada !== null && targetJornada !== undefined) params.push(`jornada=${targetJornada}`);
+        if (forceRefresh) params.push("force_refresh=true");
+        if (params.length > 0) url += "?" + params.join("&");
+
         const resp = await fetch(url);
         if (!resp.ok) throw new Error("Error al obtener Live Board");
         currentLiveBoard = await resp.json();
@@ -93,12 +97,13 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
         const lblTabla = document.getElementById("lbl-nombre-tabla");
         if (lblTabla) lblTabla.textContent = currentLiveBoard.league_name || "Liga MX";
         const lblJornada = document.getElementById("lbl-nombre-jornada");
-        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || "Jornada Activa";
+        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || `Jornada ${currentLiveBoard.jornada_mostrada || 8}`;
         const lblTime = document.getElementById("lbl-timestamp-tabla");
         if (lblTime) {
             lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
         }
 
+        renderizarPildorasJornada(currentLiveBoard);
         renderizarTabla18Clubes(currentLiveBoard.standings);
         renderizarCartelera(currentLiveBoard.fixtures);
     } catch (e) {
@@ -106,6 +111,65 @@ async function seleccionarLiga(fotmobId, forceRefresh = false) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#f87171;">❌ Error al conectar: ${e.message}</td></tr>`;
     }
 }
+
+// Renderizado dinámico de píldoras continuas de jornada [DES-QBE-026]
+function renderizarPildorasJornada(liveBoard) {
+    const container = document.getElementById("matchday-pill-selector");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const disponibles = liveBoard.jornadas_disponibles || [8, 9];
+    const mostrada = liveBoard.jornada_mostrada || 8;
+    const actual = liveBoard.jornada_actual || 8;
+
+    disponibles.forEach(jNum => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const isActive = (jNum === mostrada);
+        
+        // Estilos defensivos directos Dark Fintech
+        btn.style.cssText = `
+            background: ${isActive ? '#0284C7' : '#1C2541'};
+            border: 1px solid ${isActive ? '#38BDF8' : '#334155'};
+            color: ${isActive ? '#FFFFFF' : '#94A3B8'};
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: ${isActive ? '0 0 10px rgba(56, 189, 248, 0.3)' : 'none'};
+            transition: all 0.2s ease;
+        `;
+
+        let badgeBg = "rgba(56, 189, 248, 0.2)";
+        let badgeColor = "#38BDF8";
+        let badgeLabel = "🟢 Mercado Abierto ⭐";
+
+        if (jNum < actual || (jNum === 8 && actual === 8)) {
+            badgeBg = "rgba(148, 163, 184, 0.2)";
+            badgeColor = "#CBD5E1";
+            badgeLabel = "🏁 Concluida";
+        }
+
+        btn.innerHTML = `<span>Jornada ${jNum}</span><span style="background:${badgeBg}; color:${badgeColor}; font-size:0.7rem; padding:2px 7px; border-radius:10px; font-weight:600;">${badgeLabel}</span>`;
+        
+        btn.onmouseenter = () => { if (!isActive) btn.style.borderColor = '#38BDF8'; };
+        btn.onmouseleave = () => { if (!isActive) btn.style.borderColor = '#334155'; };
+
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (jNum === mostrada) return;
+            const leagueId = liveBoard.league_id || 262;
+            seleccionarLiga(leagueId, false, jNum);
+        };
+        container.appendChild(btn);
+    });
+}
+
 
 function _formatearFechaHoraActual() {
     const ahora = new Date();

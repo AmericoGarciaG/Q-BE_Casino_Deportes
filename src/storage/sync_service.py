@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from src.storage.database import SessionLocal
@@ -134,17 +134,25 @@ def sync_current_team_standings_table(db: Session, league_id: int, standings_for
     db.commit()
 
 
-def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = False) -> Dict[str, Any]:
+def sync_league_live_board(
+    league_id: int,
+    db: Session,
+    target_jornada: Optional[int] = None,
+    force_refresh: bool = False
+) -> Dict[str, Any]:
     """
-    [ARCH-1.6.4] Política Cache-First con TTL Dinámico.
-    Si existe un snapshot en SQLite con menos de 15 minutos, retorna desde BD en < 20 ms.
-    Solo ejecuta Playwright ante cold start o cuando force_refresh=True.
+    [ARCH-1.6.4][ARCH-1.6.8] Política Cache-First Particionada por Jornada.
+    Si existe un snapshot en SQLite para (league_id, target_jornada) con menos de 15 minutos,
+    retorna desde BD en < 20 ms.
     """
     league = db.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
     if not league:
         raise ValueError(f"Liga con ID {league_id} no encontrada en base de datos.")
 
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    jornada_actual = 8
+    jornada_mostrada = int(target_jornada) if target_jornada is not None else 8
+    jornadas_disponibles = [8, 9]
 
     # ── [GUARD TEST]: Si KYBERN_NO_SCRAPE=1, retornar inmediatamente desde SQLite sin Playwright ──
     if os.environ.get("KYBERN_NO_SCRAPE", "0") == "1":
@@ -153,46 +161,59 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         ).order_by(StandingSnapshot.captured_at.desc()).first()
 
         last_fix = db.query(FixtureSnapshot).filter(
-            FixtureSnapshot.league_id == league.id
+            FixtureSnapshot.league_id == league.id,
+            FixtureSnapshot.matchday == jornada_mostrada
         ).order_by(FixtureSnapshot.updated_at.desc()).first()
+
+        if not last_fix:
+            last_fix = db.query(FixtureSnapshot).filter(
+                FixtureSnapshot.league_id == league.id
+            ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
             return {
                 "league_id": league_id,
                 "league_name": league.name,
-                "jornada": f"Jornada {last_snap.matchday or 8}",
+                "jornada": f"Jornada {jornada_mostrada}",
                 "fechas": "Septiembre 2026",
                 "standings": last_snap.positions_json,
                 "fixtures": last_fix.matches_json,
+                "jornada_actual": jornada_actual,
+                "jornada_mostrada": jornada_mostrada,
+                "jornadas_disponibles": jornadas_disponibles,
                 "desde_cache": True
             }
 
-    # ── [CACHE-FIRST]: Verificar si existen snapshots frescos en SQLite ──────
+    # ── [CACHE-FIRST]: Verificar si existen snapshots frescos en SQLite para esta jornada ──────
     if not force_refresh:
         last_snap = db.query(StandingSnapshot).filter(
             StandingSnapshot.league_id == league.id
         ).order_by(StandingSnapshot.captured_at.desc()).first()
 
         last_fix = db.query(FixtureSnapshot).filter(
-            FixtureSnapshot.league_id == league.id
+            FixtureSnapshot.league_id == league.id,
+            FixtureSnapshot.matchday == jornada_mostrada
         ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
             tiempo_snap = (ahora - (last_fix.updated_at or last_snap.captured_at)).total_seconds() / 60.0
             if tiempo_snap < TTL_CACHE_MINUTOS:
-                # [SERVIR DESDE SQLITE EN < 20 MS]: Cero llamadas a Playwright
                 return {
                     "league_id": league_id,
                     "league_name": league.name,
-                    "jornada": f"Jornada {last_snap.matchday or 8}",
+                    "jornada": f"Jornada {jornada_mostrada}",
                     "fechas": "Septiembre 2026",
                     "standings": last_snap.positions_json,
                     "fixtures": last_fix.matches_json,
+                    "jornada_actual": jornada_actual,
+                    "jornada_mostrada": jornada_mostrada,
+                    "jornadas_disponibles": jornadas_disponibles,
                     "desde_cache": True
                 }
 
     # ── [CACHE MISS O FORCE REFRESH]: Ejecutar ingesta viva ──────────────────
     fotmob_id = league.fotmob_id
+
 
     # 1. Obtener Tabla de Posiciones
     standings_raw = FotMobProvider.obtener_tabla_posiciones(fotmob_id)
@@ -251,10 +272,13 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         return {
             "league_id": league_id,
             "league_name": league.name,
-            "jornada": f"Jornada {last_snap.matchday if last_snap else 8}",
+            "jornada": f"Jornada {jornada_mostrada}",
             "fechas": "Septiembre 2026",
             "standings": standings_formatted,
             "fixtures": (last_fix.matches_json if last_fix and last_fix.matches_json else []),
+            "jornada_actual": jornada_actual,
+            "jornada_mostrada": jornada_mostrada,
+            "jornadas_disponibles": jornadas_disponibles,
             "desde_cache": True
         }
 
@@ -264,11 +288,11 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         from playwright.sync_api import sync_playwright
         import time
 
-        def _extraer_todo_en_hilo_aislado():
+        def _extraer_todo_en_hilo_aislado(jornada_target=8):
             """Extrae ligamx.net y FotMob de forma robusta con los selectores probados en consola."""
             t0_liga = time.perf_counter()
             partidos_extraidos = []
-            jornada_txt = "Jornada 8"
+            jornada_txt = f"Jornada {jornada_target}"
             standings_vivos = []
 
             with sync_playwright() as p:
@@ -287,11 +311,17 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                         document.querySelectorAll('#ligamxPopup, .popup-overlay, .modal-backdrop').forEach(el => el.remove());
                     }""")
 
-                    # Asegurar avance a Jornada 8 si estuviera estacionado en J7
-                    content = page.content()
-                    if "JORNADA 7" in content and "MARCADOR OFICIAL" in content:
-                        fl = page.query_selector(".next, .carrusel-next, .slick-next, a:has-text('>')")
-                        if fl: fl.click(); page.wait_for_timeout(2000)
+                    # Avance dinámico de jornada si target es Jornada 9
+                    if jornada_target == 9:
+                        next_btn = page.query_selector("li.next.ctrlMrcdr")
+                        if next_btn:
+                            next_btn.click()
+                            page.wait_for_timeout(3000)
+                    else:
+                        content = page.content()
+                        if "JORNADA 7" in content and "MARCADOR OFICIAL" in content:
+                            fl = page.query_selector(".next, .carrusel-next, .slick-next, a:has-text('>')")
+                            if fl: fl.click(); page.wait_for_timeout(2000)
 
                     # Parsear tarjetas visibles de la jornada activa
                     tarjetas = page.query_selector_all("li[id^='MrcdrPrtd_'], .barMarc, .slide, .item, .partido")
@@ -447,8 +477,8 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         standings_vivos = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             try:
-                # 2. Extraer Slate Oficial y Tabla Viva
-                fut_slate = executor.submit(_extraer_todo_en_hilo_aislado)
+                # 2. Extraer Slate Oficial y Tabla Viva para la jornada solicitada
+                fut_slate = executor.submit(_extraer_todo_en_hilo_aislado, jornada_mostrada)
                 jornada_nombre, partidos_slate, standings_vivos = fut_slate.result(timeout=50.0)
 
                 if standings_vivos and len(standings_vivos) >= 18:
@@ -528,7 +558,7 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
             disponible = (estado != "FINALIZADO") and (momios_obj is not None) and (not es_fecha_lejana)
 
             fixtures_formatted.append({
-                "id_partido": f"LIGAMX-J8-{idx:02d}",
+                "id_partido": f"LIGAMX-J{jornada_mostrada}-{idx:02d}",
                 "local": l,
                 "visitante": v,
                 "horario": fecha_raw,
@@ -605,16 +635,16 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         sync_current_team_standings_table(db, league.id, standings_formatted, ahora)
 
         # Guardar Snapshots y Ledger en SQLite
-        snap_standing = StandingSnapshot(league_id=league.id, season="2026", matchday=jornada_num, positions_json=standings_formatted)
-        snap_fixture = FixtureSnapshot(league_id=league.id, matchday=jornada_num, matches_json=fixtures_formatted, updated_at=ahora)
+        snap_standing = StandingSnapshot(league_id=league.id, season="2026", matchday=jornada_mostrada, positions_json=standings_formatted)
+        snap_fixture = FixtureSnapshot(league_id=league.id, matchday=jornada_mostrada, matches_json=fixtures_formatted, updated_at=ahora)
         
         # [PM-FACE]: Actualizar MatchdayState
         m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
         if not m_state:
-            m_state = MatchdayState(league_id=league.id, matchday_num=jornada_num, status="ACTIVA", last_scraped_at=ahora)
+            m_state = MatchdayState(league_id=league.id, matchday_num=jornada_actual, status="ACTIVA", last_scraped_at=ahora)
             db.add(m_state)
         else:
-            m_state.matchday_num = jornada_num
+            m_state.matchday_num = jornada_actual
             m_state.last_scraped_at = ahora
             m_state.status = "ACTIVA"
 
@@ -658,12 +688,16 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
     return {
         "league_id": league_id,
         "league_name": league.name,
-        "jornada": jornada_nombre,
+        "jornada": f"Jornada {jornada_mostrada}",
         "fechas": fechas_dinamicas,
         "standings": standings_formatted,
         "fixtures": fixtures_formatted,
+        "jornada_actual": jornada_actual,
+        "jornada_mostrada": jornada_mostrada,
+        "jornadas_disponibles": jornadas_disponibles,
         "desde_cache": False
     }
+
 
 
 def sync_active_leagues_data():

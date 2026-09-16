@@ -546,6 +546,23 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   3. **Umbral de Tolerancia de Cartera:** Se identifica el número máximo de reveses simultáneos ($m^*$) que el portafolio puede absorber manteniendo $\text{PnL}_{m^*} \ge 0.0$ (saldo neto positivo).
 * **O (Output):** Matriz `cascada_resiliencia` con nivel, escenario, PnL ($), ROI (%) y probabilidad estimada (%), junto con `reveses_maximos_tolerados`.
 
+### ID: [LN-QBE-025] Conmutador de Slates y Preservación de Estado Inter-Jornadas
+
+* **Ω (Resumen):** Gobernar la transición de estados estocásticos y la ingesta focalizada de cuotas al conmutar entre la fecha en disputa y fechas subsecuentes con mercado abierto, habilitando la selección híbrida de cartera sin ruptura de invariantes.
+* **I (Input):** `league_id: int`, `matchday_target: int`, `selected_match_ids: List[str]`, `MasterTableSnapshot`.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Aislamiento de Ingesta:** Al solicitar `matchday_target`, el scraper focalizado interactúa con el selector de la federación (`li.next.ctrlMrcdr`) o consulta la partición de FotMob sin alterar la jornada previa.
+  2. **Persistencia No Destructiva:** Cada jornada mantiene su centinela `MatchdayState(league_id, matchday_num)`.
+  3. **Selección Híbrida Multiversal:**
+     - La cartera acepta un conjunto de partidos $K = K_{N} \cup K_{N+1}$ con $K \ge 1$.
+     - Todas las órdenes se someten conjuntamente a los filtros de Triaje (`[LN-QBE-005]`), Poisson 6x6 (`[LN-QBE-040]`), Breakeven Dinámico (`[LN-QBE-050]`) y Dutching $V=0$ (`[LN-QBE-070]`).
+  4. **Enforcement de Hard-Caps Globales:**
+     $$\sum_{i \in K_N \cup K_{N+1}} \text{Inversión}_i \le \text{Bankroll} \times 0.2501$$
+* **O (Output):** `ConsolidatedPortfolioPlan` híbrido y certificado bajo las 8 invarianzas.
+* **Φ (Transición):** Hacia `[LN-QBE-070]` y `[LN-QBE-090]`.
+* **[SHIELD]:** `tests/shield/test_LN_QBE_025_multi_matchday.py`
+
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
+
 ```

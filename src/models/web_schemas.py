@@ -83,6 +83,11 @@ class LiveBoardOut(BaseModel):
     fechas: str
     standings: List[StandingRowOut]
     fixtures: List[MatchFixtureOut]
+    # Nuevos campos legislados Fase 4: [ARCH-1.6.8]
+    jornada_actual: int = Field(default=8, description="Jornada administrativa de la liga")
+    jornada_mostrada: int = Field(default=8, description="Jornada desplegada actualmente en cartelera")
+    jornadas_disponibles: List[int] = Field(default_factory=lambda: [8, 9], description="Jornadas seleccionables")
+
 
 
 # Alias para retrocompatibilidad total

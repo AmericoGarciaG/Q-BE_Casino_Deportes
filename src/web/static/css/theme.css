@@ -407,3 +407,88 @@ table.fintech-table {
     font-weight: 700;
     color: #94A3B8;
 }
+
+/* Selector de Jornadas en Píldoras [DES-QBE-026] — Paleta Dark Fintech */
+.matchday-pill-selector {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.pill-tab {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #94A3B8;
+    padding: 5px 12px;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    outline: none;
+    user-select: none;
+}
+
+.pill-tab:hover {
+    border-color: #38BDF8;
+    color: #F8FAFC;
+    background: #1e293b;
+    transform: translateY(-1px);
+}
+
+.pill-tab.active {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid #38BDF8;
+    color: #38BDF8;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.pill-tab .pill-title {
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+}
+
+.pill-badge {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.pill-badge.badge-active {
+    background: rgba(0, 230, 118, 0.15);
+    color: #00E676;
+    border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.pill-badge.badge-open {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38BDF8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.pill-badge.badge-closed {
+    background: rgba(148, 163, 184, 0.12);
+    color: #94A3B8;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pill-tab.active .pill-badge.badge-active {
+    background: #00E676;
+    color: #0B132B;
+    border-color: #00E676;
+}
+
+.pill-tab.active .pill-badge.badge-open {
+    background: #38BDF8;
+    color: #0B132B;
+    border-color: #38BDF8;
+}
+

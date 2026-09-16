@@ -618,6 +618,27 @@ class PortfolioExecutionPlan(BaseModel):
 * **Aislamiento de Bucle Asyncio:** Toda invocación síncrona a Playwright (`sync_playwright`) dentro del ciclo de vida de FastAPI o sus controladores REST debe encapsularse obligatoriamente dentro de un worker thread dedicado (`concurrent.futures.ThreadPoolExecutor(max_workers=1)`). Queda terminantemente prohibido invocar la API síncrona en el hilo principal de Uvicorn para evitar colisiones de contexto con el bucle de eventos.
 * **Gobierno de Timeouts Rígidos:** Cada operación de extracción en segundo plano debe portar un timeout explícito en su llamada `.result(timeout=...)` (35.0s para FotMob, 40.0s para el Slate FMF y 35.0s para cuotas de Caliente), garantizando que un cuelgue de red externo no degrade ni bloquee indefinidamente los recursos del servidor local.
 
+### [ARCH-1.6.8] Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE]
+
+* **Propósito:** Permitir la exploración, ingesta y selección fluida de partidos pertenecientes a múltiples jornadas consecutivas (ej. Jornada $N$ en disputa y Jornada $N+1$ con mercado abierto), garantizando aislamiento de estados y cero colisiones en base de datos.
+* **Partición de Estado en SQLite:**
+  - Las tablas `matchday_states`, `fixture_snapshots` y `fixture_records` se particionan explícitamente por la tupla `(league_id, matchday_num)`.
+  - La ingesta o consulta de una jornada futura ($N+1$) **tiene estrictamente prohibido sobreescribir, alterar o purgar los registros de la jornada activa ($N$)**.
+* **Contratos REST Extendidos (`src/models/web_schemas.py`):**
+  - `GET /api/leagues/{id}/live-board?jornada={num}&force_refresh={bool}`:
+    - Si `jornada` es omitido (`None`): entrega por defecto la jornada en curso o la última con partidos pendientes.
+    - Si `jornada` es especificado: consulta el snapshot correspondiente en SQLite. Aplica política Cache-First con TTL independiente: si el snapshot existe y es válido, entrega en $\le 20\text{ ms}$.
+  - El esquema `LiveBoardOut` incorpora obligatoriamente:
+    ```python
+    jornada_actual: int            # Jornada administrativa en curso (ej. 8)
+    jornada_mostrada: int          # Jornada renderizada actualmente (ej. 9)
+    jornadas_disponibles: List[int] # Lista de jornadas navegables (ej. [8, 9])
+    ```
+* **Selección Híbrida de Cartera (`POST /api/portfolio/generate`):**
+  - El contrato `GeneratePortfolioRequest` procesa un array arbitrario de `selected_match_ids`.
+  - El `PipelineAdapter` resuelve cada ID independientemente de su jornada de origen (`partido_262_j8_...` y `partido_262_j9_...`), vinculando la tabla de posiciones consolidada y aplicando los Hard-Caps globales (Invarianzas #3 y #4) sobre el portafolio unificado.
+
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**
+
 ```
