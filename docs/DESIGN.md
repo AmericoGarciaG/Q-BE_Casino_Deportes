@@ -15,11 +15,10 @@
 - **Fuente Principal:** Inter / Outfit / System Sans-Serif.
 - **Fuente Monospaciada:** JetBrains Mono / Fira Code (para números, probabilidades y cuotas).
 
-## 3. Estructura de Vistas SPA (4 Vistas Canónicas)
-1. **Hub de Ligas (`view-leagues-hub`):** Selector de competencia con tarjetas interactivas y logos oficiales de torneos.
-2. **Jornada y Tabla de Posiciones (`view-matchday-selection`):** Split-View con la tabla de 18 clubes (pestañas General, Forma y xG Opta) y Cartelera en 4 Niveles con checkboxes de selección.
-3. **Cartera Cuantitativa (`tab-portfolio`):** Dashboard Ejecutivo con Macro KPIs (Inversión, EV, ROI) y tabla reactiva de Órdenes de Inversión con boletos split calculados.
-4. **Tesis & Reporte PDF (`tab-reporting`):** Generador y descargador de reporte formal A4 con Playwright.
+## 3. Estructura de Vistas SPA (3 Vistas Canónicas)
+1. **Hub de Ligas (`view-leagues-hub`):** Selector de competencia con tarjetas interactivas y emblemas oficiales de torneos (Liga MX).
+2. **Jornada y Tabla de Posiciones (`view-matchday-selection`):** Split-View con la tabla general de 18 clubes (pestañas General, Forma y xG Opta con refresco aislado) y Cartelera en 4 Niveles con selección de apuestas.
+3. **Cartera Cuantitativa (`tab-portfolio`):** Dashboard Ejecutivo unificado con Macro KPIs duales, Cascada de Resiliencia a Reveses, Tabla Resumen de Asignación, Boletos Split en Detalle con metas de CashOut, Botón de Exportación PDF A4 integrado y Radar de Descartes (`QBE-00`).
 
 ---
 
@@ -135,13 +134,17 @@
   3. Desglose analítico de los 4 umbrales de Breakeven ($\theta^*$).
   4. Curva de liquidación en vivo y disparadores de CashOut al minuto 85'.
 
-### [DES-QBE-020] Dashboard Ejecutivo de Cartera (Vista 3 Reactiva) [UX-MANDATE]
+### [DES-QBE-020] Dashboard Ejecutivo de Cartera y Métricas Duales [UX-MANDATE]
 
-* **Geometría de Macro KPIs:** Tres tarjetas elevadas en Slate 800 (`#1E293B`) con acentos de color semántico:
-  - *Inversión Total Comprometida:* Borde izquierdo cian (`#38BDF8`), texto en blanco puro.
-  - *Ganancia Neta Esperada (EV):* Borde izquierdo verde esmeralda (`#00E676`), texto en verde con signo `+$`.
-  - *ROI Global Esperado:* Borde izquierdo verde esmeralda (`#00E676`), porcentaje con un decimal.
-* **Inviolabilidad Reactiva de la Tabla:** Queda estrictamente prohibido el uso de filas fijas de ejemplo (*mocks*) en `#tabla-ordenes-inversion`. El `<tbody>` se hidrata exclusivamente a partir del array `data.ordenes` recibido de `POST /api/portfolio/generate`. Si la cartera no genera órdenes aprobadas, se renderiza un banner informativo de capital protegido al 100% ($0.00 en riesgo).
+* **Macro KPIs con Distinción Financiera Estricta:**
+  1. *Capital en Juego:* Total comprometido en pesos ($) y porcentaje del bankroll base (`font-size: 1.15rem`, blanco puro).
+  2. *Ganancia Neta Potencial:* Premio neto máximo sumado bajo el escenario de pleno acierto en ventanilla (`+$XX.XX MXN`, verde esmeralda `#00E676`), con subtexto `Techo Máximo Pleno`.
+  3. *Ganancia Neta Esperada:* La Esperanza Matemática estadística ponderada ($+EV$) derivada de las probabilidades Poisson y ruina (`+$XX.XX MXN`, cian `#38BDF8`), con subtexto `Esperanza Matemática (+EV)`.
+  4. *Blindaje de Capital:* Porcentaje de preservación global (`99.9%`, cian `#38BDF8`) y probabilidad de ruina conjunta en decimales pequeños.
+  5. *Posiciones Core:* Ratio de activos operables aprobados sobre total evaluado.
+* **Tabla Resumen de Asignación (`#tabla-resumen-asignacion`):**
+  - Columna 4: Encabezado rotulado obligatoriamente como **`GANANCIA NETA`** (cifras netas reales, prohibidas cifras brutas).
+  - Renglón TOTAL CARTERA: Muestra la suma del capital invertido, la Ganancia Neta Potencial acumulada, y la **celda de Escenario Cobertura permanece estrictamente en blanco / vacía** para evitar redundancias.
 
 ---
 
@@ -163,4 +166,23 @@
 
 * **Criterio Vigente por Defecto (Prioridad Financiera):** Boleto 1 de Ganancia (Ataque) a la izquierda en verde, Boleto 2 de Seguro (Recuperación) a la derecha en azul.
 * **Criterio Opcional Futuro (Posición Canónica):** Vista conmutables por el usuario para alinear boletos por posición Local a la izquierda y Visitante a la derecha para facilitar la carga en interfaces de casas de apuestas que no admitan ordenamiento libre.
+
+---
+
+### [DES-QBE-023] Modal HUD de Procesamiento Cuantitativo en Vivo [UX-MANDATE] (H7)
+
+* **Geometría y Estilo:** Ventana modal emergente Dark Fintech (`background: #1C2541`, borde cian `#38BDF8`, radio `10px`, ancho `500px`) sobre backdrop difuminado (`rgba(11, 19, 43, 0.88)` y `backdrop-filter: blur(5px)`).
+* **Cinética de Progresión:**
+  - Barra de progreso superior continua con gradiente `#38BDF8` a `#00E676`.
+  - Lista checklist reactiva de 6 pasos secuenciales (cambian de estado `⏳` en azul a `✅` en verde conforme avanza la computación estocástica).
+  - Botón de cancelación accesible que aborta la llamada HTTP mediante `AbortController`.
+  - Cierre automático fluido al recibir la respuesta y transición a la Vista de Cartera.
+
+### [DES-QBE-024] Ergonomía de Boletos Split con Prioridad Financiera [UX-MANDATE] (H9)
+
+* **Jerarquía Visual de Izquierda a Derecha:**
+  - **Boleto 1: Ganancia (Ataque) a la IZQUIERDA en Verde:** Cuadro con borde `#00E676` al 40%. Despliega la selección principal y el monto de asignación en **letra grande (`font-size: 1.35rem; font-weight: 900; color: #00E676;`)** para agilidad inmediata al teclear en ventanilla de apuestas.
+  - **Boleto 2: Seguro (Recuperación) a la DERECHA en Azul:** Cuadro con borde `#38BDF8` al 30%. Despliega el empate/cobertura con su momio real y el monto de asignación en letra grande (`1.35rem`, peso 900).
+* **Momios 1X2 Completos:** El encabezado de la tarjeta muestra el resumen tripartito del mercado (`L @... | E @... | V @...`) para contexto completo de precios.
+* **Sobriedad de Escenarios:** La descripción de desenlaces (Ganancia Principal, Doble Cobro PA y Cobertura Tablas) se formatea en tipografía sobria limpia (`font-size: 7.8pt; color: #94A3B8`), erradicando insignias o balazos fluorescentes invasivos.
 

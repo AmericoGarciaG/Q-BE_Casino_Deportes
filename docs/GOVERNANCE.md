@@ -173,8 +173,11 @@ Todo cambio estructural en `Q_BE_CD_WEB` DEBE ejecutarse mediante el **Motor de 
  │ FASE 0   │ Cimientos Web y Purga Crisol             │ ✅ SELLADA│ Monolito FastAPI+DB  │
  │ FASE 1   │ Curación Agéntica y Bóveda Soberana      │ ✅ SELLADA│ 18 escudos FMF disco │
  │ FASE 2   │ Ingesta Real ligamx/Caliente & Cache-1st │ ✅ SELLADA│ Cero mocks, <20ms BD │
- │ FASE 3   │ Despacho Cuantitativo, Poisson y Dutching│ 🟡 SELLADO│ Portafolio activo    │
- │ FASE 4   │ Orquestación StateGraph / LangGraph      │ 📋 Planeado│ Micro-agentes async  │
+ │ FASE 3   │ Despacho Cuantitativo, Poisson y Dutching│ ✅ SELLADA│ Portafolio activo,   │
+ │          │ (Stress-Testing, Piso $2.00 y HUD)       │           │ Boletos V=0, 3 Vistas│
+ ├──────────┼──────────────────────────────────────────┼───────────┼──────────────────────┤
+ │ FASE 4   │ Selector Multi-Jornada (J8 vs J9) y      │ 🚀 SIGUIE-│ Conmutación de fecha │
+ │          │ Orquestación StateGraph / LangGraph      │ NTE FRENTE│ y agentes paralelos. │
  │ FASE 5   │ Consola Bankroll, Slippage y Vaquita     │ 📋 Planeado│ WhatsApp & Sindicato │
  │ FASE 6   │ Expansión Multi-Torneo Internacional     │ 📋 Planeado│ Premier / Champions  │
  │ FASE 7   │ PM-FACE: Calibración y Brier Score       │ 📋 Bases  │ MatchdayState activo │

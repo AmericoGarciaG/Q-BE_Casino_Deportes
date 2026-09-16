@@ -139,14 +139,12 @@ async function refrescarTablaEnVivo() {
         }
     } catch (e) {
         console.error("Error refrescando tabla:", e);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#f87171;">❌ Error al refrescar tabla: ${e.message}</td></tr>`;
     } finally {
         if (btn) btn.innerHTML = "🔄 Refrescar Tabla";
     }
 }
 window.refrescarTablaEnVivo = refrescarTablaEnVivo;
 
-// ── 2. Refrescar ÚNICAMENTE la Cartelera de Momios (Panel Derecho) ──────────
 async function refrescarCarteleraEnVivo() {
     const targetId = currentLiveBoard ? currentLiveBoard.league_id : 262;
     const btn = document.getElementById("btn-refresh-cartelera");
@@ -160,7 +158,7 @@ async function refrescarCarteleraEnVivo() {
         if (!resp.ok) throw new Error("Error en respuesta del servidor");
         const data = await resp.json();
 
-        // Actualizar ÚNICAMENTE la cartelera derecha (LA TABLA DE LA IZQUIERDA NO SE TOCA)
+        // Actualizar ÚNICAMENTE el panel derecho
         renderizarCartelera(data.fixtures);
 
         const lblTime = document.getElementById("lbl-timestamp-cartelera");
@@ -169,7 +167,6 @@ async function refrescarCarteleraEnVivo() {
         }
     } catch (e) {
         console.error("Error refrescando cartelera:", e);
-        if (container) container.innerHTML = `<div style="text-align:center; color:#f87171; padding:20px;">❌ Error al refrescar momios: ${e.message}</div>`;
     } finally {
         if (btn) btn.innerHTML = "🔄 Refrescar Momios";
     }
@@ -184,7 +181,7 @@ function renderizarTabla18Clubes(standings) {
 
     standings.forEach(t => {
         const tr = document.createElement("tr");
-        
+
         // Renderizado del escudo oficial del club
         const escudoHtml = t.escudo_url ? `<img src="${t.escudo_url}" alt="" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle; margin-right: 6px;">` : '';
 
@@ -243,7 +240,7 @@ function renderizarCartelera(fixtures) {
     selectedMatchIds = [];
 
     // Separar por estado semántico (Ordenamiento Topológico ya aplicado por el backend)
-    const enCurso     = fixtures.filter(f => f.estado === "EN_CURSO");
+    const enCurso = fixtures.filter(f => f.estado === "EN_CURSO");
     const programados = fixtures.filter(f => f.estado === "PROGRAMADO");
     const reprogramados = fixtures.filter(f => f.estado === "REPROGRAMADO");
     const finalizados = fixtures.filter(f => f.estado === "FINALIZADO");
@@ -294,8 +291,8 @@ function _esHoyDinamico(fechaDtStr) {
         const dt = new Date(fechaDtStr);
         const hoy = new Date();
         return dt.getFullYear() === hoy.getFullYear() &&
-               dt.getMonth() === hoy.getMonth() &&
-               dt.getDate() === hoy.getDate();
+            dt.getMonth() === hoy.getMonth() &&
+            dt.getDate() === hoy.getDate();
     } catch (e) {
         return false;
     }
@@ -349,7 +346,9 @@ function _renderFixtureCard(container, f, deshabilitada) {
     } else if (estado === "FINALIZADO") {
         badgeHtml = `<span class="badge-status-finished">🏁 FINALIZADO</span>`;
     } else if (estado === "REPROGRAMADO") {
-        badgeHtml = `<span class="badge-status-postponed">⏳ Fecha Lejana</span>`;
+        // [CORRECCIÓN]: Leer sub_badge del backend (solo dice Fecha Lejana si dista > 14 días)
+        const textoBadge = f.sub_badge ? `⏳ ${f.sub_badge}` : "⏳ Reprogramado";
+        badgeHtml = `<span class="badge-status-postponed">${textoBadge}</span>`;
     }
 
     // Checkbox — solo visible y habilitado si es PROGRAMADO
@@ -498,7 +497,7 @@ function actualizarContadorSeleccionados() {
     // Contar exclusivamente checkboxes marcados que NO estén deshabilitados
     const checkboxesActivos = document.querySelectorAll(".fixture-card:not(.fixture-disabled) input[type='checkbox']:checked");
     selectedMatchIds = Array.from(checkboxesActivos).map(cb => cb.value);
-    
+
     if (lbl) {
         lbl.textContent = `${selectedMatchIds.length} partido${selectedMatchIds.length !== 1 ? 's' : ''} seleccionado${selectedMatchIds.length !== 1 ? 's' : ''}`;
     }
@@ -569,7 +568,7 @@ async function ejecutarDespachoPortafolio() {
 
         const resp = await fetch('/api/portfolio/generate', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             signal: abortControllerDespacho.signal,
             body: JSON.stringify({
                 league_id: currentLiveBoard.league_id || 262,
@@ -584,14 +583,14 @@ async function ejecutarDespachoPortafolio() {
             const errData = await resp.json().catch(() => ({}));
             throw new Error(errData.detail || "Error en cálculo de portafolio");
         }
-        
+
         const data = await resp.json();
-        
+
         setTimeout(() => {
             ocultarHUDProcesamiento();
             switchView("tab-portfolio");
             renderizarResultadosPortafolio(data);
-            
+
             // Enlazar botón PDF export en la vista de cartera
             const pdfBtn = document.getElementById("export-pdf-btn");
             if (pdfBtn && data.portfolio_id) {
@@ -643,7 +642,7 @@ function renderizarResultadosPortafolio(data) {
     if (elInv) elInv.textContent = `$${invTotal.toFixed(2)} MXN`;
     const elPctCaja = document.getElementById("kpi-pct-caja");
     if (elPctCaja) elPctCaja.textContent = `${((invTotal / (control.desglose_bankroll?.bankroll_total || 200)) * 100).toFixed(1)}% de la caja`;
-    
+
     // Ganancia Potencial
     const elPot = document.getElementById("kpi-ganancia-potencial");
     if (elPot) elPot.textContent = `+$${sumaPremios.toFixed(2)} MXN`;
@@ -655,7 +654,7 @@ function renderizarResultadosPortafolio(data) {
     if (elEv) elEv.textContent = `+$${gananciaEv.toFixed(2)} MXN`;
     const elRoi = document.getElementById("kpi-roi-global");
     if (elRoi) elRoi.textContent = `+${roiGlobal.toFixed(1)}% ROI Esperado (+EV estrategia a largo plazo)`;
-    
+
     const elBlind = document.getElementById("kpi-blindaje-global");
     if (elBlind) elBlind.textContent = `${blindajePct.toFixed(2)}%`;
     const elRuina = document.getElementById("kpi-prob-ruina");
@@ -933,16 +932,16 @@ async function abrirModalCurador(leagueId = 262) {
     document.getElementById("modal-curador-hitl").style.display = "block";
     const grid = document.getElementById("grid-curacion-clubes");
     grid.innerHTML = '<div style="color:#38BDF8; padding:20px;">🔍 Cargando candidatos prospectados...</div>';
-    
+
     try {
         const resp = await fetch(`/api/admin/catalogs/staging?league_id=${leagueId}`);
         const teams = await resp.json();
         grid.innerHTML = "";
-        
+
         teams.forEach(t => {
             const card = document.createElement("div");
             card.style.cssText = "background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px;";
-            
+
             // Priorizar ruta local soberana con fallback a candidate_url
             const imgSrc = t.crest_url || t.crest_candidate_url;
 
@@ -974,11 +973,11 @@ async function sellarCatalogoCompleto(leagueId = 262) {
     try {
         const stagedResp = await fetch(`/api/admin/catalogs/staging?league_id=${leagueId}`);
         const teams = await stagedResp.json();
-        
+
         const commitResp = await fetch("/api/admin/catalogs/commit", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({league_id: leagueId, approved_teams: teams})
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ league_id: leagueId, approved_teams: teams })
         });
         const res = await commitResp.json();
         alert(`✅ Catálogo sellado con éxito: ${res.teams_committed} clubes guardados en SQLite.`);
@@ -990,17 +989,17 @@ async function sellarCatalogoCompleto(leagueId = 262) {
 }
 
 // [FAST-TRACK FIX]: Exponer funciones del Modal Curador al ámbito global
-window.abrirModalCurador = typeof abrirModalCurador !== 'undefined' ? abrirModalCurador : function() {
+window.abrirModalCurador = typeof abrirModalCurador !== 'undefined' ? abrirModalCurador : function () {
     const modal = document.getElementById('modalCurador') || document.getElementById('modal-curador');
     if (modal) modal.style.display = 'flex';
 };
 
-window.cerrarModalCurador = typeof cerrarModalCurador !== 'undefined' ? cerrarModalCurador : function() {
+window.cerrarModalCurador = typeof cerrarModalCurador !== 'undefined' ? cerrarModalCurador : function () {
     const modal = document.getElementById('modalCurador') || document.getElementById('modal-curador');
     if (modal) modal.style.display = 'none';
 };
 
-window.sellarCatalogoCompleto = typeof sellarCatalogoCompleto !== 'undefined' ? sellarCatalogoCompleto : function() {
+window.sellarCatalogoCompleto = typeof sellarCatalogoCompleto !== 'undefined' ? sellarCatalogoCompleto : function () {
     console.log("Sellando catálogo...");
 };
 

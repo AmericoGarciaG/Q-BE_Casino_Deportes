@@ -226,15 +226,16 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ### ID: [LN-QBE-011] Cálculo del Momio Justo (Fair Odds Q-BE)
 
-* **Ω (Resumen):** Convertir la probabilidad híbrida del modelo en un precio decimal puro e identificar el descalce de cuotas (*Market Mispricing*).
+* **Ω (Resumen):** Convertir la probabilidad real del modelo en un precio decimal puro e identificar la ventaja matemática (+EV) frente al casino en la Radiografía Forense.
 * **I (Input):** $P_{\text{híbrida}}(k)$ para $k \in \{\text{Fav}, \text{Emp}, \text{Und}\}$.
-* **P (Process) [BIZ-LOGIC]:**
-  1. Momio Justo Teórico:
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED]:**
+  1. **Momio Justo Teórico Puro Q-BE (H8):**
      $$O_{\text{Q-BE}}(k) = \frac{100.0}{P_{\text{híbrida}}(k) \times 100.0} = \frac{1.0}{P_{\text{híbrida}}(k)}$$
-  2. Ventaja Matemática Pura:
+     *(Queda terminantemente prohibido duplicar o copiar el momio del casino en esta columna de la Radiografía).*
+  2. **Ventaja Matemática Pura (Edge / +EV):**
      $$\text{Edge}(k) = P_{\text{híbrida}}(k) - \frac{1.0}{O_{\text{Casino}}(k)}$$
-* **O (Output):** `FairOddsSnapshot`.
-* **Φ (Transición):** Hacia **[LN-QBE-050]** y la Vista de Radiografía.
+* **O (Output):** `FairOddsSnapshot` ($O_{\text{Q-BE}}$, $O_{\text{Casino}}$, $\text{Prob\_Real}$, $\text{Prob\_Casino}$, $\text{Edge}$).
+* **Φ (Transición):** Hacia `[LN-QBE-050]` y el modal interactivo de Radiografía Forense.
 
 ---
 
@@ -347,37 +348,52 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 ### ID: [LN-QBE-070] Router de Utilidad Pura, Kelly y Techo Aritmético
 
 * **Ω (Resumen):** Seleccionar la estrategia óptima individual mediante comparación analítica de utilidad, calcular la ruina conjunta del portafolio y estructurar los boletos en pesos con respeto estricto al techo de ganancia máxima.
-* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
-  1. **Comparación de Utilidad Directo vs. Cobertura:**
+* **P (Process) — Reglas de Ordenamiento y Escala Financiera:**
+  1. **Ordenamiento Jerárquico Doble (H3):** Las órdenes del portafolio se ordenan prioritariamente por:
+     - 1º Criterio: Mayor probabilidad de preservación $(1.0 - \Psi_{\text{Ruina}})$ descendente.
+     - 2º Criterio: Mayor ROI neto esperado descendente.
+  2. **Cálculo de Ganancia Esperada (Corrección Decimal Estricta):**
+     - Dado que $EV_{\text{Net\_ROI}}$ se deriva como fracción decimal ($0.4464 = 44.64\%$):
+       $$EV_{\text{Global}} = \sum_{i=1}^K A_i \times EV_{\text{Net\_ROI}, i}$$
+       *(Prohibido dividir entre 100 dos veces; el monto de ganancia esperada se computa en pesos directos).*
+     - El ROI global se expresa en porcentaje: $\text{ROI}_{\text{Global}} = \left(\frac{EV_{\text{Global}}}{\sum A_i}\right) \times 100.0$.
+  3. **Comparación de Utilidad Directo vs. Cobertura:**
      $$U_{\text{Directo}} = EV_{\text{Directo}} \times P_{\text{Fav}}$$
      $$U_{\text{Cobertura}} = EV_{\text{Cobertura}} \times (1.0 - \Psi_{\text{Ruina}})$$
      - Si $U_{\text{Directo}} > U_{\text{Cobertura}} \land \Psi_{\text{Ruina}} \le 0.08 \implies$ Seleccionar **`QBE-D1+` (o `D1`)**.
-  2. **Escalera de Prioridad:** `H2+` $\rightarrow$ Max($U$) entre `D1+/H1+` $\rightarrow$ Max($U$) entre `D1/H1` $\rightarrow$ `H2` $\rightarrow$ `R1/R2` $\rightarrow$ `QBE-00`.
-  3. **Asignación de Capital:**
+  4. **Escalera de Prioridad:** `H2+` $\rightarrow$ Max($U$) entre `D1+/H1+` $\rightarrow$ Max($U$) entre `D1/H1` $\rightarrow$ `H2` $\rightarrow$ `R1/R2` $\rightarrow$ `QBE-00`.
+  5. **Asignación de Capital:**
      - $S_i = \frac{EV_i}{\Psi_i}$, $w_i = \frac{S_i}{\sum S_j}$.
      - $\text{Bolsa}_{\text{Core}} = B \times \min(0.25, 0.06 \cdot K)$.
      - $\text{Cap}_i = \min(0.08, \max(0.02, \frac{EV_i}{3.0 \cdot \Psi_i}))$.
      - $A_i = \min(\text{Bolsa}_{\text{Core}} \times w_i, B \times \text{Cap}_i)$ con piso operativo de $4.00 MXN.
-  4. **Dutching Exacto:**
+  6. **Dutching Exacto:**
      - Familia H2: Boleto 1 (Seguro Fav) $= A_i / O_{\text{Fav}}$, Boleto 2 (Ganancia Emp) $= A_i - \text{Boleto 1}$.
      - Familia H1 / R1: Boleto 1 (Seguro Emp) $= A_i / O_{\text{Emp}}$, Boleto 2 $= A_i - \text{Boleto 1}$.
      - Familia D1: Boleto 1 $= \$0.00$, Boleto 2 $= A_i$.
-  5. **Invarianza de Techo Aritmético de Cartera [INVARIANZA #7]:**
+  7. **Invarianza de Techo Aritmético de Cartera [INVARIANZA #7]:**
      - Prohibido clavar pisos mínimos fijos (ej. `max(0.50)` o `$3.50`).
-     - Sumatoria pura: $EV_{\text{Global}} = \sum_{i=1}^K A_i \cdot \left(\frac{EV_{\text{Net\_ROI}, i}}{100.0}\right)$.
+     - Sumatoria pura: $EV_{\text{Global}} = \sum_{i=1}^K A_i \cdot EV_{\text{Net\_ROI}, i}$.
      - Techo estricto: $EV_{\text{Global}} \le \sum_{i=1}^K \text{Ganancia\_Máxima\_Partido}_i$.
 * **O (Output):** `PortfolioExecutionPlan`.
 * **Φ (Transición):** Hacia **[LN-QBE-013]**, **[LN-QBE-014]** y **[LN-QBE-090]**.
 
 ---
 
-### ID: [LN-QBE-013] Sintetizador de Metadatos y Cronometría Dinámica
+### ID: [LN-QBE-013] Sintetizador de Metadatos, Cronometría Dinámica y Ventanas Reprogramadas
 
-* **Ω (Resumen):** Deducir cronológicamente el torneo, jornada y rango de fechas reales de los partidos eliminando textos hardcodeados.
-* **P (Process) [ANTI-BUG]:**
-  1. Fechas: Parsear fechas mínimas y máximas de los partidos y formatear en español (`"05 de Septiembre de 2026"` o `"04 al 05 de Septiembre de 2026"`).
-  2. Jornada: Si el torneo es Copa/Champions/Leagues Cup $\implies$ rotular `"Fase de Grupos / Eliminatoria"`. Si es liga regular $\implies$ `"Jornada N"`.
-  3. Marca temporal de procesamiento: Registrar `datetime.now().strftime("%d-%m-%Y %H:%M hrs")`.
+* **Ω (Resumen):** Deducir cronológicamente el rango de fechas real de la jornada y discriminar la operabilidad de encuentros reprogramados sin cadenas quemadas.
+* **P (Process) [ANTI-BUG] [BIZ-LOGIC] (H5, H6):**
+  1. **Rango Dinámico de Fechas:** Parsear el día y mes de los partidos operables del lote, identificando $d_{\min}$ y $d_{\max}$. Formatear en español institucional:
+     $$\text{Rango} = \begin{cases} 
+     d_{\min} \text{ al } d_{\max} \text{ de } \text{Mes de } \text{Año} & \text{si } d_{\min} \ne d_{\max} \\ 
+     d_{\min} \text{ de } \text{Mes de } \text{Año} & \text{si } d_{\min} == d_{\max} 
+     \end{cases}$$
+     *(Prohibido el renderizado de cadenas por defecto como "Fechas no especificadas").*
+  2. **Discriminación de Reprogramados ($\Delta t \le 14$d):**
+     - Calcular distancia en días contra la fecha del sistema: $\Delta t = \text{fecha\_partido} - \text{hoy}$.
+     - Si $\Delta t > 14$ días: Sub-etiqueta `Fecha Lejana`, selección bloqueada (`disponible = False`).
+     - Si $\Delta t \le 14$ días: Reprogramado en ventana inmediata. Si posee cuotas activas de casino, se declara operable (`disponible = True`).
 * **O (Output):** `MetadataDictionary` dinámico y certificado.
 * **Φ (Transición):** Hacia **[LN-QBE-080]**.
 
@@ -491,40 +507,44 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   4. Invarianza de Techo: $\text{EV}_{\text{Global}} \le \sum \text{Premios\_Máximos}$.
 * **O (Output):** Veredicto formal en consola: `EXIT CODE 0 (THE SHIELD PASSED)` o `EXIT CODE 1 (BLOCKED)`.
 
----
-
-### ID: [LN-QBE-006] Asignación Relacional de Favorito por Momio 1X2
-
-* **Ω (Resumen):** Determinar de forma puramente objetiva el rol de Favorito y Underdog en un encuentro a partir de las cuotas decimales del mercado.
-* **I (Input):** Cuota local ($O_L$), Cuota visitante ($O_V$).
-* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED]:**
-  $$\text{Si } O_L \le O_V \implies \text{Favorito} = \text{Local}, \text{Underdog} = \text{Visitante}$$
-  $$\text{Si } O_L > O_V \implies \text{Favorito} = \text{Visitante}, \text{Underdog} = \text{Local}$$
-* **O (Output):** Roles canónicos `fav_name`, `und_name` y bandera `is_fav_local: bool`.
-* **Φ (Transición):** Hacia `[LN-QBE-040]` (Poisson) y `[LN-QBE-070]` (Dutching).
-
----
-
-### ID: [LN-QBE-020-B] Ley de Ponderación Zero-H2H (Cero Mocks Sintéticos)
-
-* **Ω (Resumen):** Gobernar el modelado estocástico cuando dos clubes carecen de antecedentes directos registrados en la base de datos, prohibiendo terminantemente inventar partidos históricos falsos.
-* **P (Process) [GOVERNANCE-01] [ALGO-PROTECTED]:**
-  - Si una pareja de equipos no tiene partidos H2H reales verificables en la base de datos (`len(h2h_matches) == 0`):
-    $$w_{\text{H2H}} = 0.0 \implies w_{\text{Liga}} = 1.0$$
-  - El modelo bivariado de Poisson 6x6 se ejecuta al **100% sobre las métricas Opta ($xG, xGA, FCF, E_{\text{att}}$)** del torneo activo.
-  - Queda formalmente catalogado como violación crítica a la constitución el fabricar partidos H2H sintéticos con fechas o marcadores ficticios para forzar la ejecución de pruebas.
-  - El mecanismo de activación en `temporal.py`: si `h2h_matches` está vacío, retornar `H2HDecayResult` con `antiguedad_promedio_dias=9999.0` y probabilidades neutras `(0.3333, 0.3333, 0.3333)`.
-  - El mecanismo de activación en `poisson.py`: si `h2h.antiguedad_promedio_dias >= 9000.0`, forzar `w_h2h = 0.0` y `w_liga = 1.0`.
-* **O (Output):** Ponderaciones $w_{\text{H2H}} = 0.0$ y $w_{\text{Liga}} = 1.0$.
-
----
-
 ### ID: [LN-QBE-035] Fórmulas de Derivación Opta y Tokens de Marcador
 
 * **Derivación de $xG/xGA$ en Ausencia de Tiros Profundos (H7):**
   $$\text{Fav } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Fav}} \times 1.05, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Fav}} \times 0.95, 2)$$
   $$\text{Und } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Und}} \times 0.95, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Und}} \times 1.10, 2)$$
 * **Token Fail-Loud de Marcador Pendiente (H4):** Si un encuentro concluyó pero la federación aún no publica los números oficiales de goles, el sistema asigna el token canónico `"MARCADOR_PENDIENTE"`, prohibiendo inventar empates `"0 - 0"`.
+
+---
+
+### ID: [LN-QBE-071] Algoritmo de Escalamiento a Piso de Ventanilla ($2.00 MXN)
+
+* **Ω (Resumen):** Ajustar las asignaciones de boletos split que resulten inferiores al mínimo operativo del casino ($2.00 MXN) mediante escalamiento proporcional que preserva la indemnidad en tablas ($V=0$).
+* **I (Input):** Asignación teórica de boletos $B_1$ y $B_2$, Momio de seguro $O_{\text{Seguro}}$, Momio de ataque $O_{\text{Ataque}}$, Código de estrategia.
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED] (H1):**
+  1. Si $0.0 < B_1 < \$2.00\text{ MXN}$ en estrategias de cobertura (`H1`, `H2`, `R1`):
+     - Fijar el boleto de seguro al piso mínimo: $B_1^* = \$2.00\text{ MXN}$.
+     - Recalcular la inversión total del partido para igualar el retorno exacto del seguro:
+       $$A_i^* = \$2.00 \times O_{\text{Seguro}}$$
+     - Derivar el boleto de ataque por diferencia: $B_2^* = A_i^* - \$2.00\text{ MXN}$.
+  2. Si $0.0 < B_2 < \$2.00\text{ MXN}$: Fijar $B_2^* = \$2.00$ y $A_i^* = B_1 + \$2.00$.
+  3. Para Doble Oportunidad Sintética (`QBE-R2`): Si $\min(B_1, B_2) < \$2.00$, escalar ambos boletos por el factor $k = \frac{2.00}{\min(B_1, B_2)}$.
+  4. Para apuestas directas (`QBE-D1`, `D1+`): Si $A_i < \$2.00$, fijar $A_i = \$2.00$, $B_2 = \$2.00$, y asignar al boleto de seguro $B_1$ el momio real del empate con monto $\$0.00\text{ MXN}$.
+* **O (Output):** Asignaciones escaladas $A_i^*$, $B_1^*$ y $B_2^*$ cumpliendo $B \ge \$2.00\text{ MXN}$ y $V=0$.
+
+---
+
+### ID: [LN-QBE-072] Algoritmo de Cascada de Resiliencia a Reveses (Stress-Testing)
+
+* **Ω (Resumen):** Simular la curva de resistencia financiera del portafolio modelando el impacto acumulado de fallos sucesivos desde $m = 0$ hasta $m = K$ activos.
+* **I (Input):** Lista de $K$ órdenes ordenadas por probabilidad de éxito, Ganancias netas principales $G_i$, Inversiones $A_i$, Probabilidades de ruina $\Psi_i$.
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED] (H2):**
+  1. **Nivel 0 (Pleno Éxito - 0 Fallos):**
+     $$\text{PnL}_0 = \sum_{i=1}^K G_i, \quad P(\text{Nivel 0}) = \prod_{i=1}^K (1.0 - \Psi_i) \times 100.0$$
+  2. **Nivel $m$ ($m$ Reveses Catastróficos):**  
+     Se asume que fallan los $m$ activos de mayor fragilidad (menor probabilidad de éxito):
+     $$\text{PnL}_m = \sum_{j=1}^{K-m} G_j - \sum_{k=K-m+1}^K A_k$$
+  3. **Umbral de Tolerancia de Cartera:** Se identifica el número máximo de reveses simultáneos ($m^*$) que el portafolio puede absorber manteniendo $\text{PnL}_{m^*} \ge 0.0$ (saldo neto positivo).
+* **O (Output):** Matriz `cascada_resiliencia` con nivel, escenario, PnL ($), ROI (%) y probabilidad estimada (%), junto con `reveses_maximos_tolerados`.
 
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**

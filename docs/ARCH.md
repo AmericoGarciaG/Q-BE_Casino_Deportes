@@ -21,9 +21,8 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
     [ SU NAVEGADOR WEB (Cliente SPA Reactivo) — http://localhost:8000 ]
      • Vista 1: Hub de Ligas (Liga MX ⭐, Premier, Champions, LaLiga...)
      • Vista 2: Split-View (Tabla 18 clubes oficial | Cartelera en 4 Niveles)
-     • Vista 3: Cartera Cuantitativa (Dashboard Ejecutivo: Macro KPIs & Boletos Split)
-     • Vista 4: Tesis & Reporte PDF Oficial A4
-     • Vista 5 (Backlog): Radiografía Forense Interactiva (Matriz 6x6 & CashOut)
+     • Vista 3: Cartera Cuantitativa (Dashboard Ejecutivo: Macro KPIs, Boletos Split, PDF y Descartes)
+     • Vista 5 (Backlog): Radiografía Forense Interactiva (Matriz 6x6, Edge y CashOut)
                        │                              ▲
                        │ (Peticiones REST en JSON)    │ (Respuestas en Tiempo Real)
                        ▼                              │
@@ -219,18 +218,16 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   1. `VENTANA_ACTIVA` (Próximos $\le 7$ días): Partidos habilitados con checkbox de selección para cálculo de cartera.
   2. `VENTANA_POSPUESTA` (Fechas $> 14$ días): Partidos reprogramados agrupados bajo la sección `📅 PARTIDOS REPROGRAMADOS`, con checkbox deshabilitado (`disabled`) y badge `⏳ Fecha Lejana`.
 * **Ciclo de Vida de Cuotas (Disponibilidad de Momios):**
-  - Si el partido tiene cuotas publicadas en Caliente.mx $\implies$ se registran momios decimales 1X2 reales y `pago_anticipado = True/False`.
-  - Si Caliente.mx aún no publica cuotas $\implies$ `momios = null`, `disponible = False`. La interfaz muestra `L — | E — | V —  ⏳ Cuotas Pendientes` y deshabilita el checkbox de selección con un tooltip explicativo.
-
-### [ARCH-1.6.3] Ciclo de Vida del Fixture, Estatus Semántico y Dinamismo Temporal [ARCH-PILLAR] [BIZ-LOGIC] [ANTI-BUG]
-
-* **Axioma de Temporalidad Dinámica:** Queda terminantemente prohibido hardcodear la etiqueta `"HOY"` o prefijos relativos en cadenas de texto estáticas. La bandera `es_hoy` se calcula estrictamente en tiempo de ejecución:
-  $$\text{es\_hoy} = (\text{fecha\_partido.date}() == \text{datetime.now().date}())$$
-* **Máquina de Estados del Fixture (`MatchFixtureOut.estado`):**
+  - Si el partido tiene cuotas publicadas en Caliente.mx $\implies$ se registran momios decimales 1X2 reales y `* **Máquina de Estados del Fixture (`MatchFixtureOut.estado`):**
   1. `PROGRAMADO`: Partido futuro dentro de la ventana activa. Posee momios 1X2 válidos y checkbox de selección habilitado (`disponible = True`).
   2. `EN_CURSO`: Partido en disputa en tiempo real. Expone `marcador_actual` dinámico y `minuto_juego` (ej. `"45'"`, `"Medio Tiempo"`). Checkbox deshabilitado para apuestas pre-partido.
   3. `FINALIZADO`: Partido concluido. Expone `marcador_actual` oficial definitivo. Checkbox deshabilitado (`disponible = False`). Queda **estrictamente vetado** de ingresar en `selected_match_ids` hacia `/api/portfolio/generate`.
-  4. `REPROGRAMADO`: Partido con fecha lejana (> 14 días). Checkbox deshabilitado.
+  4. `REPROGRAMADO`: Partido reprogramado por la federación.
+* **Criterio de Reprogramados Operables vs. Fecha Lejana [BIZ-LOGIC] (H5):**
+  - Todo partido extraído de la sección de reprogramados de la federación lleva el estado `REPROGRAMADO`.
+  - Se calcula la distancia temporal en días: $\Delta t = (\text{fecha\_partido.date}() - \text{datetime.now().date}()).\text{days}$.
+  - Si $\Delta t > 14$ días: El partido se clasifica como `Fecha Lejana`, sus cuotas permanecen en `None` si el mercado no está abierto, y su selección se bloquea (`disponible = False`, checkbox deshabilitado).
+  - Si $\Delta t \le 14$ días (ventana operable inmediata): Si la casa de apuestas (Caliente.mx) tiene cuotas 1X2 válidas publicadas ($O_L, O_E, O_V > 1.0$), el partido es **plenamente operable y seleccionable** (`disponible = True`, checkbox habilitado) para ser incorporado en el cálculo del portafolio.
 * **Axioma Anti-Degradación de Partidos Pasados [GOVERNANCE-01]:** Si la marca temporal de un partido es anterior a la hora actual por más de 120 minutos, el sistema tiene prohibido clasificarlo como `PROGRAMADO`. Si la fuente no provee marcador, el partido entra en `CUARENTENA_SIN_RESULTADO` y se desactiva.
 * **Ordenamiento Topológico Obligatorio en API (`LiveBoardOut.fixtures`):**
   El backend debe entregar la lista ordenada y agrupada cronológicamente bajo la jerarquía:
@@ -241,7 +238,7 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ### [ARCH-1.6.4] Política Cache-First con TTL y Erradicación de Ingesta Redundante [ARCH-PILLAR] [PERF-MANDATE]
 
-* **Axioma de Desacoplamiento de Ingesta:** Queda estrictamente prohibido que la navegación del usuario en el frontend (`GET /api/leagues/{id}/live-board`) dispare scrapers externos síncronos de Playwright si existe un snapshot válido en SQLite dentro de su ventana de validez (*Time-To-Live, TTL*).
+* **Axioma de Desacoplamiento de Ingesta:** Queda strictly prohibido que la navegación del usuario en el frontend (`GET /api/leagues/{id}/live-board`) dispare scrapers externos síncronos de Playwright si existe un snapshot válido en SQLite dentro de su ventana de validez (*Time-To-Live, TTL*).
 * **Ventanas de Validez (TTL):**
   - **Ventana Pre-Partido:** TTL de **15 minutos** cuando todos los partidos están `PROGRAMADOS`.
   - **Ventana En Vivo:** TTL de **2 minutos** si existen partidos con estado `EN_CURSO`.
@@ -262,6 +259,30 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 * **Aislamiento de Bucle Asyncio:** Toda invocación síncrona a Playwright (`sync_playwright`) dentro del ciclo de vida de FastAPI o sus controladores REST debe encapsularse obligatoriamente dentro de un worker thread dedicado (`concurrent.futures.ThreadPoolExecutor(max_workers=1)`). Queda terminantemente prohibido invocar la API síncrona en el hilo principal de Uvicorn para evitar colisiones de contexto con el bucle de eventos.
 * **Gobierno de Timeouts Rígidos:** Cada operación de extracción en segundo plano debe portar un timeout explícito en su llamada `.result(timeout=...)` (35.0s para FotMob, 40.0s para el Slate FMF y 35.0s para cuotas de Caliente), garantizando que un cuelgue de red externo no degrade ni bloquee indefinidamente los recursos del servidor local.
+
+### [ARCH-1.6.7] Endpoints Atómicos de Refresco Desacoplado [ARCH-PILLAR] [PERF-MANDATE] (H4)
+
+* **Aislamiento de Carga en UI:** Queda estrictamente prohibido que la actualización de momios recargue la tabla de posiciones, o que la actualización de la tabla haga parpadear la cartelera.
+* **Contratos REST Especializados:**
+  1. `POST /api/leagues/{id}/refresh-tabla`: Invoca exclusivamente `sync_standings_only()`, consulta la tabla oficial de FotMob/FMF, actualiza la tabla relacional `current_team_standings` en SQLite y retorna la lista de 18 clubes en $\le 3\text{s}$.
+  2. `POST /api/leagues/{id}/refresh-momios`: Invoca exclusivamente `sync_fixtures_only()`, consulta las cuotas focalizadas de Caliente.mx para la cartelera activa, actualiza `FixtureSnapshot` y retorna los partidos con cuotas actualizadas en $\le 4\text{s}$.
+
+### [ARCH-1.7.0] Lanzador de Servidor con Sonda de Salud (run_app.py) [ARCH-PILLAR] (H10)
+
+* **Apertura de Navegador Sincronizada:** Queda prohibido invocar `webbrowser.open()` de forma prematura antes de que Uvicorn esté en línea.
+* **Mecanismo:** El entrypoint `run_app.py` inicia un hilo demonio que sondea en segundo plano el endpoint `http://127.0.0.1:8000/health`. El navegador web se abre única y exclusivamente cuando el servidor responde `HTTP 200 OK`, eliminando pantallas en blanco de conexión rechazada.
+
+### [ARCH-1.7.1] Piso Mínimo de Ventanilla ($2.00 MXN) y Escalamiento Proporcional [BIZ-LOGIC] [ALGO-PROTECTED] (H1)
+
+* **Restricción de Microestructura de Casino:** La casa de apuestas (Caliente.mx) impone una apuesta mínima por boleto de **$2.00 MXN**.
+* **Axioma de Escalamiento con Preservación $V=0$:**
+  - Si la asignación de Kelly fraccional en un boleto de cobertura o ataque calcula un monto $B < \$2.00\text{ MXN}$, queda prohibido truncar a cero o redondear ciegamente rompiendo el seguro.
+  - El sistema escala el boleto menor al piso: $B_{\text{menor}}^* = \$2.00\text{ MXN}$.
+  - Para estrategias con cobertura de empate (`QBE-H1`, `QBE-H2`, `QBE-R1`), la inversión total del activo se recalcula para garantizar que el retorno en tablas cubra el 100% de la nueva inversión:
+    $$A_i^* = \$2.00 \times O_{\text{Seguro}}$$
+    $$B_{\text{Ganancia}}^* = A_i^* - \$2.00\text{ MXN}$$
+  - Para Doble Oportunidad Sintética (`QBE-R2`), ambos boletos se escalan por el factor $\max\left(\frac{2.00}{B_1}, \frac{2.00}{B_2}\right)$.
+  - **Garantía Invariante:** Se preserva la recuperación exacta de capital en tablas ($0.00 pérdida) y el ratio de ROI intacto.
 
 ---
 
@@ -537,27 +558,17 @@ class PortfolioExecutionPlan(BaseModel):
 
 ## 4. ENDPOINTS REST DE LA APLICACIÓN WEB
 
-```text
- ┌────────────────────────────────────────────────────────────────────────────────────────┐
- │                         CONTRATOS DE ENDPOINTS REST (FASTAPI)                          │
- ├────────────────────────────────────────────────────────────────────────────────────────┤
- │ 1. `GET /api/leagues`                                                                  │
- │    ➔ Retorna catálogo de ligas activas (Liga MX, Premier, Champions, LaLiga...).       │
- │                                                                                        │
- │ 2. `GET /api/leagues/{id}/live-board`                                                  │
- │    ➔ Consulta FotMob y DB; retorna la tabla oficial de 18 clubes (con puntos, GF/GC,    │
- │      forma reciente W/D/L y xG acumulado) y la cartelera con momios 1X2 de Caliente.  │
- │                                                                                        │
- │ 3. `POST /api/portfolio/generate`                                                      │
- │    ➔ Recibe { league_id, selected_match_ids, bankroll, mode }.                         │
- │    ➔ Filtra por triaje, ejecuta Poisson 6x6 con xG Opta, calcula Kelly y Dutching,    │
- │      invoca Gemini 3.6 para la Tesis Q-BE en 4 bullets y audita con The Shield.       │
- │    ➔ Retorna: `ConsolidatedPayload` con las órdenes listas para colocar en casino.     │
- │                                                                                        │
- │ 4. `GET /api/portfolio/{portfolio_id}/pdf`                                            │
- │    ➔ Compila y descarga el PDF institucional A4 oficial generado por Playwright.      │
- └────────────────────────────────────────────────────────────────────────────────────────┘
-```
+| Endpoint | Método | Entrada | Salida | Descripción |
+|---|:---:|---|---|---|
+| `/api/leagues` | `GET` | — | `List[LeagueOut]` | Catálogo de ligas activas registradas en SQLite. |
+| `/api/leagues/{id}/live-board` | `GET` | `force_refresh: bool` | `LiveBoardOut` | Entrega Live Board (18 clubes + cartelera en 4 niveles). |
+| `/api/leagues/{id}/refresh-tabla` | `POST` | — | `{"standings": ...}` | Refresco aislado de tabla en vivo (FotMob/FMF). |
+| `/api/leagues/{id}/refresh-momios` | `POST` | — | `{"fixtures": ...}` | Refresco aislado de momios Caliente y cartelera. |
+| `/api/portfolio/generate` | `POST` | `GeneratePortfolioRequest` | `ConsolidatedPayload` | Despacho del motor cuantitativo (Poisson 6x6, Kelly, Dutching). |
+| `/api/portfolio/{id}/pdf` | `GET` | — | `FileResponse` | Compilación y descarga de reporte oficial A4 (Playwright). |
+| `/api/admin/catalogs/staging` | `GET` | `league_id: int` | `List[Dict]` | Lectura de candidatos de clubes prospectados (HITL). |
+| `/api/admin/catalogs/commit` | `POST` | `CommitCatalogRequest` | `{"status": "SEALED"}` | Sellado definitivo de clubes y escudos en SQLite. |
+| `/health` | `GET` | — | `{"status": "HEALTHY"}` | Sonda de salud de servidor para auto-lanzador. |
 
 ---
 

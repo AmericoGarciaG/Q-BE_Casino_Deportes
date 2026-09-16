@@ -131,7 +131,7 @@ class AbstractTestLN_QBE_025_FixtureLifecycle(abc.ABC):
                     if diferencia_horas > 2.5:  # Partido inició hace más de 2.5 horas
                         estado = f.get("estado")
                         partido = f"{f.get('local')} vs {f.get('visitante')}"
-                        assert estado in ["FINALIZADO", "EN_CURSO"], (
+                        assert estado in ["FINALIZADO", "EN_CURSO", "REPROGRAMADO"], (
                             f"Violación [GOVERNANCE-01]: El partido '{partido}' se jugó en {fecha_iso} "
                             f"({diferencia_horas:.1f} hrs atrás) pero sigue catalogado como '{estado}'."
                         )

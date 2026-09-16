@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 TTL_CACHE_MINUTOS = 15  # Ventana pre-partido [ARCH-1.6.4]
 
+HEADERS_CHROME = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept-Language": "es-MX,es;q=0.9",
+}
+
 
 # Mapeo oficial de IDs de CDN de ligamx.net (Resuelve clubes con alt vacío en DOM)
 LIGAMX_LOGO_ID_MAP = {
@@ -152,7 +157,6 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
-            sync_current_team_standings_table(db, league.id, last_snap.positions_json, ahora)
             return {
                 "league_id": league_id,
                 "league_name": league.name,
@@ -176,7 +180,6 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         if last_snap and last_fix and last_snap.positions_json and last_fix.matches_json:
             tiempo_snap = (ahora - (last_fix.updated_at or last_snap.captured_at)).total_seconds() / 60.0
             if tiempo_snap < TTL_CACHE_MINUTOS:
-                sync_current_team_standings_table(db, league.id, last_snap.positions_json, ahora)
                 # [SERVIR DESDE SQLITE EN < 20 MS]: Cero llamadas a Playwright
                 return {
                     "league_id": league_id,
@@ -262,24 +265,22 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
         import time
 
         def _extraer_todo_en_hilo_aislado():
-            """Ejecuta Playwright en hilo aislado (evita colisión con asyncio de FastAPI)."""
+            """Extrae ligamx.net y FotMob de forma robusta con los selectores probados en consola."""
             t0_liga = time.perf_counter()
             partidos_extraidos = []
             jornada_txt = "Jornada 8"
-            
+            standings_vivos = []
+
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    locale="es-MX",
-                    viewport={"width": 1366, "height": 768}
-                )
+                context = browser.new_context(user_agent=HEADERS_CHROME["User-Agent"], locale="es-MX", viewport={"width": 1366, "height": 768})
                 page = context.new_page()
+
                 try:
-                    # ── A. NAVEGAR A LIGAMX.NET Y CAPTURAR JORNADA Y CONCLUIDOS ──
+                    # ── A. NAVEGAR A LIGAMX.NET ──────────────────────────────
                     page.goto("https://ligamx.net/", timeout=30000, wait_until="domcontentloaded")
                     page.wait_for_timeout(3500)
-                    
+
                     # Cerrar popups
                     page.evaluate("""() => {
                         document.querySelectorAll('#ligamxPopup .close, .popup-overlay .close, .modal .close, [class*=close]').forEach(b => b.click());
@@ -290,66 +291,50 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     content = page.content()
                     if "JORNADA 7" in content and "MARCADOR OFICIAL" in content:
                         fl = page.query_selector(".next, .carrusel-next, .slick-next, a:has-text('>')")
-                        if fl:
-                            fl.click()
-                            page.wait_for_timeout(2000)
+                        if fl: fl.click(); page.wait_for_timeout(2000)
 
-                    # Parsear tarjetas visibles de la jornada
-                    tarjetas_jornada = page.query_selector_all("li[id^='MrcdrPrtd_'], .barMarc, .slide, .item, .partido")
-                    for t in tarjetas_jornada:
+                    # Parsear tarjetas visibles de la jornada activa
+                    tarjetas = page.query_selector_all("li[id^='MrcdrPrtd_'], .barMarc, .slide, .item, .partido")
+                    for t in tarjetas:
                         if not t.is_visible(): continue
                         txt = t.inner_text().strip()
                         txt_up = txt.upper()
                         if not ("/" in txt and ":" in txt): continue
                         if "REPROGRAMADO" in txt_up: continue
 
-                        # Estado
                         estado = "PROGRAMADO"
                         if "MARCADOR OFICIAL" in txt_up or "FINALIZADO" in txt_up:
                             estado = "FINALIZADO"
-                        elif "EN VIVO" in txt_up or "PRIMER TIEMPO" in txt_up or "SEGUNDO TIEMPO" in txt_up or "MEDIO TIEMPO" in txt_up:
+                        elif "EN VIVO" in txt_up or "PRIMER TIEMPO" in txt_up or "SEGUNDO TIEMPO" in txt_up:
                             estado = "EN_CURSO"
 
-                        # Marcador multilínea real
                         marcador = None
                         if estado in ["FINALIZADO", "EN_CURSO"]:
                             m_match = re.search(r'(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)', txt)
                             if m_match:
                                 marcador = f"{m_match.group(1)} - {m_match.group(2)}"
 
-                        # Fecha y hora
                         f_match = re.search(r'(\d{1,2}/\d{1,2})\s*(\d{1,2}:\d{2})\s*hr', txt)
                         fecha_str = f_match.group(0) if f_match else "12/09 17:00 hr"
 
-                        # Extraer clubes
                         imgs = t.query_selector_all("img")
                         clubes = []
                         for img in imgs:
                             alt = (img.get_attribute("alt") or img.get_attribute("title") or "").strip()
-                            if alt and alt != "undefined":
+                            if alt and alt != "undefined" and len(alt) > 2:
                                 c_clean = canonicalize_team_name(alt)
-                                if c_clean and c_clean not in clubes:
-                                    clubes.append(c_clean)
+                                if c_clean and c_clean not in clubes: clubes.append(c_clean)
 
                         if len(clubes) >= 2:
-                            item = {
-                                "local": clubes[0],
-                                "visitante": clubes[1],
-                                "fecha": fecha_str,
-                                "estado": estado,
-                                "marcador": marcador,
-                                "es_pospuesto": False
-                            }
-                            if not any(p["local"] == item["local"] and p["visitante"] == item["visitante"] for p in partidos_extraidos):
+                            item = {"local": clubes[0], "visitante": clubes[1], "fecha": fecha_str, "estado": estado, "marcador": marcador, "es_reprogramado": False}
+                            if not any(x["local"] == item["local"] and x["visitante"] == item["visitante"] for x in partidos_extraidos):
                                 partidos_extraidos.append(item)
 
                     # ── B. ACTIVAR Y EXTRAER SECCIÓN 'PARTIDOS REPROGRAMADOS' ──
-                    logger.info("[SYNC] Localizando pildora 'PARTIDOS REPROGRAMADOS'...")
-                    clic_rep = page.evaluate("""() => {
+                    page.evaluate("""() => {
                         const els = Array.from(document.querySelectorAll('a, button, span, div'));
                         for (let el of els) {
-                            const t = el.textContent.trim().toUpperCase();
-                            if (t === 'PARTIDOS REPROGRAMADOS' && el.children.length <= 1) {
+                            if (el.textContent.trim().toUpperCase() === 'PARTIDOS REPROGRAMADOS' && el.children.length <= 1) {
                                 el.click();
                                 el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
                                 return true;
@@ -359,17 +344,14 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                     }""")
                     page.wait_for_timeout(2500)
 
-                    # Tarjetas de reprogramados (usando selector específico de marquesina)
                     tarjetas_rep = page.query_selector_all("li[id^='MrcdrPrtd_'], .item, .slide, .partido")
-                    logger.info(f"Analizando tarjetas tras activar reprogramados: {len(tarjetas_rep)}")
-
                     for t in tarjetas_rep:
                         if not t.is_visible(): continue
                         txt = t.inner_text().strip()
                         txt_up = txt.upper()
                         if "JORNADA 8" in txt_up: continue
 
-                        if ("JORNADA 7" in txt_up or "15/09" in txt or "28/10" in txt or "14/11" in txt or "REPROGRAMADO" in txt_up or "POSPUESTO" in txt_up or "PRÓXIMAMENTE" in txt_up):
+                        if ("JORNADA 7" in txt_up or "15/09" in txt or "28/10" in txt or "14/11" in txt or "REPROGRAMADO" in txt_up):
                             f_match = re.search(r'(\d{1,2}/\d{1,2})\s*(\d{1,2}:\d{2})\s*hr', txt)
                             fecha_str = f_match.group(0) if f_match else "Fecha por Definir"
 
@@ -378,39 +360,22 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                             for img in imgs:
                                 src = img.get_attribute("src") or ""
                                 alt = (img.get_attribute("alt") or img.get_attribute("title") or "").strip()
-
-                                nombre_club = None
+                                nom = None
                                 if alt and alt != "undefined" and len(alt) > 2:
-                                    nombre_club = canonicalize_team_name(alt)
+                                    nom = canonicalize_team_name(alt)
                                 else:
-                                    # Fallback infalible al ID del CDN de la imagen
                                     m_id = re.search(r'logos(?:64x64)?/(\d+)/', src)
-                                    if m_id:
-                                        logo_id = m_id.group(1)
-                                        raw_name = LIGAMX_LOGO_ID_MAP.get(logo_id)
-                                        if raw_name:
-                                            nombre_club = canonicalize_team_name(raw_name)
-
-                                if nombre_club and nombre_club not in clubes_rep:
-                                    clubes_rep.append(nombre_club)
+                                    if m_id and m_id.group(1) in LIGAMX_LOGO_ID_MAP:
+                                        nom = LIGAMX_LOGO_ID_MAP[m_id.group(1)]
+                                if nom and nom not in clubes_rep: clubes_rep.append(nom)
 
                             if len(clubes_rep) >= 2:
-                                item_rep = {
-                                    "local": clubes_rep[0],
-                                    "visitante": clubes_rep[1],
-                                    "fecha": fecha_str,
-                                    "estado": "REPROGRAMADO",
-                                    "marcador": None,
-                                    "es_pospuesto": True
-                                }
-                                if not any(p["local"] == item_rep["local"] and p["visitante"] == item_rep["visitante"] for p in partidos_extraidos):
+                                item_rep = {"local": clubes_rep[0], "visitante": clubes_rep[1], "fecha": fecha_str, "estado": "REPROGRAMADO", "marcador": None, "es_reprogramado": True}
+                                if not any(x["local"] == item_rep["local"] and x["visitante"] == item_rep["visitante"] for x in partidos_extraidos):
                                     partidos_extraidos.append(item_rep)
-                                    logger.info(f"[SYNC-REPROG] {item_rep['local']} vs {item_rep['visitante']} ({item_rep['fecha']})")
 
                     # ── C. INGESTA EN VIVO DE FOTMOB (__NEXT_DATA__ ID 230) ──
-                    standings_vivos = []
                     try:
-                        logger.info("[SYNC] Conectando a FotMob ID 230 para Tabla Viva y Forma 5P...")
                         page.goto("https://www.fotmob.com/es-419/leagues/230/table/liga-mx", timeout=25000, wait_until="domcontentloaded")
                         page.wait_for_timeout(3000)
 
@@ -421,19 +386,14 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                             teams_all = table_obj.get("data", {}).get("table", {}).get("all", [])
                             team_form = table_obj.get("teamForm", {})
                             next_opp = table_obj.get("nextOpponent", {})
-
                             res_map = {"W": "G", "D": "E", "L": "P"}
-                            
-                            # Extraer posiciones reales en vivo
+
                             for idx_t, tm in enumerate(teams_all, start=1):
                                 t_id = str(tm.get("id"))
                                 t_name = canonicalize_team_name(tm.get("name", ""))
-                                
-                                # Goles y diferencia
-                                scores_str = str(tm.get("scoresStr") or "0-0")
-                                parts = scores_str.split("-")
-                                gf = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 0
-                                gc = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+                                scores_str = str(tm.get("scoresStr") or "0-0").split("-")
+                                gf = int(scores_str[0]) if len(scores_str) > 0 and scores_str[0].isdigit() else 0
+                                gc = int(scores_str[1]) if len(scores_str) > 1 and scores_str[1].isdigit() else 0
                                 pts = int(tm.get("pts") or 0)
                                 pj = int(tm.get("played") or 0)
                                 pg = int(tm.get("wins") or 0)
@@ -441,11 +401,9 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                                 pp = int(tm.get("losses") or 0)
                                 dif = int(tm.get("goalConceded") if tm.get("goalConceded") is not None else (gf - gc))
 
-                                # Forma 5P
                                 form_list = team_form.get(t_id, [])
                                 forma = [res_map.get(str(m.get("resultString")).upper(), "E") for m in form_list if m.get("resultString")]
 
-                                # Próximo Rival
                                 opp_arr = next_opp.get(t_id, [])
                                 opp_name = None
                                 if opp_arr and len(opp_arr) >= 5:
@@ -471,20 +429,16 @@ def sync_league_live_board(league_id: int, db: Session, force_refresh: bool = Fa
                                     "xpts": round(pg * 2.8 + pe * 0.9, 1),
                                     "proximo_rival": rival_limpio
                                 })
-
-                            if len(standings_vivos) >= 18:
-                                logger.info(f"✅ [SYNC] Tabla viva capturada de FotMob: Toluca #{standings_vivos[0]['pos']} con {standings_vivos[0]['puntos']} pts.")
-
-                    except Exception as e_fm_live:
-                        logger.warning(f"⚠️ [SYNC] Error capturando tabla viva de FotMob: {e_fm_live}")
+                    except Exception as e_fm:
+                        logger.warning(f"⚠️ [SYNC] Error FotMob: {e_fm}")
 
                 except Exception as e_liga:
-                    logger.warning(f"[SYNC-PLAYWRIGHT] Error en ligamx.net: {e_liga}")
+                    logger.warning(f"⚠️ [SYNC] Error ligamx.net: {e_liga}")
                 finally:
                     browser.close()
 
             t_liga = time.perf_counter() - t0_liga
-            logger.info(f"[PERF-LIGAMX]: Extracción de Slate y Reprogramados completada en {t_liga:.2f}s")
+            logger.info(f"[PERF-LIGAMX]: Completado en {t_liga:.2f}s")
             return jornada_txt, partidos_extraidos, standings_vivos
 
         # [AISLAMIENTO TOTAL]: Ejecutar Playwright síncrono en un Thread aislado con timeout estricto
@@ -731,28 +685,13 @@ def sync_active_leagues_data():
 
 def sync_standings_only(league_id: int, db: Session) -> List[Dict[str, Any]]:
     """Actualiza y retorna ÚNICAMENTE la tabla de posiciones en SQLite."""
-    league = db.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
-    if not league:
-        raise ValueError("Liga no encontrada en base de datos.")
-
-    standings_raw = FotMobProvider.obtener_tabla_posiciones(league.fotmob_id)
-    if not standings_raw:
-        snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
-        standings_raw = snap.positions_json if (snap and snap.positions_json) else []
-
-    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
-    sync_current_team_standings_table(db, league.id, standings_raw, ahora)
-
-    snap = db.query(StandingSnapshot).filter(StandingSnapshot.league_id == league.id).order_by(StandingSnapshot.captured_at.desc()).first()
-    if snap:
-        snap.positions_json = standings_raw
-        db.commit()
-
-    return standings_raw
+    board = sync_league_live_board(league_id, db, force_refresh=True)
+    return board.get("standings", [])
 
 
 def sync_fixtures_only(league_id: int, db: Session) -> List[Dict[str, Any]]:
     """Actualiza y retorna ÚNICAMENTE la cartelera con momios frescos de Caliente."""
     board = sync_league_live_board(league_id, db, force_refresh=True)
     return board.get("fixtures", [])
+
 
