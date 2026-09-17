@@ -15,7 +15,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, 'reconfigure'):
     try: sys.stdout.reconfigure(encoding='utf-8')
     except Exception: pass
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "qbe_database.db")
 OUT_DIR = os.path.join(PROJECT_ROOT, "data", "output")
 os.makedirs(OUT_DIR, exist_ok=True)

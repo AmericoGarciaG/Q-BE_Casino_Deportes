@@ -145,7 +145,7 @@ def sync_league_live_board(
     ).order_by(StandingSnapshot.captured_at.desc()).first()
 
     if not last_snap or not last_snap.positions_json:
-        raise RuntimeError("Base de datos sin tabla de posiciones. Ejecuta primero 'python scripts/5_centinela_deportivo.py'.")
+        raise RuntimeError("Base de datos sin tabla de posiciones. Ejecuta primero 'python scripts/daemons/centinela_deportivo.py'.")
 
     standings = last_snap.positions_json
 

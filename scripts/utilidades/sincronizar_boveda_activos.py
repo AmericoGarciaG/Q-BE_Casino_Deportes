@@ -15,7 +15,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, 'reconfigure'):
     try: sys.stdout.reconfigure(encoding='utf-8')
     except Exception: pass
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CRESTS_DIR = os.path.join(PROJECT_ROOT, "src", "web", "static", "img", "crests")
 LEAGUES_DIR = os.path.join(PROJECT_ROOT, "src", "web", "static", "img", "leagues")
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "qbe_database.db")

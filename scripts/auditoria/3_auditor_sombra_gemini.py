@@ -18,7 +18,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT_DIR = os.path.join(PROJECT_ROOT, "data", "output")
 ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
 
@@ -151,7 +151,7 @@ def ejecutar_auditor_sombra():
 
     if not os.path.exists(path_entrada) or not os.path.exists(path_traza):
         print("❌ Faltan archivos de entrada. Ejecuta primero:")
-        print("   python scripts/simulador_forense_calculos.py")
+        print("   python scripts/auditoria/2_simulador_forense.py")
         return
 
     with open(path_entrada, "r", encoding="utf-8") as f:
