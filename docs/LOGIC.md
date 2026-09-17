@@ -194,9 +194,8 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
-### ID: [LN-QBE-002] Sensor Fáctico Grounded (Gemini Search Engine)
-
-* **Ω (Resumen):** Extracción complementaria y auditoría cualitativa mediante Gemini 3.6 Flash con Google Search Grounding asistida por la Rueda de Inferencia y Circuit Breaker de 4 llaves.
+### ID: [LN-QBE-002] Deprecación de Inferencia de Bajas y Anclaje Fáctico Estructurado
+* **Ω (Resumen):** El factor de entorno $Q_{\text{mod}}$ se desvincula de búsquedas genéricas de IA y se ancla estrictamente a datos estructurados de fuentes oficiales. La inferencia generativa con Search Grounding se reserva exclusivamente para el futuro módulo `[ARCH-1.5.9]` ante movimientos anómalos de línea.
 * **I (Input):** Partidos aprobados, tabla de posiciones congelada y pool `Gemini_API_4_QBE_*`.
 * **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
   1. Verificar pre-vuelo en `GeminiCircuitBreaker`: si la llave está en `COOLDOWN`, rotar en 0 ms sin invocar red.

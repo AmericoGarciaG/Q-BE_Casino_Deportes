@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from typing import Any, Dict
-from src.ingestion.providers.gemini_search_sensor import redactar_tesis_dinamica_gemini
+from src.services.gemini_gateway import GeminiCognitiveGateway
 
 logger = logging.getLogger(__name__)
 
@@ -44,29 +44,25 @@ def generar_tesis_madlibs_fallback(partido_data: dict) -> str:
     gan = float(partido_data.get("ganancia_neta", partido_data.get("ganancia_neta_principal_mxn", 4.0)) or 4.0)
     qmod = float(partido_data.get("qmod", partido_data.get("q_mod_fav", 1.0)) or 1.0)
 
-    return f"""<div>• <strong>Momento y Tabla:</strong> Disparidad fáctica en la clasificación general. {fav} llega consolidando una efectividad superior en puntos por partido y una diferencia goleadora positiva frente a la inestabilidad de {und}.</div>
-<div style='margin-top:6px;'>• <strong>Dominio de Cancha:</strong> Superioridad categórica en la creación de peligro. El modelo Opta proyecta {xg_fav:.2f} xG para {fav} frente a apenas {xg_und:.2f} xG de {und}, ratificado por el volumen de tiros a puerta e índice de control territorial FCF.</div>
-<div style='margin-top:6px;'>• <strong>Historial y Bajas:</strong> Antecedentes directos gobernados bajo decaimiento temporal continuo, sin bajas de fuerza mayor reportadas en el once estelar ({qmod:.2f} Q_mod), garantizando estabilidad táctica para el evento.</div>
-<div style='margin-top:6px;'>• <strong>Estrategia y Protección Financiera:</strong> Asignación óptima bajo {cod}. Probabilidad de éxito de {p_fav:.1f}% que supera holgadamente el umbral dinámico de equilibrio (+{edge:.2f}% de ventaja +EV sobre el casino). Se invierten ${inv:.2f} MXN proyectando ${gan:.2f} MXN de ganancia neta, con blindaje estricto de capital.</div>"""
+    return (
+        f"<div>• <strong>Momento y Tabla:</strong> Disparidad fáctica en la clasificación general. {fav} llega "
+        f"consolidando una efectividad superior en puntos por partido y una diferencia goleadora positiva frente a la inestabilidad de {und}.</div>\n"
+        f"<div style='margin-top:6px;'>• <strong>Dominio de Cancha:</strong> Superioridad categórica en la creación de peligro. "
+        f"El modelo Opta proyecta {xg_fav:.2f} xG para {fav} frente a apenas {xg_und:.2f} xG de {und}, ratificado por el volumen de tiros a puerta e índice de control territorial FCF.</div>\n"
+        f"<div style='margin-top:6px;'>• <strong>Historial y Bajas:</strong> Antecedentes directos gobernados bajo "
+        f"decaimiento temporal continuo, sin bajas de fuerza mayor reportadas en el once estelar ({qmod:.2f} Q_mod), garantizando estabilidad táctica para el evento.</div>\n"
+        f"<div style='margin-top:6px;'>• <strong>Estrategia y Protección Financiera:</strong> Asignación óptima bajo {cod}. "
+        f"Probabilidad de éxito de {p_fav:.1f}% que supera holgadamente el umbral dinámico de equilibrio (+{edge:.2f}% de ventaja +EV sobre el casino). Se invierten ${inv:.2f} MXN proyectando ${gan:.2f} MXN de ganancia neta, con blindaje estricto de capital.</div>"
+    )
 
 
 def generar_tesis_narrativa_hibrida(partido_data: dict) -> str:
     """
-    [ARCH-1.6.0] Genera la Tesis Didáctica en 4 viñetas bajo demanda para un partido específico.
-    Intenta la generación rica con Gemini 3.6 Flash y recurre a Mad-Libs si no hay conexión/API key.
+    [ARCH-1.6.0] [ARCH-1.3.4] Genera la Tesis Didáctica en 4 viñetas bajo demanda para un partido específico.
+    Canaliza la interacción neuro-simbólica a través de GeminiCognitiveGateway.
     """
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return generar_tesis_madlibs_fallback(partido_data)
-
-    if os.getenv("Gemini_API_4_QBE_001") or os.getenv("Gemini_API_4_QBE") or os.getenv("GEMINI_API_KEY"):
-        try:
-            tesis_ai = redactar_tesis_dinamica_gemini(partido_data)
-            if tesis_ai and len(tesis_ai.strip()) > 80:
-                return tesis_ai.strip()
-        except Exception as e:
-            logger.warning(f"Fallback a Mad-Libs por error en Gemini API: {e}")
-
-    return generar_tesis_madlibs_fallback(partido_data)
+    gateway = GeminiCognitiveGateway()
+    return gateway.generate_thesis(partido_data)
 
 
 def _get_val(obj: Any, *keys: str, default: Any = None) -> Any:

@@ -84,3 +84,48 @@ def commit_catalogs(
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+llm_router = APIRouter(prefix="/api/admin/llm", tags=["LLM Telemetry"])
+
+
+@llm_router.get("/telemetry")
+def get_llm_telemetry(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    [ARCH-1.3.4] Entrega los últimos 50 registros de inferencia de LLMTokenLedger.
+    """
+    try:
+        from src.storage.models import LLMTokenLedger
+        records = db.query(LLMTokenLedger).order_by(LLMTokenLedger.id.desc()).limit(50).all()
+        total_cost = sum(r.cost_usd for r in records)
+        total_prompt_tokens = sum(r.prompt_tokens for r in records)
+        total_candidates_tokens = sum(r.candidates_tokens for r in records)
+
+        items = [
+            {
+                "id": r.id,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                "key_alias": r.key_alias,
+                "task_type": r.task_type,
+                "model_name": r.model_name,
+                "prompt_tokens": r.prompt_tokens,
+                "candidates_tokens": r.candidates_tokens,
+                "latency_ms": r.latency_ms,
+                "cost_usd": r.cost_usd,
+                "status": r.status,
+            }
+            for r in records
+        ]
+
+        return {
+            "total_records": len(items),
+            "summary": {
+                "total_prompt_tokens": total_prompt_tokens,
+                "total_candidates_tokens": total_candidates_tokens,
+                "total_cost_usd": round(total_cost, 6),
+            },
+            "records": items,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+

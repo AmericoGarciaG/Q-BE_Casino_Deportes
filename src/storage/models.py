@@ -100,3 +100,18 @@ class CurrentTeamStanding(Base):
     last_updated_at = Column(DateTime, default=datetime.utcnow)
 
 
+class LLMTokenLedger(Base):
+    __tablename__ = "llm_token_ledger"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    key_alias = Column(String(50), nullable=False)
+    task_type = Column(String(50), nullable=False)  # 'TESIS', 'CURACION', 'AUDITORIA'
+    model_name = Column(String(50), default="gemini-3.6-flash")
+    prompt_tokens = Column(Integer, default=0)
+    candidates_tokens = Column(Integer, default=0)
+    latency_ms = Column(Float, default=0.0)
+    cost_usd = Column(Float, default=0.0)
+    status = Column(String(20), default="SUCCESS")  # 'SUCCESS', 'COOLDOWN_429', 'FALLBACK'
+
+
+

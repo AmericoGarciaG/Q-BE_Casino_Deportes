@@ -92,6 +92,21 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.3.4] GeminiCognitiveGateway y Ledger Contable de Inferencia [ARCH-PILLAR]
+
+* **Axioma de Encajonamiento Cognitivo:** Queda terminantemente prohibido que cualquier módulo cliente (`narrative.py`, `admin.py`, scripts de auditoría) instancie clientes HTTP directos o librerías de Google Gemini. Toda interacción neuro-simbólica debe canalizarse a través de `src/services/gemini_gateway.py`.
+* **Alcance Autorizado de Producción:**
+  1. `generate_thesis()`: Redacción didáctica on-demand en 4 viñetas [LN-QBE-014].
+  2. `curate_catalog()`: Prospección agéntica HITL de ligas y clubes [ARCH-1.5.2].
+  3. `audit_shadow()`: Conciliación matemática externa con Gemini Flash (Script de auditoría).
+* **Deprecación de Sensores Ineficientes:** Se extirpa el sensor genérico de búsqueda de bajas (`gemini_search_sensor.py`) del pipeline activo.
+* **Pool Circular y Máquina de Estados:**
+  - Auto-descubrimiento dinámico de llaves: `Gemini_API_4_QBE_*` en `.env`.
+  - Estados: `OK`, `COOLDOWN` (pausa automática ante HTTP 429), `BANNED`.
+* **Telemetría y Contabilidad de Tokens:** Cada llamada registra `prompt_tokens`, `candidates_tokens`, `latency_ms` y `estimated_cost_usd` en la tabla SQLite `llm_token_ledger`.
+
+---
+
 ### [ARCH-1.4.0] Inversión de Carga Neuro-Simbólica (FotMob Primary Sensor) [ARCH-PILLAR]
 
 * **Sensor Primario Estructurado (FotMob / Opta Data):** FotMob API (`https://www.fotmob.com/api/leagues?id=262`) es el sensor primario oficial de hechos deportivos (xG real, xGA, tabla general completa de 18 clubes, forma de 5 partidos y fixtures de la jornada activa).
@@ -189,6 +204,9 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 * **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`.
 * **Aduana de IDs de Imagen FMF (H1):** El diccionario inmutable `LIGAMX_LOGO_ID_MAP` opera como respaldo determinista de resolución cuando el servidor oficial de la federación emite etiquetas `<img>` con atributo `alt` vacío o indefinido en el carrusel de marcadores.
 * **Umbrales Físicos de Bóveda y Espejeo (H13, H14):** Todo escudo de club guardado localmente debe verificar `size >= 3000` bytes y cabecera PNG válida (`\x89PNG`). Todo emblema de torneo debe verificar `size >= 1000` bytes. Durante el commit de curación HITL, se ejecuta el copiado físico obligatorio (`shutil.copyfile`) hacia todos los aliases del club para garantizar integridad multi-slug inmediata.
+
+### [ARCH-1.5.9] Módulo Centinela Pre-Kickoff: Sharp Money & Semantic Shock [BACKLOG]
+* **Propósito:** Monitorear fluctuaciones violentas de cuotas ($t \le 30'$ previo al inicio). Si el mercado se mueve en reversa por apuestas de sindicatos, dispara a Gemini con Search Grounding focalizado (prensa y redes) para explicar el motivo táctico, habilitando CashOut preventivo o arbitraje de cobertura.
 
 ---
 

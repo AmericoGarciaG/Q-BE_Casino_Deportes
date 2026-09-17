@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 from src.storage.seeder import seed_initial_leagues
 from src.storage.sync_service import sync_active_leagues_data
 from src.web.routes import leagues, portfolio, export
-from src.web.routes.admin import router as admin_router
+from src.web.routes.admin import router as admin_router, llm_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,6 +64,7 @@ app.include_router(leagues.router)
 app.include_router(portfolio.router)
 app.include_router(export.router)
 app.include_router(admin_router)  # [ARCH-1.5.2] Curación Agéntica HITL
+app.include_router(llm_router)    # [ARCH-1.3.4] Telemetría de LLMTokenLedger
 
 @app.get("/health")
 def health_check():
