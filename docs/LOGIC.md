@@ -533,18 +533,24 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
-### ID: [LN-QBE-072] Algoritmo de Cascada de Resiliencia a Reveses (Stress-Testing)
+### ID: [LN-QBE-072] Modelo Estocástico Combinatorio de Resiliencia 3^K y Trinidad de Certeza
 
-* **Ω (Resumen):** Simular la curva de resistencia financiera del portafolio modelando el impacto acumulado de fallos sucesivos desde $m = 0$ hasta $m = K$ activos.
-* **I (Input):** Lista de $K$ órdenes ordenadas por probabilidad de éxito, Ganancias netas principales $G_i$, Inversiones $A_i$, Probabilidades de ruina $\Psi_i$.
-* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED] (H2):**
-  1. **Nivel 0 (Pleno Éxito - 0 Fallos):**
-     $$\text{PnL}_0 = \sum_{i=1}^K G_i, \quad P(\text{Nivel 0}) = \prod_{i=1}^K (1.0 - \Psi_i) \times 100.0$$
-  2. **Nivel $m$ ($m$ Reveses Catastróficos):**  
-     Se asume que fallan los $m$ activos de mayor fragilidad (menor probabilidad de éxito):
-     $$\text{PnL}_m = \sum_{j=1}^{K-m} G_j - \sum_{k=K-m+1}^K A_k$$
-  3. **Umbral de Tolerancia de Cartera:** Se identifica el número máximo de reveses simultáneos ($m^*$) que el portafolio puede absorber manteniendo $\text{PnL}_{m^*} \ge 0.0$ (saldo neto positivo).
-* **O (Output):** Matriz `cascada_resiliencia` con nivel, escenario, PnL ($), ROI (%) y probabilidad estimada (%), junto con `reveses_maximos_tolerados`.
+* **Ω (Resumen):** Modelar el espacio muestral discreto exacto de la cartera mediante enumeración combinatoria de los $3^K$ micro-estados posibles, derivando las tres anclas deterministas de certeza financiera y erradicando cualquier ordenamiento lineal arbitrario.
+* **I (Input):** $K$ órdenes aprobadas, ganancias netas principales $G_i$, inversiones $A_i$, probabilidades de victoria $P_{\text{Atk}, i}$, probabilidades de empate $P_{\text{Draw}, i}$ y de ruina $\Psi_i$.
+* **P (Process) [BIZ-LOGIC] [ALGO-PROTECTED]:**
+  1. **Espacio Muestral ($\Omega = 3^K$):** Cada activo $i \in \{1, \dots, K\}$ posee 3 desenlaces discretos:
+     - Estado 0 (Victoria Boleto de Ataque): $\text{PnL}_i = +G_i$, $\text{Prob}_i = P_{\text{Atk}, i}$.
+     - Estado 1 (Empate / Cobertura): $\text{PnL}_i = \$0.00\text{ MXN}$ (o $+G_{\text{Draw}}$ en R2), $\text{Prob}_i = P_{\text{Draw}, i}$ (en estrategias directas D1: $\text{PnL}_i = -A_i$).
+     - Estado 2 (Derrota / Ruina): $\text{PnL}_i = -A_i$, $\text{Prob}_i = \Psi_i$.
+  2. **Evaluación Combinatoria Exhaustiva ($s \in \prod_{i=1}^K \{0, 1, 2\}$):**
+     $$\text{PnL}(s) = \sum_{i=1}^K \text{PnL}_i(s_i), \quad \text{Prob}(s) = \prod_{i=1}^K \text{Prob}_i(s_i)$$
+  3. **Las Tres Anclas de Certeza:**
+     - **Ancla 1 (Pleno Éxito):** $\text{PnL} = +\sum G_i$, $\quad P(\text{Pleno}) = \prod_{i=1}^K P_{\text{Atk}, i} \times 100.0$.
+     - **Ancla 2 (Tablas o Ganancia — La Métrica Reina):** Suma estricta de las probabilidades de todos los micro-estados donde el balance final es no-negativo:
+       $$P(\text{PnL} \ge \$0.00) = \sum_{s \in \Omega: \text{PnL}(s) \ge -0.01} \text{Prob}(s) \times 100.0$$
+     - **Ancla 3 (Ruina Total):** $\text{PnL} = -\sum A_i$, $\quad P(\text{Ruina Total}) = \prod_{i=1}^K \Psi_i \times 100.0$.
+* **O (Output):** Diccionario `trinidad_resiliencia` con `pleno_exito`, `tablas_o_ganancia` y `ruina_total`.
+* **Φ (Transición):** Hacia `[LN-QBE-080]`, `[LN-QBE-090]` y visualización en el Dashboard de Cartera.
 
 ### ID: [LN-QBE-025] Conmutador de Slates y Preservación de Estado Inter-Jornadas
 

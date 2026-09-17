@@ -144,7 +144,17 @@
   5. *Posiciones Core:* Ratio de activos operables aprobados sobre total evaluado.
 * **Tabla Resumen de Asignación (`#tabla-resumen-asignacion`):**
   - Columna 4: Encabezado rotulado obligatoriamente como **`GANANCIA NETA`** (cifras netas reales, prohibidas cifras brutas).
-  - Renglón TOTAL CARTERA: Muestra la suma del capital invertido, la Ganancia Neta Potencial acumulada, y la **celda de Escenario Cobertura permanece estrictamente en blanco / vacía** para evitar redundancias.
+  - Renglón TOTAL CARTERA: Muestra la suma del capital invertido, la Ganancia Neta Potencial acumulada, y la **celda de Escenario Cobertura permanece strictly en blanco / vacía** para evitar redundancias.
+
+---
+
+### [DES-QBE-027] Banner de Resiliencia Tripartito (Las Tres Píldoras de Certeza) [UX-MANDATE]
+
+* **Geometría y Estilo:** Contenedor `#pildoras-cascada` con `display: flex; gap: 10px; align-items: center; flex-wrap: wrap;`.
+* **Estructura de las Tres Píldoras:**
+  1. **Píldora 1 (Pleno Éxito):** Borde y texto Verde Esmeralda (`#00E676`), fondo `rgba(0, 230, 118, 0.15)`. Formato: `🎯 Pleno Éxito: +$XX.XX MXN (XX.X%)`.
+  2. **Píldora 2 (Tablas o Ganancia — Destacada):** Borde y texto Azul Cian (`#38BDF8`), fondo `rgba(56, 189, 248, 0.20)`, sombra suave `box-shadow: 0 0 10px rgba(56, 189, 248, 0.3)`. Formato: `🛡️ Tablas o Ganancia: ≥ $0.00 MXN (XX.X%) ⭐`.
+  3. **Píldora 3 (Ruina Total):** Borde y texto Rojo Muted (`#EF4444`), fondo `rgba(239, 68, 68, 0.12)`. Formato: `💀 Ruina Total: -$XX.XX MXN (0.002%)`.
 
 ---
 

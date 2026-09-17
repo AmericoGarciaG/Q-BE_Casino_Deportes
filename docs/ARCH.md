@@ -236,17 +236,13 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
-### [ARCH-1.6.4] Política Cache-First con TTL y Erradicación de Ingesta Redundante [ARCH-PILLAR] [PERF-MANDATE]
+### [ARCH-1.6.4] Desacoplamiento Absoluto de Scraping en el Plano Web (Bus de Datos SQLite) [ARCH-PILLAR] [PERF-MANDATE]
 
-* **Axioma de Desacoplamiento de Ingesta:** Queda strictly prohibido que la navegación del usuario en el frontend (`GET /api/leagues/{id}/live-board`) dispare scrapers externos síncronos de Playwright si existe un snapshot válido en SQLite dentro de su ventana de validez (*Time-To-Live, TTL*).
-* **Ventanas de Validez (TTL):**
-  - **Ventana Pre-Partido:** TTL de **15 minutos** cuando todos los partidos están `PROGRAMADOS`.
-  - **Ventana En Vivo:** TTL de **2 minutos** si existen partidos con estado `EN_CURSO`.
-  - **Jornada Concluida:** TTL infinito (datos históricos inmutables).
-* **Mecánica de Consulta:**
-  1. El endpoint lee prioritariamente desde SQLite. Si el snapshot existe y `now() - last_scraped_at < TTL`, entrega el payload en $\le 25\text{ ms}$.
-  2. Solo ante `cold_start` (base de datos vacía) o si el usuario envía el parámetro explícito `?force_refresh=true`, se autoriza la invocación controlada de los sensores de red.
-* **Ciclo de Vida en Arranque (`lifespan`):** Al iniciar el servidor, el seeder valida si SQLite ya contiene la jornada activa fresca. Si los datos existen y están en TTL, el servidor concluye su arranque en $\le 500\text{ ms}$ sin abrir navegadores headless.
+* **Axioma de Desconexión de Red:** Queda strictly prohibido que el servidor web (`src/web/`) o sus servicios de sincronización (`src/storage/sync_service.py`) importen `playwright`, ejecuten navegadores headless o realicen llamadas HTTP síncronas durante el ciclo de vida de las peticiones de los usuarios.
+* **El Bus de Datos Local:** La capa web opera exclusivamente como un lector desacoplado contra SQLite (`data/qbe_database.db` en modo WAL).
+* **Gobernanza de Roles:**
+  - Los scripts independientes en `scripts/` (Centinela Deportivo y Centinela de Mercado) son los **únicos autorizados** para escribir e interactuar con fuentes externas.
+  - `sync_league_live_board()` lee de SQLite y responde en un tiempo SLA de **$\le 10\text{ milisegundos}$**.
 
 ### [ARCH-1.6.5] Pipeline Adaptador de Portafolio (src/pipeline/adapter.py) [ARCH-PILLAR]
 

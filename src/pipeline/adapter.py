@@ -65,6 +65,25 @@ def construir_master_table_desde_db(db_session, league_id: int = 1, jornada: int
     return MasterTableSnapshot(jornada_concluida=max(1, jornada - 1), posiciones=posiciones)
 
 
+def obtener_fixtures_multiversal(db, league_id: int) -> Dict[str, Dict[str, Any]]:
+    """[ARCH-1.6.8] Recuperación Multiversal de Fixtures (Multi-Jornada)"""
+    from src.storage.models import FixtureSnapshot
+    snapshots = db.query(FixtureSnapshot).filter(
+        FixtureSnapshot.league_id == league_id
+    ).order_by(FixtureSnapshot.updated_at.desc()).all()
+
+    fixtures_pool = {}
+    for snap in snapshots:
+        if snap.matches_json:
+            for fx in snap.matches_json:
+                pid = fx.get("id_partido")
+                # Guardar el más reciente por ID
+                if pid and pid not in fixtures_pool:
+                    fixtures_pool[pid] = fx
+    return fixtures_pool
+
+
+
 
 def hidratar_partidos_cuantitativos(
     selected_fixtures: List[Dict[str, Any]],

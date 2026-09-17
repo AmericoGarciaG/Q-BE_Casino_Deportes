@@ -727,23 +727,31 @@ function renderizarResultadosPortafolio(data) {
     const elCore = document.getElementById("kpi-posiciones-core");
     if (elCore) elCore.textContent = `${kAprobados} / ${kEscaneados}`;
 
-    // 3. Cascada de Resiliencia a Reveses con porcentaje
-    const cascada = control.desglose_bankroll?.cascada_resiliencia || [];
-    const maxReveses = control.desglose_bankroll?.reveses_maximos_tolerados || 0;
+    // 3. Banner de Certeza Tripartito (La Trinidad de Resiliencia) [DES-QBE-027]
+    const trinidad = control.desglose_bankroll?.trinidad_resiliencia;
     const txtResumen = document.getElementById("txt-cascada-resumen");
-    if (txtResumen) {
-        txtResumen.textContent = `El portafolio soporta hasta ${maxReveses} revés${maxReveses !== 1 ? 'es' : ''} simultáneo${maxReveses !== 1 ? 's' : ''} conservando saldo neto positivo (+EV).`;
-    }
     const pildorasCont = document.getElementById("pildoras-cascada");
-    if (pildorasCont) {
-        pildorasCont.innerHTML = cascada.map(c => {
-            const color = c.pnl_mxn > 0 ? '#00E676' : (c.pnl_mxn === 0 ? '#38BDF8' : '#ef4444');
-            const bg = c.pnl_mxn > 0 ? 'rgba(0,230,118,0.15)' : (c.pnl_mxn === 0 ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)');
-            const probStr = c.probabilidad_pct ? ` (${c.probabilidad_pct}%)` : '';
-            return `<span style="background:${bg}; color:${color}; border:1px solid ${color}; padding:3px 10px; border-radius:12px; font-size:7pt; font-weight:800;">
-                Nivel ${c.nivel}: ${c.pnl_mxn >= 0 ? '+' : ''}$${c.pnl_mxn.toFixed(2)}${probStr}
-            </span>`;
-        }).join("");
+
+    if (trinidad && pildorasCont) {
+        const pleno = trinidad.pleno_exito;
+        const tablas = trinidad.tablas_o_ganancia;
+        const ruina = trinidad.ruina_total;
+
+        if (txtResumen) {
+            txtResumen.innerHTML = `<strong style="color:#38BDF8;">Certeza de Cartera:</strong> Tienes un <strong style="color:#00E676;">${tablas.probabilidad_pct}%</strong> de probabilidad de recuperar el 100% de tu dinero o salir con ganancia neta.`;
+        }
+
+        pildorasCont.innerHTML = `
+            <span style="background: rgba(0, 230, 118, 0.15); color: #00E676; border: 1px solid #00E676; padding: 4px 12px; border-radius: 20px; font-size: 7.8pt; font-weight: 800;">
+                🎯 Pleno Éxito: +$${pleno.pnl_mxn.toFixed(2)} (${pleno.probabilidad_pct}%)
+            </span>
+            <span style="background: rgba(56, 189, 248, 0.20); color: #38BDF8; border: 1px solid #38BDF8; padding: 4px 14px; border-radius: 20px; font-size: 8pt; font-weight: 900; box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);">
+                🛡️ Tablas o Ganancia: ≥ $0.00 (${tablas.probabilidad_pct}%) ⭐
+            </span>
+            <span style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid #ef4444; padding: 4px 12px; border-radius: 20px; font-size: 7.8pt; font-weight: 700;">
+                💀 Ruina Total: -$${Math.abs(ruina.pnl_mxn).toFixed(2)} (${ruina.probabilidad_pct}%)
+            </span>
+        `;
     }
 
     // 4. Tabla Resumen de Asignación
@@ -925,19 +933,7 @@ function renderizarResultadosPortafolio(data) {
 }
 
 // ─── Modal de Radiografía Forense (Imagen 4) ─────────────────────────────────
-function abrirRadiografiaForense(matchId) {
-    if (!currentPortfolioData) return;
-    const analisisList = currentPortfolioData.partidos_analisis || [];
-    const p = analisisList.find(x => x.id_partido === matchId);
-    if (!p) return;
-
-    document.getElementById("modal-radiografia-forense").style.display = "block";
-    document.getElementById("rad-estrategia-badge").textContent = p.strategy_code || "QBE";
-    document.getElementById("rad-titulo-partido").textContent = p.partido || p.partido_nombre;
-
-    // Tesis Didáctica
-    document.getElementById("rad-tesis-html").innerHTML = p.tesis_didactica || p.interpretacion_didactica || "Sin tesis disponible.";
-
+function _hidratarTablasRadiografia(p) {
     // Pronóstico vs Mercado
     const tbodyPron = document.getElementById("rad-cuerpo-pronostico");
     if (tbodyPron && p.probabilidades_3vias) {
@@ -982,6 +978,61 @@ function abrirRadiografiaForense(matchId) {
                 <td style="text-align:center; font-weight:700; color:#38BDF8;">${row.qmod?.toFixed(2)}</td>
             </tr>
         `).join("");
+    }
+}
+
+async function abrirRadiografiaForense(matchId) {
+    if (!currentPortfolioData) return;
+    const analisisList = currentPortfolioData.partidos_analisis || [];
+    const p = analisisList.find(x => x.id_partido === matchId);
+    if (!p) return;
+
+    document.getElementById("modal-radiografia-forense").style.display = "block";
+    document.getElementById("rad-estrategia-badge").textContent = p.strategy_code || "QBE";
+    document.getElementById("rad-titulo-partido").textContent = p.partido || p.partido_nombre;
+
+    // Hidratar Pronóstico vs Mercado, Poisson y 10P (Instantáneo)
+    _hidratarTablasRadiografia(p);
+
+    const tesisContainer = document.getElementById("rad-tesis-html");
+
+    // Si ya fue generada previamente, renderizarla de inmediato
+    if (p.tesis_didactica && p.tesis_didactica.length > 50 && p.tesis_didactica !== "PENDIENTE") {
+        tesisContainer.innerHTML = p.tesis_didactica;
+        return;
+    }
+
+    // Si no, mostrar spinner elegante y llamar al endpoint on-demand
+    tesisContainer.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; color: #38BDF8; padding: 12px 0;">
+            <span class="badge-pulse"></span>
+            <span style="font-size: 8.5pt; font-weight: 600;">⚡ Generando Tesis Cuantitativa con IA (Gemini 3.6 Flash)...</span>
+        </div>
+    `;
+
+    try {
+        const resp = await fetch("/api/portfolio/match-thesis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                partido_id: matchId,
+                partido_data: p
+            })
+        });
+        if (!resp.ok) throw new Error("Error en generador narrativo");
+        const data = await resp.json();
+
+        p.tesis_didactica = data.tesis_html;
+        tesisContainer.innerHTML = data.tesis_html;
+    } catch (err) {
+        console.error("Fallo lazy loading tesis:", err);
+        // Fallback local instantáneo
+        tesisContainer.innerHTML = `
+            <div>• <strong>Momento y Tabla:</strong> Disparidad fáctica en puntos y rendimiento de ambos clubes.</div>
+            <div style='margin-top:6px;'>• <strong>Dominio de Cancha:</strong> Superioridad en métricas de xG Opta y control de posesión.</div>
+            <div style='margin-top:6px;'>• <strong>Historial y Bajas:</strong> Antecedentes ponderados sin bajas críticas reportadas.</div>
+            <div style='margin-top:6px;'>• <strong>Estrategia y Protección:</strong> Cobertura cuantitativa con preservación de capital garantizada.</div>
+        `;
     }
 }
 

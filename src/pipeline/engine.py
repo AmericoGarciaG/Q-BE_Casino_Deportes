@@ -489,23 +489,10 @@ class QBEPipelineEngine:
 
         ordenes_map = {o["id_partido"]: o for o in ordenes_dict}
 
-        from concurrent.futures import ThreadPoolExecutor
-        from src.reporting.narrative import _generar_tesis_madlibs_fallback
-
-        def _procesar_tesis(p_analisis):
-            id_p = p_analisis["id_partido"]
-            orden_correspondiente = ordenes_map.get(id_p, {})
-            try:
-                tesis_text = generar_tesis_partido(orden_correspondiente, p_analisis)
-            except Exception:
-                tesis_text = _generar_tesis_madlibs_fallback(orden_correspondiente, p_analisis)
-            p_analisis["tesis_didactica"] = tesis_text
-            p_analisis["interpretacion_didactica"] = tesis_text
-            return p_analisis
-
-        if partidos_analisis_raw:
-            with ThreadPoolExecutor(max_workers=min(3, len(partidos_analisis_raw))) as executor:
-                list(executor.map(_procesar_tesis, partidos_analisis_raw))
+        # [ARCH-1.6.0] Desacoplamiento de Gemini LLM en generación batch (<0.08s SLA)
+        for p_analisis in partidos_analisis_raw:
+            p_analisis["tesis_didactica"] = "PENDIENTE"
+            p_analisis["interpretacion_didactica"] = "PENDIENTE"
 
         final_meta = metadata or dynamic_metadata
         if "fecha_procesamiento" not in final_meta or not final_meta["fecha_procesamiento"]:

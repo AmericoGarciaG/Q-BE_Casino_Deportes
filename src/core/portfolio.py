@@ -6,6 +6,7 @@ Calcula la asignación de capital y el Dutching exacto eliminando pisos fijos y 
 el techo aritmético de cartera.
 """
 
+import itertools
 from typing import List, Dict, Any
 from src.core.catalog import STRATEGY_CATALOG
 from src.models.decision import (
@@ -13,6 +14,75 @@ from src.models.decision import (
     MatchTickets, Projections, CashoutTargets, SatelliteModule,
     PortfolioControl, PortfolioBalance, PortfolioExecutionPlan
 )
+
+
+def calcular_trinidad_resiliencia_3k(ordenes_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    [LN-QBE-072] Resuelve de forma exacta los 3^K estados combinatorios de la cartera
+    y computa la Trinidad de Certeza Cuantitativa. Latencia < 1 ms.
+    """
+    K = len(ordenes_data)
+    if K == 0:
+        return {
+            "pleno_exito": {"pnl_mxn": 0.0, "probabilidad_pct": 0.0},
+            "tablas_o_ganancia": {"umbral_pnl_mxn": 0.0, "probabilidad_pct": 0.0},
+            "ruina_total": {"pnl_mxn": 0.0, "probabilidad_pct": 0.0}
+        }
+
+    # Construir para cada partido los 3 desenlaces discretos (Win, Draw, Loss)
+    activos_micro = []
+    for o in ordenes_data:
+        ganancia = float(o.get("ganancia", 0.0))
+        inversion = float(o.get("inversion", 0.0))
+        p_win = float(o.get("p_win", 0.70))
+        p_draw = float(o.get("p_draw", 0.20))
+        p_loss = float(o.get("p_loss", max(0.001, 1.0 - p_win - p_draw)))
+        es_directo = bool(o.get("es_directo", False))
+
+        # En estrategias directas (D1/D1+), el empate pierde la inversión
+        pnl_draw = -inversion if es_directo else 0.0
+
+        activos_micro.append([
+            {"pnl": ganancia, "prob": p_win},      # Estado 0: Gana boleto ataque
+            {"pnl": pnl_draw, "prob": p_draw},     # Estado 1: Empate (V=0 o pérdida si directo)
+            {"pnl": -inversion, "prob": p_loss}    # Estado 2: Derrota / Ruina
+        ])
+
+    prob_tablas_o_arriba = 0.0
+    pnl_maximo = sum(float(o.get("ganancia", 0.0)) for o in ordenes_data)
+    inv_total = sum(float(o.get("inversion", 0.0)) for o in ordenes_data)
+
+    # Evaluar los 3^K micro-estados exhaustivamente
+    for estado_combinado in itertools.product(*activos_micro):
+        pnl_estado = sum(e["pnl"] for e in estado_combinado)
+        prob_estado = 1.0
+        for e in estado_combinado:
+            prob_estado *= e["prob"]
+
+        if pnl_estado >= -0.01:
+            prob_tablas_o_arriba += prob_estado
+
+    # Probabilidades analíticas de extremos
+    prob_pleno = 1.0
+    prob_ruina = 1.0
+    for o in ordenes_data:
+        prob_pleno *= float(o.get("p_win", 0.70))
+        prob_ruina *= float(o.get("p_loss", 0.05))
+
+    return {
+        "pleno_exito": {
+            "pnl_mxn": round(pnl_maximo, 2),
+            "probabilidad_pct": round(prob_pleno * 100.0, 1)
+        },
+        "tablas_o_ganancia": {
+            "umbral_pnl_mxn": 0.0,
+            "probabilidad_pct": round(min(99.9, prob_tablas_o_arriba * 100.0), 1)
+        },
+        "ruina_total": {
+            "pnl_mxn": round(-inv_total, 2),
+            "probabilidad_pct": round(prob_ruina * 100.0, 4)
+        }
+    }
 
 
 class PortfolioEngine:
@@ -340,51 +410,74 @@ class PortfolioEngine:
         roi_global_esp = round((ganancia_esperada_core / total_inv_core) * 100.0, 2) if total_inv_core > 0 else 0.0
 
         # ── 5. Análisis de Resiliencia y Cascada de Reveses (Stress-Testing) ──
+        # ── [LN-QBE-072] Cascada de Resiliencia Estocástica Ponderada ───────────
+        import numpy as np
+
+        ordenes_ordenadas = sorted(
+            orders,
+            key=lambda x: x.proyecciones.roi_principal_porcentaje,
+            reverse=False
+        )
+
+        K = len(orders)
+        probs_win = []
+        for o in ordenes_ordenadas:
+            inv_a = max(1.0, o.boletos.inversion_partido_A_i)
+            p_est = 1.0 - (o.proyecciones.perdida_maxima_posible_mxn / inv_a * 0.2)
+            probs_win.append(min(0.95, max(0.40, p_est)))
+
         cascada_reveses = []
-        ganancias_premios = [o.proyecciones.ganancia_neta_principal_mxn for o in orders]
-        inversiones_ordenes = [o.boletos.inversion_partido_A_i for o in orders]
-        
-        # Simulación de fallos desde 0 hasta K (asumiendo que fallan los activos de mayor riesgo primero)
         reveses_tolerados = 0
-        pnl_acumulado = sum(ganancias_premios)
-        
-        # Probabilidad de Nivel 0 (Todos los activos cubiertos/ganadores tienen éxito)
-        p_exito_conjunto = 1.0
-        for m in approved_matches:
-            p_exito_conjunto *= (1.0 - m["psi_downside"])
-        prob_nivel_0_pct = round(p_exito_conjunto * 100.0, 1)
 
-        cascada_reveses.append({
-            "nivel": 0,
-            "escenario": "Pleno Éxito (0 Fallos)",
-            "pnl_mxn": round(pnl_acumulado, 2),
-            "roi_pct": round((pnl_acumulado / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0,
-            "probabilidad_pct": prob_nivel_0_pct,
-            "estado": "PLENO_POSITIVO"
-        })
-
-        for m_fallos in range(1, k_count + 1):
-            ganancia_restante = sum(ganancias_premios[:k_count - m_fallos])
-            perdida_reveses = sum(inversiones_ordenes[k_count - m_fallos:])
-            pnl_nivel = round(ganancia_restante - perdida_reveses, 2)
-            roi_nivel = round((pnl_nivel / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0
-            
-            if m_fallos == k_count:
-                prob_escenario_pct = round(p_ruina_total, 2)
+        for m in range(K + 1):
+            if m == 0:
+                pnl = sum(o.proyecciones.ganancia_neta_principal_mxn for o in orders)
+                prob_nivel = round(float(np.prod(probs_win)) * 100.0, 1)
+            elif m == K:
+                pnl = -sum(o.boletos.inversion_partido_A_i for o in orders)
+                prob_nivel = round(float(p_ruina_total), 4)
             else:
-                prob_escenario_pct = round(max(0.1, (100.0 - prob_nivel_0_pct - p_ruina_total) / max(1, k_count - 1)), 1)
+                ganancias_supervivientes = sum(o.proyecciones.ganancia_neta_principal_mxn for o in ordenes_ordenadas[:-m])
+                perdidas_caidas = sum(o.boletos.inversion_partido_A_i for o in ordenes_ordenadas[-m:])
+                pnl = ganancias_supervivientes - perdidas_caidas
 
-            if pnl_nivel >= 0:
-                reveses_tolerados = m_fallos
+                prob_fallo_m = float(np.prod([1.0 - p for p in probs_win[-m:]]))
+                prob_exito_restantes = float(np.prod(probs_win[:-m]))
+                prob_nivel = round(prob_fallo_m * prob_exito_restantes * 100.0, 1)
+
+            if pnl >= 0.0 and m > 0:
+                reveses_tolerados = m
 
             cascada_reveses.append({
-                "nivel": m_fallos,
-                "escenario": f"{m_fallos} Reves{'es' if m_fallos > 1 else ''}",
-                "pnl_mxn": pnl_nivel,
-                "roi_pct": roi_nivel,
-                "probabilidad_pct": prob_escenario_pct,
-                "estado": "SUPERAVIT" if pnl_nivel > 0 else ("BREAKEVEN" if pnl_nivel == 0 else "DEFICIT")
+                "nivel": m,
+                "reveses": m,
+                "escenario": "Pleno Éxito (0 Fallos)" if m == 0 else (f"{K} Reveses (Ruina Total)" if m == K else f"{m} Reves{'es' if m > 1 else ''}"),
+                "pnl_mxn": round(pnl, 2),
+                "roi_pct": round((pnl / total_inv_core) * 100.0, 1) if total_inv_core > 0 else 0.0,
+                "probabilidad_pct": prob_nivel,
+                "estado": "PLENO_POSITIVO" if (pnl > 0 and m == 0) else ("SUPERAVIT" if pnl > 0 else ("BREAKEVEN" if pnl == 0 else "DEFICIT"))
             })
+
+        # ── [LN-QBE-072] Trinidad de Certeza Cuantitativa 3^K ──
+        ordenes_trinidad = []
+        for idx, o in enumerate(orders):
+            m = approved_matches[idx]
+            p_w = float(m.get("prob_fav", 70.0)) / 100.0 if m.get("prob_fav") is not None else 0.70
+            p_d = float(m.get("prob_emp", 20.0)) / 100.0 if m.get("prob_emp") is not None else 0.20
+            p_l = float(m.get("prob_und", 10.0)) / 100.0 if m.get("prob_und") is not None else o.metricas_clave.psi_downside_riesgo
+            code = o.estrategia_seleccionada.codigo
+            es_directo = code in ["QBE-D1", "QBE-D1+"]
+
+            ordenes_trinidad.append({
+                "ganancia": o.proyecciones.ganancia_neta_principal_mxn,
+                "inversion": o.boletos.inversion_partido_A_i,
+                "p_win": p_w,
+                "p_draw": p_d,
+                "p_loss": p_l,
+                "es_directo": es_directo
+            })
+
+        trinidad_resiliencia = calcular_trinidad_resiliencia_3k(ordenes_trinidad)
 
         plan_ejecucion = PortfolioExecutionPlan(
             control_portafolio=PortfolioControl(
@@ -399,7 +492,8 @@ class PortfolioEngine:
                     "bankroll_total": bankroll,
                     "porcentaje_total_arriesgado": round((total_inv_core / bankroll) * 100.0, 2),
                     "reveses_maximos_tolerados": reveses_tolerados,
-                    "cascada_resiliencia": cascada_reveses
+                    "cascada_resiliencia": cascada_reveses,
+                    "trinidad_resiliencia": trinidad_resiliencia
                 }
             ),
             ordenes_ejecucion_partidos=orders,

@@ -9,7 +9,7 @@ from datetime import datetime
 from src.storage.database import get_db
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, PortfolioRecord
 from src.models.web_schemas import GeneratePortfolioRequest
-from src.pipeline.adapter import construir_master_table_snapshot, construir_master_table_desde_db, hidratar_partidos_cuantitativos
+from src.pipeline.adapter import construir_master_table_snapshot, construir_master_table_desde_db, hidratar_partidos_cuantitativos, obtener_fixtures_multiversal
 from src.pipeline.engine import QBEPipelineEngine
 
 
@@ -30,33 +30,50 @@ def generate_portfolio(req: GeneratePortfolioRequest, db: Session = Depends(get_
     if not league:
         raise HTTPException(status_code=404, detail=f"Liga con ID {req.league_id} no encontrada.")
 
-    # 2. Leer snapshots más recientes de SQLite
-    fixture_snap = db.query(FixtureSnapshot).filter(
-        FixtureSnapshot.league_id == league.id
-    ).order_by(FixtureSnapshot.updated_at.desc()).first()
+    # 2. [ARCH-1.6.8] Recuperación Multiversal de Fixtures (Multi-Jornada)
+    fixtures_pool = obtener_fixtures_multiversal(db, league.id)
 
     standing_snap = db.query(StandingSnapshot).filter(
         StandingSnapshot.league_id == league.id
     ).order_by(StandingSnapshot.captured_at.desc()).first()
 
-    if not fixture_snap or not fixture_snap.matches_json:
+    if not fixtures_pool:
         raise HTTPException(status_code=400, detail="No hay cartelera activa registrada en la base de datos.")
 
     if not standing_snap or not standing_snap.positions_json:
         raise HTTPException(status_code=400, detail="No hay tabla de posiciones registrada en la base de datos.")
 
-    # 3. Filtrar partidos seleccionados por el usuario
-    todos_fixtures = fixture_snap.matches_json
+    # 3. Filtrar partidos seleccionados por el usuario desde el pool multiversal
     if req.selected_match_ids:
-        seleccionados = [f for f in todos_fixtures if f.get("id_partido") in req.selected_match_ids]
+        seleccionados = []
+        for match_id in req.selected_match_ids:
+            fx = fixtures_pool.get(match_id)
+            if not fx:
+                continue
+            momios = fx.get("momios")
+            if not momios or not momios.get("L"):
+                continue
+            if fx.get("estado") == "FINALIZADO":
+                continue
+            seleccionados.append(fx)
     else:
-        # Si no envió IDs específicos, tomar todos los operables de la ventana activa
-        seleccionados = [f for f in todos_fixtures if f.get("disponible_para_seleccion") is not False]
+        # Si no envió IDs específicos, tomar todos los operables del pool multiversal
+        seleccionados = [
+            fx for fx in fixtures_pool.values()
+            if fx.get("disponible_para_seleccion") is not False
+            and fx.get("estado") != "FINALIZADO"
+            and fx.get("momios")
+            and fx.get("momios", {}).get("L")
+        ]
 
     if not seleccionados:
         raise HTTPException(status_code=400, detail="Ninguno de los partidos seleccionados es operable para inversión.")
 
-    jornada_activa = fixture_snap.matchday or 8
+    last_fix_snap = db.query(FixtureSnapshot).filter(
+        FixtureSnapshot.league_id == league.id
+    ).order_by(FixtureSnapshot.updated_at.desc()).first()
+    jornada_activa = (last_fix_snap.matchday if last_fix_snap else 8) or 8
+
 
     # 4. Construir contratos matemáticos vía Adaptador
     master_table = construir_master_table_desde_db(db, league.id, jornada_activa)
@@ -85,3 +102,22 @@ def generate_portfolio(req: GeneratePortfolioRequest, db: Session = Depends(get_
 
     consolidated_payload["portfolio_id"] = record.id
     return consolidated_payload
+
+
+from pydantic import BaseModel
+from typing import Dict, Any
+
+
+class GenerateThesisRequest(BaseModel):
+    partido_id: str
+    partido_data: Dict[str, Any]
+
+
+@router.post("/match-thesis")
+def generate_match_thesis(req: GenerateThesisRequest):
+    """
+    [ARCH-1.6.0] Genera la Tesis Didáctica en 4 viñetas bajo demanda para un partido específico.
+    """
+    from src.reporting.narrative import generar_tesis_narrativa_hibrida
+    tesis_html = generar_tesis_narrativa_hibrida(req.partido_data)
+    return {"partido_id": req.partido_id, "tesis_html": tesis_html}
