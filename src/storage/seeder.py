@@ -155,10 +155,123 @@ def seed_initial_data(db):
     if not snap_existente:
         db.add(StandingSnapshot(league_id=liga.id, season="2026", matchday=8, positions_json=standings_iniciales))
         db.commit()
-        print("[SEEDER]: Snapshot inicial sembrado en SQLite.")
+        print("[SEEDER]: Snapshot inicial de posiciones sembrado en SQLite.")
     else:
-        # [INMUNIZACIÓN]: Si ya existe un snapshot con datos reales, NO SOBRESCRIBIR con 'Por definir'
         print("[SEEDER]: Snapshot de posiciones existente preservado en SQLite.")
+
+    # Guardar fixture snapshot si la base de datos no tiene partidos
+    from src.storage.models import FixtureSnapshot
+    fix_existente = db.query(FixtureSnapshot).filter(FixtureSnapshot.league_id == liga.id).first()
+    if not fix_existente:
+        fixtures_iniciales_j8 = [
+            {
+                "id_partido": "j8_01",
+                "local": "Deportivo Toluca",
+                "visitante": "Santos Laguna",
+                "horario": "Sábado 19:00",
+                "fecha_bloque": "Sábado 12 de Septiembre",
+                "fecha_dt": "2026-09-12T19:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/toluca.png",
+                "visitante_escudo_url": "/static/img/crests/santos-laguna.png",
+                "momios": {"L": 1.70, "E": 3.60, "V": 4.50, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_02",
+                "local": "Club América",
+                "visitante": "Chivas Guadalajara",
+                "horario": "Sábado 21:00",
+                "fecha_bloque": "Sábado 12 de Septiembre",
+                "fecha_dt": "2026-09-12T21:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/america.png",
+                "visitante_escudo_url": "/static/img/crests/guadalajara.png",
+                "momios": {"L": 2.10, "E": 3.25, "V": 3.40, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_03",
+                "local": "Cruz Azul",
+                "visitante": "Pumas UNAM",
+                "horario": "Domingo 12:00",
+                "fecha_bloque": "Domingo 13 de Septiembre",
+                "fecha_dt": "2026-09-13T12:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/cruz-azul.png",
+                "visitante_escudo_url": "/static/img/crests/pumas-unam.png",
+                "momios": {"L": 1.95, "E": 3.40, "V": 3.80, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_04",
+                "local": "Tigres UANL",
+                "visitante": "Club León",
+                "horario": "Domingo 17:00",
+                "fecha_bloque": "Domingo 13 de Septiembre",
+                "fecha_dt": "2026-09-13T17:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/tigres-uanl.png",
+                "visitante_escudo_url": "/static/img/crests/leon.png",
+                "momios": {"L": 1.85, "E": 3.50, "V": 4.10, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_05",
+                "local": "Rayados de Monterrey",
+                "visitante": "Club Puebla",
+                "horario": "Domingo 19:00",
+                "fecha_bloque": "Domingo 13 de Septiembre",
+                "fecha_dt": "2026-09-13T19:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/monterrey.png",
+                "visitante_escudo_url": "/static/img/crests/puebla.png",
+                "momios": {"L": 1.65, "E": 3.75, "V": 4.80, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_06",
+                "local": "Club Tijuana",
+                "visitante": "Atlas FC",
+                "horario": "Viernes 21:00",
+                "fecha_bloque": "Viernes 11 de Septiembre",
+                "fecha_dt": "2026-09-11T21:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/club-tijuana.png",
+                "visitante_escudo_url": "/static/img/crests/atlas.png",
+                "momios": {"L": 2.05, "E": 3.30, "V": 3.50, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_07",
+                "local": "Atlético San Luis",
+                "visitante": "Necaxa",
+                "horario": "Sábado 17:00",
+                "fecha_bloque": "Sábado 12 de Septiembre",
+                "fecha_dt": "2026-09-12T17:00:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/atletico-san-luis.png",
+                "visitante_escudo_url": "/static/img/crests/necaxa.png",
+                "momios": {"L": 2.45, "E": 3.10, "V": 2.90, "pago_anticipado": True}
+            },
+            {
+                "id_partido": "j8_08",
+                "local": "Club Pachuca",
+                "visitante": "FC Juárez",
+                "horario": "Sábado 19:05",
+                "fecha_bloque": "Sábado 12 de Septiembre",
+                "fecha_dt": "2026-09-12T19:05:00",
+                "estado": "PROGRAMADO",
+                "disponible_para_seleccion": True,
+                "local_escudo_url": "/static/img/crests/pachuca.png",
+                "visitante_escudo_url": "/static/img/crests/fc-juarez.png",
+                "momios": {"L": 1.75, "E": 3.50, "V": 4.50, "pago_anticipado": True}
+            }
+        ]
+        db.add(FixtureSnapshot(league_id=liga.id, matchday=8, matches_json=fixtures_iniciales_j8))
+        db.commit()
+        print("[SEEDER]: Snapshot inicial de partidos (Jornada 8) sembrado en SQLite.")
 
 
 def seed_initial_leagues():

@@ -134,6 +134,12 @@
   3. Desglose analítico de los 4 umbrales de Breakeven ($\theta^*$).
   4. Curva de liquidación en vivo y disparadores de CashOut al minuto 85'.
 
+### [DES-QBE-028] Badge de Inconsistencia Auditada en Tesis [UX-MANDATE]
+* **Supervisión Activa con IA:** Si el LLM detecta una contradicción fáctica entre los datos y la estrategia, antepondrá un recuadro de advertencia en color ámbar/rojo tenue:
+  `<div class="alerta-inconsistencia" style="background: rgba(239,68,68,0.15); border-left: 3px solid #EF4444; padding: 8px 12px; margin-bottom: 8px; color: #F8FAFC; font-size: 8pt;">⚠️ <strong>Alerta de Inconsistencia Auditada:</strong> [Explicación]</div>`
+
+
+
 ### [DES-QBE-020] Dashboard Ejecutivo de Cartera y Métricas Duales [UX-MANDATE]
 
 * **Macro KPIs con Distinción Financiera Estricta:**

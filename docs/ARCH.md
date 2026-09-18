@@ -296,7 +296,9 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
     $$A_i^* = \$2.00 \times O_{\text{Seguro}}$$
     $$B_{\text{Ganancia}}^* = A_i^* - \$2.00\text{ MXN}$$
   - Para Doble Oportunidad Sintética (`QBE-R2`), ambos boletos se escalan por el factor $\max\left(\frac{2.00}{B_1}, \frac{2.00}{B_2}\right)$.
-  - **Garantía Invariante:** Se preserva la recuperación exacta de capital en tablas ($0.00 pérdida) y el ratio de ROI intacto.
+### [ARCH-1.6.10] Herramienta de Saneamiento SQLite y Protocolo de Inferencia On-Demand [ARCH-PILLAR]
+* **Utilidad de Purga (`scripts/utilidades/purgar_base_datos.py`):** Permite el reseteo selectivo de las tablas volátiles de snapshots (`fixture_snapshots`, `standing_snapshots`, `portfolio_records`) preservando de forma inmutable el catálogo de `leagues` y `teams`.
+* **Axioma de Inferencia Diferida (Lazy-Loading Cognitivo):** Al generar la cartera en `POST /api/portfolio/generate`, el campo `tesis_didactica` debe emitirse estrictamente como `None` o `"PENDIENTE"`. La invocación a `GeminiCognitiveGateway` se ejecuta de forma exclusiva bajo demanda a través de `POST /api/portfolio/match-thesis` al abrir el modal de Radiografía Forense.
 
 ---
 
@@ -501,6 +503,11 @@ class Form10PRaw(BaseModel):
 ---
 
 ### 3.3 Contratos de Órdenes y Portafolio (`src/models/decision.py`)
+
+### [ARCH-1.6.9] Herencia Dinámica de la Cláusula de Pago Anticipado en Boletos [BIZ-LOGIC]
+* **Regla de Propagación:** Si un encuentro porta la bandera `pago_anticipado == True` certificada desde el mercado (Caliente.mx), toda orden de ejecución derivada debe heredar obligatoriamente `linea_promocional = "Pago Anticipado (+2 goles)"`.
+* **Identificación en Boleto:** Todo boleto que lleve asignación a la victoria de un club (Boleto 1 o Boleto 2) debe desplegar el sufijo `+ PA` en su selección (ej. `Gana Necaxa + PA` o `Gana Toluca + PA`).
+
 
 ```python
 from typing import List, Optional, Literal, Dict, Any

@@ -274,6 +274,7 @@ class QBEPipelineEngine:
                     "fav_name": m.identidad_partido.favorito,
                     "und_name": m.identidad_partido.underdog,
                     "is_fav_local": is_fav_l,
+                    "pago_anticipado": bool(m.momios.pago_anticipado.disponible),
                     "strategy_code": code,
                     "strategy_nombre": nombre,
                     "estrategia_codigo": code,
@@ -489,10 +490,10 @@ class QBEPipelineEngine:
 
         ordenes_map = {o["id_partido"]: o for o in ordenes_dict}
 
-        # [ARCH-1.6.0] Desacoplamiento de Gemini LLM en generación batch (<0.08s SLA)
+        # [ARCH-1.6.10] Inferencia Diferida: NO generar Mad-Libs ni llamar LLM en generación batch (<0.08s SLA)
         for p_analisis in partidos_analisis_raw:
-            p_analisis["tesis_didactica"] = "PENDIENTE"
-            p_analisis["interpretacion_didactica"] = "PENDIENTE"
+            p_analisis["tesis_didactica"] = None
+            p_analisis["interpretacion_didactica"] = None
 
         final_meta = metadata or dynamic_metadata
         if "fecha_procesamiento" not in final_meta or not final_meta["fecha_procesamiento"]:

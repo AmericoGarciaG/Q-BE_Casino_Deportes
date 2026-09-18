@@ -188,7 +188,7 @@ class PortfolioEngine:
         clean_key = code.replace("+", "_plus").replace("-", "_")
         nombre = evals[clean_key]["nombre_oficial"]
         ev = evals[clean_key]["ev_neto_roi"]
-        promocion = "Pago Anticipado" if ("+" in code or code == "QBE-R1" or pago_anticipado) else "Estándar"
+        promocion = "Pago Anticipado (+2 goles)" if ("+" in code or code == "QBE-R1" or pago_anticipado) else "Estándar"
         return code, nombre, ev, promocion
 
     @classmethod
@@ -239,6 +239,9 @@ class PortfolioEngine:
             o_fav, o_emp, o_und = m["odd_fav"], m["odd_emp"], m["odd_und"]
             fav_name, und_name = m["fav_name"], m["und_name"]
 
+            pa_activo = bool("+" in code or m.get("pago_anticipado", False))
+            suffix_pa = " + PA" if pa_activo else ""
+
             # Hard-Cap Individual <= 8.0%
             if mode == "BANKROLL":
                 cap_i = min(0.08, max(0.02, ev_roi / (3.0 * max(0.01, psi))))
@@ -250,7 +253,7 @@ class PortfolioEngine:
             # Estructuración de Boletos (Dutching Exacto)
             if "H2" in code:
                 # Seguro en Fav, Ganancia en Empate
-                b1_sel = f"Gana {fav_name}" + (" + PA" if "+" in code else "")
+                b1_sel = f"Gana {fav_name}{suffix_pa}"
                 b1_momio = o_fav
                 b1_monto = round(inv_partido / b1_momio, 2)
                 b2_sel = "Empate" + (" + PA" if "+" in code else "")
@@ -264,7 +267,7 @@ class PortfolioEngine:
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = round(inv_partido / b1_momio, 2)
-                b2_sel = f"Gana {fav_name}" + (" + PA" if "+" in code else "")
+                b2_sel = f"Gana {fav_name}{suffix_pa}"
                 b2_momio = o_fav
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas o cobro anticipado por ventaja de 2 goles."
@@ -275,7 +278,7 @@ class PortfolioEngine:
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = round(inv_partido / b1_momio, 2)
-                b2_sel = f"Gana {und_name} + PA"
+                b2_sel = f"Gana {und_name}{suffix_pa if suffix_pa else ' + PA'}"
                 b2_momio = o_und
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas en empate o victoria de Underdog."
@@ -290,7 +293,7 @@ class PortfolioEngine:
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = round(inv_partido * inv_emp_w, 2)
-                b2_sel = f"Gana {und_name}"
+                b2_sel = f"Gana {und_name}{suffix_pa}"
                 b2_momio = o_und
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Dejar correr al 90'. Ambos boletos cubren el escenario X2."
@@ -300,7 +303,7 @@ class PortfolioEngine:
                 b1_sel = "Empate (Sin Cobertura)"
                 b1_momio = round(float(m.get("odd_emp") or o_emp or 3.70), 2)
                 b1_monto = 0.0
-                b2_sel = f"Gana {fav_name}" + (" + PA" if "+" in code else "")
+                b2_sel = f"Gana {fav_name}{suffix_pa}"
                 b2_momio = o_fav
                 b2_monto = inv_partido
                 out_min85 = "N/A (Dejar correr al 90' o cobrado anticipadamente por ventaja de 2 goles)."
@@ -362,8 +365,9 @@ class PortfolioEngine:
                     codigo=code,
                     nombre_oficial=nombre,
                     descripcion_ejecutiva=cls.DESCRIPCIONES_OFICIALES.get(code, "Estrategia Cuantitativa"),
-                    linea_promocional="Pago Anticipado" if "+" in code or code == "QBE-R1" else "Estándar"
+                    linea_promocional="Pago Anticipado (+2 goles)" if (pa_activo or code == "QBE-R1") else "Estándar"
                 ),
+
                 metricas_clave=KeyMetrics(
                     score_calidad_S_i=round(scores[idx], 4),
                     peso_portafolio_w_i=round(weights[idx], 4),

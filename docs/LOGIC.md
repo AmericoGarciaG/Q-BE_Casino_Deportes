@@ -339,6 +339,17 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - **Candado 2:** Vulnerabilidad estructural del favorito ($\ge 2$ de: $Pts/PJ_{\text{Fav}} \le 1.40$, $\overline{GC}_{10P} \ge 1.30$, $Q_{\text{mod}} \le 0.95$).
      - **Candado 3:** Inmunidad histórica: $P_{\text{H2H}}(X2) \ge 0.4000$.
      - Si no supera los 3 candados $\implies \text{viable: False}$ (Veto Inverso).
+
+### [LN-QBE-060-R] Estado de Sueño Profundo para la Familia R (R1 y R2) [GOVERNANCE] [ALGO-PROTECTED]
+* **Estado:** DESCONECTADA / EN REFORMULACIÓN HOLÍSTICA.
+* **Mandato:** Queda estrictamente prohibida la emisión de órdenes bajo los códigos `QBE-R1` y `QBE-R2` en el evaluador de estrategias.
+* **Comportamiento:** Toda evaluación de R1 y R2 debe retornar `viable = False` con el motivo `"ESTRATEGIA EN SUEÑO PROFUNDO (REFORMULACIÓN HOLÍSTICA EN CURSO)"`. Todo partido con ineficiencia en el no-favorito o empate debe derivar a `QBE-H2` o a `QBE-00` (Veto preventivo).
+
+* **Candado 4 para Familia R (Filtro Anti-Contracorriente Obligatorio) [BIZ-LOGIC] [ALGO-PROTECTED]:**
+  - Queda estrictamente prohibido autorizar estrategias de la Familia R (`QBE-R1` o `QBE-R2`) si el favorito del mercado mantiene la probabilidad individual dominante en el modelo Q-BE ($P_{\text{Fav}} > P_{\text{Und}}$) y el no-favorito posee ventaja matemática negativa ($Edge_{\text{Und}} \le 0.0$).
+  - *Regla de Decisión:*
+    $$\text{Si } (P_{\text{Fav}} > P_{\text{Und}} \land Edge_{\text{Und}} \le 0.0) \implies \text{Viable}_{\text{R1/R2}} = \text{False}$$
+  - *Motivo:* Previene apostar capital a la derrota del desenlace más probable cuando el valor real está concentrado exclusivamente en el empate. El partido debe derivar a `QBE-H2` o a `QBE-00` (Veto preventivo).
 * **O (Output):** `StrategyComplianceMatrix`.
 * **Φ (Transición):** Hacia **[LN-QBE-070]**.
 

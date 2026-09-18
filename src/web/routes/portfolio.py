@@ -104,20 +104,25 @@ def generate_portfolio(req: GeneratePortfolioRequest, db: Session = Depends(get_
     return consolidated_payload
 
 
-from pydantic import BaseModel
+import logging
 from typing import Dict, Any
+from pydantic import BaseModel
 
+logger = logging.getLogger("PortfolioRouter")
 
-class GenerateThesisRequest(BaseModel):
+class MatchThesisRequest(BaseModel):
     partido_id: str
     partido_data: Dict[str, Any]
 
 
 @router.post("/match-thesis")
-def generate_match_thesis(req: GenerateThesisRequest):
+def generate_match_thesis_endpoint(req: MatchThesisRequest):
     """
-    [ARCH-1.6.0] Genera la Tesis Didáctica en 4 viñetas bajo demanda para un partido específico.
+    [ARCH-1.3.4 / ARCH-1.6.10] Invocación real de Gemini 3.6 Flash bajo demanda.
     """
-    from src.reporting.narrative import generar_tesis_narrativa_hibrida
-    tesis_html = generar_tesis_narrativa_hibrida(req.partido_data)
+    logger.info(f"🧠 [ON-DEMAND] Redactando Tesis con Gemini para partido {req.partido_id}...")
+    print(f"🧠 [ON-DEMAND] Redactando Tesis con Gemini para partido {req.partido_id}...")
+    from src.services.gemini_gateway import GeminiCognitiveGateway
+    gateway = GeminiCognitiveGateway()
+    tesis_html = gateway.generate_thesis(req.partido_data)
     return {"partido_id": req.partido_id, "tesis_html": tesis_html}
