@@ -147,7 +147,114 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
-### [ARCH-1.5.0] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
+### [ARCH-1.5.0] Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR]
+
+* **Axioma de Centralización Transaccional:** Queda estrictamente prohibido que cualquier ruta REST, scraper o daemon instancie sesiones directas o ejecute `db.commit()` sin mediación. Toda interacción con `data/qbe_database.db` debe canalizarse a través de `src/storage/gateway.py`.
+* **Directivas de Motor Obligatorias (PRAGMAs SQLite):** En cada conexión física, el engine debe forzar mediante event listeners:
+  ```sql
+  PRAGMA journal_mode = WAL;
+  PRAGMA foreign_keys = ON;
+  PRAGMA synchronous = NORMAL;
+  PRAGMA busy_timeout = 15000;
+  ```
+* **Segregación Estricta de Contextos:**
+  1. `gateway.read_session()`: Contexto de solo lectura para la interfaz FastAPI. Sin bloqueos, con liberación inmediata de recursos y latencia $< 2\text{ ms}$.
+  2. `gateway.write_transaction()`: Contexto de escritura atómica para demonios e ingesta. Si ocurre una sola excepción dentro del bloque, se ejecuta `ROLLBACK` total y la base de datos queda intacta.
+* **Validación de Integridad en el Arranque:** En la inicialización, el gateway ejecuta `PRAGMA quick_check;`. Si reporta anomalías físicas, aborta con `RuntimeError` impidiendo operar sobre datos corruptos.
+
+### [ARCH-1.5.1] Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT]
+
+La persistencia abandona el almacenamiento ciego en listas JSON y se estructura en entidades relacionales de **Tercera Forma Normal (3NF)**. Cada tabla se detalla a continuación con sus columnas exactas, claves primarias y foráneas:
+
+#### Tabla: `competitions`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `VARCHAR` | `PK` | ID canónico (`MEX_LIGAMX`, `ENG_PL`, `EUR_UCL`) |
+| `name` | `VARCHAR` | `NOT NULL` | Nombre oficial de la competición |
+| `country` | `VARCHAR` | `NOT NULL` | País o región de la competición |
+| `macro_mu_liga` | `FLOAT` | `NOT NULL` | Parámetro macro $\mu_{\text{liga}}$ (goles/90 promedio de liga) |
+| `macro_gamma_home` | `FLOAT` | `NOT NULL` | Ventaja media de local $\bar{\gamma}_{\text{home}}$ |
+
+#### Tabla: `teams`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `VARCHAR` | `PK` | ID canónico slug (ej. `club-america`) |
+| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga a la que pertenece |
+| `name` | `VARCHAR` | `NOT NULL` | Nombre completo oficial |
+| `short_name` | `VARCHAR` | | Nombre corto o acrónimo |
+| `crest_path` | `VARCHAR` | | Ruta local `/static/img/crests/{slug}.png` |
+
+#### Tabla: `seasons`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `VARCHAR` | `PK` | ID único de temporada |
+| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga a la que pertenece |
+| `year` | `INTEGER` | `NOT NULL` | Año de inicio de la temporada |
+| `name` | `VARCHAR` | `NOT NULL` | Nombre descriptivo (ej. `Apertura 2026`) |
+
+#### Tabla: `matches`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `VARCHAR` | `PK` | ID universal del partido |
+| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga |
+| `season_id` | `VARCHAR` | `FK → seasons.id` | Temporada |
+| `matchday_num` | `INTEGER` | `NOT NULL` | Número de jornada |
+| `kickoff_utc` | `DATETIME` | `NOT NULL` | Fecha/hora UTC de inicio |
+| `home_team_id` | `VARCHAR` | `FK → teams.id` | Equipo local |
+| `away_team_id` | `VARCHAR` | `FK → teams.id` | Equipo visitante |
+| `status` | `VARCHAR` | `NOT NULL` | Estado: `PROGRAMADO`, `EN_CURSO`, `FINALIZADO`, `REPROGRAMADO` |
+| `score_home` | `INTEGER` | | Goles local (NULL si no concluido) |
+| `score_away` | `INTEGER` | | Goles visitante (NULL si no concluido) |
+
+#### Tabla: `match_telemetry`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `match_id` | `VARCHAR` | `PK, FK → matches.id` | Partido al que pertenece |
+| `team_id` | `VARCHAR` | `PK, FK → teams.id` | Equipo (permite registro local + visitante) |
+| `xg` | `FLOAT` | | Expected Goals ofensivos |
+| `xga` | `FLOAT` | | Expected Goals concedidos |
+| `sot` | `FLOAT` | | Disparos al arco |
+| `sota` | `FLOAT` | | Disparos al arco del rival |
+| `possession_pct` | `FLOAT` | | Posesión (%) |
+| `fouls` | `INTEGER` | | Faltas cometidas |
+| `red_cards` | `INTEGER` | | Tarjetas rojas |
+
+#### Tabla: `sovereign_distributions`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `match_id` | `VARCHAR` | `PK, FK → matches.id` | Partido analizado |
+| `model_version` | `VARCHAR` | `PK` | Versión del modelo Poisson + calibración |
+| `p_local` | `FLOAT` | `NOT NULL` | Probabilidad soberana local |
+| `p_empate` | `FLOAT` | `NOT NULL` | Probabilidad soberana empate |
+| `p_visitante` | `FLOAT` | `NOT NULL` | Probabilidad soberana visitante |
+| `lambda_h` | `FLOAT` | `NOT NULL` | Tasa goles esperados local $\lambda_h$ |
+| `lambda_a` | `FLOAT` | `NOT NULL` | Tasa goles esperados visitante $\lambda_a$ |
+| `phi_lead2_home` | `FLOAT` | | Prob. ventaja $\ge 2$ goles a favor local (André) |
+| `phi_lead2_away` | `FLOAT` | | Prob. ventaja $\ge 2$ goles a favor visitante (André) |
+| `epistemic_delta` | `FLOAT` | | Delta epistémico de incertidumbre del modelo |
+| `audit_trace_json` | `TEXT` | | JSON de trazabilidad de auditoría completa |
+| `created_at` | `DATETIME` | `NOT NULL` | Timestamp UTC de creación del registro |
+
+#### Tablas: `slates` y `slate_items`
+**`slates`** — Concurso principal (Progol, quiniela multitorneo):
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `VARCHAR` | `PK` | ID único del concurso (ej. `PROGOL-2026-J17`) |
+| `name` | `VARCHAR` | `NOT NULL` | Nombre del concurso |
+| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga principal del concurso |
+| `matchday_num` | `INTEGER` | `NOT NULL` | Jornada asociada |
+| `status` | `VARCHAR` | `NOT NULL` | Estado del concurso: `OPEN`, `CLOSED`, `SETTLED` |
+| `created_at` | `DATETIME` | `NOT NULL` | Timestamp de creación |
+
+**`slate_items`** — Partidos incluidos en cada concurso:
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `INTEGER` | `PK` | ID autoincremental |
+| `slate_id` | `VARCHAR` | `FK → slates.id` | Concurso al que pertenece |
+| `match_id` | `VARCHAR` | `FK → matches.id` | Partido incluido |
+| `position` | `INTEGER` | `NOT NULL` | Posición en la quiniela (1–N) |
+
+### [ARCH-1.5.2] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
 
 * **Motor:** SQLAlchemy 2.0 conectado a `sqlite:///data/qbe_database.db` con `check_same_thread=False`.
 * **Ciclo Lifespan de Inicio (FastAPI):**
@@ -155,7 +262,7 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   2. Ejecutar Seeder (`src/storage/seeder.py`): inicializar Liga MX (ID: 262) si no existe.
   3. Ejecutar Sincronización de Arranque (`src/storage/sync_service.py`): consultar FotMob, validar y persistir la tabla general completa de 18 clubes y la cartelera activa.
 
-### [ARCH-1.5.1] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG]
+### [ARCH-1.5.3] Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG]
 
 * **Prohibición de URLs Vulnerables:** Queda estrictamente prohibido utilizar enlaces directos al CDN de FotMob (`images.fotmob.com`) para el renderizado de escudos en la interfaz, debido al bloqueo sistemático HTTP 403 por políticas de Anti-Hotlinking y a la presencia histórica de IDs cruzados o extintos.
 * **Fuente Canónica Primaria (Federación Oficial):** La única fuente oficial fáctica para la extracción de escudos de la Liga MX es el portal de la liga (`https://ligamx.net/`) y su CDN oficial centralizado:
@@ -298,7 +405,17 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
   - Para Doble Oportunidad Sintética (`QBE-R2`), ambos boletos se escalan por el factor $\max\left(\frac{2.00}{B_1}, \frac{2.00}{B_2}\right)$.
 ### [ARCH-1.6.10] Herramienta de Saneamiento SQLite y Protocolo de Inferencia On-Demand [ARCH-PILLAR]
 * **Utilidad de Purga (`scripts/utilidades/purgar_base_datos.py`):** Permite el reseteo selectivo de las tablas volátiles de snapshots (`fixture_snapshots`, `standing_snapshots`, `portfolio_records`) preservando de forma inmutable el catálogo de `leagues` y `teams`.
-* **Axioma de Inferencia Diferida (Lazy-Loading Cognitivo):** Al generar la cartera en `POST /api/portfolio/generate`, el campo `tesis_didactica` debe emitirse estrictamente como `None` o `"PENDIENTE"`. La invocación a `GeminiCognitiveGateway` se ejecuta de forma exclusiva bajo demanda a través de `POST /api/portfolio/match-thesis` al abrir el modal de Radiografía Forense.
+* **Axioma de Inferencia Diferida (Lazy-Loading Cognitivo):** Al generar la cartera en `POST /api/portfolio/generate`, el campo `tesis_didactica` debe emitirse strictly como `None` o `"PENDIENTE"`. La invocación a `GeminiCognitiveGateway` se ejecuta de forma exclusiva bajo demanda a través de `POST /api/portfolio/match-thesis` al abrir el modal de Radiografía Forense.
+
+### [ARCH-1.6.11] Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`) [DIRGEN-SEALED]
+
+* **Propósito:** Actuar como el puente transaccional definitivo entre los datos deportivos y la tabla relacional 3NF `sovereign_distributions`.
+* **Mecánica:**
+  1. Consulta a través de `PersistenceGateway.read_session()` los partidos programados (`Match` o `FixtureSnapshot`).
+  2. Para cada partido, ejecuta `generar_distribucion_soberana(match_id, raw_data, mu_liga, gamma_home)`.
+  3. A través de `PersistenceGateway.write_transaction()`, ejecuta un upsert atómico en la tabla `sovereign_distributions`, persistiendo:
+     `match_id`, `model_version`, `p_local`, `p_empate`, `p_visitante`, `lambda_home`, `lambda_away`, `phi_lead2_home`, `phi_lead2_away`, `audit_trace_json`.
+* **Idempotencia:** Si el partido ya tiene una distribución idéntica calculada con la misma versión del modelo, no genera escrituras redundantes.
 
 ---
 

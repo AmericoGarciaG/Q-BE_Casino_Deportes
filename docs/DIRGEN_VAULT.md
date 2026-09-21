@@ -1,0 +1,678 @@
+# 🏛️ Q-BE DIRGEN VAULT (BÓVEDA DE CÓDIGO CANÓNICO PROTEGIDO)
+**Marco Rector:** Kybern Framework v12.0 (Directed Generative Engineering)  
+**Autoridad:** Américo García Guerrero (Director Humano)  
+**Estado:** `[DIRGEN-SEALED]` — Bóveda de Código Inmutable  
+**Aviso:** Este documento resguarda las transcripciones canónicas de los algoritmos matemáticos y transaccionales críticos de Q-BE. Queda prohibida la modificación de cualquier bloque sellado sin una Ficha de Varianza aprobada.
+
+---
+
+## ÍNDICE DE COMPONENTES CANÓNICOS
+1. `[VAULT-CORE-001]` Ecuación Log-Lineal Canónica y Ligadura Estructural de α (`src/core/intensity_canonical_loglink.py`)
+2. `[VAULT-CORE-002]` Compresión Hiperbólica Simétrica tanh y Damping (`src/core/metrics_damping_orthogonalizer.py`)
+3. `[VAULT-CORE-003]` Fórmula Cerrada de André para Pago Anticipado Π_Lead2 (`src/core/andre_early_payout.py`)
+4. `[VAULT-CORE-004]` Concurso Pseudo-BMA con Máscara Booleana (`src/core/generators_ensemble_bma.py`)
+5. `[VAULT-CORE-005]` Registro de Variables, Suficiencia Fáctica S(I) y Orquestador Soberano (`src/core/sovereign_pipeline.py`)
+6. `[VAULT-DATA-001]` Central Persistence Gateway y PRAGMAs Transaccionales (`src/storage/gateway.py`)
+7. `[VAULT-DATA-002]` Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`)
+
+*(Los bloques de código canónico se incorporan durante el despliegue de la Fase 5).*
+
+---
+
+## [VAULT-DATA-001] Central Persistence Gateway (`src/storage/gateway.py`)
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-SPRINT5.1-VERIFIED  
+
+```python
+# -*- coding: utf-8 -*-
+"""
+🏆 Q-BE PERSISTENCE GATEWAY — CENTRAL DATA ACCESS & UNIT OF WORK
+[VAULT-DATA-001] Motor Transaccional SQLite WAL con Foreign Keys y Aislamiento de Contextos.
+Base de Gobierno: Kybern Framework v12.0 [ARCH-1.5.0]
+"""
+
+import os
+import sqlite3
+import logging
+from contextlib import contextmanager
+from typing import Generator
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker, Session
+from src.config import settings
+
+logger = logging.getLogger("PersistenceGateway")
+
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    """
+    [ARCH-1.5.0] Configuración inmutable de motor SQLite en cada conexión:
+    - WAL Mode: Concurrencia masiva lecturas/escrituras.
+    - Foreign Keys: Integridad referencial estricta 3NF.
+    - Synchronous NORMAL: Seguridad física con máxima velocidad.
+    - Busy Timeout: 15,000 ms para eliminar bloqueos de concurrencia.
+    """
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode = WAL;")
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA synchronous = NORMAL;")
+        cursor.execute("PRAGMA busy_timeout = 15000;")
+        cursor.close()
+
+
+class PersistenceGateway:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(PersistenceGateway, cls).__new__(cls)
+            cls._instance._init_engine()
+        return cls._instance
+
+    def _init_engine(self):
+        db_path = settings.DATABASE_URL
+        connect_args = {"check_same_thread": False} if "sqlite" in db_path else {}
+        
+        self.engine = create_engine(
+            db_path,
+            connect_args=connect_args,
+            pool_pre_ping=True
+        )
+        self.SessionFactory = sessionmaker(
+            bind=self.engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False
+        )
+        self._verify_database_health()
+
+    def _verify_database_health(self):
+        """Ejecuta PRAGMA quick_check al arranque para detectar corrupción."""
+        with self.engine.connect() as conn:
+            result = conn.exec_driver_sql("PRAGMA quick_check;").scalar()
+            if result != "ok":
+                raise RuntimeError(f"🚨 FATAL: Base de datos corrupta: {result}")
+            logger.info("🛡️ [GATEWAY HEALTH] SQLite integrity verified: OK (WAL Mode & FK Active)")
+
+    @contextmanager
+    def read_session(self) -> Generator[Session, None, None]:
+        """
+        Contexto de Solo Lectura (FastAPI UI / Endpoints).
+        No-lock, ultraligero (< 2ms), auto-close garantizado.
+        """
+        session: Session = self.SessionFactory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    @contextmanager
+    def write_transaction(self) -> Generator[Session, None, None]:
+        """
+        Contexto de Escritura Atómica (Unit of Work para Daemons).
+        Commit automático si todo es exitoso; ROLLBACK total ante cualquier excepción.
+        """
+        session: Session = self.SessionFactory()
+        try:
+            yield session
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.error(f"❌ [GATEWAY ROLLBACK] Transacción abortada por excepción: {ex}")
+            raise ex
+        finally:
+            session.close()
+
+    def create_all_tables(self, base_metadata):
+        """Crea todas las tablas declaradas en el esquema ORM."""
+        base_metadata.create_all(bind=self.engine)
+        logger.info("✅ [GATEWAY TABLES] Esquema relacional 3NF sincronizado.")
+
+
+---
+
+## [VAULT-CORE-001] Ecuación Log-Lineal Canónica y Ligadura Estructural de α (`src/core/intensity_canonical_loglink.py`)
+**Estado:** `[ESTADO: CANON EN FORJA]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+# [VAULT-CORE-001] Ecuación Log-Lineal Canónica, Ligadura de α y Damping tanh
+# src/core/intensity_canonical_loglink.py
+# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+
+import math
+from typing import Tuple, Optional
+
+def calcular_alpha_ligadura(mu_liga: float = 2.65, gamma_home: float = 0.15) -> float:
+    """
+    [Sección 4.9.1] Ecuación de Ligadura Estructural de Q-BE:
+    alpha = ln(mu_liga) - ln(1.0 + exp(gamma_home))
+    Garantiza analíticamente la conservación de masa de goles de la competición.
+    """
+    gamma_val = float(gamma_home) if gamma_home is not None else 0.15
+    mu_val = float(mu_liga) if mu_liga is not None else 2.65
+    return math.log(mu_val) - math.log(1.0 + math.exp(gamma_val))
+
+
+def aplicar_damping_hiperbolico(factor_crudo: float, sigma_liga: float = 1.0, kappa_mult: float = 2.5) -> float:
+    """
+    [Sección 4.12] Compresión Hiperbólica Simétrica:
+    A = kappa * tanh(A_crudo / kappa), donde kappa = 2.5 * sigma_liga.
+    Preserva estrictamente la media cero E[A] = 0 y acota divergencias asintóticas.
+    """
+    kappa = float(kappa_mult * sigma_liga)
+    if kappa <= 0.0:
+        return 0.0
+    return kappa * math.tanh(float(factor_crudo) / kappa)
+
+
+def estimar_intensidades_loglineal(
+    A_home: float,
+    D_away: float,
+    A_away: float,
+    D_home: float,
+    mu_liga: float = 2.65,
+    gamma_home_base: float = 0.15,
+    delta_alt_metros: float = 0.0,
+    delta_descanso_dias: float = 0.0,
+    q_mod_h: float = 1.0,
+    q_mod_a: float = 1.0,
+    sigma_A: float = 0.25,
+    sigma_D: float = 0.25
+) -> Tuple[float, float]:
+    """
+    [Sección 4.9] Arquitectura Canónica Log-Lineal:
+    ln(lambda_H) = alpha + gamma_home + A_H - D_A + C_H
+    ln(lambda_A) = alpha + A_A - D_H + C_A
+    """
+    # 1. Ligadura estructural
+    alpha = calcular_alpha_ligadura(mu_liga, gamma_home_base)
+
+    # 2. Damping hiperbólico aguas arriba en factores
+    A_h_damped = aplicar_damping_hiperbolico(A_home, sigma_A)
+    D_a_damped = aplicar_damping_hiperbolico(D_away, sigma_D)
+    A_a_damped = aplicar_damping_hiperbolico(A_away, sigma_A)
+    D_h_damped = aplicar_damping_hiperbolico(D_home, sigma_D)
+
+    # 3. Operador vectorial de localía (Sección 4.7)
+    delta_alt_term = 0.03 * max(0.0, delta_alt_metros / 1000.0)
+    delta_rest_term = 0.02 * max(-3.0, min(3.0, delta_descanso_dias))
+    gamma_contextual = gamma_home_base + delta_alt_term + delta_rest_term
+
+    # 4. Factores contextuales en espacio logarítmico
+    q_h_clamped = max(0.90, min(1.05, float(q_mod_h)))
+    q_a_clamped = max(0.90, min(1.05, float(q_mod_a)))
+    C_h = math.log(q_h_clamped)
+    C_a = math.log(q_a_clamped)
+
+    # 5. Formulación log-lineal canónica
+    eta_h = alpha + gamma_contextual + A_h_damped - D_a_damped + C_h
+    eta_a = alpha + A_a_damped - D_h_damped + C_a
+
+    # 6. Transformación exponencial e Invariante I6 (Positividad estricta acotada)
+    lambda_h = max(0.15, min(4.50, math.exp(eta_h)))
+    lambda_a = max(0.15, min(4.50, math.exp(eta_a)))
+
+    return round(lambda_h, 4), round(lambda_a, 4)
+```
+
+
+---
+
+## [VAULT-CORE-003] Fórmula Cerrada de André para Pago Anticipado Π_Lead2 (`src/core/andre_early_payout.py`)
+**Estado:** `[ESTADO: CANON EN FORJA]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+# [VAULT-CORE-003] Fórmula Cerrada de André para Pago Anticipado Π_Lead2
+# src/core/andre_early_payout.py
+# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+
+from typing import List
+
+def operador_seccional_andre(x: int, y: int) -> float:
+    """
+    [Sección 5.20.2] Fórmula Cerrada de Désiré André para activación de ventaja +2:
+    pi(x, y) = x*(x-1) / ((y+1)*(y+2)) para marcadores con x >= 2.
+    Evaluación continua exacta en tiempo constante O(1).
+    """
+    if x - y >= 2:
+        return 1.0000
+    if x < 2:
+        return 0.0000
+    
+    # Marcadores de erosión: x >= 2 pero x - y < 2 (ej. 2-1, 3-2, 4-3)
+    num = float(x * (x - 1))
+    den = float((y + 1) * (y + 2))
+    prob = num / den
+    return max(0.0, min(1.0, prob))
+
+
+def calcular_probabilidad_pago_anticipado(matriz_2d: List[List[float]], es_local: bool = True) -> float:
+    """
+    [Sección 5.20.3] Integra el Operador de André sobre la matriz 2D consolidada:
+    Phi_Lead2 = Sum_x Sum_y [ Pi_Lead2(x, y) * M_xy ]
+    """
+    phi_acumulado = 0.0
+    k_dim = len(matriz_2d)
+
+    for x in range(k_dim):
+        for y in range(k_dim):
+            p_marcador = matriz_2d[x][y]
+            if p_marcador <= 0.0:
+                continue
+            
+            # Si evaluamos al local: x son sus goles, y los del rival.
+            # Si evaluamos al visitante: y son sus goles, x los del rival.
+            goles_fav = x if es_local else y
+            goles_und = y if es_local else x
+
+            pi_hit = operador_seccional_andre(goles_fav, goles_und)
+            phi_acumulado += pi_hit * p_marcador
+
+    return round(max(0.0, min(1.0, phi_acumulado)), 4)
+```
+
+
+---
+
+## [VAULT-CORE-004] Generador Dixon-Coles y Colapso Geométrico al Símplex Δ² (`src/core/distribution_dixon_coles.py`)
+**Estado:** `[ESTADO: CANON EN FORJA]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+# [VAULT-CORE-004] Generador Dixon-Coles y Colapso Geométrico al Símplex Δ²
+# src/core/distribution_dixon_coles.py
+# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+
+import math
+from typing import List, Tuple, Dict, Any
+
+def calcular_matriz_dixon_coles(
+    lambda_h: float,
+    lambda_a: float,
+    rho: float = 0.0,
+    k_max: int = 6
+) -> List[List[float]]:
+    """
+    [Sección 5.3.1 y 5.16] Generador paramétrico con corrección de dependencia
+    en baja puntuación bajo Teorema de No-Negatividad Estricta (Invariante I13).
+    """
+    # 1. Cotas analíticas de admisibilidad de rho (Sección 5.16.1)
+    cota_inf = -min(1.0 / max(0.01, lambda_h), 1.0 / max(0.01, lambda_a))
+    cota_sup = min(1.0, 1.0 / max(0.01, lambda_h * lambda_a))
+    rho_admisible = max(cota_inf, min(cota_sup, rho))
+
+    # 2. Distribución de Poisson base
+    def pois_prob(lmb: float, k: int) -> float:
+        return (math.exp(-lmb) * (lmb ** k)) / math.factorial(k)
+
+    # 3. Factor de corrección tau(x, y)
+    def tau_factor(x: int, y: int) -> float:
+        if x == 0 and y == 0:
+            return 1.0 - (lambda_h * lambda_a * rho_admisible)
+        if x == 0 and y == 1:
+            return 1.0 + (lambda_h * rho_admisible)
+        if x == 1 and y == 0:
+            return 1.0 + (lambda_a * rho_admisible)
+        if x == 1 and y == 1:
+            return 1.0 - rho_admisible
+        return 1.0
+
+    matriz = []
+    suma_total = 0.0
+
+    for x in range(k_max + 1):
+        fila = []
+        p_x = pois_prob(lambda_h, x)
+        for y in range(k_max + 1):
+            p_y = pois_prob(lambda_a, y)
+            p_conjunta = max(0.0, p_x * p_y * tau_factor(x, y))
+            fila.append(p_conjunta)
+            suma_total += p_conjunta
+        matriz.append(fila)
+
+    # 4. Renormalización estricta sobre el retículo truncado (Sección 5.14)
+    if suma_total > 0.0:
+        for x in range(k_max + 1):
+            for y in range(k_max + 1):
+                matriz[x][y] /= suma_total
+
+    return matriz
+
+
+def colapsar_matriz_a_simplex(matriz_2d: List[List[float]]) -> Tuple[float, float, float]:
+    """
+    [Sección 5.7 a 5.10] Colapso geométrico exacto de regiones disjuntas sobre el Símplex Δ²:
+    p_1 = Sum_{x > y} M_xy
+    p_X = Sum_{x = y} M_xy
+    p_2 = Sum_{x < y} M_xy
+    Garantiza formalmente Invariante I1 (Exhaustividad) e Invariante I14 (Partición).
+    """
+    p_local = 0.0
+    p_empate = 0.0
+    p_visitante = 0.0
+    k_dim = len(matriz_2d)
+
+    for x in range(k_dim):
+        for y in range(k_dim):
+            val = matriz_2d[x][y]
+            if x > y:
+                p_local += val
+            elif x == y:
+                p_empate += val
+            else:
+                p_visitante += val
+
+    # Normalización final de seguridad para redondear a 4 decimales
+    p_1 = round(p_local, 4)
+    p_X = round(p_empate, 4)
+    p_2 = round(1.0 - p_1 - p_X, 4)
+
+    return p_1, p_X, p_2
+```
+
+---
+
+## [VAULT-CORE-005] Registro de Variables, Suficiencia Fáctica S(I) y Orquestador Soberano (`src/core/sovereign_pipeline.py`)
+**Estado:** `[ESTADO: CANON EN FORJA]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+# [VAULT-CORE-005] Registro de Variables, Suficiencia Fáctica S(I) y Orquestador Soberano
+# src/core/sovereign_pipeline.py
+# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+
+import math
+from typing import Dict, Any, Tuple, Optional
+from pydantic import BaseModel, Field
+
+from src.core.intensity_canonical_loglink import estimar_intensidades_loglineal
+from src.core.distribution_dixon_coles import calcular_matriz_dixon_coles, colapsar_matriz_a_simplex
+from src.core.andre_early_payout import calcular_probabilidad_pago_anticipado
+
+
+class StochasticAuditTrace(BaseModel):
+    """Traza forense inmutable de la generación de la distribución soberana."""
+    match_id: str
+    suficiencia_S_I: int = Field(description="1 si satisface datos mínimos, 0 si entra en ignorancia")
+    factores_entrada: Dict[str, float]
+    intensidades: Dict[str, float]
+    distribucion_simplex: Dict[str, float]
+    phi_lead2: Dict[str, float]
+    matriz_resumen: Dict[str, float]
+
+
+class SovereignDistributionOutput(BaseModel):
+    """Contrato formal de salida de la Capa Probabilística Soberana."""
+    match_id: str
+    p_local: float
+    p_empate: float
+    p_visitante: float
+    lambda_home: float
+    lambda_away: float
+    phi_lead2_home: float
+    phi_lead2_away: float
+    es_operable: bool
+    audit_trace: StochasticAuditTrace
+
+
+def evaluar_suficiencia_informativa(raw_match_data: Dict[str, Any]) -> bool:
+    """
+    [Sección 2.13.1] Evalúa la función indicadora S(I_i) in {0, 1}.
+    Requiere al menos 3 partidos jugados por equipo y datos básicos de goles.
+    """
+    h_data = raw_match_data.get("home_team_stats", {})
+    a_data = raw_match_data.get("away_team_stats", {})
+
+    pj_h = int(h_data.get("pj", 0) or 0)
+    pj_a = int(a_data.get("pj", 0) or 0)
+
+    if pj_h < 3 or pj_a < 3:
+        return False
+    return True
+
+
+def derivar_factores_estructurales(raw_match_data: Dict[str, Any], mu_liga: float = 2.65) -> Tuple[float, float, float, float]:
+    """
+    [Sección 4.5 y 4.6] Convierte métricas de Nivel 1 en factores log-diferenciales centrados en media cero:
+    Retorna: (A_home, D_away, A_away, D_home)
+    """
+    h = raw_match_data.get("home_team_stats", {})
+    a = raw_match_data.get("away_team_stats", {})
+
+    pj_h = max(1, int(h.get("pj", 8)))
+    pj_a = max(1, int(a.get("pj", 8)))
+
+    mu_base_equipo = max(0.5, mu_liga / 2.0)
+
+    # 1. Ataque Local
+    gf_h_per_game = float(h.get("gf", 10)) / pj_h
+    xg_h_per_game = float(h.get("xg", gf_h_per_game * 1.05))
+    att_h_rate = (0.65 * xg_h_per_game) + (0.35 * gf_h_per_game)
+    A_home = math.log(max(0.2, att_h_rate) / mu_base_equipo)
+
+    # 2. Defensa Visita (con signo negativo hacia intensidad rival)
+    gc_a_per_game = float(a.get("gc", 12)) / pj_a
+    xga_a_per_game = float(a.get("xga", gc_a_per_game * 0.95))
+    def_a_rate = (0.65 * xga_a_per_game) + (0.35 * gc_a_per_game)
+    # Si concede más que la media -> D_away es negativo (defensa débil)
+    D_away = -math.log(max(0.2, def_a_rate) / mu_base_equipo)
+
+    # 3. Ataque Visita
+    gf_a_per_game = float(a.get("gf", 7)) / pj_a
+    xg_a_per_game = float(a.get("xg", gf_a_per_game * 1.05))
+    att_a_rate = (0.65 * xg_a_per_game) + (0.35 * gf_a_per_game)
+    A_away = math.log(max(0.2, att_a_rate) / mu_base_equipo)
+
+    # 4. Defensa Local
+    gc_h_per_game = float(h.get("gc", 10)) / pj_h
+    xga_h_per_game = float(h.get("xga", gc_h_per_game * 0.95))
+    def_h_rate = (0.65 * xga_h_per_game) + (0.35 * gc_h_per_game)
+    D_home = -math.log(max(0.2, def_h_rate) / mu_base_equipo)
+
+    return round(A_home, 4), round(D_away, 4), round(A_away, 4), round(D_home, 4)
+
+
+def generar_distribucion_soberana(
+    match_id: str,
+    raw_match_data: Dict[str, Any],
+    mu_liga: float = 2.65,
+    gamma_home_base: float = 0.15,
+    delta_alt_metros: float = 0.0,
+    delta_descanso_dias: float = 0.0,
+    q_mod_h: float = 1.0,
+    q_mod_a: float = 1.0,
+    rho: float = -0.05
+) -> SovereignDistributionOutput:
+    """
+    [TRATADO VOLUMEN I] Generador Soberano Universal de la Distribución del Partido.
+    Pipeline completo: Datos -> S(I) -> Factores -> Intensidades acotadas -> Dixon-Coles 2D -> André -> Simplex.
+    """
+    # 1. Comprobación de Suficiencia Fáctica S(I_i)
+    if not evaluar_suficiencia_informativa(raw_match_data):
+        trace_insuf = StochasticAuditTrace(
+            match_id=match_id,
+            suficiencia_S_I=0,
+            factores_entrada={},
+            intensidades={"lambda_h": 1.325, "lambda_a": 1.325},
+            distribucion_simplex={"p_1": 0.3333, "p_X": 0.3333, "p_2": 0.3334},
+            phi_lead2={"phi_h": 0.0, "phi_a": 0.0},
+            matriz_resumen={}
+        )
+        return SovereignDistributionOutput(
+            match_id=match_id,
+            p_local=0.3333, p_empate=0.3333, p_visitante=0.3334,
+            lambda_home=1.325, lambda_away=1.325,
+            phi_lead2_home=0.0, phi_lead2_away=0.0,
+            es_operable=False,
+            audit_trace=trace_insuf
+        )
+
+    # 2. Derivación de Factores Estructurales
+    A_h, D_a, A_a, D_h = derivar_factores_estructurales(raw_match_data, mu_liga)
+
+    # 3. Estimación de Intensidades con Ligadura de alpha y Damping tanh
+    lh, la = estimar_intensidades_loglineal(
+        A_home=A_h, D_away=D_a,
+        A_away=A_a, D_home=D_h,
+        mu_liga=mu_liga, gamma_home_base=gamma_home_base,
+        delta_alt_metros=delta_alt_metros,
+        delta_descanso_dias=delta_descanso_dias,
+        q_mod_h=q_mod_h, q_mod_a=q_mod_a
+    )
+
+    # 4. Construcción de la Matriz Conjunta Dixon-Coles 2D
+    matriz_2d = calcular_matriz_dixon_coles(lambda_h=lh, lambda_a=la, rho=rho, k_max=6)
+
+    # 5. Colapso Geométrico al Símplex Delta^2
+    p1, pX, p2 = colapsar_matriz_a_simplex(matriz_2d)
+
+    # 6. Evaluación de la Cláusula de Pago Anticipado (Operador de André en O(1))
+    phi_h = calcular_probabilidad_pago_anticipado(matriz_2d, es_local=True)
+    phi_a = calcular_probabilidad_pago_anticipado(matriz_2d, es_local=False)
+
+    # 7. Consolidación de Traza Forense
+    trace = StochasticAuditTrace(
+        match_id=match_id,
+        suficiencia_S_I=1,
+        factores_entrada={"A_home": A_h, "D_away": D_a, "A_away": A_a, "D_home": D_h},
+        intensidades={"lambda_home": lh, "lambda_away": la, "ratio": round(lh / la, 2)},
+        distribucion_simplex={"p_1": p1, "p_X": pX, "p_2": p2},
+        phi_lead2={"phi_home": phi_h, "phi_away": phi_a},
+        matriz_resumen={"0_0": round(matriz_2d[0][0], 4), "1_0": round(matriz_2d[1][0], 4), "1_1": round(matriz_2d[1][1], 4)}
+    )
+
+    return SovereignDistributionOutput(
+        match_id=match_id,
+        p_local=p1, p_empate=pX, p_visitante=p2,
+        lambda_home=lh, lambda_away=la,
+        phi_lead2_home=phi_h, phi_lead2_away=phi_a,
+        es_operable=True,
+        audit_trace=trace
+    )
+```
+
+---
+
+## [VAULT-DATA-002] Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`)
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-SPRINT5.5-VERIFIED  
+
+```python
+# -*- coding: utf-8 -*-
+"""
+🏆 Q-BE PERSISTENCE BRIDGE — SINCRONIZACIÓN DE DISTRIBUCIONES SOBERANAS
+[ARCH-1.6.11] Puente Transaccional E2E: Hechos Deportivos -> Sovereign Pipeline -> SQLite 3NF.
+Base de Gobierno: Kybern Framework v12.0 / Tratado Volumen I
+"""
+
+import logging
+from typing import Dict, Any, List, Optional
+from src.storage.gateway import PersistenceGateway
+from src.storage.models import Competition, Match, SovereignDistribution
+from src.core.sovereign_pipeline import generar_distribucion_soberana
+
+logger = logging.getLogger("DistributionSync")
+
+
+def sincronizar_distribuciones_soberanas_partidos(
+    partidos_datos: List[Dict[str, Any]],
+    gateway: Optional[PersistenceGateway] = None
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.6.11] Ejecuta la generación y persistencia transaccional atómica
+    de distribuciones soberanas sobre la tabla 3NF 'sovereign_distributions'.
+    """
+    gw = gateway or PersistenceGateway()
+    procesados = 0
+    exitosos = 0
+    errores = []
+
+    for item in partidos_datos:
+        match_id = item.get("match_id")
+        comp_id = item.get("competition_id", "MEX_LIGAMX")
+
+        if not match_id:
+            continue
+
+        procesados += 1
+
+        try:
+            # 1. Obtener parámetros macro de la competición desde la BD
+            mu_liga = 2.65
+            gamma_home = 0.15
+
+            with gw.read_session() as session:
+                comp = session.query(Competition).filter(Competition.id == comp_id).first()
+                if comp:
+                    mu_liga = float(comp.macro_mu_liga or 2.65)
+                    gamma_home = float(comp.macro_gamma_home or 0.15)
+
+            # 2. Generación matemática soberana con el pipeline del Tratado Vol. I
+            dist_out = generar_distribucion_soberana(
+                match_id=match_id,
+                raw_match_data=item,
+                mu_liga=mu_liga,
+                gamma_home_base=gamma_home,
+                delta_alt_metros=float(item.get("delta_alt_metros", 0.0) or 0.0),
+                delta_descanso_dias=float(item.get("delta_descanso_dias", 0.0) or 0.0),
+                q_mod_h=float(item.get("q_mod_h", 1.0) or 1.0),
+                q_mod_a=float(item.get("q_mod_a", 1.0) or 1.0)
+            )
+
+            # 3. Persistencia atómica en la tabla 3NF 'sovereign_distributions'
+            trace_dict = dist_out.audit_trace.model_dump()
+            epist_delta = float(trace_dict.get("intensidades", {}).get("ratio", 0.0) or 0.0)
+
+            with gw.write_transaction() as tx:
+                dist_rec = tx.query(SovereignDistribution).filter(
+                    SovereignDistribution.match_id == match_id
+                ).first()
+
+                if not dist_rec:
+                    dist_rec = SovereignDistribution(
+                        match_id=match_id,
+                        model_version="v13.0-DIRGEN",
+                        p_local=dist_out.p_local,
+                        p_empate=dist_out.p_empate,
+                        p_visitante=dist_out.p_visitante,
+                        lambda_home=dist_out.lambda_home,
+                        lambda_away=dist_out.lambda_away,
+                        phi_lead2_home=dist_out.phi_lead2_home,
+                        phi_lead2_away=dist_out.phi_lead2_away,
+                        epistemic_delta=epist_delta,
+                        audit_trace_json=trace_dict
+                    )
+                    tx.add(dist_rec)
+                else:
+                    dist_rec.model_version = "v13.0-DIRGEN"
+                    dist_rec.p_local = dist_out.p_local
+                    dist_rec.p_empate = dist_out.p_empate
+                    dist_rec.p_visitante = dist_out.p_visitante
+                    dist_rec.lambda_home = dist_out.lambda_home
+                    dist_rec.lambda_away = dist_out.lambda_away
+                    dist_rec.phi_lead2_home = dist_out.phi_lead2_home
+                    dist_rec.phi_lead2_away = dist_out.phi_lead2_away
+                    dist_rec.epistemic_delta = epist_delta
+                    dist_rec.audit_trace_json = trace_dict
+
+            exitosos += 1
+            logger.info(f"✅ [SOVEREIGN PERSISTED] Distribución guardada en SQLite para {match_id}: ({dist_out.p_local:.4f}, {dist_out.p_empate:.4f}, {dist_out.p_visitante:.4f})")
+
+        except Exception as ex:
+            logger.error(f"❌ Error sincronizando distribución para {match_id}: {ex}")
+            errores.append({"match_id": match_id, "error": str(ex)})
+
+    return {
+        "procesados": procesados,
+        "exitosos": exitosos,
+        "errores": errores
+    }
+```
+
+

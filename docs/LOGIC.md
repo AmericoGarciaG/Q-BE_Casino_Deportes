@@ -517,8 +517,12 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   4. Invarianza de Techo: $\text{EV}_{\text{Global}} \le \sum \text{Premios\_Máximos}$.
 * **O (Output):** Veredicto formal en consola: `EXIT CODE 0 (THE SHIELD PASSED)` o `EXIT CODE 1 (BLOCKED)`.
 
-### ID: [LN-QBE-035] Fórmulas de Derivación Opta y Tokens de Marcador
+### ID: [LN-QBE-035] Registro Modular de Variables y Suficiencia Fáctica
 
+* **Ω (Resumen):** Gobernar la transformación determinista de datos observados ($\mathcal{I}_i$) en factores estructurales normalizados ($\mathcal{A}_i, \mathcal{D}_i$) bajo la regla de suficiencia $S(\mathcal{I}_i) \in \{0, 1\}$.
+* **Suficiencia $S(\mathcal{I}_i)$:** Requiere obligatoriamente que ambos clubes cuenten con partidos jugados $PJ \ge 3$, métricas de goles y tiros $SoT > 0$. Si $S(\mathcal{I}_i) = 0$, la distribución colapsa al prior de ignorancia uniforme $(1/3, 1/3, 1/3)$ y se marca como no operable.
+* **Cálculo de Factores Normalizados:**
+  $$A_{\text{home}} = \ln\left(\frac{0.65 \cdot xG_{\text{local}} + 0.35 \cdot GF_{\text{local}}}{\mu_{\text{liga}} / 2}\right), \quad D_{\text{away}} = -\ln\left(\frac{0.65 \cdot xGA_{\text{visita}} + 0.35 \cdot GC_{\text{visita}}}{\mu_{\text{liga}} / 2}\right)$$
 * **Derivación de $xG/xGA$ en Ausencia de Tiros Profundos (H7):**
   $$\text{Fav } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Fav}} \times 1.05, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Fav}} \times 0.95, 2)$$
   $$\text{Und } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Und}} \times 0.95, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Und}} \times 1.10, 2)$$

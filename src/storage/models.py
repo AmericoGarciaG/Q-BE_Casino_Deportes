@@ -114,4 +114,86 @@ class LLMTokenLedger(Base):
     status = Column(String(20), default="SUCCESS")  # 'SUCCESS', 'COOLDOWN_429', 'FALLBACK'
 
 
+# ── [ARCH-1.5.1] ESQUEMA RELACIONAL NORMALIZADO 3NF MULTI-TORNEO ──────────
+
+class Competition(Base):
+    __tablename__ = "competitions"
+    id = Column(String(50), primary_key=True)  # Ej: 'MEX_LIGAMX', 'ENG_PL', 'ESP_LALIGA'
+    name = Column(String(100), nullable=False)
+    country = Column(String(100), nullable=False)
+    macro_mu_liga = Column(Float, default=2.65)        # μ_liga (Goles promedio incondicionales)
+    macro_gamma_home = Column(Float, default=0.15)    # γ_home (Efecto localía medio incondicional)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Season(Base):
+    __tablename__ = "seasons"
+    id = Column(String(50), primary_key=True)  # Ej: 'MEX_2026_APERTURA', 'ENG_2026_2027'
+    competition_id = Column(String(50), ForeignKey("competitions.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    name = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Match(Base):
+    __tablename__ = "matches"
+    id = Column(String(100), primary_key=True)  # Ej: 'MATCH_MEX_2026_J09_TOL_SAN'
+    competition_id = Column(String(50), ForeignKey("competitions.id"), nullable=False)
+    season_id = Column(String(50), ForeignKey("seasons.id"), nullable=True)
+    matchday_num = Column(Integer, default=1)
+    kickoff_utc = Column(DateTime, nullable=True)
+    home_team_slug = Column(String(50), nullable=False)
+    away_team_slug = Column(String(50), nullable=False)
+    status = Column(String(20), default="SCHEDULED")  # 'SCHEDULED', 'IN_PLAY', 'FINISHED', 'POSTPONED'
+    score_home = Column(Integer, nullable=True)
+    score_away = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MatchTelemetry(Base):
+    __tablename__ = "match_telemetry"
+    match_id = Column(String(100), ForeignKey("matches.id"), primary_key=True)
+    team_slug = Column(String(50), primary_key=True)
+    xg = Column(Float, default=0.0)
+    xga = Column(Float, default=0.0)
+    sot = Column(Float, default=0.0)
+    sota = Column(Float, default=0.0)
+    possession_pct = Column(Float, default=50.0)
+    fouls = Column(Integer, default=0)
+    red_cards = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SovereignDistribution(Base):
+    __tablename__ = "sovereign_distributions"
+    match_id = Column(String(100), ForeignKey("matches.id"), primary_key=True)
+    model_version = Column(String(50), default="v13.0-DIRGEN")
+    p_local = Column(Float, nullable=False)
+    p_empate = Column(Float, nullable=False)
+    p_visitante = Column(Float, nullable=False)
+    lambda_home = Column(Float, nullable=False)
+    lambda_away = Column(Float, nullable=False)
+    phi_lead2_home = Column(Float, default=0.0)
+    phi_lead2_away = Column(Float, default=0.0)
+    epistemic_delta = Column(Float, default=0.0)
+    audit_trace_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Slate(Base):
+    __tablename__ = "slates"
+    id = Column(String(50), primary_key=True)  # Ej: 'PROGOL_2245', 'PRONOSPORTS_754'
+    name = Column(String(100), nullable=False)
+    market_type = Column(String(50), default="PROGOL")  # 'PROGOL', 'PRONOSPORTS', 'MIXTO'
+    closing_utc = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SlateItem(Base):
+    __tablename__ = "slate_items"
+    slate_id = Column(String(50), ForeignKey("slates.id"), primary_key=True)
+    match_id = Column(String(100), ForeignKey("matches.id"), primary_key=True)
+    item_order = Column(Integer, nullable=False)  # Orden 1 a 14 en la quiniela
+
+
 

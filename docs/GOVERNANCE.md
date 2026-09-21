@@ -150,6 +150,24 @@ Todo cambio estructural en `Q_BE_CD_WEB` DEBE ejecutarse mediante el **Motor de 
 * **Acción:** El Agente Constructor implementa el código en `src/` y la clase concreta que hereda del Juez Abstracto.
 * **Cierre de Bucle Ético:** El ciclo concluye ÚNICAMENTE cuando la suite completa de pruebas retorna `Green State (Exit Code 0)`, se ejecuta la auditoría perimetral contra regresiones y se valida que no existan hardcodes.
 
+### 4.1 El Motor de 3 Pasos Extendido (Régimen Dual-Track)
+Para equilibrar la agilidad en la capa de presentación con el rigor extremo en la capa financiera, todo ciclo de desarrollo se bifurca según su Régimen de Gobernanza:
+
+1. **Vía A: Régimen [DBBD-FUNGIBLE] (UI, CSS, Templates, Utilidades):**
+   * *Paso 1 (Legislación):* Definición de contratos IPO y reglas visuales en `docs/`.
+   * *Paso 2 (Juez Inmutable):* Clase abstracta `abc.ABC` con validaciones funcionales y Sad Paths.
+   * *Paso 3 (Materialización):* Autonomía táctica iterativa del Constructor en `src/` hasta `Exit Code 0`.
+2. **Vía B: Régimen [DIRGEN-STRICT] (Matemática Pura, Poisson, André, Kelly, Persistencia):**
+   * *Paso 1 (Legislación + Bóveda):* Contrato IPO + Transcripción Canónica exacta en `docs/DIRGEN_VAULT.md`.
+   * *Paso 2 (Juez + Guardián AST):* Test funcional numérico + Verificador criptográfico de integridad (SHA-256 / AST).
+   * *Paso 3 (Materialización Fiel):* Transcripción determinista al código de producción. Cero tolerancia a modificaciones arbitrarias.
+
+### 4.2 Protocolo Anti-Bandazos (Single-Strike Constraint)
+En componentes bajo `[DIRGEN-STRICT]`, queda estrictamente prohibido el ensayo y error iterativo autónomo. Ante el primer fallo de compilación o ejecución, el Constructor debe detenerse de inmediato y emitir el artefacto `DIRGEN_VARIANCE_REQUEST.md` detallando coordenadas, traceback, diagnóstico causal, abanico de 2 alternativas evaluadas y diff propuesto, esperando resolución de la Dirección.
+
+### 4.3 Protocolo de Gestión Cognitiva y Ventana Limpia [GOV-LLM-01]
+En flujos asistidos por `gemini-3.6-flash`, toda característica mayor debe iniciarse en una ventana de contexto limpia. Si una implementación desvía su esfuerzo en $\ge 50\%$ o entra en bucles de parches, se descarta la ventana y se inicia una nueva sesión limpia ejecutando la directiva de arranque de `AGENTS.md`.
+
 ---
 
 ## 5. TAXONOMÍA DE INCIDENTES Y RUTAS DE RESOLUCIÓN
