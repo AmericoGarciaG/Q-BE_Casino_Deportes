@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, League, SovereignDistribution, CurrentTeamStanding
 from src.core.sovereign_pipeline import generar_distribucion_soberana
+from src.storage.crest_resolver import obtener_slug_club
 
 router = APIRouter(prefix="/api/sovereign", tags=["Sovereign Intelligence"])
 
@@ -140,8 +141,8 @@ def get_sovereign_matches(
                 "match_id": mid,
                 "local": fx.get("local", ""),
                 "visitante": fx.get("visitante", ""),
-                "local_escudo_url": fx.get("local_escudo_url", ""),
-                "visitante_escudo_url": fx.get("visitante_escudo_url", ""),
+                "local_escudo_url": f"/static/img/crests/{obtener_slug_club(fx.get('local', ''))}.png",
+                "visitante_escudo_url": f"/static/img/crests/{obtener_slug_club(fx.get('visitante', ''))}.png",
                 "horario": fx.get("horario", ""),
                 "fecha_bloque": fx.get("fecha_bloque", ""),
                 "estado": fx.get("estado", "PROGRAMADO"),

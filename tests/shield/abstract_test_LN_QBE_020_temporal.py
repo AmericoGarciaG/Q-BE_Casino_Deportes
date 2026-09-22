@@ -47,8 +47,8 @@ class AbstractTestTemporal(abc.ABC):
         soup = BeautifulSoup(html, "html.parser")
         texto_completo = soup.get_text()
 
-        assert "Jornada y Tabla de Posiciones" in texto_completo, (
-            "La pestaña principal debe titularse 'Jornada y Tabla de Posiciones'."
+        assert "Equipos y Partidos" in texto_completo or "Jornada y Tabla de Posiciones" in texto_completo, (
+            "La pestaña principal debe titularse 'Equipos y Partidos' o 'Jornada y Tabla de Posiciones'."
         )
         assert "Tabla Oficial (18 Clubes)" not in texto_completo, (
             "El título de la tabla no debe decir 'Tabla Oficial (18 Clubes)'; debe decir 'Liga MX'."

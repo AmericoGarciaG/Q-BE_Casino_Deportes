@@ -3,165 +3,353 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Q-BE CD WEB — Terminal Cuantitativa & Arbitraje Estocástico</title>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026QBE_V6">
+    <title>Q-BE Casino Deportes — Quantitative Betting Engine</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg?v=2026QBE">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026QBE_V4">
 </head>
-<body class="dark-theme">
+<body>
+    <!-- Header Fino de Un Solo Piso (Max-Height 45px, Fondo #0B132B) -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="header-brand">
+                <span style="font-size: 1rem;">🏛️</span>
+                <span>Q-BE · Casino Deportes</span>
+            </div>
+            
+            <nav class="header-nav">
+                <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Ligas y Torneos</button>
+                <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Equipos y Partidos</button>
+                <button class="tab-btn" data-tab="tab-portfolio">💼 Mesa de Apuestas</button>
+            </nav>
 
-    <!-- 1. BARRA SUPERIOR GLOBAL COCKPIT [DES-QBE-030] -->
-    <header id="main-navbar" class="cockpit-navbar">
-        <div class="navbar-brand">
-            <span class="brand-logo">🏛️</span>
-            <span class="brand-name">Q-BE <span class="brand-badge">QUANT v13</span></span>
+            <div class="status-badge-slim">
+                <span class="status-dot"></span>
+                <span>Sistema en Línea</span>
+            </div>
         </div>
-        <nav class="navbar-menu">
-            <button id="nav-btn-sovereign" class="nav-tab active" onclick="cambiarVistaPrincipal('sovereign')">
-                ⚽ Centro Soberano
-            </button>
-            <button id="nav-btn-markets" class="nav-tab" onclick="cambiarVistaPrincipal('markets')">
-                💼 Estación de Mercados
-            </button>
-            <button id="nav-btn-admin" class="nav-tab" onclick="cambiarVistaPrincipal('admin')">
-                ⚙️ Bóveda & Telemetría
-            </button>
-        </nav>
-        <!-- Compatibilidad Didáctica Shield [DES-QBE-016 / DES-QBE-036] -->
-        <div style="display:none; white-space: nowrap;">Jornada y Tabla de Posiciones</div>
     </header>
 
-
-    <main class="main-container">
-
-        <!-- 2. PANTALLA CORE 1: CENTRO SOBERANO DE INTELIGENCIA DEPORTIVA [DES-QBE-031] -->
-        <div id="view-sovereign-hub" class="view-panel active">
-            <div class="view-header">
-                <h2>⚽ Inteligencia Deportiva Soberana</h2>
-                <div id="sovereign-league-selector" class="pill-selector">
-                    <button class="pill-tab active" data-league="262">🇲🇽 Liga MX</button>
-                    <button class="pill-tab" data-league="47" disabled title="Fase 6.3">🏴 Premier League</button>
-                    <button class="pill-tab" data-league="87" disabled title="Fase 6.3">🇪🇸 LaLiga</button>
+    <main class="content">
+        <!-- VISTA 1: HUB DE LIGAS -->
+        <section id="view-leagues-hub" class="view-section active">
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3>🏆 Ligas y Torneos de Alta Liquidez</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Seleccione el Torneo o Liga para conocer sus estadísticas y probabilidades 1X2 en tiempo real.
+                </p>
+                <div class="leagues-grid">
+                    <!-- Se inyecta dinámicamente vía cargarLigasDesdeBD() -->
                 </div>
             </div>
+        </section>
 
-            <!-- Sub-selector de Jornadas Soberanas -->
-            <div id="sovereign-matchday-selector" class="matchday-pill-selector">
-                <!-- Inyectado dinámicamente -->
-            </div>
+        <!-- VISTA 2: SPLIT-VIEW LIVE BOARD (DES-QBE-016) -->
+        <section id="view-matchday-selection" class="view-section">
+            <div class="split-view">
+                <!-- Panel Izquierdo: Tabla de 18 Clubes con 3 Pestañas -->
+                <div class="card table-panel-left">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0;">🛡️ <span id="lbl-nombre-tabla">Liga MX</span></h3>
+                        <div style="display: flex; gap: 6px;">
+                            <button id="btn-tab-general" class="subtab-btn active" onclick="switchTableTab('general')">📋 General</button>
+                            <button id="btn-tab-forma" class="subtab-btn" onclick="switchTableTab('forma')">📈 Forma</button>
+                            <button id="btn-tab-xg" class="subtab-btn" onclick="switchTableTab('xg')">🎯 xG Opta</button>
+                        </div>
+                    </div>
 
-            <div class="dual-pane-layout">
-                <!-- Panel Izquierdo: Clasificación General y Métricas Opta -->
-                <div class="pane-left">
-                    <div class="card card-clean">
-                        <div class="card-header">
-                            <h3>📊 Clasificación General & Opta</h3>
-                        </div>
-                        <div id="sovereign-standings-container" class="table-responsive">
-                            <!-- Inyectado dinámicamente -->
-                        </div>
+                    <div style="font-size: 7.2pt; color: #94A3B8; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                        <span id="lbl-timestamp-tabla">🕒 Tabla Oficial: Sincronizada en vivo desde la FMF y FotMob</span>
+                        <button id="btn-force-refresh" onclick="refrescarTablaEnVivo()" style="background: transparent; border: none; color: #38BDF8; font-size: 7.2pt; cursor: pointer; text-decoration: underline;">🔄 Refrescar Tabla</button>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table id="table-standings" class="fintech-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: center;">POS</th>
+                                    <th>EQUIPO</th>
+                                    <th style="text-align: center;">PTS</th>
+                                    <!-- General -->
+                                    <th class="col-gen" style="text-align: center;">PJ</th>
+                                    <th class="col-gen" style="text-align: center;">G</th>
+                                    <th class="col-gen" style="text-align: center;">E</th>
+                                    <th class="col-gen" style="text-align: center;">P</th>
+                                    <th class="col-gen" style="text-align: center;">GF:GC</th>
+                                    <th class="col-gen" style="text-align: center;">DIF</th>
+                                    <!-- Forma -->
+                                    <th class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">FORMA (5P)</th>
+                                    <th class="col-forma" style="text-align: center; white-space: nowrap !important; display: none;">PRÓX. RIVAL</th>
+                                    <!-- xG Opta -->
+                                    <th class="col-xg" style="text-align: center; display: none;">xG</th>
+                                    <th class="col-xg" style="text-align: center; display: none;">xGA</th>
+                                    <th class="col-xg" style="text-align: center; display: none;">xPTS</th>
+                                    <th class="col-xg" style="text-align: center; display: none;">DIF xG</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Inyectado dinámicamente con renderizarTabla18Clubes -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <!-- Panel Derecho: Carrusel Cronológico Soberano (CERO CUOTAS) -->
-                <div class="pane-right">
-                    <div class="card card-clean">
-                        <div class="card-header flex-between">
-                            <h3>📅 Encuentros & Probabilidades Soberanas</h3>
-                            <span class="badge-status-neutral">Cero Sesgo Comercial</span>
+                <!-- PANEL DERECHO: CARTELERA SOBERANA [VAULT-UI-001] -->
+                <div class="cartelera-panel card card-clean">
+                    <div class="cartelera-header flex-between">
+                        <div class="flex-align-center gap-10">
+                            <span class="icon-header">⚽</span>
+                            <h3 id="lbl-nombre-jornada" class="m-0">Jornada Activa</h3>
                         </div>
-                        <div id="sovereign-matches-carousel" class="matches-grid">
-                            <!-- Inyectado dinámicamente por app.js (SIN CHECKBOXES) -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- FIN VIEW-SOVEREIGN-HUB -->
-
-        <!-- 3. PANTALLA CORE 2: ESTACIÓN DE MERCADOS FINANCIEROS [DES-QBE-032] -->
-        <div id="view-markets-hub" class="view-panel" style="display: none;">
-            <div class="view-header">
-                <h2>💼 Estación de Mercados Financieros</h2>
-                <div id="market-vehicle-tabs" class="market-tabs">
-                    <button id="tab-btn-casino" class="sub-tab active" onclick="conmutarSubMercado('casino')">
-                        🏦 1. Casino Deportes 1X2 (Caliente.mx)
-                    </button>
-                    <button id="tab-btn-progol" class="sub-tab" onclick="conmutarSubMercado('progol')">
-                        📋 2. Pronósticos Deportivos (Progol)
-                    </button>
-                    <button id="tab-btn-arbitrage" class="sub-tab" disabled title="Próximamente">
-                        ⚡ 3. Arbitraje Inter-Casas
-                    </button>
-                </div>
-            </div>
-
-            <!-- 3.1 SUB-VISTA: CASINO DEPORTES 1X2 -->
-            <div id="market-view-casino" class="sub-market-panel">
-                <div class="card">
-                    <div class="card-header flex-between">
-                        <h3>🏦 Partidos Abiertos en Caliente.mx (GAPs +EV & Cobertura V=0)</h3>
-                        <div class="casino-controls">
-                            <label>Bankroll: <input type="number" id="input-bankroll" value="200" style="width: 80px;"></label>
-                            <label>Certeza: <input type="range" id="slider-risk-certainty" min="70" max="90" value="80"></label>
-                            <button id="btn-generate-portfolio" class="btn btn-primary" onclick="ejecutarDespachoPortafolio()">
-                                🚀 Generar Cartera Cuantitativa
-                            </button>
+                        <div id="sync-status-badge" class="badge-status-neutral">
+                            <span>Sincronizada con BD</span>
                         </div>
                     </div>
-                    <div id="casino-matches-list" class="matches-grid">
-                        <!-- Partidos con cuotas, GAPs y CHECKBOXES activos -->
+
+                    <!-- Carrusel de Píldoras de Jornada Continuas (Sin "Mercado Abierto") -->
+                    <div id="matchday-pill-selector" class="matchday-pill-selector">
+                        <!-- Generado dinámicamente por app.js -->
+                    </div>
+
+                    <!-- Lista de Partidos Soberanos (Cero Checkboxes, Cero Botón Portafolio) -->
+                    <div id="fixtures-container" class="fixtures-scroll-container">
+                        <!-- Tarjetas inyectadas dinámicamente -->
                     </div>
                 </div>
 
-                <!-- Dashboard de Cartera Despachada -->
-                <div id="portfolio-results-dashboard" style="display: none; margin-top: 20px;">
-                    <!-- Macro KPIs, Tres Píldoras de Certeza y Boletos Split -->
-                    <div id="pildoras-cascada" class="pildoras-cascada-container"></div>
-                    <div id="boletos-container" class="boletos-grid" style="margin-top: 15px;"></div>
-                </div>
             </div>
+        </section>
 
-            <!-- 3.2 SUB-VISTA: PRONÓSTICOS DEPORTIVOS (PROGOL) -->
-            <div id="market-view-progol" class="sub-market-panel" style="display: none;">
-                <div class="card">
-                    <div class="card-header flex-between">
-                        <div>
-                            <h3 id="progol-slate-name">📋 Concurso Progol Activo</h3>
-                            <span class="badge-bolsa">Bolsa: $25,000,000 MXN</span>
-                        </div>
-                        <button class="btn btn-secondary" onclick="cargarMercadoProgol()">🔄 Actualizar Concurso</button>
+        <!-- VISTA 3: CARTERA CUANTITATIVA INDUSTRIAL -->
+        <section id="tab-portfolio" class="view-section">
+            <!-- BLOQUE 1: CONFIGURACIÓN DEL ROUTER -->
+            <div class="card" style="margin-bottom: 1rem; padding: 14px 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.15rem; color: #fff;">⚙️ Configuración de Cartera</h2>
+                        <span style="font-size: 7.5pt; color: #94A3B8;">Cálculos integrados: Dimensionamiento de Kelly fraccional, Coberturas Sintéticas (V=0) y Stress-Testing</span>
                     </div>
-                    <div id="progol-slate-container" class="progol-grid">
-                        <!-- Inyectado dinámicamente con alertas de sesgo -->
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <label style="font-size: 8.5pt; color: #cbd5e1;">Fondo Disponible (Bankroll): $</label>
+                        <input type="number" id="bankroll-input" value="200" style="padding: 6px 12px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 100px; font-weight: 700;">
+                        <button class="btn-primary" onclick="ejecutarDespachoPortafolio()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;">⚡ Recalcular Cartera</button>
+                        <button id="export-pdf-btn" class="btn-primary" style="background: rgba(56,189,248,0.15); border: 1px solid #38BDF8; color: #38BDF8; padding: 7px 16px; font-size: 8.5pt; font-weight: 700; margin-left: 8px;">📄 Exportar Reporte PDF A4</button>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- 4. PANTALLA TELEMETRÍA & ADMIN (BÓVEDA) -->
-        <div id="view-admin-hub" class="view-panel" style="display: none;">
-            <div class="card">
-                <h3>⚙️ Bóveda de Telemetría y Salud del Sistema</h3>
-                <div id="admin-telemetry-container"></div>
+            <!-- BLOQUE 2: ENCABEZADO MACRO & ANÁLISIS DE RESILIENCIA -->
+            <div class="card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, #1C2541 0%, #0B132B 100%); border: 1px solid rgba(56,189,248,0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px;">
+                    <div>
+                        <span style="font-size: 7.2pt; color: #38BDF8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Visión Global: Inversión, Rentabilidad y Riesgo </span>
+                        <h1 style="margin: 2px 0 0 0; font-size: 1.4rem; color: #fff;" id="hdr-torneo-portfolio">Liga MX — Apertura 2026</h1>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="badge-status-live" style="background: rgba(0,230,118,0.15); color: #00E676; border-color: #00E676; font-size: 7.2pt;">Q-BE  CASINO DEPORTES v3.0</span>
+                        <div style="font-size: 7.2pt; color: #94A3B8; margin-top: 4px;" id="hdr-fechas-portfolio">Jornada 8 · Septiembre 2026</div>
+                    </div>
+                </div>
+
+                <!-- 5 Macro KPIs con distinción de Ganancia Potencial y Esperada -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 10px; margin-bottom: 1rem;">
+                    <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38BDF8;">
+                        <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Capital en Juego</span>
+                        <div id="kpi-inversion-total" style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 2px;">$0.00 MXN</div>
+                        <span id="kpi-pct-caja" style="font-size: 6.8pt; color: #64748B;">(0.0% de la caja)</span>
+                    </div>
+                    <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #00E676;">
+                        <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Ganancia Neta Potencial</span>
+                        <div id="kpi-ganancia-potencial" style="font-size: 1.15rem; font-weight: 800; color: #00E676; margin-top: 2px;">+$0.00 MXN</div>
+                        <span id="kpi-roi-potencial" style="font-size: 6.8pt; color: #64748B;">Techo Máximo Pleno</span>
+                    </div>
+                    <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38BDF8;">
+                        <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Ganancia Neta Esperada</span>
+                        <div id="kpi-ganancia-esperada" style="font-size: 1.15rem; font-weight: 800; color: #38BDF8; margin-top: 2px;">+$0.00 MXN</div>
+                        <span id="kpi-roi-global" style="font-size: 6.8pt; color: #64748B;">Esperanza Matemática (+EV)</span>
+                    </div>
+                    <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38BDF8;">
+                        <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Blindaje de Capital</span>
+                        <div id="kpi-blindaje-global" style="font-size: 1.15rem; font-weight: 800; color: #38BDF8; margin-top: 2px;">99.9%</div>
+                        <span id="kpi-prob-ruina" style="font-size: 6.8pt; color: #64748B;">Probabilidad Ruina: 0.1%</span>
+                    </div>
+                    <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #e2e8f0;">
+                        <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Posiciones del Total</span>
+                        <div id="kpi-posiciones-core" style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 2px;">0 / 0</div>
+                        <span style="font-size: 6.8pt; color: #64748B;">Partidos con Valor (+EV)</span>
+                    </div>
+                </div>
+
+                <!-- Banner de Cascada de Resiliencia a Reveses -->
+                <div id="banner-cascada-resiliencia" style="background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.25); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <strong style="color: #38BDF8; font-size: 8pt;">🛡️ Tolerancia al Riesgo (Stress-Testing de Cartera):</strong>
+                        <span id="txt-cascada-resumen" style="color: #cbd5e1; font-size: 8pt; margin-left: 6px;">Evaluando absorción de reveses...</span>
+                    </div>
+                    <div id="pildoras-cascada" style="display: flex; gap: 6px;"></div>
+                </div>
             </div>
-        </div>
 
+            <!-- BLOQUE 3: TABLA SINTÉTICA DE ASIGNACIÓN -->
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 0.8rem; font-size: 1rem;">📊 Resumen de Asignación</h3>
+                <div style="overflow-x: auto;">
+                    <table class="fintech-table" id="tabla-resumen-asignacion">
+                        <thead>
+                            <tr>
+                                <th>PARTIDO</th>
+                                <th style="text-align: center;">ESTRATEGIA</th>
+                                <th style="text-align: right;">INVERSIÓN</th>
+                                <th style="text-align: right;">GANANCIA NETA</th>
+                                <th>ESCENARIO COBERTURA</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-resumen-asignacion"></tbody>
+                        <tfoot id="pie-resumen-asignacion" style="border-top: 2px solid #38BDF8; font-weight: 700; color: #fff;"></tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BLOQUE 4: ÓRDENES DE EJECUCIÓN DE BOLETOS (SPLIT TICKETS EN DETALLE) -->
+            <div style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">🟢 Órdenes de Ejecución de Boletos </h3>
+                    <span style="font-size: 7.5pt; color: #94A3B8;">Boletos split en pesos ($) con cobertura exacta en tablas ($0.00 pérdida)</span>
+                </div>
+                <div id="contenedor-tarjetas-split" style="display: flex; flex-direction: column; gap: 14px;"></div>
+            </div>
+
+            <!-- BLOQUE 5: CENTRO DE MANDO TÁCTICO & RADAR DE DESCARTES -->
+            <div class="card" style="border-top: 3px solid #ef4444;">
+                <h3 style="color: #ef4444; font-size: 1rem; margin-bottom: 0.8rem;">🚫 Partidos Vetados (QBE-00 Sin rentabilidad)</h3>
+                <div id="contenedor-descartes" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+        </section>
     </main>
 
-    <!-- MODAL DE RADIOGRAFÍA FORENSE (COMPARTIDO) -->
-    <div id="modal-radiografia-forense" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="rad-titulo-partido">Radiografía Estocástica</h3>
-                <button class="btn-close" onclick="cerrarModalRadiografia()">✕</button>
+    <!-- Modal / Vista Administrativa de Curación HITL -->
+    <div id="modal-curador-hitl" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.95); z-index: 10000; overflow-y: auto; padding: 24px;">
+        <div style="max-width: 1100px; margin: 0 auto; background: #1C2541; border: 1px solid #38BDF8; border-radius: 8px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                    <h2 style="color: #ffffff; margin: 0; font-size: 13pt;">🛠️ Panel de Curación Agéntica de Catálogos (HITL)</h2>
+                    <span style="color: #94A3B8; font-size: 8pt;">Revise y confirme los 18 clubes prospectados antes de sellar en la base de datos</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="cerrarModalCurador()" style="background: #0f172a; color: #cbd5e1; border: 1px solid #334155; padding: 8px 14px; border-radius: 6px; cursor: pointer;">Cerrar</button>
+                    <button onclick="sellarCatalogoCompleto()" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: 700; border: 1px solid #38BDF8; padding: 8px 18px; border-radius: 6px; cursor: pointer;">🔒 Sellar Catálogo en BD</button>
+                </div>
             </div>
-            <div class="modal-body">
-                <div id="rad-poisson-container"></div>
-                <div id="rad-tesis-html" style="margin-top: 15px;"></div>
+            <!-- Grid de Tarjetas de Curación -->
+            <div id="grid-curacion-clubes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;"></div>
+        </div>
+    </div>
+
+    <!-- MODAL VISTA 5: RADIOGRAFÍA FORENSE & TESIS Q-BE INTERACTIVA -->
+    <div id="modal-radiografia-forense" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.95); z-index: 10000; overflow-y: auto; padding: 20px;">
+        <div style="max-width: 1050px; margin: 0 auto; background: #1C2541; border: 1px solid #38BDF8; border-radius: 8px; padding: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+                <div>
+                    <span id="rad-estrategia-badge" class="badge-status-live" style="background: rgba(56,189,248,0.15); color: #38BDF8; border-color: #38BDF8;">QBE-H2+</span>
+                    <h2 id="rad-titulo-partido" style="color: #fff; margin: 6px 0 0 0; font-size: 1.3rem;">Deportivo Toluca vs Club León</h2>
+                </div>
+                <button onclick="cerrarRadiografiaForense()" style="background: #0f172a; color: #cbd5e1; border: 1px solid #334155; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 700;">✕ Cerrar Radiografía</button>
+            </div>
+
+            <!-- Tesis Q-BE en 4 Viñetas -->
+            <div class="card" style="background: #0f172a; border-left: 3px solid #38BDF8; margin-bottom: 14px; padding: 14px;">
+                <h4 style="color: #38BDF8; margin: 0 0 8px 0; font-size: 9pt; text-transform: uppercase;">📝 Tesis Didáctica Q-BE</h4>
+                <div id="rad-tesis-html" style="font-size: 8.5pt; color: #e2e8f0; line-height: 1.5;"></div>
+            </div>
+
+            <!-- Pronóstico Q-BE vs Mercado -->
+            <h4 style="color: #fff; font-size: 9pt; margin-bottom: 6px;">⚖️ Pronóstico Q-BE vs. Mercado</h4>
+            <table class="fintech-table" style="margin-bottom: 14px;">
+                <thead>
+                    <tr>
+                        <th>RESULTADO POSIBLE</th>
+                        <th style="text-align: center;">MOMIO Q-BE</th>
+                        <th style="text-align: center;">PROB. REAL Q-BE</th>
+                        <th style="text-align: center;">MOMIO CASINO</th>
+                        <th style="text-align: center;">PROB. IMPLÍCITA</th>
+                        <th style="text-align: right;">VENTAJA (+EV / EDGE)</th>
+                    </tr>
+                </thead>
+                <tbody id="rad-cuerpo-pronostico"></tbody>
+            </table>
+
+            <!-- Cajas de Poisson xG y PA -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px;">
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <span style="font-size: 7pt; color: #94A3B8;">xG LOCAL (λ)</span>
+                    <div id="rad-xg-local" style="font-size: 1.1rem; font-weight: 800; color: #38BDF8;">0.00</div>
+                </div>
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <span style="font-size: 7pt; color: #94A3B8;">xG VISITA (μ)</span>
+                    <div id="rad-xg-visita" style="font-size: 1.1rem; font-weight: 800; color: #38BDF8;">0.00</div>
+                </div>
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <span style="font-size: 7pt; color: #94A3B8;">GOLES TOTALES</span>
+                    <div id="rad-xg-total" style="font-size: 1.1rem; font-weight: 800; color: #fff;">0.00</div>
+                </div>
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <span style="font-size: 7pt; color: #94A3B8;">PROB. PAGO ANTICIPADO (Φ)</span>
+                    <div id="rad-phi-lead2" style="font-size: 1.1rem; font-weight: 800; color: #00E676;">0.0%</div>
+                </div>
+            </div>
+
+            <!-- Tabla de Desempeño 10P -->
+            <h4 style="color: #fff; font-size: 9pt; margin-bottom: 6px;">📊 Desempeño y Control de Cancha (Últimos 10 Partidos)</h4>
+            <table class="fintech-table" style="margin-bottom: 14px;">
+                <thead>
+                    <tr>
+                        <th>EQUIPO</th>
+                        <th style="text-align: center;">PUESTO</th>
+                        <th style="text-align: center;">PTS</th>
+                        <th style="text-align: center;">GF / GC</th>
+                        <th style="text-align: center;">PTS/PJ</th>
+                        <th style="text-align: center;">SoT</th>
+                        <th style="text-align: center;">SoTA</th>
+                        <th style="text-align: center;">POSESIÓN</th>
+                        <th style="text-align: center;">Q_MOD</th>
+                    </tr>
+                </thead>
+                <tbody id="rad-cuerpo-10p"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL HUD: PROCESAMIENTO CUANTITATIVO EN VIVO (DARK FINTECH) -->
+    <div id="modal-hud-procesamiento" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(5px); z-index: 20000; justify-content: center; align-items: center;">
+        <div style="background: #1C2541; border: 1px solid #38BDF8; border-radius: 10px; width: 500px; max-width: 90%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h3 style="margin: 0; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #00E676; display: inline-block;"></span>
+                    Motor Cuantitativo Q-BE en Ejecución
+                </h3>
+                <button onclick="cancelarDespachoPortafolio()" style="background: transparent; border: none; color: #94A3B8; font-size: 1.1rem; cursor: pointer;">✕</button>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <div style="height: 4px; background: #0f172a; border-radius: 2px; overflow: hidden;">
+                    <div id="hud-barra-fill" style="width: 15%; height: 100%; background: linear-gradient(90deg, #38BDF8, #00E676); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+
+            <div id="hud-pasos-lista" style="display: flex; flex-direction: column; gap: 99px; font-size: 8pt; color: #cbd5e1; display: flex; flex-direction: column; gap: 9px;">
+                <div id="hud-p1" style="color: #94A3B8;">⏳ [1/6] Sanitizando contexto y anclaje a tabla maestra...</div>
+                <div id="hud-p2" style="color: #94A3B8;">⏳ [2/6] Proyectando Poisson Bivariado 6x6 con calibración Opta xG...</div>
+                <div id="hud-p3" style="color: #94A3B8;">⏳ [3/6] Derivando umbrales analíticos de equilibrio continuo (θ* Breakeven)...</div>
+                <div id="hud-p4" style="color: #94A3B8;">⏳ [4/6] Evaluando catálogo de 9 estrategias y Triple Candado Fáctico...</div>
+                <div id="hud-p5" style="color: #94A3B8;">⏳ [5/6] Optimizando asignación de capital (Kelly & Dutching V=0) y redactando Tesis IA...</div>
+                <div id="hud-p6" style="color: #94A3B8;">⏳ [6/6] Verificando compuertas de The Shield (8 Invarianzas Numéricas)...</div>
+            </div>
+
+            <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
+                <button onclick="cancelarDespachoPortafolio()" style="background: #0f172a; border: 1px solid #334155; color: #94A3B8; padding: 5px 14px; border-radius: 4px; font-size: 7.5pt; cursor: pointer;">Cancelar</button>
             </div>
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=2026QBE_V6"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

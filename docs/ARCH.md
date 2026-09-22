@@ -439,6 +439,14 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
      `match_id`, `model_version`, `p_local`, `p_empate`, `p_visitante`, `lambda_home`, `lambda_away`, `phi_lead2_home`, `phi_lead2_away`, `audit_trace_json`.
 * **Idempotencia:** Si el partido ya tiene una distribución idéntica calculada con la misma versión del modelo, no genera escrituras redundantes.
 
+### [ARCH-1.6.12] Ingesta Dinámica de Calendario Completo sin Alambrado [DIRGEN-SEALED] [GOVERNANCE-01]
+
+* **Axioma de Extracción Viva del Calendario:** Queda estrictamente prohibido incluir listas o tuplas estáticas de marcadores pasados en el código de los demonios (`j8_raw`, `j9_raw`, etc.).
+* **Mecanismo Dinámico Oficial:**
+  - El centinela deportivo consulta en cada ejecución el árbol JSON `__NEXT_DATA__` de FotMob Opta (League ID 230), el cual contiene el calendario íntegro de la temporada oficial.
+  - El parser dinámico `_convertir_match_fotmob` filtra en memoria los partidos de cualquier jornada ($N \in [1, 17]$), extrayendo sus marcadores oficiales consumados y fechas ISO.
+  - La complementación de reprogramados se ejecuta dinámicamente contra `ligamx.net` mediante deduplicación estricta por par canónico.
+
 ---
 
 ## 2. ESTRUCTURA LIMPIA DE MÓDULOS Y MAPEO DE CÓDIGO

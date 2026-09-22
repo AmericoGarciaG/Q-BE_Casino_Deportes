@@ -33,85 +33,98 @@ body {
     flex-direction: column;
 }
 
-header {
-    background-color: var(--bg-card);
-    border-bottom: 1px solid var(--border-color);
-    padding: 1rem 2rem;
+/* Header Fino de Un Solo Piso (Max-Height 45px, Fondo #0B132B) */
+header.app-header {
+    background-color: #0B132B;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    height: 45px;
+    max-height: 45px;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.header-container {
+    max-width: 1380px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    height: 100%;
 }
 
-/* [DES-QBE-010] Identidad Discreta — Silent Branding */
-.logo {
+.header-brand {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--text-slate); /* Gris Pizarra: #CBD5E1 — NO amarillo */
-    letter-spacing: 0.04em;
-}
-
-.status-badge {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--accent-green);
-    border: 1px solid var(--accent-green);
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-nav.tab-nav {
-    display: flex;
-    gap: 1rem;
-    background: var(--bg-card);
-    border-bottom: 1px solid var(--border-color);
-    padding: 0 2rem;
-}
-
-.tab-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 1rem 1.25rem;
+    gap: 0.6rem;
+    font-weight: 700;
     font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
-    transition: all 0.2s ease;
+    color: #F8FAFC;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 
-/* [DES-QBE-005] Pestaña activa/hover: Azul Cian — NO ámbar */
-.tab-btn:hover, .tab-btn.active {
-    color: #FFFFFF;
-    border-bottom-color: var(--accent-cyan);
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-/* [DES-QBE-005] Clase alternativa de nav-tab per directiva */
-.nav-tab-btn {
-    background: #0f172a;
-    color: var(--text-muted);
+.header-nav .tab-btn {
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 8pt;
+    color: var(--text-muted);
+    padding: 4px 14px;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
+    border-radius: 20px;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
-.nav-tab-btn:hover, .nav-tab-btn.active {
+.header-nav .tab-btn:hover {
     background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.3);
+    color: #F8FAFC;
+}
+
+.header-nav .tab-btn.active {
+    background: rgba(56, 189, 248, 0.18);
     border-color: var(--accent-cyan);
     color: #FFFFFF;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
+.status-badge-slim {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #94A3B8;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00E676;
+    display: inline-block;
+    box-shadow: 0 0 6px rgba(0, 230, 118, 0.6);
 }
 
 main.content {
     flex: 1;
-    padding: 2rem;
-    max-width: 1400px;
+    padding: 1.5rem 1rem;
+    max-width: 1380px;
     margin: 0 auto;
     width: 100%;
 }
@@ -491,109 +504,4 @@ table.fintech-table {
     color: #0B132B;
     border-color: #38BDF8;
 }
-
-/* ── BARRA SUPERIOR GLOBAL COCKPIT [DES-QBE-030] ── */
-.cockpit-navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #0B132B;
-    border-bottom: 1px solid #1C2541;
-    padding: 10px 24px;
-}
-.navbar-brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: #F8FAFC;
-}
-.brand-badge {
-    font-size: 0.65rem;
-    background: #0284C7;
-    color: #FFFFFF;
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-.navbar-menu {
-    display: flex;
-    gap: 8px;
-}
-.nav-tab {
-    background: #1C2541;
-    border: 1px solid #334155;
-    color: #94A3B8;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.nav-tab:hover {
-    border-color: #38BDF8;
-    color: #F8FAFC;
-}
-.nav-tab.active {
-    background: #0284C7;
-    border-color: #38BDF8;
-    color: #FFFFFF;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
-}
-
-/* ── FRANJA TRICOLOR DE PROBABILIDAD SOBERANA [DES-QBE-031] ── */
-.prob-strip {
-    display: flex;
-    width: 100%;
-    height: 8px;
-    border-radius: 4px;
-    overflow: hidden;
-    margin: 8px 0;
-    background: #334155;
-}
-.prob-strip-local {
-    background: #00E676;
-    height: 100%;
-}
-.prob-strip-draw {
-    background: #64748B;
-    height: 100%;
-}
-.prob-strip-away {
-    background: #EF4444;
-    height: 100%;
-}
-
-/* ── SUB-PESTAÑAS DE MERCADOS [DES-QBE-032] ── */
-.market-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 15px;
-}
-.sub-tab {
-    background: #1C2541;
-    border: 1px solid #334155;
-    color: #94A3B8;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-.sub-tab.active {
-    background: #38BDF8;
-    color: #0B132B;
-    border-color: #38BDF8;
-}
-.badge-bias-alert {
-    background: rgba(239, 68, 68, 0.2);
-    color: #EF4444;
-    border: 1px solid #EF4444;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    font-weight: 800;
-}
-
 

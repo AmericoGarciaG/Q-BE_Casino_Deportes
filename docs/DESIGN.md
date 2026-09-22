@@ -89,7 +89,7 @@
 ### [DES-QBE-015] Hub de Ligas (Vista 1) — Voz Institucional [UX-MANDATE]
 * **Título de Sección:** `🏆 Ligas y Torneos de Alta Liquidez`.
 * **Badge de Estado:** `⚡ Datos Oficiales en Vivo (Opta Engine)`.
-* **Etiqueta en Tarjeta:** `• 18 Clubes • Tabla y Métricas al Día`.
+* **Etiqueta en Tarjeta:** `• 18 Clubes`.
 * **Pestaña de Navegación:** `🌐 Hub de Ligas`.
 
 ### [DES-QBE-016] Jornada y Tabla de Posiciones (Vista 2) [UX-MANDATE]
@@ -288,3 +288,21 @@
   - El contador de selección superior debe totalizar dinámicamente:
     `"3 partidos seleccionados (1 de Jornada 8, 2 de Jornada 9)"`.
   - Al regresar a una jornada visitada, las tarjetas previamente seleccionadas deben conservar su checkbox activo (`checked = true`) y el borde iluminado en `#38BDF8`.
+
+---
+
+### [DES-QBE-035] Vista Equipos y Partidos Soberana (Limpieza de Controles Comerciales) [UX-MANDATE]
+
+* **Axioma de Desconexión Comercial:** La vista "Equipos y Partidos" es un espacio de inteligencia y consulta deportiva pura. Queda estrictamente prohibido incluir en esta vista casillas de selección de apuestas (`checkbox`), contadores de partidos seleccionados o botones de generación de portafolios comerciales.
+* **Geometría del Panel de Cartelera (`.cartelera-panel`):**
+  1. **Selector de Jornadas:** Contenedor `#matchday-pill-selector` con píldoras de navegación continua:
+     - Fechas Concluidas: `Jornada N 🏁 Concluida` (fondo `#1E293B`, texto `#94A3B8`).
+     - Fecha Activa / En Curso: `Jornada N ⚡ Activa` (fondo `#0284C7`, borde `#38BDF8`, brillo cian).
+     - Fechas Programadas: `Jornada N 📅 Programada` (fondo `#1C2541`, borde `#334155`).
+     *(Queda prohibido el término "Mercado Abierto" en esta pantalla).*
+  2. **Tarjetas de Partidos (`.match-card-sovereign`):**
+     - Fecha, hora y distintivo de estado (`FINALIZADO` con marcador real, o `PROGRAMADO`).
+     - Escudos locales oficiales y nombres canónicos de ambos clubes.
+     - Franja de probabilidad o datos físicos de gol (sin cuotas de casino).
+     - CERO inputs de tipo checkbox.
+
