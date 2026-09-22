@@ -583,6 +583,50 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **[SHIELD]:** `tests/shield/test_LN_QBE_025_multi_matchday.py`
 
 ---
+
+### ID: [LN-QBE-037] Algoritmo de Detección de Sesgo Popular en Quinielas Progol
+
+* **Ω (Resumen):** Explotar la sobre-representación de apuestas populares en quinielas colectivas contrastando la venta pública nacional contra la distribución soberana de Q-BE.
+* **I (Input):** $P_{\text{Público}} = (v_1, v_X, v_2)$ y $\hat{P}_{\text{Q-BE}} = (p_1, p_X, p_2)$.
+* **P (Process) [BIZ-LOGIC]:**
+  $$\text{Sesgo}_k = v_k - p_k$$
+  $$\text{Si } \text{Sesgo}_{\text{Local}} \ge +0.20 \implies \text{Alerta de Sesgo: El público sobrevaloró al local; el valor (+EV) radica en X2.}$$
+* **O (Output):** Clasificación de casillas: `BASE_SIMPLE`, `DOBLE_COBERTURA_SESGO`, `TRIPLE_ESTRATÉGICO`.
+
+---
+
+### ID: [LN-QBE-073] Algoritmo del Slider Dinámico de Certeza (Risk Dial)
+
+* **Ω (Resumen):** Modulación estocástica adaptativa del perfil de riesgo de la cartera basada en el parámetro objetivo de certeza del usuario (`target_certeza`).
+* **I (Input):** `target_certeza: float` (ej. 0.80), $K$ órdenes seleccionadas, bankroll disponible.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. Asignación inicial de órdenes según utilidades $U_{\text{Directo}}$ vs. $U_{\text{Cobertura}}$.
+  2. Evaluación del espacio combinatorio $3^K$ mediante `calcular_trinidad_resiliencia_3k()`.
+  3. Mientras $P(\text{PnL} \ge \$0.00) < \text{target\_certeza}$ y existan órdenes en `QBE-D1`:
+     - Transmutar la orden directa más frágil a `QBE-H1` (recalcular inversión total $A_i^*$ para absorber boleto de seguro $V=0$).
+     - Re-evaluar $3^K$.
+  4. Si persiste la deficiencia de certeza:
+     - Aplicar atenuación multiplicativa de Kelly ($\times 0.75$) sobre los activos con mayor varianza.
+  5. Si la certeza sigue por debajo de $\text{target\_certeza}$:
+     - Podar el partido más riesgoso derivándolo a `QBE-00` (Veto preventivo).
+* **O (Output):** `ConsolidatedPortfolioPlan` ajustado con métrica de resiliencia satisfaciendo $P(\text{PnL} \ge \$0.00) \ge \text{target\_certeza}$.
+* **Φ (Transición):** Hacia `[LN-QBE-070]`, `[LN-QBE-080]`, `[LN-QBE-090]`.
+* **[SHIELD]:** `tests/shield/test_shield_risk_dial_modulator.py`
+
+---
+
+### ID: [LN-QBE-074] Optimizador de Quinielas Progol por Presupuesto
+
+* **Ω (Resumen):** Asignación óptima combinatoria de dobles y triples en quinielas de 14 partidos sujeta a restricción presupuestaria comercial ($B$).
+* **I (Input):** Presupuesto en pesos ($B$) y vector de sesgos $\text{Sesgo}_k = V_{\text{pub}, k} - P_{\text{qbe}, k}$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Estructura de Costos Oficial Progol:** Quiniela simple $=\$15.00\text{ MXN}$. Una combinación con $D$ dobles y $T$ triples cuesta:
+     $$\text{Costo} = 15.00 \times 2^D \times 3^T \le B$$
+  2. **Regla de Asignación:** Ordena los 14 encuentros por magnitud de sesgo popular descendente ($|\text{Sesgo}_k|$). Asigna los Triples a los partidos de máxima incertidumbre/sesgo, los Dobles a los partidos con sesgo $\ge +0.20$, y fija como "Bases Simples" los partidos de alta probabilidad ($P_L \ge 0.65$ o $P_V \ge 0.65$).
+* **O (Output):** Diccionario de respuesta `{ combinaciones_totales, costo_total_mxn, matriz_quiniela: List[Dict] }`.
+* **Φ (Transición):** Hacia `/api/markets/progol/optimize` y motor de quinielas.
+
+---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
 
 ```

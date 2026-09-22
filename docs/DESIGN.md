@@ -22,6 +22,70 @@
 
 ---
 
+### [DES-QBE-030] Barra de Navegación Cockpit y Dual-Core Layout [UX-MANDATE]
+
+* **Barra Superior Global (`#main-navbar`):**
+  - Fondo: Slate 950 (`#0B132B`), borde inferior `1px solid #1C2541`, padding `10px 24px`.
+  - Elementos de navegación:
+    - `[ 🏛️ Q-BE QUANT ]` (Branding Institucional).
+    - `[ ⚽ CENTRO SOBERANO ]` (Pantalla Core 1 — Consulta Deportiva Pura).
+    - `[ 💼 ESTACIÓN DE MERCADOS ]` (Pantalla Core 2 — Asignación y Monetización).
+    - `[ ⚙️ BÓVEDA & TELEMETRÍA ]` (Admin / Estado de Daemons / Ledger LLM).
+
+### [DES-QBE-031] Pantalla Core 1: El Centro Soberano de Inteligencia Deportiva
+* **Propósito:** Inspección científica de la verdad fáctica antes de cualquier consideración de precios.
+* **Componentes:**
+  1. **Selector de Ligas (`#sovereign-league-selector`):** Píldoras deslizantes con bandera (`🇲🇽 Liga MX`, `🏴 Premier League`, `🇪🇸 LaLiga`).
+  2. **Split-View Coordinado:**
+     - *Panel Izquierdo:* Clasificación general de 18 clubes con pestañas General, Forma 5P y Métricas Opta (xG/xGA).
+     - *Panel Derecho:* Carrusel cronológico de encuentros agrupados por fecha (partidos de hoy/próximos en foco; conmutador de fechas pasadas concluidas y futuras).
+  3. **Franja de Distribución Soberana (Tri-Color Probabilistic Strip):**  
+     Cada tarjeta de partido despliega una barra horizontal de 6px de alto dividida proporcionalmente:
+     - Cian / Verde Neón (`#00E676` / `#38BDF8`): Probabilidad Victoria Local ($p_1$).
+     - Gris Pizarra (`#64748B`): Probabilidad Empate ($p_X$).
+     - Rojo Coral (`#EF4444`): Probabilidad Victoria Visitante ($p_2$).
+     - Debajo de la barra: `λ_Local vs μ_Visita` y la probabilidad de ventaja `Φ_Lead2`.
+  4. **RESTRICCIÓN ABSOLUTA:** Cero cuotas de casino, cero momios decimales, cero casillas de selección para apostar. Botón único: `[ 🔬 Inspeccionar Radiografía Estocástica ]` (abre modal con matriz 6x6 de Poisson limpia).
+
+### [DES-QBE-032] Pantalla Core 2: Estación de Mercados Financieros y Asignación
+* **Selector de Vehículo de Inversión (`#market-vehicle-tabs`):**
+  - `[ 🏦 1. CASINO DEPORTES 1X2 (Caliente.mx) ]`
+  - `[ 📋 2. PRONÓSTICOS DEPORTIVOS (Progol) ]`
+  - `[ ⚡ 3. ARBITRAJE INTER-CASAS ]` (En radar)
+* **Sub-Vista Casino Deportes 1X2:**
+  - Despliega únicamente los partidos que el operador tiene abiertos con cuotas en ventanilla.
+  - Cada tarjeta contrasta: Probabilidad Soberana vs. Momio Casino $\rightarrow$ **Cálculo de GAP (+EV)** destacado en verde esmeralda si hay valor o gris si es candidato a Veto (`QBE-00`).
+  - Checkboxes de selección de partidos activos para el portafolio.
+  - Panel inferior: Input de Bankroll, Slider de Certeza ($75\% \leftrightarrow 85\%$) y botón `[ 🚀 Generar Cartera Cuantitativa ]`.
+  - Despliegue de boletos split con piso de $\$2.00\text{ MXN}$ y las Tres Píldoras de Certeza ($3^K$).
+* **Sub-Vista Pronósticos Deportivos (Progol):**
+  - Selector de Concurso activo (ej. `Progol 2245`).
+  - Despliega los 14 partidos del boleto (admitiendo cruces multitorneo).
+  - Contrasta la Venta Pública Nacional (%) vs. Probabilidad Real Q-BE (%) alertando sesgos populares.
+  - Optimizador de dobles y triples maximizando el valor esperado de la bolsa acumulada.
+
+### [DES-QBE-033] Geometría DOM Obligatoria para la Interfaz Dual-Core [UX-MANDATE]
+
+1. **Navegación Superior Cockpit (`#main-navbar`):**
+   - Botón Pantalla 1: `#nav-btn-sovereign` (Texto: "⚽ Centro Soberano")
+   - Botón Pantalla 2: `#nav-btn-markets` (Texto: "💼 Estación de Mercados")
+   - Botón Admin/Bóveda: `#nav-btn-admin` (Texto: "⚙️ Bóveda & Telemetría")
+
+2. **Contenedor Pantalla Core 1 (`#view-sovereign-hub`):**
+   - Selector de Ligas: `#sovereign-league-selector`
+   - Tabla General: `#sovereign-standings-container`
+   - Carrusel Cronológico de Encuentros: `#sovereign-matches-carousel`
+   - Franja Tricolor de Probabilidad: `.prob-strip` con subelementos `.prob-strip-local`, `.prob-strip-draw`, `.prob-strip-away`.
+   - RESTRICCIÓN: Cero inputs `<input type="checkbox">` para apuestas en esta vista.
+
+3. **Contenedor Pantalla Core 2 (`#view-markets-hub`):**
+   - Pestañas de Vehículo: `#market-vehicle-tabs` con botones `#tab-btn-casino` y `#tab-btn-progol`.
+   - Sub-Vista Casino: `#market-view-casino` (con `#casino-matches-list`, checkboxes `.casino-match-checkbox`, `#input-bankroll`, `#slider-risk-certainty`, `#btn-generate-portfolio`).
+   - Sub-Vista Progol: `#market-view-progol` (con `#progol-slate-container`, badges `.badge-bias-alert`, tabla de 14 partidos).
+
+---
+
+
 ### [DES-QBE-015] Hub de Ligas (Vista 1) — Voz Institucional [UX-MANDATE]
 * **Título de Sección:** `🏆 Ligas y Torneos de Alta Liquidez`.
 * **Badge de Estado:** `⚡ Datos Oficiales en Vivo (Opta Engine)`.

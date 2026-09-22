@@ -492,3 +492,108 @@ table.fintech-table {
     border-color: #38BDF8;
 }
 
+/* ── BARRA SUPERIOR GLOBAL COCKPIT [DES-QBE-030] ── */
+.cockpit-navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #0B132B;
+    border-bottom: 1px solid #1C2541;
+    padding: 10px 24px;
+}
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #F8FAFC;
+}
+.brand-badge {
+    font-size: 0.65rem;
+    background: #0284C7;
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.navbar-menu {
+    display: flex;
+    gap: 8px;
+}
+.nav-tab {
+    background: #1C2541;
+    border: 1px solid #334155;
+    color: #94A3B8;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.nav-tab:hover {
+    border-color: #38BDF8;
+    color: #F8FAFC;
+}
+.nav-tab.active {
+    background: #0284C7;
+    border-color: #38BDF8;
+    color: #FFFFFF;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+/* ── FRANJA TRICOLOR DE PROBABILIDAD SOBERANA [DES-QBE-031] ── */
+.prob-strip {
+    display: flex;
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+    background: #334155;
+}
+.prob-strip-local {
+    background: #00E676;
+    height: 100%;
+}
+.prob-strip-draw {
+    background: #64748B;
+    height: 100%;
+}
+.prob-strip-away {
+    background: #EF4444;
+    height: 100%;
+}
+
+/* ── SUB-PESTAÑAS DE MERCADOS [DES-QBE-032] ── */
+.market-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+.sub-tab {
+    background: #1C2541;
+    border: 1px solid #334155;
+    color: #94A3B8;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.sub-tab.active {
+    background: #38BDF8;
+    color: #0B132B;
+    border-color: #38BDF8;
+}
+.badge-bias-alert {
+    background: rgba(239, 68, 68, 0.2);
+    color: #EF4444;
+    border: 1px solid #EF4444;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+

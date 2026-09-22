@@ -145,6 +145,28 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 * **Tolerancia a Saltos de Línea en Marcadores:** Los scrapers de resultados en vivo deben emplear patrones de expresiones regulares multilínea capaces de resolver goles separados por retornos de carro o espacios en el DOM (`(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)`), impidiendo que marcadores legítimos concluidos se descarten como nulos.
 
+### [ARCH-1.4.5-B] Endpoints Desacoplados de Soberanía y Mercados [ARCH-PILLAR]
+
+1. **Rutas Soberanas (Sin Cuotas):**
+   - `GET /api/sovereign/leagues/{id}/matches`:
+     Retorna la lista de partidos de la liga indicada con su distribución matemática pura:
+     `{ match_id, local, visitante, local_escudo_url, visitante_escudo_url, horario, p_local, p_empate, p_visitante, lambda_home, lambda_away, phi_lead2_home, es_operable }`.
+     *Garantía:* CERO campos de cuotas o momios comerciales en el payload.
+
+2. **Rutas de Mercado Casino 1X2:**
+   - `GET /api/markets/sportsbook/matches?bookmaker=caliente&league_id=262`:
+     Retorna los partidos abiertos con cuotas, contrastados contra la distribución soberana de SQLite:
+     `{ match_id, local, visitante, momio_l, momio_e, momio_v, pago_anticipado, gap_local, gap_empate, gap_visitante, es_viable_ev }`.
+   - `POST /api/markets/sportsbook/portfolio/generate`:
+     Acepta `{ league_id: int, selected_match_ids: List[str], bankroll: float, target_certeza: float }`.
+     Despacha la cartera cuantitativa (Dutching $V=0$, Kelly, Trinidad $3^K$, slider de certeza y boletos split).
+
+3. **Rutas de Mercado Pronósticos Deportivos (Progol):**
+   - `GET /api/markets/progol/slates/active`:
+     Retorna el concurso activo de 14 partidos con venta pública vs. probabilidad soberana y alertas de sesgo.
+   - `POST /api/markets/progol/optimize`:
+     Acepta `{ slate_id: str, presupuesto_mxn: float }` y retorna `{ combinaciones_totales, costo_total_mxn, matriz_quiniela: List[Dict] }`.
+
 ---
 
 ### [ARCH-1.5.0] Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR]
