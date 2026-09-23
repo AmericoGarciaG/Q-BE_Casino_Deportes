@@ -93,3 +93,5 @@ src/web/static/img/favicon.svg
 scratch/test_portfolio_post.py
 src/web/static/img/crests/fiera.png
 src/web/static/img/crests/potros-hierro.png
+scripts/utilidades/convertir_vol1_md_a_docx.py
+scripts/utilidades/exportar_volumen1_word.py

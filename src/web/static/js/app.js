@@ -112,61 +112,66 @@ async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = n
     }
 }
 
-// Renderizado dinámico de píldoras continuas de jornada [DES-QBE-026]
+// [DES-QBE-037] Carrusel Ventanizado Determinista (Máximo 3 píldoras en pantalla)
 function renderizarPildorasJornada(liveBoard) {
     const container = document.getElementById("matchday-pill-selector");
     if (!container) return;
     container.innerHTML = "";
 
-    const disponibles = liveBoard.jornadas_disponibles || [8, 9];
-    const mostrada = liveBoard.jornada_mostrada || 8;
-    const actual = liveBoard.jornada_actual || 8;
+    const disponibles = liveBoard.jornadas_disponibles || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+    const mostrada = liveBoard.jornada_mostrada || 10;
+    const actual = liveBoard.jornada_actual || 10;
 
-    disponibles.forEach(jNum => {
+    // 1. Calcular la ventana de 3 jornadas visibles [mostrada - 1, mostrada, mostrada + 1]
+    let ventana = [mostrada - 1, mostrada, mostrada + 1];
+    if (mostrada === 1) ventana = [1, 2, 3];
+    if (mostrada === 17) ventana = [15, 16, 17];
+
+    // Filtrar para que solo existan jornadas dentro del rango 1 a 17
+    ventana = ventana.filter(j => j >= 1 && j <= 17);
+
+    // 2. Controlar estado de flechas ◄ y ►
+    const btnPrev = document.getElementById("btn-carousel-prev");
+    const btnNext = document.getElementById("btn-carousel-next");
+    if (btnPrev) btnPrev.disabled = (mostrada <= 1);
+    if (btnNext) btnNext.disabled = (mostrada >= 17);
+
+    // 3. Renderizar ÚNICAMENTE las 3 píldoras visibles
+    ventana.forEach(jNum => {
         const btn = document.createElement("button");
         btn.type = "button";
         const isActive = (jNum === mostrada);
+        btn.className = "pill-tab" + (isActive ? " active" : "");
         
-        // Estilos defensivos directos Dark Fintech
         btn.style.cssText = `
             background: ${isActive ? '#0284C7' : '#1C2541'};
             border: 1px solid ${isActive ? '#38BDF8' : '#334155'};
             color: ${isActive ? '#FFFFFF' : '#94A3B8'};
-            padding: 6px 14px;
+            padding: 5px 12px;
             border-radius: 20px;
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 700;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            box-shadow: ${isActive ? '0 0 10px rgba(56, 189, 248, 0.3)' : 'none'};
-            transition: all 0.2s ease;
+            gap: 6px;
+            white-space: nowrap;
+            box-shadow: ${isActive ? '0 0 8px rgba(56, 189, 248, 0.35)' : 'none'};
         `;
 
-        let badgeBg = "rgba(56, 189, 248, 0.2)";
-        let badgeColor = "#38BDF8";
-        let badgeLabel = "📅 Programada";
-
-        if (jNum < actual || (jNum === 8 && actual >= 8) || (jNum === 9 && actual >= 9)) {
-            badgeBg = "rgba(148, 163, 184, 0.2)";
-            badgeColor = "#CBD5E1";
-            badgeLabel = "🏁 Concluida";
+        let badgeLabel = "";
+        if (jNum < actual) {
+            badgeLabel = "🏁";
         } else if (jNum === actual) {
-            badgeBg = "rgba(2, 132, 199, 0.3)";
-            badgeColor = "#38BDF8";
             badgeLabel = "⚡ Activa";
+        } else {
+            badgeLabel = "📅";
         }
 
-
-        btn.innerHTML = `<span>Jornada ${jNum}</span><span style="background:${badgeBg}; color:${badgeColor}; font-size:0.7rem; padding:2px 7px; border-radius:10px; font-weight:600;">${badgeLabel}</span>`;
+        btn.innerHTML = `<span>Jornada ${jNum}</span><span style="font-size:0.68rem; opacity:0.8;">${badgeLabel}</span>`;
         
-        btn.onmouseenter = () => { if (!isActive) btn.style.borderColor = '#38BDF8'; };
-        btn.onmouseleave = () => { if (!isActive) btn.style.borderColor = '#334155'; };
-
         btn.onclick = (e) => {
             e.preventDefault();
-            e.stopPropagation();
             if (jNum === mostrada) return;
             const leagueId = liveBoard.league_id || 262;
             seleccionarLiga(leagueId, false, jNum);
@@ -174,6 +179,19 @@ function renderizarPildorasJornada(liveBoard) {
         container.appendChild(btn);
     });
 }
+
+function navegarCarruselTemporal(delta) {
+    if (!currentLiveBoard) return;
+    const mostrada = currentLiveBoard.jornada_mostrada || 10;
+    const targetJornada = mostrada + delta;
+    if (targetJornada >= 1 && targetJornada <= 17) {
+        const leagueId = currentLiveBoard.league_id || 262;
+        seleccionarLiga(leagueId, false, targetJornada);
+    }
+}
+window.navegarCarruselTemporal = navegarCarruselTemporal;
+window.renderizarCarruselTemporadaCompleta = renderizarPildorasJornada;
+
 
 
 function _formatearFechaHoraActual() {
@@ -303,7 +321,7 @@ function renderizarTabla18Clubes(standings) {
 
 // 4. Renderizar Cartelera en 4 Niveles Visuales [DES-QBE-016-C] [ARCH-1.6.3]
 function renderizarCartelera(fixtures) {
-    const container = document.querySelector(".fixtures-list");
+    const container = document.getElementById("fixtures-container") || document.querySelector(".fixtures-scroll-container");
     if (!container || !fixtures) return;
     container.innerHTML = "";
     selectedMatchIds = [];
@@ -378,122 +396,54 @@ function _renderSeccionHeader(container, texto, claseAdicional) {
 /** Renderiza una tarjeta de fixture según su estado semántico [DES-QBE-016-C] */
 function _renderFixtureCard(container, f, deshabilitada) {
     const estado = f.estado || "PROGRAMADO";
-    // [LEY DE OPERABILIDAD TOTAL]: Seleccionable si no está finalizado y tiene cuotas reales
-    const esSeleccionable = !deshabilitada && f.disponible_para_seleccion === true && estado !== "FINALIZADO";
-
     const card = document.createElement("div");
-    card.className = "fixture-card" + (!esSeleccionable ? " fixture-disabled" : "");
+    card.className = "card match-card-clean";
     card.id = `fixture-card-${f.id_partido}`;
-    card.dataset.estado = f.estado || "PROGRAMADO";
-    card.dataset.matchId = f.id_partido;
+    card.setAttribute("onclick", `abrirRadiografiaForense('${f.id_partido}')`);
 
-    // Si es operable con cuotas, incluir en selección inicial por defecto si aún no está agregado
-    if (esSeleccionable && !selectedMatchIds.includes(f.id_partido)) {
-        selectedMatchIds.push(f.id_partido);
-    }
+    const localEscudo = f.local_escudo_url ? `<img src="${f.local_escudo_url}" class="match-crest-mini">` : "";
+    const visEscudo = f.visitante_escudo_url ? `<img src="${f.visitante_escudo_url}" class="match-crest-mini">` : "";
 
-    // Estilo base de la tarjeta según estado
-    if (estado === "EN_CURSO") {
-        card.style.cssText = "background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; padding: 10px; margin-bottom: 6px;";
-    } else if (estado === "FINALIZADO") {
-        card.style.cssText = "background: rgba(255,255,255,0.015); border: 1px dashed #475569; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
-    } else if (estado === "REPROGRAMADO") {
-        card.style.cssText = "background: rgba(255,255,255,0.01); border: 1px dashed #334155; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
-    } else {
-        // PROGRAMADO — operable
-        card.style.cssText = "background: rgba(0,230,118,0.04); border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 6px;";
-        if (esSeleccionable) {
-            selectedMatchIds.push(f.id_partido);
-        }
-    }
-
-    // Badge de estado
-    let badgeHtml = "";
-    if (estado === "EN_CURSO") {
-        const minuto = f.minuto_juego || "En Juego";
-        badgeHtml = `<span class="badge-status-live"><span class="badge-pulse"></span>${minuto}</span>`;
-    } else if (estado === "FINALIZADO") {
-        badgeHtml = `<span class="badge-status-finished">🏁 FINALIZADO</span>`;
-    } else if (estado === "REPROGRAMADO") {
-        // [CORRECCIÓN]: Leer sub_badge del backend (solo dice Fecha Lejana si dista > 14 días)
-        const textoBadge = f.sub_badge ? `⏳ ${f.sub_badge}` : "⏳ Reprogramado";
-        badgeHtml = `<span class="badge-status-postponed">${textoBadge}</span>`;
-    }
-
-    // Checkbox — solo visible y habilitado si es PROGRAMADO
-    const checkboxHtml = esSeleccionable
-        ? `<input type="checkbox" checked
-               style="accent-color: #38BDF8; cursor: pointer; width: 15px; height: 15px;"
-               value="${f.id_partido}"
-               class="fixture-checkbox"
-               onchange="toggleFixtureCheckbox(this, '${f.id_partido}')">`
-        : `<input type="checkbox" disabled
-               style="cursor: not-allowed; opacity: 0.25; width: 15px; height: 15px;"
-               value="${f.id_partido}"
-               class="fixture-checkbox">`;
-
-    // Marcador (EN_CURSO o FINALIZADO con números reales)
-    let marcadorHtml = "";
-    if (f.marcador_actual) {
-        const cls = estado === "EN_CURSO" ? "score-live" : "score-final";
-        const textoMarcador = (f.marcador_actual === "MARCADOR_PENDIENTE") ? "Finalizado" : f.marcador_actual;
-        marcadorHtml = `<span class="${cls}" style="font-weight: 800; font-size: 8.5pt; color: ${estado === 'EN_CURSO' ? '#EF4444' : '#38BDF8'}; margin-left: 6px;">${textoMarcador}</span>`;
-    }
-
-    // Escudos de ambos equipos
-    const localEscudo = f.local_escudo_url
-        ? `<img src="${f.local_escudo_url}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
-        : "";
-    const visEscudo = f.visitante_escudo_url
-        ? `<img src="${f.visitante_escudo_url}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
-        : "";
-
-    // Nombre del partido con escudos
-    const partidoHtml = `
-        <span style="display:inline-flex;align-items:center;gap:4px;">
-            ${localEscudo}<span style="color:#FFFFFF;font-weight:700;">${f.local}</span>
-        </span>
-        <span style="color:#64748B;font-size:8pt;margin:0 4px;">vs</span>
-        <span style="display:inline-flex;align-items:center;gap:4px;">
-            ${visEscudo}<span style="color:#FFFFFF;font-weight:700;">${f.visitante}</span>
-        </span>
-    `;
-
-    // Cuotas 1X2 (solo para operables o como referencia en finalizados)
-    let cuotasHtml = "";
-    if (f.momios && f.momios.L) {
-        const paBadge = f.momios.pago_anticipado
-            ? `<span style="color:#00E676;font-weight:700;font-size:6.8pt;margin-left:4px;">🏷️ PA</span>` : "";
-        const cuotaColor = estado === "FINALIZADO" ? "#64748B" : "#38BDF8";
-        cuotasHtml = `
-            <span>L <strong style="color:${cuotaColor};">${Number(f.momios.L).toFixed(2)}</strong></span>
-            <span>E <strong style="color:#94A3B8;">${Number(f.momios.E).toFixed(2)}</strong></span>
-            <span>V <strong style="color:#94A3B8;">${Number(f.momios.V).toFixed(2)}</strong></span>
-            ${paBadge}
+    // Contenido del centro: reemplaza el 'vs' flotante por el resultado o estado discreto
+    let centroHtml = "";
+    if (estado === "FINALIZADO") {
+        const marcador = f.marcador_actual || "Final";
+        centroHtml = `
+            <span class="match-time-muted">${f.horario}</span>
+            <span class="score-center-badge">${marcador}</span>
         `;
-    } else if (estado === "PROGRAMADO") {
-        cuotasHtml = `<span style="color:#94A3B8;font-size:6.8pt;font-style:italic;">⏳ Cuotas Pendientes</span>`;
+    } else if (estado === "REPROGRAMADO") {
+        centroHtml = `
+            <span class="match-time-muted">${f.horario}</span>
+            <span class="status-center-subtle">⏳ Reprogramado</span>
+        `;
+    } else {
+        // PROGRAMADO
+        centroHtml = `
+            <span class="match-time-muted">${f.horario}</span>
+            <span class="status-center-subtle">vs</span>
+        `;
     }
 
     card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-            <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:7pt;color:#94A3B8;">⏰ ${f.horario}</span>
-                ${badgeHtml}
-                ${marcadorHtml}
+        <div class="match-grid-3col">
+            <div class="team-home-cell">
+                <span>${f.local}</span>
+                ${localEscudo}
             </div>
-            ${checkboxHtml}
-        </div>
-        <div style="font-size:9.2pt;font-weight:700;margin-bottom:4px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-            ${partidoHtml}
-        </div>
-        <div style="font-size:7pt;color:#cbd5e1;display:flex;gap:8px;align-items:center;">
-            ${cuotasHtml}
+            <div class="match-center-cell">
+                ${centroHtml}
+            </div>
+            <div class="team-away-cell">
+                ${visEscudo}
+                <span>${f.visitante}</span>
+            </div>
         </div>
     `;
 
     container.appendChild(card);
 }
+
 
 // [DES-QBE-016-C] Clicabilidad Total de Tarjeta (Card-Level Clickability)
 function habilitarClicTarjetaCompleta() {

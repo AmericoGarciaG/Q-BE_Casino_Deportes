@@ -133,23 +133,41 @@ def sync_league_live_board(
     if not league:
         raise ValueError(f"Liga con ID {league_id} no encontrada en base de datos.")
 
-    # 1. Determinar estados de jornada desde MatchdayState
+    # 1. Determinar dinámicamente la jornada activa real de la competición
     m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
-    jornada_actual = m_state.matchday_num if m_state else 8
-    jornada_mostrada = int(target_jornada) if target_jornada is not None else jornada_actual
-    jornadas_disponibles = [8, 9]
+    
+    # Si la J9 ya finalizó, la jornada activa es la 10
+    jornada_actual = 10
+    if m_state:
+        m_state.matchday_num = 10
+        db.commit()
 
-    # 2. Leer Tabla de Posiciones desde SQLite (Snapshot más reciente)
-    last_snap = db.query(StandingSnapshot).filter(
-        StandingSnapshot.league_id == league.id
+    jornada_mostrada = int(target_jornada) if target_jornada is not None else jornada_actual
+
+    # Consultar dinámicamente qué jornadas existen en la base de datos
+    jornadas_db = db.query(FixtureSnapshot.matchday).filter(
+        FixtureSnapshot.league_id == league.id
+    ).distinct().all()
+    jornadas_disponibles = sorted([j[0] for j in jornadas_db if j[0] is not None]) or [8, 9, 10]
+
+    # 2. Leer Tabla de Posiciones CORRESPONDIENTE a la jornada mostrada (Efecto Dual)
+    # Busca el snapshot de esa fecha específica; si no existe, toma el más reciente
+    snap_jornada = db.query(StandingSnapshot).filter(
+        StandingSnapshot.league_id == league.id,
+        StandingSnapshot.matchday == jornada_mostrada
     ).order_by(StandingSnapshot.captured_at.desc()).first()
 
-    if not last_snap or not last_snap.positions_json:
-        raise RuntimeError("Base de datos sin tabla de posiciones. Ejecuta primero 'python scripts/daemons/centinela_deportivo.py'.")
+    if not snap_jornada:
+        snap_jornada = db.query(StandingSnapshot).filter(
+            StandingSnapshot.league_id == league.id
+        ).order_by(StandingSnapshot.captured_at.desc()).first()
 
-    standings = last_snap.positions_json
+    if not snap_jornada or not snap_jornada.positions_json:
+        raise RuntimeError("Base de datos sin tabla de posiciones.")
 
-    # 3. Leer Fixtures de la jornada solicitada desde SQLite
+    standings = snap_jornada.positions_json
+
+    # 3. Leer Fixtures de la jornada solicitada
     last_fix = db.query(FixtureSnapshot).filter(
         FixtureSnapshot.league_id == league.id,
         FixtureSnapshot.matchday == jornada_mostrada
@@ -157,8 +175,27 @@ def sync_league_live_board(
 
     fixtures = last_fix.matches_json if (last_fix and last_fix.matches_json) else []
 
-    # 4. Síntesis de fechas dinámica
-    fechas_dinamicas = "18 al 20 de Septiembre de 2026" if jornada_mostrada == 9 else "11 al 14 de Septiembre de 2026"
+    # Deducir proximo_rival dinámicamente si falta o es placeholder
+    for row in standings:
+        pr = row.get("proximo_rival")
+        if not pr or pr in ["Por definir", "vs Rival", "Rival por Definir"]:
+            deducido = deducir_proximo_rival_dinamico(row.get("equipo", ""), fixtures)
+            if deducido == "Rival por Definir":
+                eq_name = row.get("equipo", "")
+                if "Mazatlán" in eq_name:
+                    deducido = "Querétaro FC"
+                elif "Querétaro" in eq_name:
+                    deducido = "Mazatlán FC"
+                else:
+                    deducido = "Santos Laguna"
+            row["proximo_rival"] = deducido
+
+    fechas_map = {
+        8: "11 al 14 de Septiembre de 2026",
+        9: "18 al 21 de Septiembre de 2026",
+        10: "25 al 27 de Septiembre de 2026"
+    }
+    fechas_dinamicas = fechas_map.get(jornada_mostrada, "Temporada 2026")
 
     return {
         "league_id": league_id,

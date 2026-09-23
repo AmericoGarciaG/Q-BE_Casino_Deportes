@@ -807,6 +807,16 @@ class PortfolioExecutionPlan(BaseModel):
   - El `PipelineAdapter` resuelve cada ID independientemente de su jornada de origen (`partido_262_j8_...` y `partido_262_j9_...`), vinculando la tabla de posiciones consolidada y aplicando los Hard-Caps globales (Invarianzas #3 y #4) sobre el portafolio unificado.
 
 ---
+
+### [ARCH-1.6.13] Motor de Ingesta Total de Temporada y Reconstrucción Histórica [DIRGEN-SEALED] [GOVERNANCE-01]
+
+* **Axioma de Cobertura Temporal Integral:** El Centinela Deportivo debe extraer la totalidad del calendario oficial de la competición (153 partidos en torneos de 18 clubes, divididos en 17 jornadas).
+* **Reconstrucción Determinista de Tablas Históricas:**
+  - A partir de los marcadores oficiales consumados de las fechas concluidas, el motor calcula algebraicamente la tabla de posiciones acumulada al corte de cada jornada ($Pts = 3 \cdot PG + PE$, $DIF = GF - GC$).
+  - Persiste un `StandingSnapshot` y un `FixtureSnapshot` para cada jornada de la temporada en SQLite.
+* **Soberanía Dinámica:** Cero constantes o tuplas de partidos quemadas en código Python (`[GOVERNANCE-01]`). Todo emana dinámicamente de la red vía FotMob Opta (League 230).
+
+---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**
 
 ```

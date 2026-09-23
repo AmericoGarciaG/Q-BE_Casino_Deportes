@@ -306,3 +306,18 @@
      - Franja de probabilidad o datos físicos de gol (sin cuotas de casino).
      - CERO inputs de tipo checkbox.
 
+---
+
+### [DES-QBE-037] El Carrusel Horizontal Continuo y la Tarjeta Clicable Limpia [UX-MANDATE]
+
+* **Geometría del Carrusel (`.carousel-track`):**
+  - Contenedor de una sola fila: `display: flex; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;`.
+  - Queda estrictamente prohibido que las píldoras se apilen en múltiples filas verticales (`flex-wrap: wrap` prohibido).
+  - Flechas de navegación: `#btn-carousel-prev` (`◄`) y `#btn-carousel-next` (`►`).
+  - Auto-centrado: La píldora de la jornada activa o seleccionada se desplaza automáticamente al centro visible del track.
+* **Geometría de la Tarjeta Soberana (`.match-card-clean`):**
+  - La tarjeta completa es el disparador de interacción (`cursor: pointer; transition: border-color 0.2s;`).
+  - Queda prohibido añadir botones internos de ancho completo o textos con jerga técnica ("Radiografía Estocástica" prohibido).
+  - Encabezado con fecha y badge de estado (`FINALIZADO` con marcador, o `PROGRAMADO`), escudos locales y nombres canónicos.
+
+

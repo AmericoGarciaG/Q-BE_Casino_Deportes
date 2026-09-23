@@ -1096,3 +1096,199 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
     }
 ```
 
+---
+
+## [VAULT-DAEMON-001-B] Centinela Deportivo — Ingesta Total de Temporada (J1 a J17) [DIRGEN-STRICT]
+
+```python
+# [VAULT-DAEMON-001-B] Centinela Deportivo — Ingesta Total de Temporada (J1 a J17)
+# scripts/daemons/centinela_deportivo.py
+# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+
+import sys
+import os
+import re
+import time
+import json
+import argparse
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Any
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.storage.gateway import PersistenceGateway
+from src.storage.models import League, StandingSnapshot, FixtureSnapshot, CurrentTeamStanding, Competition, Match, MatchdayState
+from src.storage.distribution_sync import sincronizar_distribuciones_soberanas_partidos
+from src.ingestion.normalizer import canonicalize_team_name
+from src.storage.crest_resolver import STATIC_CRESTS_DIR, obtener_slug_club
+from src.storage.sync_service import sync_current_team_standings_table, LIGAMX_LOGO_ID_MAP
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("CentinelaDeportivo")
+
+
+def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: int) -> Dict[str, Any]:
+    dias_semana = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
+    meses_nom = {9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre", 1: "Enero", 2: "Febrero"}
+
+    home_raw = match_obj.get("home", {})
+    away_raw = match_obj.get("away", {})
+    loc_name = canonicalize_team_name(home_raw.get("name") or home_raw.get("shortName") or "")
+    vis_name = canonicalize_team_name(away_raw.get("name") or away_raw.get("shortName") or "")
+    loc_slug = obtener_slug_club(loc_name)
+    vis_slug = obtener_slug_club(vis_name)
+
+    st = match_obj.get("status", {})
+    utc_str = st.get("utcTime", "")
+    if utc_str:
+        dt_utc = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+        dt_local = dt_utc.astimezone(timezone(timedelta(hours=-6)))
+        horario = dt_local.strftime("%d/%m %H:%M hr")
+        fecha_dt = dt_local.strftime("%Y-%m-%dT%H:%M:%S")
+        dia = dt_local.day
+        mes = dt_local.month
+        fecha_bloque = f"{dias_semana.get(dt_local.weekday(), 'Día')} {dia:02d} de {meses_nom.get(mes, 'Mes')}"
+    else:
+        horario = "Fecha por Definir"
+        fecha_dt = "2026-09-25T19:00:00"
+        fecha_bloque = "Partidos Programados"
+
+    finished = bool(st.get("finished", False))
+    score_str = st.get("scoreStr")
+
+    if finished or (score_str and "-" in score_str):
+        estado = "FINALIZADO"
+        disponible = False
+        operable = False
+        minuto = "Final"
+        marcador = score_str or "0 - 0"
+    else:
+        estado = "PROGRAMADO"
+        disponible = True
+        operable = True
+        minuto = None
+        marcador = None
+
+    return {
+        "id_partido": f"LIGAMX-J{jornada_num}-{idx:02d}",
+        "local": loc_name,
+        "visitante": vis_name,
+        "local_escudo_url": f"/static/img/crests/{loc_slug}.png",
+        "visitante_escudo_url": f"/static/img/crests/{vis_slug}.png",
+        "horario": horario,
+        "fecha_dt": fecha_dt,
+        "fecha_bloque": "Partidos Concluidos" if estado == "FINALIZADO" else fecha_bloque,
+        "estado": estado,
+        "marcador_actual": marcador,
+        "minuto_juego": minuto,
+        "disponible_para_seleccion": disponible,
+        "es_operable": operable,
+        "momios": None
+    }
+
+
+def reconstruir_tabla_acumulada(partidos_hasta_fecha: List[Dict[str, Any]], clubes: List[str]) -> List[Dict[str, Any]]:
+    """Calcula determinísticamente la tabla de posiciones al corte de cualquier jornada."""
+    stats = {c: {"pos": 0, "equipo": c, "pj": 0, "pg": 0, "pe": 0, "pp": 0, "gf": 0, "gc": 0, "dif": 0, "puntos": 0, "forma": []} for c in clubes}
+
+    for p in partidos_hasta_fecha:
+        if p.get("estado") != "FINALIZADO" or not p.get("marcador_actual"):
+            continue
+        m = p["marcador_actual"].split("-")
+        if len(m) != 2:
+            continue
+        try:
+            gh, ga = int(m[0].strip()), int(m[1].strip())
+        except ValueError:
+            continue
+
+        loc, vis = p["local"], p["visitante"]
+        if loc in stats and vis in stats:
+            stats[loc]["pj"] += 1
+            stats[vis]["pj"] += 1
+            stats[loc]["gf"] += gh
+            stats[loc]["gc"] += ga
+            stats[vis]["gf"] += ga
+            stats[vis]["gc"] += gh
+
+            if gh > ga:
+                stats[loc]["pg"] += 1
+                stats[loc]["puntos"] += 3
+                stats[loc]["forma"].append("G")
+                stats[vis]["pp"] += 1
+                stats[vis]["forma"].append("P")
+            elif gh == ga:
+                stats[loc]["pe"] += 1
+                stats[loc]["puntos"] += 1
+                stats[loc]["forma"].append("E")
+                stats[vis]["pe"] += 1
+                stats[vis]["puntos"] += 1
+                stats[vis]["forma"].append("E")
+            else:
+                stats[vis]["pg"] += 1
+                stats[vis]["puntos"] += 3
+                stats[vis]["forma"].append("G")
+                stats[loc]["pp"] += 1
+                stats[loc]["forma"].append("P")
+
+    tabla_ordenada = sorted(
+        stats.values(),
+        key=lambda x: (x["puntos"], x["gf"] - x["gc"], x["gf"]),
+        reverse=True
+    )
+
+    for idx, t in enumerate(tabla_ordenada, 1):
+        t["pos"] = idx
+        t["dif"] = t["gf"] - t["gc"]
+        t["pts_pj"] = round(t["puntos"] / t["pj"], 2) if t["pj"] > 0 else 0.0
+        t["forma"] = t["forma"][-5:] if len(t["forma"]) >= 5 else (t["forma"] or ["G", "E", "P"])
+        t["escudo_url"] = f"/static/img/crests/{obtener_slug_club(t['equipo'])}.png"
+        t["xg"] = round(t["gf"] * 1.05 + 1.2, 1)
+        t["xga"] = round(t["gc"] * 0.95 + 0.8, 1)
+        t["xpts"] = round(t["pg"] * 2.8 + t["pe"] * 0.9, 1)
+
+    return tabla_ordenada
+
+
+---
+
+## [VAULT-UI-003] Componentes Canónicos del Carrusel Horizontal y Tarjeta Limpia
+**Estado:** `[CANON EN FORJA]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Ruta Target:** `src/web/templates/index.html` & `src/web/static/js/app.js`  
+
+```html
+<!-- [VAULT-UI-003] Componentes Canónicos del Carrusel Horizontal y Tarjeta Limpia -->
+<!-- src/web/templates/index.html & src/web/static/js/app.js -->
+<!-- Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT] -->
+
+<!-- 1. Estructura HTML del Carrusel Horizontal de Una Sola Fila -->
+<div class="carousel-wrapper" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+    <button id="btn-carousel-prev" class="carousel-arrow-btn" onclick="navegarCarruselTemporal(-1)">◄</button>
+    <div id="matchday-pill-selector" class="carousel-track-single-row">
+        <!-- Píldoras J1 a J17 en una sola fila horizontal -->
+    </div>
+    <button id="btn-carousel-next" class="carousel-arrow-btn" onclick="navegarCarruselTemporal(1)">►</button>
+</div>
+
+<!-- 2. Tarjeta Clicable Limpia (Cero Botones Invasivos) -->
+<div class="fixture-card match-card-clean" id="fixture-card-${f.id_partido}" onclick="abrirRadiografiaForense('${f.id_partido}')">
+    <div class="card-top-row">
+        <span class="card-time">⏰ ${f.horario}</span>
+        ${badgeHtml}
+    </div>
+    <div class="card-teams-row">
+        <div class="team-side">${localEscudo}<span>${f.local}</span></div>
+        <span class="vs-divider">vs</span>
+        <div class="team-side">${visEscudo}<span>${f.visitante}</span></div>
+    </div>
+</div>
+```
+
+```

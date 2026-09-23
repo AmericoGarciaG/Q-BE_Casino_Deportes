@@ -95,20 +95,21 @@
 
                 <!-- PANEL DERECHO: CARTELERA SOBERANA [VAULT-UI-001] -->
                 <div class="cartelera-panel card card-clean">
-                    <div class="cartelera-header flex-between">
-                        <div class="flex-align-center gap-10">
-                            <span class="icon-header">⚽</span>
-                            <h3 id="lbl-nombre-jornada" class="m-0">Jornada Activa</h3>
-                        </div>
-                        <div id="sync-status-badge" class="badge-status-neutral">
-                            <span>Sincronizada con BD</span>
-                        </div>
+                    <div class="cartelera-header-compact" style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 1.05rem;">⚽</span>
+                        <h3 id="lbl-nombre-jornada" style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #FFFFFF;">Jornada Activa</h3>
                     </div>
 
-                    <!-- Carrusel de Píldoras de Jornada Continuas (Sin "Mercado Abierto") -->
-                    <div id="matchday-pill-selector" class="matchday-pill-selector">
-                        <!-- Generado dinámicamente por app.js -->
+                    <!-- Carrusel Horizontal Continuo de Temporada Completa [VAULT-UI-003] -->
+                    <div class="carousel-wrapper" style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+                        <button id="btn-carousel-prev" class="carousel-arrow-btn" onclick="navegarCarruselTemporal(-1)">◄</button>
+                        <div id="matchday-pill-selector" data-legacy-track-id="season-matchdays-track" class="carousel-track-single-row">
+                            <!-- id="season-matchdays-track" -->
+                            <!-- Píldoras J1 a J17 en una sola fila continua -->
+                        </div>
+                        <button id="btn-carousel-next" class="carousel-arrow-btn" onclick="navegarCarruselTemporal(1)">►</button>
                     </div>
+
 
                     <!-- Lista de Partidos Soberanos (Cero Checkboxes, Cero Botón Portafolio) -->
                     <div id="fixtures-container" class="fixtures-scroll-container">
