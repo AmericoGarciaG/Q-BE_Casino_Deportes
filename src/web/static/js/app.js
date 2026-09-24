@@ -418,10 +418,29 @@ function _renderFixtureCard(container, f, deshabilitada) {
             <span class="status-center-subtle">⏳ Reprogramado</span>
         `;
     } else {
-        // PROGRAMADO
+        // PROGRAMADO (JORNADA ACTIVA J10)
+        const pL = f.p_local ? (f.p_local * 100).toFixed(0) + "%" : "—";
+        const pE = f.p_empate ? (f.p_empate * 100).toFixed(0) + "%" : "—";
+        const pV = f.p_visitante ? (f.p_visitante * 100).toFixed(0) + "%" : "—";
+
+        const wL = f.p_local ? (f.p_local * 100).toFixed(1) : 33.3;
+        const wE = f.p_empate ? (f.p_empate * 100).toFixed(1) : 33.3;
+        const wV = f.p_visitante ? (f.p_visitante * 100).toFixed(1) : 33.4;
+
         centroHtml = `
             <span class="match-time-muted">${f.horario}</span>
-            <span class="status-center-subtle">vs</span>
+            <div class="distribution-center-badge" title="Probabilidad Soberana Q-BE: Local · Empate · Visita">
+                <span style="color:#00E676; font-weight:800;">${pL}</span>
+                <span style="color:#64748B; margin: 0 3px;">·</span>
+                <span style="color:#94A3B8; font-weight:700;">${pE}</span>
+                <span style="color:#64748B; margin: 0 3px;">·</span>
+                <span style="color:#EF4444; font-weight:800;">${pV}</span>
+            </div>
+            <div class="prob-strip-mini" style="display:flex; width:75px; height:3px; border-radius:2px; overflow:hidden; margin-top:3px;">
+                <div style="background:#00E676; width:${wL}%;"></div>
+                <div style="background:#64748B; width:${wE}%;"></div>
+                <div style="background:#EF4444; width:${wV}%;"></div>
+            </div>
         `;
     }
 

@@ -175,6 +175,24 @@ def sync_league_live_board(
 
     fixtures = last_fix.matches_json if (last_fix and last_fix.matches_json) else []
 
+    from src.storage.models import SovereignDistribution
+
+    fixtures_con_distribucion = []
+    for fx_orig in fixtures:
+        fx = dict(fx_orig)
+        mid = fx.get("id_partido", "")
+        dist_db = db.query(SovereignDistribution).filter(SovereignDistribution.match_id == mid).first()
+        if dist_db:
+            fx["p_local"] = dist_db.p_local
+            fx["p_empate"] = dist_db.p_empate
+            fx["p_visitante"] = dist_db.p_visitante
+            fx["lambda_home"] = dist_db.lambda_home
+            fx["lambda_away"] = dist_db.lambda_away
+            fx["phi_lead2_home"] = dist_db.phi_lead2_home
+        fixtures_con_distribucion.append(fx)
+
+    fixtures = fixtures_con_distribucion
+
     # Deducir proximo_rival dinámicamente si falta o es placeholder
     for row in standings:
         pr = row.get("proximo_rival")

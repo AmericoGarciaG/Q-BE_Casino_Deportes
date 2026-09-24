@@ -658,5 +658,22 @@ table.fintech-table {
     margin-bottom: 2px;
 }
 
+/* ── DISTRIBUCIÓN SOBERANA CENTRAL EN TARJETAS ── */
+.distribution-center-badge {
+    background: #0f172a;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.76rem;
+    font-family: var(--font-mono);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+.prob-strip-mini {
+    background: #334155;
+}
+
 
 

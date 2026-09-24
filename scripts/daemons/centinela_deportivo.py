@@ -387,6 +387,33 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
                 snap_standing.positions_json = tabla_r
                 snap_standing.captured_at = ahora
 
+        # ── INYECCIÓN SOBERANA DIRECTA EN TODAS LAS JORNADAS PROGRAMADAS (J10 A J17) ──
+        standings_map = {s["equipo"]: s for s in datos["standings_viva"]}
+        from src.core.sovereign_pipeline import generar_distribucion_soberana
+
+        for r in range(10, 18):
+            fixtures_r = datos["fixtures_por_jornada"].get(r, [])
+            for f in fixtures_r:
+                h_st = standings_map.get(f["local"], {})
+                a_st = standings_map.get(f["visitante"], {})
+                try:
+                    dist_out = generar_distribucion_soberana(
+                        match_id=f["id_partido"],
+                        raw_match_data={"home_team_stats": h_st, "away_team_stats": a_st},
+                        mu_liga=2.65,
+                        gamma_home_base=0.15
+                    )
+                    # INYECCIÓN DIRECTA AL FIXTURE: Cero dependencia de consultas cruzadas
+                    f["p_local"] = dist_out.p_local
+                    f["p_empate"] = dist_out.p_empate
+                    f["p_visitante"] = dist_out.p_visitante
+                    f["lambda_home"] = dist_out.lambda_home
+                    f["lambda_away"] = dist_out.lambda_away
+                    f["phi_lead2_home"] = dist_out.phi_lead2_home
+                except Exception as ex_dist:
+                    logger.warning(f"No se pudo generar distribución para {f['id_partido']}: {ex_dist}")
+
+        # ── PERSISTENCIA DE SNAPSHOTS CON PROBABILIDADES YA INTEGRADAS ──
         for r, fixtures_r in datos["fixtures_por_jornada"].items():
             lista_final = (fixtures_r + datos["reprogramados"]) if r == 8 else fixtures_r
 
@@ -404,8 +431,9 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
                 )
                 tx.add(snap_fix)
             else:
-                if r == 10 and snap_fix.matches_json:
-                    momios_cache = { (fx["local"], fx["visitante"]): fx["momios"] for fx in snap_fix.matches_json if fx.get("momios") }
+                # Si ya tenía momios de Caliente, preservarlos
+                if snap_fix.matches_json:
+                    momios_cache = {(fx["local"], fx["visitante"]): fx["momios"] for fx in snap_fix.matches_json if fx.get("momios")}
                     for f in lista_final:
                         k = (f["local"], f["visitante"])
                         if k in momios_cache:
@@ -414,40 +442,21 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
                 snap_fix.matches_json = lista_final
                 snap_fix.updated_at = ahora
 
-        comp = tx.query(Competition).filter(Competition.id == "MEX_LIGAMX").first()
-        if not comp:
-            comp = Competition(id="MEX_LIGAMX", name="Liga MX", country="Mexico", macro_mu_liga=2.65, macro_gamma_home=0.15)
-            tx.add(comp)
+        # ── SINCRONIZAR ENTIDADES 3NF MATCH ──
+        for r in range(10, 18):
+            for f in datos["fixtures_por_jornada"].get(r, []):
+                m_id = f["id_partido"]
+                m_rec = tx.query(Match).filter(Match.id == m_id).first()
+                if not m_rec:
+                    m_rec = Match(
+                        id=m_id, competition_id="MEX_LIGAMX", matchday_num=r,
+                        home_team_slug=obtener_slug_club(f["local"]),
+                        away_team_slug=obtener_slug_club(f["visitante"]),
+                        status=f["estado"]
+                    )
+                    tx.add(m_rec)
 
-        for f in datos["fixtures_por_jornada"].get(10, []):
-            m_id = f["id_partido"]
-            m_rec = tx.query(Match).filter(Match.id == m_id).first()
-            if not m_rec:
-                m_rec = Match(
-                    id=m_id, competition_id="MEX_LIGAMX", matchday_num=10,
-                    home_team_slug=obtener_slug_club(f["local"]),
-                    away_team_slug=obtener_slug_club(f["visitante"]),
-                    status=f["estado"]
-                )
-                tx.add(m_rec)
-
-    logger.info("Generando distribuciones soberanas J10...")
-    payloads_soberanos = []
-    standings_map = {s["equipo"]: s for s in datos["standings_viva"]}
-
-    for f in datos["fixtures_por_jornada"].get(10, []):
-        h_st = standings_map.get(f["local"], {})
-        a_st = standings_map.get(f["visitante"], {})
-        payloads_soberanos.append({
-            "match_id": f["id_partido"],
-            "competition_id": "MEX_LIGAMX",
-            "home_team_stats": h_st,
-            "away_team_stats": a_st
-        })
-
-    if payloads_soberanos:
-        sincronizar_distribuciones_soberanas_partidos(payloads_soberanos, gateway=gateway)
-    logger.info("[PERSISTENCIA OK] SQLite sincronizado con la temporada completa J1 a J17 y tablas acumuladas.")
+    logger.info("✅ [PERSISTENCIA OK] Probabilidades inyectadas directamente en snapshots de J10 a J17.")
 
 
 def imprimir_resumen_telemetria(datos: Dict[str, Any], duracion: float) -> None:

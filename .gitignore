@@ -95,3 +95,6 @@ src/web/static/img/crests/fiera.png
 src/web/static/img/crests/potros-hierro.png
 scripts/utilidades/convertir_vol1_md_a_docx.py
 scripts/utilidades/exportar_volumen1_word.py
+scripts/utilidades/aislar_fuga_probabilidades.py
+scripts/utilidades/comprobar_payload_http.py
+scripts/utilidades/simulador_pantalla_soberana.py

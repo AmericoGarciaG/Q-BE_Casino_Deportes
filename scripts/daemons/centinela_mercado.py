@@ -64,9 +64,9 @@ def actualizar_cuotas_en_sqlite(jornada: int, cuotas_caliente: List[Dict[str, An
             prev_momios = fx.get("momios")
             mid = fx.get("id_partido", "")
 
-            # Consultar probabilidad soberana real de la BD
+            # Consultar probabilidad soberana real calculada por el Tratado Vol. I
             dist_db = tx.query(SovereignDistribution).filter(SovereignDistribution.match_id == mid).first()
-            p_soberana_l = dist_db.p_local if dist_db else 0.50
+            p_soberana_l = dist_db.p_local if dist_db else 0.45
 
             if c and c.get("L") is not None:
                 momio_l = float(c["L"])
@@ -79,7 +79,7 @@ def actualizar_cuotas_en_sqlite(jornada: int, cuotas_caliente: List[Dict[str, An
 
                 viable, motivo = evaluar_viabilidad_cuotas(momio_l, momio_e, momio_v, pago_anticipado=pa)
 
-                # Cálculo de GAP real (+EV) frente a probabilidad soberana
+                # Cálculo de GAP real (+EV) frente a la probabilidad soberana
                 prob_impl_l = 1.0 / momio_l
                 gap_l = round((p_soberana_l - prob_impl_l) * 100.0, 1)
 
@@ -133,10 +133,12 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
 
     for idx, p in enumerate(partidos, 1):
         delta_str = f"({p['delta_L']:+.2f})" if p['delta_L'] != 0.0 else ""
-        momio_l_txt = f"{p['L']:.2f} {delta_str}".strip()
+        momio_l_txt = f"{p['L']:.2f} {delta_str}".strip() if p['L'] > 0 else "—"
         gap_txt = f"{p.get('gap_L', 0.0):+.1f}%" if p['L'] > 0 else "—"
+        momio_e_txt = f"{p['E']:.2f}" if p['E'] > 0 else "—"
+        momio_v_txt = f"{p['V']:.2f}" if p['V'] > 0 else "—"
         print(
-            f" {idx:<2} {p['horario']:<15} {p['partido']:<38} {momio_l_txt:<9} {p['E']:<9.2f} {p['V']:<9.2f} "
+            f" {idx:<2} {p['horario']:<15} {p['partido']:<38} {momio_l_txt:<9} {momio_e_txt:<9} {momio_v_txt:<9} "
             f"{gap_txt:<10} {p['margen_casa']:<7.1f}% {p['pa']:<4} {p['triaje']:<11} {p['via_valor']}"
         )
 
@@ -149,7 +151,7 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
 
 def main():
     parser = argparse.ArgumentParser(description="Centinela de Mercado Autónomo Q-BE")
-    parser.add_argument("--jornada", type=int, default=9)
+    parser.add_argument("--jornada", type=int, default=10, help="Jornada a escanear en Caliente (default: 10)")
     parser.add_argument("--loop", type=int, default=0)
     args = parser.parse_args()
 

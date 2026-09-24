@@ -4,7 +4,7 @@
 Gobierna los esquemas de entrada y salida del cliente SPA reactivo.
 """
 
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -61,9 +61,10 @@ class MatchFixtureOut(BaseModel):
     horario: str
     fecha_dt: Optional[str] = None              # ISO 8601: "YYYY-MM-DDTHH:MM:SS"
     fecha_bloque: Optional[str] = None          # Etiqueta de agrupación (retrocompat.)
-    momios: Optional[Odds1X2] = None
+    momios: Optional[Union[Odds1X2, Dict[str, Any]]] = None
     es_viable_triaje: bool = True
     motivo_triaje: Optional[str] = None
+    sub_badge: Optional[str] = None
 
     # [ARCH-1.6.3] Máquina de Estados del Fixture
     estado: Literal["PROGRAMADO", "EN_CURSO", "FINALIZADO", "REPROGRAMADO"] = "PROGRAMADO"
@@ -73,6 +74,14 @@ class MatchFixtureOut(BaseModel):
     disponible_para_seleccion: bool = True      # False si FINALIZADO o REPROGRAMADO [BIZ-LOGIC]
     es_operable: bool = True
     es_pospuesto: bool = False
+
+    # ── [CAMPOS SOBERANOS TRATADO VOL. I] ──
+    p_local: Optional[float] = Field(default=None, description="Probabilidad soberana local")
+    p_empate: Optional[float] = Field(default=None, description="Probabilidad soberana empate")
+    p_visitante: Optional[float] = Field(default=None, description="Probabilidad soberana visitante")
+    lambda_home: Optional[float] = Field(default=None, description="Intensidad de gol local")
+    lambda_away: Optional[float] = Field(default=None, description="Intensidad de gol visita")
+    phi_lead2_home: Optional[float] = Field(default=None, description="Probabilidad de ventaja +2 local")
 
 
 class LiveBoardOut(BaseModel):

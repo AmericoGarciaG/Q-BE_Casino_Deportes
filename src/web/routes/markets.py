@@ -75,7 +75,7 @@ def get_sportsbook_matches(
 
         fix_snap = session.query(FixtureSnapshot).filter(
             FixtureSnapshot.league_id == league.id,
-            FixtureSnapshot.matchday == 9
+            FixtureSnapshot.matchday == 10
         ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if not fix_snap or not fix_snap.matches_json:
