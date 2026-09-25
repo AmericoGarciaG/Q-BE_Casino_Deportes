@@ -16,8 +16,17 @@
 7. `[VAULT-DATA-001]` Central Persistence Gateway y PRAGMAs Transaccionales (`src/storage/gateway.py`)
 8. `[VAULT-DATA-002]` Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`)
 9. `[VAULT-DAEMON-001]` Centinela Deportivo Autónomo 100% Dinámico (Cero Alambrado) (`scripts/daemons/centinela_deportivo.py`)
-
-*(Los bloques de código canónico se incorporan durante el despliegue de la Fase 5).*
+10. `[VAULT-CORE-007-C]` Descuento de Margen Comercial Vig-Free al Símplex Δ² (`centinela_mercado.py`)
+11. `[VAULT-CORE-007-D]` Detector de Arbitraje Inter-Casas Surebet (`centinela_mercado.py`)
+12. `[VAULT-DAEMON-007-E]` Consenso de Mercado y Diferenciales vs Q-BE (`centinela_mercado.py`)
+13. `[VAULT-SCRAPER-001-A]` Conversor Resiliente Cuotas Americanas/Decimales (`betway_scraper.py`)
+14. `[VAULT-SCRAPER-001-B]` Extractor Betway con Auto-Scroll y Clic de Acordeones (`betway_scraper.py`)
+15. `[VAULT-SCRAPER-002-A]` Inicializador Chromium Stealth Anti-Detección (`caliente_scraper.py`)
+16. `[VAULT-SCRAPER-002-B]` Extractor Focalizado Caliente con Descontaminación de Filas (`caliente_scraper.py`)
+17. `[VAULT-UI-001-A]` Carrusel Ventanizado de 3 Píldoras (`app.js`)
+18. `[VAULT-UI-001-B]` Alternador Modo Enfoque con Persistencia en localStorage (`app.js`)
+19. `[VAULT-UI-002-B]` Micro-Malla de Consenso de Mercado 26px 42px 42px 42px (`theme.css`)
+20. `[VAULT-UI-002-C]` Geometría de Modo Enfoque Centrado a 880px (`theme.css`)
 
 ---
 
@@ -1289,6 +1298,130 @@ def reconstruir_tabla_acumulada(partidos_hasta_fecha: List[Dict[str, Any]], club
         <div class="team-side">${visEscudo}<span>${f.visitante}</span></div>
     </div>
 </div>
+
+---
+
+## [VAULT-CORE-007-C] Descuento de Margen Comercial Vig-Free al Símplex Δ² (`centinela_mercado.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+def calcular_probabilidades_sin_comision(L: float, E: float, V: float) -> Tuple[float, float, float]:
+    """[LN-QBE-007-C] Descuento de Margen Comercial al Símplex Δ²."""
+    if L <= 1.0 or E <= 1.0 or V <= 1.0:
+        return (0.0, 0.0, 0.0)
+    pi_l = 1.0 / L
+    pi_e = 1.0 / E
+    pi_v = 1.0 / V
+    S = pi_l + pi_e + pi_v
+    if S <= 0.0:
+        return (0.0, 0.0, 0.0)
+    return (pi_l / S, pi_e / S, pi_v / S)
+```
+
+---
+
+## [VAULT-CORE-007-D] Detector de Arbitraje Inter-Casas Surebet (`centinela_mercado.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+def evaluar_arbitraje_partido(momios_operadores: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """[LN-QBE-007-D] Detector de Arbitraje Inter-Casas (Cross-Market Surebet)."""
+    best_l = {"momio": 0.0, "operador": None}
+    best_e = {"momio": 0.0, "operador": None}
+    best_v = {"momio": 0.0, "operador": None}
+
+    for op_name, m in momios_operadores.items():
+        if not m:
+            continue
+        l_val, e_val, v_val = float(m.get("L", 0.0)), float(m.get("E", 0.0)), float(m.get("V", 0.0))
+        if l_val > best_l["momio"]: best_l = {"momio": l_val, "operador": op_name}
+        if e_val > best_e["momio"]: best_e = {"momio": e_val, "operador": op_name}
+        if v_val > best_v["momio"]: best_v = {"momio": v_val, "operador": op_name}
+
+    if best_l["momio"] > 1.0 and best_e["momio"] > 1.0 and best_v["momio"] > 1.0:
+        indice = (1.0 / best_l["momio"]) + (1.0 / best_e["momio"]) + (1.0 / best_v["momio"])
+        existe = indice < 1.0000
+        roi_pct = ((1.0 / indice) - 1.0) * 100.0 if existe else 0.0
+    else:
+        indice, existe, roi_pct = 1.0, False, 0.0
+
+    return {
+        "existe": existe, "indice": round(indice, 4), "roi_pct": round(roi_pct, 2),
+        "mejor_L": best_l, "mejor_E": best_e, "mejor_V": best_v
+    }
+```
+
+---
+
+## [VAULT-SCRAPER-001-A] Conversor Resiliente Cuotas Americanas/Decimales (`betway_scraper.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+@staticmethod
+def american_to_decimal(val_str: str) -> float:
+    """Convierte cuotas americanas (+230, -150) o decimales a float puro."""
+    if not val_str: return 0.0
+    txt = str(val_str).strip().replace(" ", "")
+    try:
+        val_flt = float(txt)
+        if "." in txt and val_flt > 1.0: return round(val_flt, 2)
+    except ValueError: pass
+
+    try:
+        if txt.startswith("+"):
+            return round(1.0 + (float(txt[1:]) / 100.0), 2)
+        elif txt.startswith("-"):
+            num = float(txt[1:])
+            return round(1.0 + (100.0 / num), 2) if num > 0 else 0.0
+        elif txt.isdigit() and float(txt) >= 100:
+            return round(1.0 + (float(txt) / 100.0), 2)
+    except Exception: pass
+    return 0.0
+```
+
+---
+
+## [VAULT-UI-002-B] Micro-Malla de Consenso de Mercado (`theme.css`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```css
+.market-benchmark-grid {
+    display: grid;
+    grid-template-columns: 26px 42px 42px 42px;
+    justify-content: center;
+    align-items: center;
+    gap: 1px 4px;
+    margin-top: 5px;
+    padding: 3px 6px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+```
+
+---
+
+## [VAULT-UI-002-C] Geometría de Modo Enfoque Centrado a 880px (`theme.css`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```css
+.split-view-container.standings-hidden .cartelera-panel,
+.split-view.standings-hidden .cartelera-panel,
+.content-grid.standings-hidden .cartelera-panel,
+.split-view-container.standings-hidden #sovereign-matches-carousel {
+    max-width: 880px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    transition: max-width 0.25s ease;
+}
+```
+
 ```
 
 ```

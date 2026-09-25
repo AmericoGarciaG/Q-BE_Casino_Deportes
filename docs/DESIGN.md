@@ -1,4 +1,5 @@
 # 🎨 DESIGN SYSTEM SPECIFICATION (DESIGN.md)
+**Versión:** 10.0 (Fintech Micro-Grid, Focus Mode & Viewport Containment Edition)  
 **DARK MODE FINTECH — `Q_BE_CD_WEB`**
 
 ## 1. Paleta de Colores Canónica
@@ -202,8 +203,6 @@
 * **Supervisión Activa con IA:** Si el LLM detecta una contradicción fáctica entre los datos y la estrategia, antepondrá un recuadro de advertencia en color ámbar/rojo tenue:
   `<div class="alerta-inconsistencia" style="background: rgba(239,68,68,0.15); border-left: 3px solid #EF4444; padding: 8px 12px; margin-bottom: 8px; color: #F8FAFC; font-size: 8pt;">⚠️ <strong>Alerta de Inconsistencia Auditada:</strong> [Explicación]</div>`
 
-
-
 ### [DES-QBE-020] Dashboard Ejecutivo de Cartera y Métricas Duales [UX-MANDATE]
 
 * **Macro KPIs con Distinción Financiera Estricta:**
@@ -320,6 +319,12 @@
   - Queda prohibido añadir botones internos de ancho completo o textos con jerga técnica ("Radiografía Estocástica" prohibido).
   - Encabezado con fecha y badge de estado (`FINALIZADO` con marcador, o `PROGRAMADO`), escudos locales y nombres canónicos.
 
+### [DES-QBE-037-A] Ventanizado de 3 Píldoras en Carrusel de Jornadas [UX-MANDATE]
+* **Mecanismo:** Algoritmo determinista de renderizado de píldoras de navegación en el carrusel para limitar el Viewport y prevenir desbordamientos:
+  - Para Jornada 1: Visualizar píldoras `[1, 2, 3]`.
+  - Para Jornada 17: Visualizar píldoras `[15, 16, 17]`.
+  - Para Jornadas intermedias $j$: Visualizar el trío dinámico `[j-1, j, j+1]`.
+
 ---
 
 ### [DES-QBE-039] Configuración de Cartera con Selector de Operador y Despacho Único [UX-MANDATE]
@@ -334,7 +339,7 @@
 
 ---
 
-### [DES-QBE-039-B] Cluster Central de Tarjeta: Triple Nivel Probabilístico (Soberano vs. Consenso) [UX-MANDATE]
+### [DES-QBE-039-B] Cluster Central de Tarjeta: Triple Nivel Probabilístico (Soberano vs. Consenso) & Micro-Malla [UX-MANDATE]
 * **Geometría del Núcleo Central (`.card-center` / `.match-center-cluster`):**
   El bloque central de cada tarjeta en la Jornada Activa se estructura verticalmente en 4 micro-estaciones:
   1. **Horario:** Texto pequeño monospaciado (`0.72rem`, `#94A3B8`).
@@ -349,6 +354,12 @@
      - Formato: `Δ: ±dL% · ±dE% · ±dV%`
      - Estilo: Color Gris Atenuado (`#64748B`), `font-size: 0.67rem`, `font-weight: 400`, fuente monospaciada.
      - Representación: Signo explícito `+` o `-` con 1 decimal (ej. `Δ: -7.2% · -1.3% · +8.5%`).
+* **Geometría de Micro-Malla Fija (4 Columnas):**
+  ```css
+  grid-template-columns: 26px 42px 42px 42px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  ```
 
 ---
 
@@ -358,6 +369,26 @@
   - Estados:
     - Tabla Visible: Texto `◨ Ocultar Tabla`, fondo Slate 800 (`#1E293B`), texto Gris Pizarra (`#94A3B8`).
     - Tabla Oculta: Texto `◧ Ver Tabla`, fondo Azul Tenue (`#0284C7` al 25%), borde Cian (`#38BDF8`), texto Blanco Puro.
+* **Geometría de Estado Oculto (`.standings-hidden`):**
+  - El panel izquierdo de posiciones (`#sovereign-standings-container` o `.standings-panel`) adopta `display: none !important;`.
+  - El contenedor principal de la vista elimina la cuadrícula bipartita (`grid-template-columns: 1fr !important;`).
+  - El panel de la cartelera adopta:
+    `max-width: 880px !important; width: 100% !important; margin: 0 auto !important;`
+  - Transición fluida sin parpadeos de interfaz.
+
+### [DES-QBE-040-A] Modo Enfoque de Cartelera y Persistencia Local [UX-MANDATE]
+* **Mecanismo de Persistencia y Centrado Áureo:**
+  - El botón `#btn-toggle-standings` conmuta la visibilidad de la tabla general y persiste el estado en `localStorage.setItem('qbe_standings_hidden', status)`.
+  - Al activar el Modo Enfoque (tabla oculta), la cartelera adopta el centrado áureo mediante `max-width: 880px !important; margin: 0 auto !important;`.
+
+### [DES-QBE-041] Header Fino de Un Solo Piso (45px Fijo) [UX-MANDATE]
+* **Geometría:** La cabecera principal `header.app-header` restringe su altura a `height: 45px; max-height: 45px;` para maximizar el área vertical visible del Live Board en pantallas estándar.
+
+### [DES-QBE-042] Contención Maestra Split-View con Columna minmax(0, 1fr) [UX-MANDATE]
+* **Regla Antidesbordamiento Horizontal:** La vista `.split-view` debe forzar el uso de la regla CSS `grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)` para impedir desbordamientos horizontales en Viewports de 1380px.
+
+### [DES-QBE-043] Respaldo Narrativo Local de 4 Puntos Focales [UX-MANDATE]
+* **Resiliencia Frontend:** El controlador de la SPA en `app.js` inyecta un bloque narrativo de respaldo determinista estructurado en 4 puntos focales ante cualquier fallo de red o tiempo de espera al consultar `/api/portfolio/match-thesis`.
 * **Geometría de Estado Oculto (`.standings-hidden`):**
   - El panel izquierdo de posiciones (`#sovereign-standings-container` o `.standings-panel`) adopta `display: none !important;`.
   - El contenedor principal de la vista elimina la cuadrícula bipartita (`grid-template-columns: 1fr !important;`).

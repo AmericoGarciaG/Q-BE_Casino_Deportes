@@ -1,10 +1,10 @@
 ```markdown
 # Q-BE Casino Deportes — Governance Book (GOVERNANCE.md)
-**Versión:** 12.0 (Kybern Industrial - Production Multi-Engine Edition)  
+**Versión:** 13.5 (Kybern Industrial - Production Multi-Engine & DirGen Strict Edition)  
 **Estado:** [ALGO-PROTECTED] - Base de Gobierno Sellada (2026-09)  
 **Proyecto:** `Q_BE_CD_WEB` (Quantitative Betting Engine — Web Platform)  
 **Autoridad Suprema:** Américo García Guerrero (Director Humano)  
-**Fuente de Verdad:** Kybern Framework v8.0 / v12.0 + Protocolo Nexus
+**Fuente de Verdad:** Kybern Framework v8.0 / v12.0 / v13.5 + Protocolo Nexus
 
 Este documento define **CÓMO TRABAJAMOS**. Es la constitución operativa, metodológica y técnica absoluta para el desarrollo, auditoría y evolución del sistema `Q_BE_CD_WEB` bajo el estándar **Kybern Framework v8.0 / v12.0**.
 
@@ -162,8 +162,11 @@ Para equilibrar la agilidad en la capa de presentación con el rigor extremo en 
    * *Paso 2 (Juez + Guardián AST):* Test funcional numérico + Verificador criptográfico de integridad (SHA-256 / AST).
    * *Paso 3 (Materialización Fiel):* Transcripción determinista al código de producción. Cero tolerancia a modificaciones arbitrarias.
 
-### 4.2 Protocolo Anti-Bandazos (Single-Strike Constraint)
-En componentes bajo `[DIRGEN-STRICT]`, queda estrictamente prohibido el ensayo y error iterativo autónomo. Ante el primer fallo de compilación o ejecución, el Constructor debe detenerse de inmediato y emitir el artefacto `DIRGEN_VARIANCE_REQUEST.md` detallando coordenadas, traceback, diagnóstico causal, abanico de 2 alternativas evaluadas y diff propuesto, esperando resolución de la Dirección.
+### 4.2 Protocolo Anti-Bandazos (Single-Strike Constraint) [GOVERNANCE] [ALGO-PROTECTED]
+En componentes bajo `[DIRGEN-STRICT]`, queda estrictamente prohibido el ensayo y error iterativo autónomo. Ante el primer fallo de compilación, aserción rota o excepción en tiempo de ejecución, el Constructor tiene la **PROHIBICIÓN ABSOLUTA de intentar parches a ciegas**. Debe detenerse de inmediato (Alto al Fuego) y emitir el artefacto `DIRGEN_VARIANCE_REQUEST.md` detallando coordenadas, traceback, diagnóstico causal, abanico de 2 alternativas evaluadas y diff propuesto, esperando resolución de la Dirección.
+
+### 4.2-B Prohibición Estricta de Pruebas Interactivas en Navegador por IA [GOVERNANCE]
+* **Mandato Operativo:** Queda estrictamente prohibida la ejecución de pruebas interactivas en navegador mediante subagentes de IA para validar flujos de producción. La validación se canaliza obligatoriamente mediante sondas HTTP/consola independientes y la suite en `tests/shield/`.
 
 ### 4.3 Protocolo de Gestión Cognitiva y Ventana Limpia [GOV-LLM-01]
 En flujos asistidos por `gemini-3.6-flash`, toda característica mayor debe iniciarse en una ventana de contexto limpia. Si una implementación desvía su esfuerzo en $\ge 50\%$ o entra en bucles de parches, se descarta la ventana y se inicia una nueva sesión limpia ejecutando la directiva de arranque de `AGENTS.md`.
@@ -283,6 +286,9 @@ Toda suite de The Shield debe incluir pruebas de inspección estática del Árbo
 1. Ausencia de datos mockeados o simulados en producción (`[GOVERNANCE-01]`).
 2. Ausencia de números mágicos hardcodeados sin constante descriptiva.
 3. Ausencia de capturas de error genéricas y silenciosas (`except Exception: pass`).
+
+### [GOV-TEST-08] Invarianza de Mercado y Arbitraje Surebet [ALGO-PROTECTED] [GOVERNANCE]
+* **Principio:** Toda prueba de cuotas multi-operador debe verificar analíticamente que las probabilidades desprovistas de comisión sumen exactamente $1.0000 \pm 10^{-4}$ (Símplex $\Delta^2$), y que el índice de arbitraje sea no-negativo ($S_{\text{arb}} > 0$).
 
 ---
 

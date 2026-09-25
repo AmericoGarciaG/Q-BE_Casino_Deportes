@@ -1,6 +1,6 @@
 ```markdown
 # Q-BE Casino Deportes — Logic Book (LOGIC.md)
-**Versión:** 9.0 (Kybern Industrial - Formal IPO Graph Edition)  
+**Versión:** 10.0 (Multi-Market & Vig-Free Edition)  
 **Estado:** [ALGO-PROTECTED] - Base de Gobierno Sellada (2026-09)  
 **Proyecto:** `Q_BE_CD_WEB` (Quantitative Betting Engine — Web Platform)  
 **Fuente de Verdad:** Paper Académico Q-BE V2.0 + Kybern Framework v8.0 / v12.0
@@ -19,63 +19,40 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
  │ [LN-QBE-012] │ ➔ Normalizador Canónico de Clubes y Cuotas
  └──────┬───────┘
         │
-        ▼
- ┌──────────────┐
- │ [LN-QBE-005] │ ➔ Triaje Determinista de Cuotas 1X2 (Paso 0-A)
- └──────┬───────┘
-        │ (Partidos pre-aprobados por 6 vías de valor)
         ├──────────────────────────┐
         ▼                          ▼
  ┌──────────────┐           ┌──────────────┐
- │ [LN-QBE-003] │           │ [LN-QBE-002] │
- │ FotMob Opta  │           │ Gemini Search│
+ │ [LN-QBE-005] │           │ [LN-QBE-007] │ ➔ Ingesta Multi-Operador (Caliente & Betway)
  └──────┬───────┘           └──────┬───────┘
-        │                          │
-        └────────────┬─────────────┘
-                     ▼
-              ┌──────────────┐
-              │ [LN-QBE-010] │ ➔ Aduana de Sanidad y Anclaje (Paso 0-C)
-              └──────┬───────┘
-                     │
-        ┌────────────┴─────────────┐
-        ▼                          ▼
- ┌──────────────┐           ┌──────────────┐
- │ [LN-QBE-020] │           │ [LN-QBE-030] │
- │ κ-Decay H2H  │           │ FCF & E_att  │
- └──────┬───────┘           └──────┬───────┘
-        │                          │
-        └────────────┬─────────────┘
-                     ▼
-              ┌──────────────┐
-              │ [LN-QBE-040] │ ➔ Poisson Bivariado 6x6 calibrado con xG Opta
-              └──────┬───────┘
-                     ▼
-              ┌──────────────┐
-              │ [LN-QBE-050] │ ➔ Breakeven Dinámico Continuo (θ*)
-              └──────┬───────┘
-                     ▼
-              ┌──────────────┐
-              │ [LN-QBE-060] │ ➔ Evaluador Booleano, Catálogo y Triple Candado
-              └──────┬───────┘
-                     ▼
-              ┌──────────────┐
-              │ [LN-QBE-070] │ ➔ Router Θ de Utilidad Pura, Kelly y Hard-Caps
-              └──────┬───────┘
-                     │
-        ┌────────────┴─────────────┐
-        ▼                          ▼
- ┌──────────────┐           ┌──────────────┐
- │ [LN-QBE-013] │           │ [LN-QBE-014] │
- │ Cronometría  │           │ Tesis Dual   │
- └──────┬───────┘           └──────┬───────┘
-        │                          │
-        └────────────┬─────────────┘
-                     ├──────────────────────────┐
-                     ▼                          ▼
-              ┌──────────────┐           ┌──────────────┐
-              │ [LN-QBE-080] │           │ [LN-QBE-090] │
-              │ Compilador   │           │ Shield Gate  │
-              └──────────────┘           └──────────────┘
+        │                          │ ➔ [007-B] Americano a Decimal
+        │                          │ ➔ [007-C] Vig-Free al Símplex Δ²
+        │                          │ ➔ [007-D] Arbitraje Inter-Casas
+        │                          │ ➔ [007-E] Consenso Mkt & Deltas
+        ├──────────────────────────┘
+        ▼
+ ┌──────────────┐
+ │ [LN-QBE-010] │ ➔ Aduana de Sanidad y Anclaje
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ [LN-QBE-040] │ ➔ Poisson Bivariado 6x6 Calibrado
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ [LN-QBE-065] │ ➔ Filtro de Descarte Temprano (+EV Gate)
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ [LN-QBE-070] │ ➔ Router Θ de Utilidad, Kelly, Dutching V=0
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ [LN-QBE-072] │ ➔ Trinidad de Certeza 3^K y Resiliencia
+ └──────────────┘
 ```
 
 ---
@@ -152,6 +129,21 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Ω (Resumen):** Promediar las probabilidades desprovistas de comisión de los casinos y calcular la disparidad contra el modelo soberano Q-BE:
   $$\bar{q}_k = \frac{1}{N} \sum_{b=1}^N q_{k, b} \quad \text{para } k \in \{L, E, V\}$$
   $$\Delta_L = p_{\text{Q-BE}, L} - \bar{q}_L, \quad \Delta_E = p_{\text{Q-BE}, E} - \bar{q}_E, \quad \Delta_V = p_{\text{Q-BE}, V} - \bar{q}_V$$
+
+### ID: [LN-QBE-007-F] Lista Negra de Tokens de Navegación e Interfaz en Scraping (UI_BLACKLIST)
+* **Ω (Resumen):** Especificar el descarte de los 27 tokens estáticos (`inicio`, `en vivo`, `1-x-2`, `mañana`, etc.) durante el parsing de sitios de casas de apuestas para prevenir contaminación de nombres de equipos.
+
+### ID: [LN-QBE-007-G] Normalización y Limpieza de Nombres de Clubes de Betway
+* **Ω (Resumen):** Describir la remoción previa de sub-cadenas ortográficas (`de guadalajara`, `xolos`, `fc`, `club`) sobre las cadenas extraídas de Betway para matching difuso exacto con el slate canónico.
+
+### ID: [LN-QBE-007-H] Cotas de Admisibilidad de Cuotas y Overround en Betway
+* **Ω (Resumen):** Filtrado de cuotas en $1.05 < O < 50.0$ y overround comercial admisible en $0.0\% < S \le 30.0\%$ para validar mercados operables de Betway.
+
+### ID: [LN-QBE-007-I] Validación de Suma de Inversas en Caliente
+* **Ω (Resumen):** Exigencia estricta de sanidad matemática sobre las cuotas 1X2 de Caliente, requiriendo que la suma de inversas $1/L + 1/E + 1/V$ se ubique estrictamente en $[1.00, 1.35]$.
+
+### ID: [LN-QBE-007-J] Prior de Ignorancia Fiduciaria ante Ausencia de Distribución Soberana
+* **Ω (Resumen):** Documentar la asignación fallback $(0.45, 0.28, 0.27)$ para evitar colapso de deltas si el motor Poisson aún no procesa el partido.
 
 ---
 
@@ -563,7 +555,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   4. Invarianza de Techo: $\text{EV}_{\text{Global}} \le \sum \text{Premios\_Máximos}$.
 * **O (Output):** Veredicto formal en consola: `EXIT CODE 0 (THE SHIELD PASSED)` o `EXIT CODE 1 (BLOCKED)`.
 
-### ID: [LN-QBE-035] Registro Modular de Variables y Suficiencia Fáctica
+### ID: [LN-QBE-035-B] Registro Modular de Variables y Suficiencia Fáctica S(I)
 
 * **Ω (Resumen):** Gobernar la transformación determinista de datos observados ($\mathcal{I}_i$) en factores estructurales normalizados ($\mathcal{A}_i, \mathcal{D}_i$) bajo la regla de suficiencia $S(\mathcal{I}_i) \in \{0, 1\}$.
 * **Suficiencia $S(\mathcal{I}_i)$:** Requiere obligatoriamente que ambos clubes cuenten con partidos jugados $PJ \ge 3$, métricas de goles y tiros $SoT > 0$. Si $S(\mathcal{I}_i) = 0$, la distribución colapsa al prior de ignorancia uniforme $(1/3, 1/3, 1/3)$ y se marca como no operable.

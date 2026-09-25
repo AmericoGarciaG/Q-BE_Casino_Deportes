@@ -1,6 +1,6 @@
 ```markdown
 # Q-BE Casino Deportes — Architecture Book (ARCH.md)
-**Versión:** 9.0 (Kybern Industrial - Local Full-Stack Web Platform Edition)  
+**Versión:** 10.0 (Multi-Bookmaker & Focus Mode Edition)  
 **Estado:** [ALGO-PROTECTED] - Base de Gobierno Sellada (2026-09)  
 **Proyecto:** `Q_BE_CD_WEB` (Quantitative Betting Engine — Web Platform)  
 **Fuente de Verdad:** Kybern Framework v8.0 / v12.0 + Protocolo Nexus
@@ -202,6 +202,16 @@ Todo sensor de mercado (`caliente_scraper.py`, `betway_scraper.py`) debe emitir 
    - `[MATCH DESCARTADO] "Mañana" vs "Local" -> Ignorado por lista negra / no coincide con Slate`
 5. **Fail-Loud:** Si el código HTTP no es 200 o los partidos extraídos son 0, emitir advertencia explícita en consola con el motivo exacto.
 
+### [ARCH-1.4.6-D] Expansión Universal de Acordeones de Fecha y Virtual Scroll en Betway [ARCH-PILLAR]
+* **Problema:** Betway Next.js agrupa encuentros bajo acordeones dinámicos basados en horario UTC (ej. partidos de sábado en México aparecen bajo "Domingo"). Los días subsecuentes se cargan cerrados (`display: none`).
+* **Mecanismo Obligatorio:** Antes de la extracción de texto, Playwright debe:
+  1. Ejecutar un barrido DOM interactivo haciendo clic en todos los elementos que contengan texto de días (`hoy`, `mañana`, `sábado`, `domingo`, `lunes`).
+  2. Ejecutar desplazamiento vertical progresivo (`page.mouse.wheel(0, 1200)`) para forzar la hidratación de los componentes virtualizados.
+  3. Re-posicionar el scroll en la cabecera antes de parsear.
+
+### [ARCH-1.4.6-E] Filtro de Descontaminación de Filas de Evento en Caliente [ARCH-PILLAR]
+* **Mecanismo:** Documentar el descarte de filas cruzadas que mencionen a clubes populares ajenos al par objetivo del slate oficial durante el scraping en Caliente.mx para prevenir la contaminación de mercados.
+
 ---
 
 ### [ARCH-1.4.7] Contrato de Telemetría Extendida en FixtureSnapshot.matches_json [ARCH-PILLAR]
@@ -238,6 +248,9 @@ Cada partido almacenarás en `matches_json`:
   "momios": { "L": 3.45, "E": 3.75, "V": 1.98, "pago_anticipado": true }
 }
 ```
+
+### [ARCH-1.4.7-B] Jerarquía y Retrocompatibilidad de Cuotas por Defecto [ARCH-PILLAR]
+* **Mecanismo:** Documentar la prioridad de Caliente.mx como operador primario en `fx["momios"]` y Betway.mx como fallback secundario para garantizar retrocompatibilidad.
 
 ---
 
@@ -381,7 +394,7 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
 
 ---
 
-### [ARCH-1.5.3] Política de Servido de Activos Visuales y Mitigación Anti-Hotlinking [ARCH-PILLAR] [ANTI-BUG]
+### [ARCH-1.5.3-B] Política de Servido de Activos Visuales y Mitigación Anti-Hotlinking [ARCH-PILLAR] [ANTI-BUG]
 
 * **Aislamiento de Red:** Los navegadores de clientes no deben realizar peticiones GET de imágenes a servidores externos no autorizados (`images.fotmob.com`).
 * **Montaje Estático de FastAPI:** La aplicación monta el directorio estático en `/static` (`app.mount("/static", StaticFiles(directory="src/web/static"), name="static")`).
@@ -533,6 +546,34 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
   - El centinela deportivo consulta en cada ejecución el árbol JSON `__NEXT_DATA__` de FotMob Opta (League ID 230), el cual contiene el calendario íntegro de la temporada oficial.
   - El parser dinámico `_convertir_match_fotmob` filtra en memoria los partidos de cualquier jornada ($N \in [1, 17]$), extrayendo sus marcadores oficiales consumados y fechas ISO.
   - La complementación de reprogramados se ejecuta dinámicamente contra `ligamx.net` mediante deduplicación estricta por par canónico.
+
+### [ARCH-1.6.8] Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE]
+
+* **Propósito:** Permitir la exploración, ingesta y selección fluida de partidos pertenecientes a múltiples jornadas consecutivas (ej. Jornada $N$ en disputa y Jornada $N+1$ con mercado abierto), garantizando aislamiento de estados y cero colisiones en base de datos.
+* **Partición de Estado en SQLite:**
+  - Las tablas `matchday_states`, `fixture_snapshots` y `fixture_records` se particionan explícitamente por la tupla `(league_id, matchday_num)`.
+  - La ingesta o consulta de una jornada futura ($N+1$) **tiene strictly prohibido sobreescribir, alterar o purgar los registros de la jornada activa ($N$)**.
+* **Contratos REST Extendidos (`src/models/web_schemas.py`):**
+  - `GET /api/leagues/{id}/live-board?jornada={num}&force_refresh={bool}`:
+    - Si `jornada` es omitido (`None`): entrega por defecto la jornada en curso o la última con partidos pendientes.
+    - Si `jornada` es especificado: consulta el snapshot correspondiente en SQLite. Aplica política Cache-First con TTL independiente: si el snapshot existe y es válido, entrega en $\le 20\text{ ms}$.
+  - El esquema `LiveBoardOut` incorpora obligatoriamente:
+    ```python
+    jornada_actual: int            # Jornada administrativa en curso (ej. 8)
+    jornada_mostrada: int          # Jornada renderizada actualmente (ej. 9)
+    jornadas_disponibles: List[int] # Lista de jornadas navegables (ej. [8, 9])
+    ```
+* **Selección Híbrida de Cartera (`POST /api/portfolio/generate`):**
+  - El contrato `GeneratePortfolioRequest` procesa un array arbitrario de `selected_match_ids`.
+  - El `PipelineAdapter` resuelve cada ID independientemente de su jornada de origen (`partido_262_j8_...` y `partido_262_j9_...`), vinculando la tabla de posiciones consolidada y aplicando los Hard-Caps globales (Invarianzas #3 y #4) sobre el portafolio unificado.
+
+### [ARCH-1.6.13] Motor de Ingesta Total de Temporada y Reconstrucción Histórica [DIRGEN-SEALED] [GOVERNANCE-01]
+
+* **Axioma de Cobertura Temporal Integral:** El Centinela Deportivo debe extraer la totalidad del calendario oficial de la competición (153 partidos en torneos de 18 clubes, divididos en 17 jornadas).
+* **Reconstrucción Determinista de Tablas Históricas:**
+  - A partir de los marcadores oficiales consumados de las fechas concluidas, el motor calcula algebraicamente la tabla de posiciones acumulada al corte de cada jornada ($Pts = 3 \cdot PG + PE$, $DIF = GF - GC$).
+  - Persiste un `StandingSnapshot` y un `FixtureSnapshot` para cada jornada de la temporada en SQLite.
+* **Soberanía Dinámica:** Cero constantes o tuplas de partidos quemadas en código Python (`[GOVERNANCE-01]`). Todo emana dinámicamente de la red vía FotMob Opta (League 230).
 
 ---
 
@@ -836,74 +877,6 @@ class PortfolioExecutionPlan(BaseModel):
 
 ---
 
-### [ARCH-1.5.2] Módulo Administrativo de Curación Agéntica HITL y Bóveda de Activos [ARCH-PILLAR]
-
-* **Propósito:** Automatizar la prospección de catálogos deportivos mediante agentes de IA y proporcionar una interfaz de validación humana (Human-in-the-Loop) para aprobar, auditar y sellar permanentemente en SQLite los clubes, estadios, aliases y escudos oficiales.
-* **Flujo de Endpoints Administrativos (`src/web/routes/admin.py`):**
-  1. `POST /api/admin/catalogs/discover?league_id={id}`:
-     - El Agente Curador (Gemini 3.6 Search) rastrea fuentes oficiales, localiza los 18 clubes, sus estadios, aliases y URLs de escudos en alta resolución.
-     - Guarda los resultados en un estado temporal de prospección (`data/.staging_catalogs_{id}.json`).
-  2. `GET /api/admin/catalogs/staging?league_id={id}`:
-     - Retorna los clubes prospectados para su inspección visual en la interfaz de usuario.
-  3. `POST /api/admin/catalogs/commit`:
-     - Recibe la confirmación humana de los clubes aprobados.
-     - Descarga físicamente los escudos validados al almacén soberano local (`src/web/static/img/crests/{slug}.png`).
-     - Inserta/actualiza de forma inmutable los registros en las tablas `teams`, `venues` y `aliases` de SQLite.
-* **Aislamiento de Producción:** Ningún club en estado de prospección (*staging*) es visible en los endpoints públicos de Live Board (`/api/leagues/{id}/live-board`) hasta haber sido sellado mediante el commit administrativo.
-
----
-
-### [ARCH-1.4.5] Robustez de Parsers DOM y Expresiones Multilínea [ANTI-BUG]
-
-* **Tolerancia a Saltos de Línea en Marcadores:** Los scrapers de resultados en vivo deben emplear patrones de expresiones regulares multilínea capaces de resolver goles separados por retornos de carro o espacios en el DOM (`(?<!\d)(\d+)\s*\n*\s*[-–]\s*\n*\s*(\d+)(?!\d)`), impidiendo que marcadores legítimos concluidos se descarten como nulos.
-
----
-
-### [ARCH-1.5.8] Parámetros Canónicos de Normalización y Bóveda de Activos [ARCH-PILLAR] [ANTI-BUG]
-
-* **Limpieza Lingüística Determinista (H9):** El normalizador canónico (`[LN-QBE-012]`) aplica obligatoriamente: eliminación estricta de acentos (`strip_accents`), conversión a minúsculas, sustitución de caracteres no-alfanuméricos por espacios (`[^a-z0-9\s]`) y colapso de dobles espacios antes de cualquier comparación.
-* **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`.
-* **Aduana de IDs de Imagen FMF (H1):** El diccionario inmutable `LIGAMX_LOGO_ID_MAP` opera como respaldo determinista de resolución cuando el servidor oficial de la federación emite etiquetas `<img>` con atributo `alt` vacío o indefinido en el carrusel de marcadores.
-* **Umbrales Físicos de Bóveda y Espejeo (H13, H14):** Todo escudo de club guardado localmente debe verificar `size >= 3000` bytes y cabecera PNG válida (`\x89PNG`). Todo emblema de torneo debe verificar `size >= 1000` bytes. Durante el commit de curación HITL, se ejecuta el copiado físico obligatorio (`shutil.copyfile`) hacia todos los aliases del club para garantizar integridad multi-slug inmediata.
-
----
-
-### [ARCH-1.6.6] Aislamiento de Hilos y Timeouts en Ingesta Playwright [ARCH-PILLAR] [ANTI-BUG]
-
-* **Aislamiento de Bucle Asyncio:** Toda invocación síncrona a Playwright (`sync_playwright`) dentro del ciclo de vida de FastAPI o sus controladores REST debe encapsularse obligatoriamente dentro de un worker thread dedicado (`concurrent.futures.ThreadPoolExecutor(max_workers=1)`). Queda terminantemente prohibido invocar la API síncrona en el hilo principal de Uvicorn para evitar colisiones de contexto con el bucle de eventos.
-* **Gobierno de Timeouts Rígidos:** Cada operación de extracción en segundo plano debe portar un timeout explícito en su llamada `.result(timeout=...)` (35.0s para FotMob, 40.0s para el Slate FMF y 35.0s para cuotas de Caliente), garantizando que un cuelgue de red externo no degrade ni bloquee indefinidamente los recursos del servidor local.
-
-### [ARCH-1.6.8] Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE]
-
-* **Propósito:** Permitir la exploración, ingesta y selección fluida de partidos pertenecientes a múltiples jornadas consecutivas (ej. Jornada $N$ en disputa y Jornada $N+1$ con mercado abierto), garantizando aislamiento de estados y cero colisiones en base de datos.
-* **Partición de Estado en SQLite:**
-  - Las tablas `matchday_states`, `fixture_snapshots` y `fixture_records` se particionan explícitamente por la tupla `(league_id, matchday_num)`.
-  - La ingesta o consulta de una jornada futura ($N+1$) **tiene estrictamente prohibido sobreescribir, alterar o purgar los registros de la jornada activa ($N$)**.
-* **Contratos REST Extendidos (`src/models/web_schemas.py`):**
-  - `GET /api/leagues/{id}/live-board?jornada={num}&force_refresh={bool}`:
-    - Si `jornada` es omitido (`None`): entrega por defecto la jornada en curso o la última con partidos pendientes.
-    - Si `jornada` es especificado: consulta el snapshot correspondiente en SQLite. Aplica política Cache-First con TTL independiente: si el snapshot existe y es válido, entrega en $\le 20\text{ ms}$.
-  - El esquema `LiveBoardOut` incorpora obligatoriamente:
-    ```python
-    jornada_actual: int            # Jornada administrativa en curso (ej. 8)
-    jornada_mostrada: int          # Jornada renderizada actualmente (ej. 9)
-    jornadas_disponibles: List[int] # Lista de jornadas navegables (ej. [8, 9])
-    ```
-* **Selección Híbrida de Cartera (`POST /api/portfolio/generate`):**
-  - El contrato `GeneratePortfolioRequest` procesa un array arbitrario de `selected_match_ids`.
-  - El `PipelineAdapter` resuelve cada ID independientemente de su jornada de origen (`partido_262_j8_...` y `partido_262_j9_...`), vinculando la tabla de posiciones consolidada y aplicando los Hard-Caps globales (Invarianzas #3 y #4) sobre el portafolio unificado.
-
----
-
-### [ARCH-1.6.13] Motor de Ingesta Total de Temporada y Reconstrucción Histórica [DIRGEN-SEALED] [GOVERNANCE-01]
-
-* **Axioma de Cobertura Temporal Integral:** El Centinela Deportivo debe extraer la totalidad del calendario oficial de la competición (153 partidos en torneos de 18 clubes, divididos en 17 jornadas).
-* **Reconstrucción Determinista de Tablas Históricas:**
-  - A partir de los marcadores oficiales consumados de las fechas concluidas, el motor calcula algebraicamente la tabla de posiciones acumulada al corte de cada jornada ($Pts = 3 \cdot PG + PE$, $DIF = GF - GC$).
-  - Persiste un `StandingSnapshot` y un `FixtureSnapshot` para cada jornada de la temporada en SQLite.
-* **Soberanía Dinámica:** Cero constantes o tuplas de partidos quemadas en código Python (`[GOVERNANCE-01]`). Todo emana dinámicamente de la red vía FotMob Opta (League 230).
-
----
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**
 
 ```
