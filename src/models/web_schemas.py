@@ -75,13 +75,29 @@ class MatchFixtureOut(BaseModel):
     es_operable: bool = True
     es_pospuesto: bool = False
 
-    # ── [CAMPOS SOBERANOS TRATADO VOL. I] ──
-    p_local: Optional[float] = Field(default=None, description="Probabilidad soberana local")
+    # ── [CAMPOS SOBERANOS TRATADO VOL. I - ENMIENDA SOBERANA ARCH-1.4.5-B] ──
+    p_local: Optional[float] = Field(default=None, description="Probabilidad soberana victoria local")
     p_empate: Optional[float] = Field(default=None, description="Probabilidad soberana empate")
-    p_visitante: Optional[float] = Field(default=None, description="Probabilidad soberana visitante")
-    lambda_home: Optional[float] = Field(default=None, description="Intensidad de gol local")
-    lambda_away: Optional[float] = Field(default=None, description="Intensidad de gol visita")
-    phi_lead2_home: Optional[float] = Field(default=None, description="Probabilidad de ventaja +2 local")
+    p_visitante: Optional[float] = Field(default=None, description="Probabilidad soberana victoria visitante")
+    lambda_home: Optional[float] = Field(default=None, description="Intensidad de gol esperada local")
+    lambda_away: Optional[float] = Field(default=None, description="Intensidad de gol esperada visitante")
+    phi_lead2_home: Optional[float] = Field(default=None, description="Probabilidad de ventaja >=2 goles local (André)")
+    phi_lead2_away: Optional[float] = Field(default=None, description="Probabilidad de ventaja >=2 goles visitante (André)")
+
+    # ── [BENCHMARK DE MERCADO - DES-QBE-039 & ARCH-1.4.8] ──
+    consenso_mercado: Optional["MarketConsensusOut"] = None
+    momios_operadores: Optional[Dict[str, Any]] = None
+
+
+class MarketConsensusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
+    p_L_mercado: float = 0.0
+    p_E_mercado: float = 0.0
+    p_V_mercado: float = 0.0
+    delta_L: float = 0.0
+    delta_E: float = 0.0
+    delta_V: float = 0.0
+
 
 
 class LiveBoardOut(BaseModel):

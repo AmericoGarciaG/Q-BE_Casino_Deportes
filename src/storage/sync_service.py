@@ -189,6 +189,7 @@ def sync_league_live_board(
             fx["lambda_home"] = dist_db.lambda_home
             fx["lambda_away"] = dist_db.lambda_away
             fx["phi_lead2_home"] = dist_db.phi_lead2_home
+            fx["phi_lead2_away"] = dist_db.phi_lead2_away
         fixtures_con_distribucion.append(fx)
 
     fixtures = fixtures_con_distribucion

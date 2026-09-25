@@ -98,3 +98,5 @@ scripts/utilidades/exportar_volumen1_word.py
 scripts/utilidades/aislar_fuga_probabilidades.py
 scripts/utilidades/comprobar_payload_http.py
 scripts/utilidades/simulador_pantalla_soberana.py
+data/qbe_database.db-shm
+data/qbe_database.db-wal

@@ -23,6 +23,11 @@ def get_leagues(db: Session = Depends(get_db)):
 _ORDEN_TOPOLOGICO = {"EN_CURSO": 1, "PROGRAMADO": 2, "REPROGRAMADO": 3, "FINALIZADO": 4}
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 @router.get("/{league_id}/live-board", response_model=LiveBoardOut)
 def get_live_board(
     league_id: int,
@@ -39,9 +44,9 @@ def get_live_board(
             target_jornada=target_jornada,
             force_refresh=force_refresh_bool
         )
-        # RETORNO DIRECTO LIMPIO: Cero filtrado manual que destruya llaves soberanas
         return board_data
     except Exception as e:
+        logger.error(f"Error en get_live_board: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

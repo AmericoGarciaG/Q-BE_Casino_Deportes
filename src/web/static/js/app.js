@@ -427,6 +427,37 @@ function _renderFixtureCard(container, f, deshabilitada) {
         const wE = f.p_empate ? (f.p_empate * 100).toFixed(1) : 33.3;
         const wV = f.p_visitante ? (f.p_visitante * 100).toFixed(1) : 33.4;
 
+        // [DES-QBE-039-B] Micro-Malla de Consenso y Diferencial Alineada
+        let consensoHtml = '';
+        if (f.consenso_mercado && f.consenso_mercado.p_L_mercado > 0) {
+            const qL = (f.consenso_mercado.p_L_mercado * 100).toFixed(0);
+            const qE = (f.consenso_mercado.p_E_mercado * 100).toFixed(0);
+            const qV = (f.consenso_mercado.p_V_mercado * 100).toFixed(0);
+
+            const dL = (f.consenso_mercado.delta_L * 100);
+            const dE = (f.consenso_mercado.delta_E * 100);
+            const dV = (f.consenso_mercado.delta_V * 100);
+
+            const fmtDiff = (v) => (v >= 0 ? `+${v.toFixed(1)}%` : `${v.toFixed(1)}%`);
+
+            consensoHtml = `
+                <div class="market-benchmark-grid" title="Comparativo: Consenso de Mercado vs Modelo Q-BE">
+                    <!-- Fila 1: Promedio de Mercado sin comisión -->
+                    <span class="mkt-cell-lbl">Mkt</span>
+                    <span class="mkt-cell-val">${qL}%</span>
+                    <span class="mkt-cell-val">${qE}%</span>
+                    <span class="mkt-cell-val">${qV}%</span>
+
+                    <!-- Fila 2: Diferencial aritmético con signo -->
+                    <span class="mkt-cell-lbl">Δ</span>
+                    <span class="mkt-cell-diff">${fmtDiff(dL)}</span>
+                    <span class="mkt-cell-diff">${fmtDiff(dE)}</span>
+                    <span class="mkt-cell-diff">${fmtDiff(dV)}</span>
+                </div>
+            `;
+        }
+
+
         centroHtml = `
             <span class="match-time-muted">${f.horario}</span>
             <div class="distribution-center-badge" title="Probabilidad Soberana Q-BE: Local · Empate · Visita">
@@ -436,12 +467,14 @@ function _renderFixtureCard(container, f, deshabilitada) {
                 <span style="color:#64748B; margin: 0 3px;">·</span>
                 <span style="color:#EF4444; font-weight:800;">${pV}</span>
             </div>
-            <div class="prob-strip-mini" style="display:flex; width:75px; height:3px; border-radius:2px; overflow:hidden; margin-top:3px;">
+            <div class="prob-strip-mini prob-strip" style="display:flex; width:75px; height:4px; border-radius:2px; overflow:hidden; margin-top:3px;">
                 <div style="background:#00E676; width:${wL}%;"></div>
                 <div style="background:#64748B; width:${wE}%;"></div>
                 <div style="background:#EF4444; width:${wV}%;"></div>
             </div>
+            ${consensoHtml}
         `;
+
     }
 
     card.innerHTML = `
@@ -582,17 +615,16 @@ function actualizarProgresoHUD(paso, porcentaje) {
 }
 
 async function ejecutarDespachoPortafolio() {
-    if (!currentLiveBoard) {
-        alert("Por favor seleccione primero una liga en el Hub.");
-        return;
-    }
-    if (selectedMatchIds.length === 0) {
-        alert("Debe seleccionar al menos 1 partido en la cartelera.");
-        return;
-    }
-
-    const bankrollInput = document.getElementById('bankroll-input');
+    const bankrollInput = document.getElementById('input-bankroll') || document.getElementById('bankroll-input');
     const bankroll = bankrollInput ? parseFloat(bankrollInput.value) : 200.0;
+
+    const operatorSelect = document.getElementById('casino-operator-select');
+    const operador = operatorSelect ? operatorSelect.value : "caliente";
+
+    const certaintySlider = document.getElementById('slider-risk-certainty');
+    const certeza = certaintySlider ? parseFloat(certaintySlider.value) / 100.0 : 0.80;
+
+    const leagueId = (currentLiveBoard && currentLiveBoard.league_id) ? currentLiveBoard.league_id : 262;
 
     mostrarHUDProcesamiento();
     abortControllerDespacho = new AbortController();
@@ -604,15 +636,16 @@ async function ejecutarDespachoPortafolio() {
         setTimeout(() => actualizarProgresoHUD(4, 75), 900);
         setTimeout(() => actualizarProgresoHUD(5, 90), 1200);
 
-        const resp = await fetch('/api/portfolio/generate', {
+        const resp = await fetch('/api/markets/sportsbook/portfolio/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: abortControllerDespacho.signal,
             body: JSON.stringify({
-                league_id: currentLiveBoard.league_id || 262,
-                selected_match_ids: selectedMatchIds,
+                league_id: leagueId,
+                selected_match_ids: [],
                 bankroll: bankroll,
-                mode: "BANKROLL"
+                target_certeza: certeza,
+                operador: operador
             })
         });
 
@@ -644,6 +677,7 @@ async function ejecutarDespachoPortafolio() {
     }
 }
 window.ejecutarDespachoPortafolio = ejecutarDespachoPortafolio;
+window.ejecutarDespachoMesaApuestas = ejecutarDespachoPortafolio;
 
 let currentPortfolioData = null;
 
@@ -1124,3 +1158,60 @@ function deseleccionarTodosPartidos() {
 // Exponer al ámbito global
 window.seleccionarTodosPartidos = seleccionarTodosPartidos;
 window.deseleccionarTodosPartidos = deseleccionarTodosPartidos;
+
+// [DES-QBE-040] Alternador de Modo Enfoque (Ocultar/Mostrar Tabla de Posiciones)
+function toggleTablaPosiciones() {
+    // Localizar el contenedor split-view padre de Pantalla 1
+    const splitContainer = document.querySelector('.split-view-container') || 
+                           document.querySelector('.split-view') ||
+                           document.getElementById('sovereign-split-container') ||
+                           document.querySelector('#view-sovereign-hub .content-grid');
+
+    const btnTxt = document.getElementById('btn-toggle-txt');
+    const btnIcon = document.getElementById('btn-toggle-icon');
+    const btn = document.getElementById('btn-toggle-standings');
+
+    if (!splitContainer) {
+        console.warn("No se encontró el contenedor split-view para alternar.");
+        return;
+    }
+
+    const estaOculta = splitContainer.classList.toggle('standings-hidden');
+
+    if (btnTxt && btnIcon) {
+        if (estaOculta) {
+            btnIcon.textContent = '◧';
+            btnTxt.textContent = 'Ver Tabla';
+            if (btn) btn.classList.add('active-focus');
+            localStorage.setItem('qbe_standings_hidden', 'true');
+        } else {
+            btnIcon.textContent = '◨';
+            btnTxt.textContent = 'Ocultar Tabla';
+            if (btn) btn.classList.remove('active-focus');
+            localStorage.setItem('qbe_standings_hidden', 'false');
+        }
+    }
+}
+window.toggleTablaPosiciones = toggleTablaPosiciones;
+
+// Al inicializar la app, verificar si el usuario tenía la tabla oculta previamente
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('qbe_standings_hidden') === 'true') {
+        const splitContainer = document.querySelector('.split-view-container') || 
+                               document.querySelector('.split-view') ||
+                               document.getElementById('sovereign-split-container') ||
+                               document.querySelector('#view-sovereign-hub .content-grid');
+        if (splitContainer) {
+            splitContainer.classList.add('standings-hidden');
+            const btnTxt = document.getElementById('btn-toggle-txt');
+            const btnIcon = document.getElementById('btn-toggle-icon');
+            const btn = document.getElementById('btn-toggle-standings');
+            if (btnTxt && btnIcon && btn) {
+                btnIcon.textContent = '◧';
+                btnTxt.textContent = 'Ver Tabla';
+                btn.classList.add('active-focus');
+            }
+        }
+    }
+});
+

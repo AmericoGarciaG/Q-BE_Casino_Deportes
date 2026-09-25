@@ -675,5 +675,105 @@ table.fintech-table {
     background: #334155;
 }
 
+/* [DES-QBE-039-B] Micro-Malla de Consenso de Mercado y Alpha Edge */
+.market-benchmark-grid {
+    display: grid;
+    grid-template-columns: 26px 42px 42px 42px; /* Anchos fijos simétricos por columna */
+    justify-content: center;
+    align-items: center;
+    gap: 1px 4px;
+    margin-top: 5px;
+    padding: 3px 6px;
+    background: rgba(15, 23, 42, 0.45); /* Fondo Slate 900 sutil para dar marco */
+    border: 1px solid rgba(51, 65, 85, 0.5); /* Borde Slate 700 tenue */
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.mkt-cell-lbl {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #64748B; /* Gris Pizarra tenue */
+    text-align: right;
+    padding-right: 3px;
+    user-select: none;
+}
+
+.mkt-cell-val {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #94A3B8; /* Gris Pizarra sobrio */
+    text-align: center;
+    white-space: nowrap;
+}
+
+.mkt-cell-diff {
+    font-size: 0.64rem;
+    font-weight: 400;
+    color: #64748B; /* Gris Atenuado sutil */
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* [DES-QBE-040] Botón de Alternancia de Tabla */
+.btn-toggle-standings {
+    background: #1E293B;
+    border: 1px solid #334155;
+    color: #94A3B8;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.btn-toggle-standings:hover {
+    border-color: #38BDF8;
+    color: #F8FAFC;
+    background: #243247;
+}
+
+.btn-toggle-standings.active-focus {
+    background: rgba(2, 132, 199, 0.25);
+    border-color: #38BDF8;
+    color: #38BDF8;
+}
+
+/* [DES-QBE-040] Geometría de Estado Oculto (Modo Enfoque Centrado) */
+.split-view-container.standings-hidden #sovereign-standings-container,
+.split-view-container.standings-hidden .standings-panel,
+.split-view.standings-hidden .standings-panel,
+.split-view.standings-hidden .table-panel-left,
+.content-grid.standings-hidden .standings-panel,
+.content-grid.standings-hidden .table-panel-left {
+    display: none !important;
+}
+
+.split-view-container.standings-hidden,
+.split-view.standings-hidden,
+.content-grid.standings-hidden {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
+.split-view-container.standings-hidden .cartelera-panel,
+.split-view.standings-hidden .cartelera-panel,
+.content-grid.standings-hidden .cartelera-panel,
+.split-view-container.standings-hidden #sovereign-matches-carousel {
+    max-width: 880px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    transition: max-width 0.25s ease;
+}
+
+
+
+
 
 

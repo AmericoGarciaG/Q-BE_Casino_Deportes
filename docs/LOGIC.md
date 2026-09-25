@@ -109,6 +109,52 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-007] Ingesta Fáctica y Normalización Multi-Operador (Caliente & Betway)
+* **Ω (Resumen):** Extraer, validar y homologar los momios decimales 1X2 procedentes de múltiples casas de apuestas con licencia en México (Caliente.mx y Betway.mx), asociándolos a la identidad canónica de los clubes bajo [LN-QBE-012] para habilitar el arbitraje de valor (+EV).
+* **I (Input):** Slate de partidos de la jornada activa `(local_canonico, visitante_canonico)` y lista de operadores objetivo `["caliente", "betway"]`.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. Para cada operador, extraer las cuotas decimales puras: $O_{\text{Local}}, O_{\text{Empate}}, O_{\text{Visitante}} > 1.00$.
+  2. Verificar integridad del mercado: Calcular el margen o sobre-precio comercial (*overround*):
+     $$\text{Overround} = \left(\frac{1}{O_L} + \frac{1}{O_E} + \frac{1}{O_V} - 1.0\right) \times 100.0$$
+     Si $\text{Overround} \le 0.0$ o $\text{Overround} > 25.0\% \implies$ Cuarentena del mercado del operador (`es_viable = False`).
+  3. Mapear cláusulas especiales:
+     - Caliente: Cláusula de Pago Anticipado (+2 goles) $\in \{\text{True}, \text{False}\}$.
+     - Betway: Identificar disponibilidad de liquidación temprana o registrar `pago_anticipado = False` por defecto.
+* **O (Output):** Estructura relacional de cuotas normalizadas por operador.
+* **Φ (Transición):** Hacia [LN-QBE-005] (Triaje Determinista) y persistencia en `FixtureSnapshot`.
+* **[SHIELD]:** `tests/shield/test_shield_multi_bookmaker_ingestion.py`
+
+---
+
+### ID: [LN-QBE-007-B] Normalización de Momios Americanos a Decimales
+* **Ω (Resumen):** Conversión determinista de cotizaciones en formato americano (+/-) a cuotas decimales europeas:
+  $$O_{\text{dec}} = \begin{cases} 
+  1.0 + \frac{A}{100.0} & \text{si } A > 0 \\ 
+  1.0 + \frac{100.0}{|A|} & \text{si } A < 0 
+  \end{cases}$$
+  *(Ejemplo: $+230 \implies 3.30$, $+100 \implies 2.00$, $-150 \implies 1.67$)*.
+
+### ID: [LN-QBE-007-C] Descuento de Margen Comercial (Vig-Free De-biasing al Símplex Δ²)
+* **Ω (Resumen):** Extraer la comisión de la casa para obtener la probabilidad justa implícita del mercado:
+  1. Probabilidades brutas implícitas: $\pi_L = 1/O_L, \quad \pi_E = 1/O_E, \quad \pi_V = 1/O_V$.
+  2. Suma de mercado (Overround Factor): $S = \pi_L + \pi_E + \pi_V$.
+  3. Probabilidades justas sin comisión (Símplex $\Delta^2$):
+     $$q_L = \frac{\pi_L}{S}, \quad q_E = \frac{\pi_E}{S}, \quad q_V = \frac{\pi_V}{S} \implies q_L + q_E + q_V = 1.0000$$
+
+### ID: [LN-QBE-007-D] Detector de Arbitraje Inter-Casas (Cross-Market Surebet)
+* **Ω (Resumen):** Identificar ineficiencias de mercado cruzando las cuotas máximas entre operadores:
+  $$O_L^{\max} = \max_b(O_{L, b}), \quad O_E^{\max} = \max_b(O_{E, b}), \quad O_V^{\max} = \max_b(O_{V, b})$$
+  $$\text{Índice Arbitraje} = \frac{1}{O_L^{\max}} + \frac{1}{O_E^{\max}} + \frac{1}{O_V^{\max}}$$
+  - Si $\text{Índice Arbitraje} < 1.0000 \implies$ **Existe Arbitraje Puro (+EV)** con ROI libre de riesgo:
+    $$\text{ROI}_{\text{Arb}} = \left(\frac{1.0}{\text{Índice Arbitraje}} - 1.0\right) \times 100\%$$
+
+### ID: [LN-QBE-007-E] Consenso de Mercado y Diferenciales vs. Distribución Soberana
+* **Ω (Resumen):** Promediar las probabilidades desprovistas de comisión de los casinos y calcular la disparidad contra el modelo soberano Q-BE:
+  $$\bar{q}_k = \frac{1}{N} \sum_{b=1}^N q_{k, b} \quad \text{para } k \in \{L, E, V\}$$
+  $$\Delta_L = p_{\text{Q-BE}, L} - \bar{q}_L, \quad \Delta_E = p_{\text{Q-BE}, E} - \bar{q}_E, \quad \Delta_V = p_{\text{Q-BE}, V} - \bar{q}_V$$
+
+---
+
 ### ID: [LN-QBE-005] Triaje Determinista de Cuotas 1X2
 
 * **Ω (Resumen):** Filtro económico previo (Paso 0-A) que evalúa las 6 vías de viabilidad sobre cuotas decimales 1X2 antes de consultar estadísticas profundas.
@@ -527,6 +573,17 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   $$\text{Fav } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Fav}} \times 1.05, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Fav}} \times 0.95, 2)$$
   $$\text{Und } xG_{\text{est}} = \text{round}(\overline{GF}_{\text{Und}} \times 0.95, 2), \quad xGA_{\text{est}} = \text{round}(\overline{GC}_{\text{Und}} \times 1.10, 2)$$
 * **Token Fail-Loud de Marcador Pendiente (H4):** Si un encuentro concluyó pero la federación aún no publica los números oficiales de goles, el sistema asigna el token canónico `"MARCADOR_PENDIENTE"`, prohibiendo inventar empates `"0 - 0"`.
+
+---
+
+### ID: [LN-QBE-065] Filtro de Descarte Temprano de Ineficiencia (+EV Gate)
+
+* **Ω (Resumen):** Bloquear el despliegue de capital sobre activos con expectativa nula o negativa antes de ingresar al optimizador de Kelly.
+* **I (Input):** Probabilidades soberanas $\hat{P}_i = (p_1, p_X, p_2)$ y cuotas comerciales $(O_L, O_E, O_V)$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  $$\text{Si } \max_{k \in \{1, X, 2\}} \left( p_k - \frac{1.0}{O_k} \right) \le 0.00 \implies \text{Estado} = \text{QBE-00 (VETO)}$$
+  Todo activo vetado recibe inversión $A_i = \$0.00\text{ MXN}$, se excluye del cómputo de ruina de cartera y se traslada a la sección de Descartes con su justificación fiduciaria.
+* **O (Output):** Conjunto filtrado de activos estrictamente rentables ($K_{\text{rentables}} \subseteq K_{\text{totales}}$).
 
 ---
 

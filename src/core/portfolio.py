@@ -227,8 +227,9 @@ class PortfolioEngine:
         bolsa_core = bankroll * min(0.25, 0.06 * k_count)  # Tope 25%
 
         orders: List[MatchExecutionOrder] = []
+        # 2. Generar estructuras intermedias de órdenes y validar Hard-Cap Global
+        orders_raw = []
         total_inv_core = 0.0
-        ganancia_esperada_core = 0.0
 
         for idx, m in enumerate(approved_matches):
             code = m["strategy_code"]
@@ -242,7 +243,6 @@ class PortfolioEngine:
             pa_activo = bool("+" in code or m.get("pago_anticipado", False))
             suffix_pa = " + PA" if pa_activo else ""
 
-            # Hard-Cap Individual <= 8.0%
             if mode == "BANKROLL":
                 cap_i = min(0.08, max(0.02, ev_roi / (3.0 * max(0.01, psi))))
                 inv_partido = min(bolsa_core * weights[idx], bankroll * cap_i)
@@ -250,9 +250,7 @@ class PortfolioEngine:
             else:
                 inv_partido = 10.00
 
-            # Estructuración de Boletos (Dutching Exacto)
             if "H2" in code:
-                # Seguro en Fav, Ganancia en Empate
                 b1_sel = f"Gana {fav_name}{suffix_pa}"
                 b1_momio = o_fav
                 b1_monto = round(inv_partido / b1_momio, 2)
@@ -261,9 +259,7 @@ class PortfolioEngine:
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = f"${round(b2_monto * b2_momio * 0.85, 2)} MXN (Asegurar ~85% del premio al minuto 85' si hay empate)"
                 tablas_amt = inv_partido
-
             elif "H1" in code:
-                # Seguro en Empate, Ganancia en Fav
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = round(inv_partido / b1_momio, 2)
@@ -272,9 +268,7 @@ class PortfolioEngine:
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas o cobro anticipado por ventaja de 2 goles."
                 tablas_amt = inv_partido
-
             elif code == "QBE-R1":
-                # Seguro en Empate, Ganancia en Underdog
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = round(inv_partido / b1_momio, 2)
@@ -283,9 +277,7 @@ class PortfolioEngine:
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas en empate o victoria de Underdog."
                 tablas_amt = inv_partido
-
             elif code == "QBE-R2":
-                # Doble Oportunidad Sintética X2 (Dutching proporcional)
                 if o_emp > 0 and o_und > 0:
                     inv_emp_w = (1.0 / o_emp) / ((1.0 / o_emp) + (1.0 / o_und))
                 else:
@@ -298,8 +290,7 @@ class PortfolioEngine:
                 b2_monto = round(inv_partido - b1_monto, 2)
                 out_min85 = "Dejar correr al 90'. Ambos boletos cubren el escenario X2."
                 tablas_amt = inv_partido
-
-            else:  # QBE-D1 / QBE-D1+
+            else:
                 b1_sel = "Empate (Sin Cobertura)"
                 b1_momio = round(float(m.get("odd_emp") or o_emp or 3.70), 2)
                 b1_monto = 0.0
@@ -309,34 +300,87 @@ class PortfolioEngine:
                 out_min85 = "N/A (Dejar correr al 90' o cobrado anticipadamente por ventaja de 2 goles)."
                 tablas_amt = 0.0
 
-            # ── APLICACIÓN DEL PISO MÍNIMO DE VENTANILLA ($2.00 MXN) [BIZ-LOGIC] ──
             PISO_MINIMO_BOLETO = 2.00
-
             if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
-                # Si el boleto de seguro es menor a $2.00 MXN, escalar proporcionalmente
                 if 0.0 < b1_monto < PISO_MINIMO_BOLETO:
                     b1_monto = PISO_MINIMO_BOLETO
                     odd_seguro = m["odd_emp"] if any(f in code for f in ["H1", "H1+", "R1"]) else m["odd_fav"]
-                    # Escalar la inversión total para que el seguro garantice el 100% en tablas (V=0)
                     inv_partido = round(b1_monto * odd_seguro, 2)
                     b2_monto = round(inv_partido - b1_monto, 2)
                 elif 0.0 < b2_monto < PISO_MINIMO_BOLETO:
                     b2_monto = PISO_MINIMO_BOLETO
                     inv_partido = round(b1_monto + b2_monto, 2)
-
             elif code == "QBE-R2":
                 if 0.0 < b1_monto < PISO_MINIMO_BOLETO or 0.0 < b2_monto < PISO_MINIMO_BOLETO:
                     factor_escala = max(PISO_MINIMO_BOLETO / max(0.01, b1_monto), PISO_MINIMO_BOLETO / max(0.01, b2_monto))
                     b1_monto = round(b1_monto * factor_escala, 2)
                     b2_monto = round(b2_monto * factor_escala, 2)
                     inv_partido = round(b1_monto + b2_monto, 2)
-
             elif code in ["QBE-D1", "QBE-D1+"]:
                 if inv_partido < PISO_MINIMO_BOLETO:
                     inv_partido = PISO_MINIMO_BOLETO
                     b2_monto = inv_partido
 
-            # Recalcular métricas financieras con inv_partido y boletos finales
+            total_inv_core += inv_partido
+            orders_raw.append({
+                "m": m, "idx": idx, "code": code, "nombre": nombre, "ev_roi": ev_roi, "psi": psi, "phi": phi,
+                "pa_activo": pa_activo, "inv_partido": inv_partido, "b1_sel": b1_sel, "b1_momio": b1_momio,
+                "b1_monto": b1_monto, "b2_sel": b2_sel, "b2_momio": b2_momio, "b2_monto": b2_monto,
+                "out_min85": out_min85, "tablas_amt": tablas_amt
+            })
+
+        # ── ESCALAMIENTO HARD-CAP GLOBAL (<= 25% BANKROLL) ────────────────────
+        max_bankroll_cap = round(bankroll * 0.25, 2)
+        if total_inv_core > max_bankroll_cap and orders_raw:
+            scale_factor = max_bankroll_cap / total_inv_core
+            total_inv_core = 0.0
+            for item in orders_raw:
+                code = item["code"]
+                inv_orig = item["inv_partido"]
+                new_inv = round(inv_orig * scale_factor, 2)
+                b1_m = item["b1_monto"]
+                b2_m = item["b2_monto"]
+                b1_mom = item["b1_momio"]
+
+                if b1_m > 0:
+                    b1_m = round(b1_m * scale_factor, 2)
+                if b2_m > 0:
+                    b2_m = round(b2_m * scale_factor, 2)
+
+                if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
+                    new_inv = round(b1_m * b1_mom, 2) if b1_mom > 0 else new_inv
+                    b2_m = round(max(0.0, new_inv - b1_m), 2)
+                elif code in ["QBE-D1", "QBE-D1+"]:
+                    new_inv = b2_m
+
+                item["inv_partido"] = new_inv
+                item["b1_monto"] = b1_m
+                item["b2_monto"] = b2_m
+                total_inv_core += new_inv
+
+        # Materializar instancias Pydantic MatchExecutionOrder
+        orders: List[MatchExecutionOrder] = []
+        ganancia_esperada_core = 0.0
+
+        for item in orders_raw:
+            m = item["m"]
+            idx = item["idx"]
+            code = item["code"]
+            nombre = item["nombre"]
+            ev_roi = item["ev_roi"]
+            psi = item["psi"]
+            phi = item["phi"]
+            pa_activo = item["pa_activo"]
+            inv_partido = item["inv_partido"]
+            b1_sel = item["b1_sel"]
+            b1_momio = item["b1_momio"]
+            b1_monto = item["b1_monto"]
+            b2_sel = item["b2_sel"]
+            b2_momio = item["b2_momio"]
+            b2_monto = item["b2_monto"]
+            out_min85 = item["out_min85"]
+            tablas_amt = item["tablas_amt"]
+
             if code == "QBE-R2":
                 ganancia_neta = round(min(b1_monto * b1_momio, b2_monto * b2_momio) - inv_partido, 2)
             else:
@@ -347,15 +391,15 @@ class PortfolioEngine:
             freeroll_roi = round((freeroll_neta / max(0.01, inv_partido)) * 100.0, 2) if "+" in code else 0.0
             if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1", "R2"]):
                 tablas_amt = inv_partido
-            if "H2" in code:
-                out_min85 = f"${round(b2_monto * b2_momio * 0.85, 2)} MXN (Asegurar ~85% del premio al minuto 85' si hay empate)"
 
-            total_inv_core += inv_partido
-
-            # Contribución aritmética pura de EV (CERO pisos artificiales)
-            # [CORRECCIÓN FINANCIERA][BIZ-LOGIC]: ev_roi es fracción decimal (ej. 0.4464 = 44.64%).
-            # Se multiplica directamente por la inversión; PROHIBIDO dividir entre 100 de nuevo.
             ganancia_esperada_core += (inv_partido * ev_roi) if ev_roi > 0 else 0.0
+
+            fav_pos = m.get("fav_pos", 1)
+            fav_pts = m.get("fav_pts", 0)
+            q_fav = m.get("q_mod_fav", 1.0)
+            und_pos = m.get("und_pos", 18)
+            und_pts = m.get("und_pts", 0)
+            q_und = m.get("q_mod_und", 1.0)
 
             order = MatchExecutionOrder(
                 id_partido=m["id_partido"],
@@ -367,17 +411,16 @@ class PortfolioEngine:
                     descripcion_ejecutiva=cls.DESCRIPCIONES_OFICIALES.get(code, "Estrategia Cuantitativa"),
                     linea_promocional="Pago Anticipado (+2 goles)" if (pa_activo or code == "QBE-R1") else "Estándar"
                 ),
-
                 metricas_clave=KeyMetrics(
                     score_calidad_S_i=round(scores[idx], 4),
                     peso_portafolio_w_i=round(weights[idx], 4),
                     phi_lead2_prob_ventaja_2_goles=round(phi, 4),
                     psi_downside_riesgo=round(psi, 4),
-                    ev_neto_roi_porcentaje=round(ev_roi * 100.0, 2)  # [BIZ-LOGIC] Escala porcentual para UI (ej. 44.65%)
+                    ev_neto_roi_porcentaje=round(ev_roi * 100.0, 2)
                 ),
                 forma_reciente_auditada={
-                    "fav_resumen": f"Posición #{m.get('fav_pos', 1)}, {m.get('fav_pts', 0)} pts | Q_mod: {m.get('q_mod_fav', 1.0)}",
-                    "und_resumen": f"Posición #{m.get('und_pos', 18)}, {m.get('und_pts', 0)} pts | Q_mod: {m.get('q_mod_und', 1.0)}"
+                    "fav_resumen": f"Posición #{fav_pos}, {fav_pts} pts | Q_mod: {q_fav}",
+                    "und_resumen": f"Posición #{und_pos}, {und_pts} pts | Q_mod: {q_und}"
                 },
                 boletos=MatchTickets(
                     inversion_partido_A_i=inv_partido,
@@ -408,7 +451,8 @@ class PortfolioEngine:
         )
 
         # 4. Consolidación de Balance con Techo Aritmético Estricto
-        total_inv_core = round(total_inv_core, 2)
+        total_inv_core = round(sum(o.boletos.inversion_partido_A_i for o in orders), 2)
+
         ganancia_maxima_posible = sum(o.proyecciones.ganancia_neta_principal_mxn for o in orders)
         ganancia_esperada_core = round(min(ganancia_maxima_posible, max(0.0, ganancia_esperada_core)), 2)
         roi_global_esp = round((ganancia_esperada_core / total_inv_core) * 100.0, 2) if total_inv_core > 0 else 0.0

@@ -169,6 +169,93 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.4.6] Topología de Ingesta Multi-Operador y Persistencia Relacional [ARCH-PILLAR]
+* **Fuente de Datos Betway.mx:**  
+  URL oficial de mercado: `https://betway.mx/mx/es-mx/sports/grp/soccer/mexico/liga-mx?tab=matches`
+* **Arquitectura de Extracción:**
+  - Se materializa `src/ingestion/betway_scraper.py` encapsulado en la clase `BetwayMarketScraper`.
+  - Emplea Playwright headless con perfiles de evasión stealth, timeout de 30.0s y búsqueda focalizada restringida exclusivamente a los pares del slate oficial de la jornada.
+* **Axioma de Retrocompatibilidad en `FixtureSnapshot.matches_json`:**
+  Cada partido dentro del snapshot almacenará el mapa extendido de operadores:
+  ```json
+  {
+    "id_partido": "LIGAMX-J10-01",
+    "local": "Toluca",
+    "visitante": "Atlas",
+    "momios_operadores": {
+      "caliente": { "L": 1.70, "E": 3.80, "V": 4.50, "pago_anticipado": true, "updated_at": "..." },
+      "betway": { "L": 1.72, "E": 3.75, "V": 4.60, "pago_anticipado": false, "updated_at": "..." }
+    },
+    "momios": { "L": 1.70, "E": 3.80, "V": 4.50, "pago_anticipado": true } // Operador principal por defecto
+  }
+  ```
+* **Orquestación en `centinela_mercado.py`:**
+  Acepta el parámetro `--operador [caliente|betway|todos]` (por defecto: `todos`), sincronizando secuencialmente ambos frentes y emitiendo un tablero comparativo en consola.
+
+### [ARCH-1.4.6-C] Control de Errores y Telemetría de Extracción [ARCH-PILLAR]
+Todo sensor de mercado (`caliente_scraper.py`, `betway_scraper.py`) debe emitir obligatoriamente en consola y en logger:
+1. **Nivel Red:** Código HTTP del servidor (`HTTP 200 OK`, `403 Forbidden`, etc.) y tiempo de respuesta.
+2. **Nivel DOM:** Cantidad total de contenedores de evento localizados y líneas de texto extraídas.
+3. **Nivel Parsing:** Lista de eventos crudos parseados exitosamente (`local_raw vs visitante_raw @ L/E/V`).
+4. **Nivel Matching:** Resultado del cotejo contra el Slate oficial:
+   - `[MATCH OK] "Atlante" vs "Monterrey" -> Vinculado`
+   - `[MATCH DESCARTADO] "Mañana" vs "Local" -> Ignorado por lista negra / no coincide con Slate`
+5. **Fail-Loud:** Si el código HTTP no es 200 o los partidos extraídos son 0, emitir advertencia explícita en consola con el motivo exacto.
+
+---
+
+### [ARCH-1.4.7] Contrato de Telemetría Extendida en FixtureSnapshot.matches_json [ARCH-PILLAR]
+Cada partido almacenarás en `matches_json`:
+```json
+{
+  "id_partido": "LIGAMX-J10-01",
+  "local": "Atlante",
+  "visitante": "Monterrey",
+  "momios_operadores": {
+    "caliente": { "L": 3.45, "E": 3.75, "V": 1.98, "pa": true },
+    "betway": { "L": 3.30, "E": 3.75, "V": 2.00, "pa": false }
+  },
+  "probabilidades_sin_comision": {
+    "caliente": { "p_L": 0.273, "p_E": 0.251, "p_V": 0.476 },
+    "betway": { "p_L": 0.284, "p_E": 0.250, "p_V": 0.466 }
+  },
+  "arbitraje": {
+    "existe": false,
+    "indice": 1.0032,
+    "roi_pct": 0.0,
+    "mejor_L": { "momio": 3.45, "operador": "caliente" },
+    "mejor_E": { "momio": 3.75, "operador": "caliente" },
+    "mejor_V": { "momio": 2.00, "operador": "betway" }
+  },
+  "consenso_mercado": {
+    "p_L_mercado": 0.279,
+    "p_E_mercado": 0.251,
+    "p_V_mercado": 0.471,
+    "delta_L": -0.069,
+    "delta_E": -0.011,
+    "delta_V": +0.089
+  },
+  "momios": { "L": 3.45, "E": 3.75, "V": 1.98, "pago_anticipado": true }
+}
+```
+
+---
+
+### [ARCH-1.4.8] Despacho Global de Mesa de Apuestas y Descarte Temprano [ARCH-PILLAR]
+
+### [ARCH-1.4.8-B] Exposición del Objeto `consenso_mercado` en LiveBoardOut [ARCH-PILLAR]
+* El endpoint `GET /api/leagues/{id}/live-board` debe asegurar el paso del diccionario `consenso_mercado` y `momios_operadores` dentro de cada objeto de partido en `fixtures`, permitiendo al frontend renderizar los niveles 2 y 3 sin peticiones HTTP adicionales.
+
+
+* **Axioma de Despacho Integral:** El endpoint `POST /api/markets/sportsbook/portfolio/generate` no requiere una lista manual de partidos (`selected_match_ids`). Si la lista no se proporciona o está vacía, el sistema recupera automáticamente la totalidad de los partidos abiertos en ventanilla para la jornada activa (Jornada 10) desde SQLite.
+* **Compuerta de Descarte Temprano de Rentabilidad:** Antes de asignar capital o ejecutar Dutching:
+  1. Cruza las cuotas de Caliente.mx ($O_L, O_E, O_V$) contra las probabilidades soberanas de `sovereign_distributions` ($\hat{P}_i$).
+  2. Calcula los GAPs matemáticos: $\text{GAP}_k = P_k - (1.0 / O_k)$.
+  3. Ejecuta el filtro de rentabilidad: si ningún desenlace ofrece Esperanza Matemática Positiva ($+EV \le 0$) o si el encuentro es un volado simétrico sin asimetría explotable, el partido se deriva de inmediato a `QBE-00` (Descarte Preventivo / Veto) con asignación de $\$0.00\text{ MXN}$.
+* **Hidratación Soberana Obligatoria:** Las órdenes de los partidos rentables se construyen consumiendo exclusivamente las intensidades acotadas ($\lambda_H, \lambda_A$), el Símplex $\Delta^2$ y el Pago Anticipado de André ($\Phi_{\text{Lead2}}$) calculados por el Tratado Volumen I.
+
+---
+
 ### [ARCH-1.5.0] Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR]
 
 * **Axioma de Centralización Transaccional:** Queda estrictamente prohibido que cualquier ruta REST, scraper o daemon instancie sesiones directas o ejecute `db.commit()` sin mediación. Toda interacción con `data/qbe_database.db` debe canalizarse a través de `src/storage/gateway.py`.

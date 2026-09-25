@@ -320,4 +320,52 @@
   - Queda prohibido añadir botones internos de ancho completo o textos con jerga técnica ("Radiografía Estocástica" prohibido).
   - Encabezado con fecha y badge de estado (`FINALIZADO` con marcador, o `PROGRAMADO`), escudos locales y nombres canónicos.
 
+---
+
+### [DES-QBE-039] Configuración de Cartera con Selector de Operador y Despacho Único [UX-MANDATE]
+
+* **Componentes de la Tarjeta `#configuracion-cartera` (Mesa de Apuestas):**
+  1. **Selector de Casino:** Dropdown `#casino-operator-select` con estilo Dark Fintech:
+     - Opción activa única: `<option value="caliente" selected>Caliente_Deportes.MX</option>`.
+  2. **Campo Bankroll:** Input numérico `#input-bankroll` (default: `$200.00 MXN`).
+  3. **Control Deslizante de Certeza:** Slider `#slider-risk-certainty` ($70\% \leftrightarrow 90\%$, default $80\%$).
+  4. **Botón Principal:** Texto unívoco ` ⚡ Calcular Cartera ` (ID: `#btn-calcular-cartera`).
+* **Erradicación de Casillas:** Se eliminan los checkboxes individuales de selección de partidos. Al hacer clic en ` ⚡ Calcular Cartera `, el sistema procesa toda la jornada, descarta lo no rentable y despliega el Dashboard con los boletos split protegidos.
+
+---
+
+### [DES-QBE-039-B] Cluster Central de Tarjeta: Triple Nivel Probabilístico (Soberano vs. Consenso) [UX-MANDATE]
+* **Geometría del Núcleo Central (`.card-center` / `.match-center-cluster`):**
+  El bloque central de cada tarjeta en la Jornada Activa se estructura verticalmente en 4 micro-estaciones:
+  1. **Horario:** Texto pequeño monospaciado (`0.72rem`, `#94A3B8`).
+  2. **Nivel 1 (Distribución Soberana Q-BE — HÉROE):**
+     - Formato: `p1% · pX% · p2%` en tipografía destacada (`font-size: 0.88rem; font-weight: 800;`).
+     - Franja horizontal tricolor (`.prob-strip`) de 4px de alto (Verde/Cian, Pizarra, Coral).
+  3. **Nivel 2 (Consenso de Mercado Sin Comisión — COMPARATIVO SOBRIO):**
+     - Formato: `Mkt: qL% · qE% · qV%`
+     - Estilo: Color Gris Pizarra (`#94A3B8`), `font-size: 0.70rem`, `font-weight: 500`, fuente monospaciada (`font-family: monospace;`).
+     - Prohibición: Queda strictly prohibido utilizar colores fluorescentes o fuentes en negrita en este renglón.
+  4. **Nivel 3 (Diferencial Aritmético Q-BE vs. Mercado — ALPHA EDGE):**
+     - Formato: `Δ: ±dL% · ±dE% · ±dV%`
+     - Estilo: Color Gris Atenuado (`#64748B`), `font-size: 0.67rem`, `font-weight: 400`, fuente monospaciada.
+     - Representación: Signo explícito `+` o `-` con 1 decimal (ej. `Δ: -7.2% · -1.3% · +8.5%`).
+
+---
+
+### [DES-QBE-040] Modo Enfoque: Alternador de Tabla General y Cartelera Centrada [UX-MANDATE]
+* **Control de Alternancia (`#btn-toggle-standings`):**
+  - Ubicado en la cabecera `.cartelera-header`, adyacente al título de la Jornada.
+  - Estados:
+    - Tabla Visible: Texto `◨ Ocultar Tabla`, fondo Slate 800 (`#1E293B`), texto Gris Pizarra (`#94A3B8`).
+    - Tabla Oculta: Texto `◧ Ver Tabla`, fondo Azul Tenue (`#0284C7` al 25%), borde Cian (`#38BDF8`), texto Blanco Puro.
+* **Geometría de Estado Oculto (`.standings-hidden`):**
+  - El panel izquierdo de posiciones (`#sovereign-standings-container` o `.standings-panel`) adopta `display: none !important;`.
+  - El contenedor principal de la vista elimina la cuadrícula bipartita (`grid-template-columns: 1fr !important;`).
+  - El panel de la cartelera adopta:
+    `max-width: 880px !important; width: 100% !important; margin: 0 auto !important;`
+  - Transición fluida sin parpadeos de interfaz.
+
+
+
+
 

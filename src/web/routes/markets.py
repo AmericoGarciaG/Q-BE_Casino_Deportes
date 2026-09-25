@@ -44,9 +44,10 @@ SLATE_PROGOL_14_ITEMS = [
 class SportsbookPortfolioRequest(BaseModel):
     """[LN-QBE-073] Request del generador de cartera con Slider de Certeza."""
     league_id: int = Field(default=262)
-    selected_match_ids: List[str]
+    selected_match_ids: Optional[List[str]] = Field(default_factory=list)
     bankroll: float = Field(default=200.0, ge=10.0)
     target_certeza: float = Field(default=0.80, ge=0.0, le=1.0)
+    operador: Optional[str] = Field(default="caliente")
 
 
 class ProgolOptimizeRequest(BaseModel):
@@ -160,12 +161,16 @@ def generate_sportsbook_portfolio_endpoint(
     data = generate_portfolio(req_legacy, db=db)
 
     # ── Adaptador de Respuesta: Alias canónicos para el Juez Inmutable ──────
-    # El motor legado emite: "balance" y "control"
-    # El Juez Inmutable [FASE 6] exige: "balance_global_portafolio" y "control_portafolio"
     if "balance" in data and "balance_global_portafolio" not in data:
         data["balance_global_portafolio"] = data["balance"]
     if "control" in data and "control_portafolio" not in data:
         data["control_portafolio"] = data["control"]
+    if "ordenes" in data and "ordenes_ejecucion_partidos" not in data:
+        data["ordenes_ejecucion_partidos"] = data["ordenes"]
+
+    for d in data.get("descartes", []):
+        if "codigo_estrategia" not in d:
+            d["codigo_estrategia"] = d.get("motivo_codigo") or d.get("motivo_titulo") or "QBE-00"
 
     return data
 
