@@ -100,3 +100,6 @@ scripts/utilidades/comprobar_payload_http.py
 scripts/utilidades/simulador_pantalla_soberana.py
 data/qbe_database.db-shm
 data/qbe_database.db-wal
+scripts/utilidades/sonda_diagnostico_progol.py
+scripts/auditar_pureza_matematica_vol1.py
+.vscode/settings.json

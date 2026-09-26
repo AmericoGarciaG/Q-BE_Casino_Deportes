@@ -4,6 +4,8 @@
 [ARCH-1.4.5 / DES-QBE-032] Rutas de Liquidación Financiera (Casino 1X2, Progol y Arbitraje).
 [LN-QBE-073] Endpoint de despacho con Slider Dinámico de Certeza (Risk Dial).
 [LN-QBE-074] Endpoint de optimización Progol por Presupuesto.
+[LN-QBE-075 / VARIANCE-03 extirpada] El slate Progol se hidrata de la bóveda 3NF (`slates` / `slate_items`);
+prohibida toda constante quemada de equipos, probabilidades o venta pública.
 Base de Gobierno: Kybern Framework v12.0
 """
 
@@ -13,30 +15,107 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
 from src.storage.gateway import PersistenceGateway
-from src.storage.models import FixtureSnapshot, League, SovereignDistribution
+from src.storage.models import FixtureSnapshot, League, SovereignDistribution, Slate, SlateItem
 from src.storage.database import get_db
 from src.core.contracts.progol_math import calcular_sesgo_quiniela, optimizar_quiniela_por_presupuesto
 
 router = APIRouter(prefix="/api/markets", tags=["Financial Markets"])
 
 
-# ── SLATE OFICIAL PROGOL 14 PARTIDOS ────────────────────────────────────────
-SLATE_PROGOL_14_ITEMS = [
-    {"order": 1,  "local": "Club América",        "visitante": "Chivas Guadalajara",    "v_pub": {"L": 0.65, "E": 0.20, "V": 0.15}, "p_qbe": {"L": 0.38, "E": 0.34, "V": 0.28}},
-    {"order": 2,  "local": "Deportivo Toluca",    "visitante": "Santos Laguna",         "v_pub": {"L": 0.75, "E": 0.15, "V": 0.10}, "p_qbe": {"L": 0.72, "E": 0.18, "V": 0.10}},
-    {"order": 3,  "local": "Club Puebla",         "visitante": "Atlante",               "v_pub": {"L": 0.52, "E": 0.28, "V": 0.20}, "p_qbe": {"L": 0.56, "E": 0.26, "V": 0.18}},
-    {"order": 4,  "local": "Cruz Azul",           "visitante": "Rayados de Monterrey",  "v_pub": {"L": 0.58, "E": 0.24, "V": 0.18}, "p_qbe": {"L": 0.40, "E": 0.32, "V": 0.28}},
-    {"order": 5,  "local": "Pumas UNAM",          "visitante": "Atlas FC",              "v_pub": {"L": 0.60, "E": 0.25, "V": 0.15}, "p_qbe": {"L": 0.39, "E": 0.33, "V": 0.28}},
-    {"order": 6,  "local": "Tigres UANL",         "visitante": "FC Juárez",             "v_pub": {"L": 0.70, "E": 0.18, "V": 0.12}, "p_qbe": {"L": 0.68, "E": 0.22, "V": 0.10}},
-    {"order": 7,  "local": "Atlético San Luis",   "visitante": "Necaxa",                "v_pub": {"L": 0.55, "E": 0.25, "V": 0.20}, "p_qbe": {"L": 0.36, "E": 0.34, "V": 0.30}},
-    {"order": 8,  "local": "Club Pachuca",        "visitante": "Club Tijuana",          "v_pub": {"L": 0.52, "E": 0.28, "V": 0.20}, "p_qbe": {"L": 0.50, "E": 0.28, "V": 0.22}},
-    {"order": 9,  "local": "Club León",           "visitante": "Querétaro FC",          "v_pub": {"L": 0.55, "E": 0.25, "V": 0.20}, "p_qbe": {"L": 0.52, "E": 0.28, "V": 0.20}},
-    {"order": 10, "local": "Arsenal",             "visitante": "Chelsea",               "v_pub": {"L": 0.58, "E": 0.24, "V": 0.18}, "p_qbe": {"L": 0.42, "E": 0.30, "V": 0.28}},
-    {"order": 11, "local": "Real Madrid",         "visitante": "Barcelona",             "v_pub": {"L": 0.50, "E": 0.25, "V": 0.25}, "p_qbe": {"L": 0.45, "E": 0.28, "V": 0.27}},
-    {"order": 12, "local": "Inter Milan",         "visitante": "AC Milan",              "v_pub": {"L": 0.45, "E": 0.30, "V": 0.25}, "p_qbe": {"L": 0.44, "E": 0.31, "V": 0.25}},
-    {"order": 13, "local": "Liverpool",           "visitante": "Manchester City",       "v_pub": {"L": 0.40, "E": 0.30, "V": 0.30}, "p_qbe": {"L": 0.38, "E": 0.32, "V": 0.30}},
-    {"order": 14, "local": "PSG",                 "visitante": "Olympique Marsella",   "v_pub": {"L": 0.65, "E": 0.20, "V": 0.15}, "p_qbe": {"L": 0.62, "E": 0.22, "V": 0.16}},
-]
+# ── CARGA FÁCTICA DEL SLATE PROGOL DESDE LA BÓVEDA 3NF [ARCH-1.5.1-C] ────────
+# [VARIANCE-03 extirpada] Eliminada la constante quemada SLATE_PROGOL_14_ITEMS: el tablero Progol
+# se hidrata EXCLUSIVAMENTE de `slates` / `slate_items` a través de PersistenceGateway.
+# [GOVERNANCE-01] Cero equipos, probabilidades, bolsas o marcadores sintéticos: si la bóveda no
+# contiene un concurso OPEN, el endpoint declara la vaciedad y NO inventa casillas.
+
+SLATE_PROGOL_14 = 14  # Casillas REGULAR publicadas por el concurso Progol (posiciones 1..14).
+
+
+def _cargar_slate_progol(session: Session, slate_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    [LN-QBE-075 / LN-QBE-037] Hidrata el concurso Progol vigente desde la persistencia 3NF.
+    Devuelve None si no existe concurso OPEN con casillas (prohibido fabricar un slate).
+    La venta pública sólo se puebla si existe captura fáctica de momios de casino de esa jornada.
+    """
+    consulta = session.query(Slate).filter(Slate.status == "OPEN")
+    slate = None
+    if slate_id:
+        slate = consulta.filter(Slate.id == slate_id).first()
+    if slate is None:
+        # [VARIANCE-03] `slate_id` ausente o inexistente => se degrada al concurso OPEN real.
+        slate = consulta.order_by(Slate.created_at.desc()).first()
+    if slate is None:
+        return None
+
+    items = (
+        session.query(SlateItem)
+        .filter(SlateItem.slate_id == slate.id)
+        .order_by(SlateItem.position.asc())
+        .all()
+    )
+    if not items:
+        return None
+
+    # ── Venta pública: SOLO si existe captura fáctica de momios de casino de esa jornada ──
+    momios_publicos: Dict[str, Dict[str, float]] = {}
+    if slate.matchday_num is not None:
+        snapshot = (
+            session.query(FixtureSnapshot)
+            .filter(FixtureSnapshot.matchday == slate.matchday_num)
+            .order_by(FixtureSnapshot.updated_at.desc())
+            .first()
+        )
+        if snapshot and snapshot.matches_json:
+            for fx in snapshot.matches_json:
+                momios = fx.get("momios") or {}
+                if momios.get("L") and momios.get("E") and momios.get("V"):
+                    momios_publicos[fx.get("id_partido", "")] = {
+                        "L": float(momios["L"]),
+                        "E": float(momios["E"]),
+                        "V": float(momios["V"]),
+                    }
+
+    items_out: List[Dict[str, Any]] = []
+    for item in items:
+        p_qbe = {"L": item.p_local, "E": item.p_empate, "V": item.p_visitante}
+        momios = momios_publicos.get(item.match_id or "", {})
+        if momios:
+            # [ARCH-1.4.5] Misma convención del plano casino: probabilidad implícita = 1 / momio.
+            v_pub = {clave: round(1.0 / valor, 4) for clave, valor in momios.items()}
+            sesgo_disponible = True
+            sesgo_motivo = "MOMIOS_DE_CASINO_DE_LA_JORNADA"
+        else:
+            v_pub = {}
+            sesgo_disponible = False
+            sesgo_motivo = "VENTA_PUBLICA_NO_INGESTADA_PARA_ESTE_PARTIDO"
+
+        items_out.append({
+            "order": item.position,
+            "tipo_concurso": item.tipo_concurso,
+            "local": item.local_canonico or item.local_raw,
+            "visitante": item.visitante_canonico or item.visitante_raw,
+            "local_raw": item.local_raw,
+            "visitante_raw": item.visitante_raw,
+            "match_id": item.match_id,
+            "p_qbe": p_qbe,
+            "v_pub": v_pub,
+            "es_prior_ignorancia": bool(item.es_prior_ignorancia),
+            "estado_qbe": "PRIOR-FIDUCIARIO-1/3" if item.es_prior_ignorancia else "SOBERANO-3NF",
+            "sesgo_disponible": sesgo_disponible,
+            "sesgo_motivo": sesgo_motivo,
+            "analisis_sesgo": calcular_sesgo_quiniela(v_pub, p_qbe) if sesgo_disponible else None,
+        })
+
+    return {
+        "slate_id": slate.id,
+        "name": slate.name,
+        "status": slate.status,
+        "matchday_num": slate.matchday_num,
+        "bolsa_estimada": slate.bolsa_estimada,
+        "fecha_cierre": slate.fecha_cierre.isoformat() if getattr(slate, "fecha_cierre", None) else None,
+        "sesgo_fuente": "MOMIOS_DE_CASINO" if momios_publicos else "NO_DISPONIBLE",
+        "items": items_out,
+    }
 
 
 # ── ESQUEMAS PYDANTIC V2 ─────────────────────────────────────────────────────
@@ -51,8 +130,11 @@ class SportsbookPortfolioRequest(BaseModel):
 
 
 class ProgolOptimizeRequest(BaseModel):
-    """[LN-QBE-074] Request del optimizador Progol por presupuesto."""
-    slate_id: str = Field(default="PROGOL_2245")
+    """
+    [LN-QBE-074 / VARIANCE-03 extirpada] Request del optimizador Progol por presupuesto.
+    `slate_id = None` => se resuelve el concurso OPEN vigente en la bóveda 3NF (cero ids sintéticos).
+    """
+    slate_id: Optional[str] = Field(default=None)
     presupuesto_mxn: float = Field(default=360.0, ge=15.0)
 
 
@@ -178,19 +260,42 @@ def generate_sportsbook_portfolio_endpoint(
 @router.get("/progol/slates/active")
 def get_active_progol_slate() -> Dict[str, Any]:
     """
-    [LN-QBE-037 / DES-QBE-032] Concurso Progol activo de 14 partidos
-    con contraste de venta pública vs probabilidad soberana Q-BE.
+    [LN-QBE-037 / DES-QBE-032 / ARCH-1.5.1-C] Concurso Progol activo leído de la bóveda 3NF.
+    Expone el contraste entre la probabilidad soberana Q-BE persistida y la venta pública fáctica
+    (sólo si existe captura de momios de casino de esa jornada; en su ausencia se declara
+    explícitamente la no disponibilidad — [GOVERNANCE-01], cero cifras inventadas).
     """
-    analizados = []
-    for p in SLATE_PROGOL_14_ITEMS:
-        sesgo = calcular_sesgo_quiniela(p["v_pub"], p["p_qbe"])
-        analizados.append({**p, "analisis_sesgo": sesgo})
+    gateway = PersistenceGateway()
+    with gateway.read_session() as session:
+        slate = _cargar_slate_progol(session)
+
+    if slate is None:
+        return {
+            "slate_id": None,
+            "name": None,
+            "status": None,
+            "matchday_num": None,
+            "bolsa_garantizada_mxn": None,
+            "fecha_cierre": None,
+            "items_total": 0,
+            "soberanos": 0,
+            "priors": 0,
+            "sesgo_fuente": "BOVEDA_SIN_CONCURSO_OPEN",
+            "items": []
+        }
 
     return {
-        "slate_id": "PROGOL_2245",
-        "name": "Concurso Progol 2245",
-        "bolsa_garantizada_mxn": 25000000.0,
-        "items": analizados
+        "slate_id": slate["slate_id"],
+        "name": slate["name"],
+        "status": slate["status"],
+        "matchday_num": slate["matchday_num"],
+        "bolsa_garantizada_mxn": slate["bolsa_estimada"],
+        "fecha_cierre": slate["fecha_cierre"],
+        "items_total": len(slate["items"]),
+        "soberanos": sum(1 for i in slate["items"] if not i["es_prior_ignorancia"]),
+        "priors": sum(1 for i in slate["items"] if i["es_prior_ignorancia"]),
+        "sesgo_fuente": slate["sesgo_fuente"],
+        "items": slate["items"]
     }
 
 
@@ -199,5 +304,14 @@ def optimize_progol_endpoint(req: ProgolOptimizeRequest) -> Dict[str, Any]:
     """
     [LN-QBE-074] Optimiza la asignación de dobles y triples respetando el
     presupuesto comercial. Costo = 15.00 × 2^D × 3^T ≤ presupuesto_mxn.
+    El tablero se hidrata de `slate_items` (bloque REGULAR: las 14 casillas del concurso Progol).
     """
-    return optimizar_quiniela_por_presupuesto(SLATE_PROGOL_14_ITEMS, req.presupuesto_mxn)
+    gateway = PersistenceGateway()
+    with gateway.read_session() as session:
+        slate = _cargar_slate_progol(session, slate_id=req.slate_id)
+
+    if slate is None:
+        raise HTTPException(status_code=404, detail="No existe concurso Progol activo en la bóveda 3NF.")
+
+    items_regular = [i for i in slate["items"] if i["tipo_concurso"] == "REGULAR"][:SLATE_PROGOL_14]
+    return optimizar_quiniela_por_presupuesto(items_regular, req.presupuesto_mxn)

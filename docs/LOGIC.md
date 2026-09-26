@@ -676,6 +676,27 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Φ (Transición):** Hacia `/api/markets/progol/optimize` y motor de quinielas.
 
 ---
+
+### ID: [LN-QBE-075] Ingesta Fáctica de Concursos Progol y Resiliencia Multi-Torneo
+
+* **Ω (Resumen):** Extracción fáctica del concurso Progol vigente (14 encuentros Regular + 7 Revancha = 21 casillas) desde el DOM oficial, resolución del corte canónico local/visitante y degradación fiduciaria ante cualquier ausencia de información. Ninguna casilla congela el sistema.
+* **I (Input):** Texto fáctico del DOM oficial del concurso: `concurso_num`, `bolsa` (ej. `$8,800,000.00`), `fecha_cierre` y las 21 casillas en layout de 1 o 3 líneas. Queda prohibido inventar casillas, fechas o bolsas.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Segmentación por torneo:** `Progol` ⇒ `REGULAR` (posiciones $1..14$); `Revancha` ⇒ `REVANCHA` (posiciones $1..7$ del bloque, persistidas como $15..21$ mediante $position = pos + 14$). Total: $14 + 7 = 21$ casillas.
+  2. **Corte canónico local/visitante:** sobre el espacio de la línea se puntúan todas las biparticiones de tokens contra el catálogo canónico de clubes y se retiene la de mayor evidencia; nunca se divide por espacio ciego (protege abreviaturas tipo `C. AZUL`, `S. LAGUNA`, `ROSARIO CEN`).
+  3. **Caso A — Vínculo Soberano:** club canónico resoluble $\wedge$ partido en `matches` $\wedge$ distribución en `sovereign_distributions` $\implies$ $P_{\text{soberana}} = (p_1, p_X, p_2)$, `match_id` poblado y `es_prior_ignorancia = False`.
+  4. **Caso B — Prior de Ignorancia Fiduciaria:** club fuera de catálogo $\vee$ partido ausente $\vee$ bóveda inaccesible $\implies$
+     $$P = (0.3333,\ 0.3333,\ 0.3334), \qquad \text{match\_id} = NULL, \qquad \text{es\_prior\_ignorancia} = True$$
+     La casilla se persiste igualmente con su cadena fáctica (`local_raw`, `visitante_raw`) intacta.
+  5. **Guardas de integridad fáctica [ALTO AL FUEGO]:** la ingesta se aborta con `exit 1` sin escribir en `slates`/`slate_items` si:
+     - produce $0$ casillas fácticas (vacuidad), o
+     - alguna casilla presenta par local/visitante incompleto ($\text{local\_raw} = \emptyset \vee \text{visitante\_raw} = \emptyset$), síntoma inequívoco de un corte estructural fallido. Una casilla Progol siempre tiene dos clubes: un par incompleto jamás es un dato legítimo, por lo que su persistencia silenciosa está prohibida.
+  6. **Fidelidad de monto y de fecha:** `slates.bolsa_estimada` preserva la escala publicada (`$8,800,000.00` $\Rightarrow 8.8 \times 10^{6}$, con la coma como separador de miles) y `slates.fecha_cierre` permanece `NULL` mientras el sitio publique día/mes sin año: la inferencia de año o la recomposición de la escala quedan **prohibidas por no ser dato fáctico**.
+* **O (Output):** Un registro `slates` (bolsa, estado `OPEN`) más 21 registros `slate_items` conforme a `[ARCH-1.5.1-C]`, cada uno con su par fáctico (`*_raw`) y su par calibrado (`*_canonico`), la terna de probabilidades y la bandera de origen epistémico.
+* **Φ (Transición):** Hacia `[LN-QBE-037]` (sesgo popular), `[LN-QBE-073]` (Risk Dial) y `[LN-QBE-074]` (matriz de quiniela).
+* **[SHIELD]:** `tests/shield/test_shield_progol_ingestion.py`
+
+---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
 
 ```

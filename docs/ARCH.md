@@ -357,24 +357,40 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
 | `audit_trace_json` | `TEXT` | | JSON de trazabilidad de auditoría completa |
 | `created_at` | `DATETIME` | `NOT NULL` | Timestamp UTC de creación del registro |
 
-#### Tablas: `slates` y `slate_items`
+#### Tablas: `slates` y `slate_items` — [ARCH-1.5.1-C]
+**Diccionario de datos sellado del subsistema de quinielas (Progol Regular + Revancha).**
+El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_items.match_id` es `NULLABLE` porque la legislación `[LN-QBE-075]` ordena que una casilla sin vínculo soberano degrade al **Prior de Ignorancia Fiduciario** sin bloquear la ingesta. La clave primaria de `slate_items` es **sustituta** (`id` autoincremental) y la unicidad de casilla se garantiza por `UNIQUE (slate_id, position)` (`uq_slate_item_position`).
+
 **`slates`** — Concurso principal (Progol, quiniela multitorneo):
 | Columna | Tipo | Restricción | Descripción |
 |---|---|---|---|
-| `id` | `VARCHAR` | `PK` | ID único del concurso (ej. `PROGOL-2026-J17`) |
-| `name` | `VARCHAR` | `NOT NULL` | Nombre del concurso |
-| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga principal del concurso |
-| `matchday_num` | `INTEGER` | `NOT NULL` | Jornada asociada |
-| `status` | `VARCHAR` | `NOT NULL` | Estado del concurso: `OPEN`, `CLOSED`, `SETTLED` |
+| `id` | `VARCHAR(50)` | `PK` | ID único del concurso (ej. `PROGOL-2352`, `PRONOSPORTS-754`) |
+| `name` | `VARCHAR(120)` | `NOT NULL` | Nombre del concurso |
+| `competition_id` | `VARCHAR(50)` | `FK → competitions.id` | Liga principal del concurso |
+| `matchday_num` | `INTEGER` | | Jornada asociada |
+| `bolsa_estimada` | `FLOAT` | | Bolsa fáctica ofrecida por el concurso (MXN) |
+| `fecha_cierre` | `DATETIME` | | Cierre del concurso; `NULL` si la fuente no publica el año |
+| `status` | `VARCHAR(20)` | `NOT NULL` | Estado del concurso: `OPEN`, `CLOSED`, `SETTLED` |
 | `created_at` | `DATETIME` | `NOT NULL` | Timestamp de creación |
 
-**`slate_items`** — Partidos incluidos en cada concurso:
+**`slate_items`** — Casilla de quiniela (21 por concurso: `1..14` Regular, `15..21` Revancha):
 | Columna | Tipo | Restricción | Descripción |
 |---|---|---|---|
-| `id` | `INTEGER` | `PK` | ID autoincremental |
-| `slate_id` | `VARCHAR` | `FK → slates.id` | Concurso al que pertenece |
-| `match_id` | `VARCHAR` | `FK → matches.id` | Partido incluido |
-| `position` | `INTEGER` | `NOT NULL` | Posición en la quiniela (1–N) |
+| `id` | `INTEGER` | `PK` | ID autoincremental (surrogate key) |
+| `slate_id` | `VARCHAR(50)` | `FK → slates.id`, `NOT NULL` | Concurso al que pertenece |
+| `tipo_concurso` | `VARCHAR(20)` | `NOT NULL` | Torneo de origen: `REGULAR` \| `REVANCHA` |
+| `position` | `INTEGER` | `NOT NULL` | Posición en la quiniela (`1..14` Regular, `15..21` Revancha) |
+| `local_raw` | `VARCHAR(100)` | | Cadena fáctica del DOM (local), sin interpretar |
+| `visitante_raw` | `VARCHAR(100)` | | Cadena fáctica del DOM (visitante), sin interpretar |
+| `local_canonico` | `VARCHAR(100)` | | Identidad canónica normalizada (local) |
+| `visitante_canonico` | `VARCHAR(100)` | | Identidad canónica normalizada (visitante) |
+| `match_id` | `VARCHAR(100)` | `FK → matches.id`, `NULLABLE` | Vínculo soberano; `NULL` ⇒ Prior Fiduciario |
+| `p_local` | `FLOAT` | | $P(\text{local})$ soberana, u $0.3333$ bajo Prior |
+| `p_empate` | `FLOAT` | | $P(\text{empate})$ soberana, u $0.3333$ bajo Prior |
+| `p_visitante` | `FLOAT` | | $P(\text{visitante})$ soberana, u $0.3334$ bajo Prior |
+| `es_prior_ignorancia` | `BOOLEAN` | `NOT NULL` | `True` ⇔ distribución fiduciaria $(1/3, 1/3, 1/3)$ de `[LN-QBE-075]` |
+
+* **Migración física:** SQLite no permite `ALTER` sobre una clave primaria compuesta, por lo que la recreación se ejecuta mediante `scripts/utilidades/migrar_schema_slates.py`, utilitario con **guarda fiduciaria** que aborta (`exit 2`) si alguna de las dos tablas contiene filas.
 
 ### [ARCH-1.5.2] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
 
@@ -606,7 +622,7 @@ Q_BE_CD_WEB/
 │   │
 │   ├── storage/                    # Persistencia y Base de Datos Local
 │   │   ├── database.py             # Conexión SQLAlchemy SQLite
-│   │   ├── models.py               # Tablas: League, StandingSnapshot, FixtureSnapshot, PortfolioRecord
+│   │   ├── models.py               # Tablas: League, StandingSnapshot, FixtureSnapshot, PortfolioRecord, Slate, SlateItem
 │   │   ├── repository.py           # Operaciones CRUD tipadas
 │   │   ├── seeder.py               # Precarga de Ligas Oficiales (Liga MX)
 │   │   └── sync_service.py         # Sincronización en arranque FotMob -> DB
@@ -614,6 +630,7 @@ Q_BE_CD_WEB/
 │   ├── ingestion/                  # Capa de Ingesta y Sensores de Mercado
 │   │   ├── normalizer.py           # Normalizador difuso de clubes (18 Liga MX + Internacionales)
 │   │   ├── caliente_scraper.py     # Extracción headless de cuotas Caliente.mx
+│   │   ├── progol_scraper.py       # [LN-QBE-075] Ingesta fáctica Progol (14 Regular + 7 Revancha)
 │   │   ├── ocr_parser.py           # Extracción OCR desde capturas
 │   │   ├── quota_manager.py        # Gestor de Cuotas y Circuit Breaker de Gemini
 │   │   └── providers/
