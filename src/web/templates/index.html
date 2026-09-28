@@ -20,6 +20,7 @@
                 <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Ligas y Torneos</button>
                 <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Equipos y Partidos</button>
                 <button class="tab-btn" data-tab="tab-portfolio">💼 Mesa de Apuestas</button>
+                <button class="tab-btn" data-tab="view-control-center" id="btn-tab-control">⚙️ Centro de Control</button>
             </nav>
 
             <div class="status-badge-slim">
@@ -130,6 +131,15 @@
 
         <!-- VISTA 3: CARTERA CUANTITATIVA INDUSTRIAL -->
         <section id="tab-portfolio" class="view-section">
+            <!-- [DES-QBE-046] Sub-Navegación de Segundo Piso de la Mesa de Apuestas -->
+            <div class="subnav-portfolio">
+                <button type="button" id="btn-subtab-sportsbook" class="subtab-btn active" onclick="conmutarSubvistaMercados('sportsbook')">🎰 Sportsbook Casino 1X2</button>
+                <button type="button" id="btn-subtab-progol" class="subtab-btn" onclick="conmutarSubvistaMercados('progol')">🎟️ Quinielas Progol #2352</button>
+            </div>
+
+            <!-- CONTENEDOR SPORTSBOOK (SUB-VISTA ACTIVA POR DEFECTO) [DES-QBE-046] -->
+            <!-- Nota de ingeniería: los bloques internos 1-5 se conservan VERBATIM (cero refactor, cero renombrado de IDs). -->
+            <div id="contenedor-sportsbook" class="subview-content active">
             <!-- BLOQUE 1: CONFIGURACIÓN DEL ROUTER [DES-QBE-039] -->
             <div id="configuracion-cartera" class="card" style="margin-bottom: 1rem; padding: 14px 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -141,6 +151,8 @@
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Casino:</label>
                         <select id="casino-operator-select" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; font-weight: 700; font-size: 8.5pt;">
                             <option value="caliente" selected>Caliente_Deportes.MX</option>
+                            <!-- [DES-QBE-047] Operador certificado en backend ([LN-QBE-007], markets.py:332 momios_operadores) -->
+                            <option value="betway">Betway.MX</option>
                         </select>
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Bankroll: $</label>
                         <input type="number" id="input-bankroll" value="200" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 85px; font-weight: 700;">
@@ -162,7 +174,8 @@
                     </div>
                     <div style="text-align: right;">
                         <span class="badge-status-live" style="background: rgba(0,230,118,0.15); color: #00E676; border-color: #00E676; font-size: 7.2pt;">Q-BE  CASINO DEPORTES v3.0</span>
-                        <div style="font-size: 7.2pt; color: #94A3B8; margin-top: 4px;" id="hdr-fechas-portfolio">Jornada 8 · Septiembre 2026</div>
+                        <!-- [DES-QBE-047] Header dinámico: hidratado por renderizarResultadosPortafolio(data.metadata) -->
+                        <div style="font-size: 7.2pt; color: #94A3B8; margin-top: 4px;" id="hdr-fechas-portfolio">Jornada Activa</div>
                     </div>
                 </div>
 
@@ -238,6 +251,49 @@
             <div class="card" style="border-top: 3px solid #ef4444;">
                 <h3 style="color: #ef4444; font-size: 1rem; margin-bottom: 0.8rem;">🚫 Partidos Vetados (QBE-00 Sin rentabilidad)</h3>
                 <div id="contenedor-descartes" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            </div>
+            <!-- /CONTENEDOR SPORTSBOOK -->
+
+            <!-- [DES-QBE-046] SUB-VISTA QUINIELAS PROGOL — MESA DE APUESTAS -->
+            <!-- Token canónico: #contenedor-progol (dictamen Q9). Alias de compatibilidad CSS: .progol-slate-container (D-1). -->
+            <div id="contenedor-progol" class="subview-content progol-slate-container" style="display: none;">
+                <!-- ENCABEZADO DEL CONCURSO: hidratado íntegramente desde GET /api/markets/progol/slates/active -->
+                <div class="card" style="margin-bottom: 1.2rem; background: linear-gradient(135deg, #1C2541 0%, #0B132B 100%); border: 1px solid rgba(56,189,248,0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <span style="font-size: 7.2pt; color: #38BDF8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Quiniela Progol — Concurso de la Bóveda 3NF</span>
+                            <h1 id="progol-slate-nombre" style="margin: 2px 0 0 0; font-size: 1.25rem; color: #fff;">Consultando concurso activo...</h1>
+                            <div id="progol-slate-casillas" style="font-size: 7.5pt; color: #94A3B8; margin-top: 4px;">—</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase; font-weight: 700;">Bolsa Garantizada</span>
+                            <div id="progol-slate-bolsa" style="font-size: 1.15rem; font-weight: 900; color: #00E676;">—</div>
+                            <div id="progol-slate-cierre" style="font-size: 7.2pt; color: #94A3B8; margin-top: 4px;">Tiempo límite: —</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
+                        <label for="input-progol-presupuesto" style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Presupuesto MXN: $</label>
+                        <input type="number" id="input-progol-presupuesto" value="360" min="15" step="15" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 100px; font-weight: 700;">
+                        <button type="button" id="btn-optimizar-progol" class="btn-primary" onclick="ejecutarOptimizadorProgol()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;">⚡ Optimizar Presupuesto</button>
+                        <span id="progol-sesgo-fuente" style="font-size: 7.5pt; color: #94A3B8;"></span>
+                    </div>
+                </div>
+
+                <!-- RESULTADO DEL OPTIMIZADOR (Matriz de 14 casillas con 2^D × 3^T) -->
+                <div id="progol-resultado-optimizador" class="card" style="margin-bottom: 1.2rem; display: none;"></div>
+
+                <!-- RETÍCULO DE CASILLAS: 14 PROGOL REGULAR + 7 REVANCHA -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0.8rem;">
+                        <h3 style="margin: 0; font-size: 1rem; color: #fff;">🎟️ Retículo de Casillas del Concurso</h3>
+                        <button type="button" class="subtab-btn" onclick="cargarSlateProgolActivo()" style="cursor: pointer;">↻ Recargar bóveda</button>
+                    </div>
+                    <div id="progol-reticulo-container" style="overflow-x: auto; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 8.5pt; color: #94A3B8;">Consultando bóveda 3NF…</div>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
@@ -333,6 +389,59 @@
             </table>
         </div>
     </div>
+
+        <!-- VISTA 4: CENTRO DE CONTROL ADMINISTRATIVO (DES-QBE-048 / ARCH-1.4.12) -->
+        <section id="view-control-center" class="view-section">
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3 style="margin-top: 0;">⚙️ Centro de Control Industrial</h3>
+                <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 14px;">
+                    Despacho gobernado de daemons y auditorías certificadas. Toda tarea atraviesa la
+                    whitelist estricta de seguridad <strong>[ARCH-1.4.12]</strong>: el servidor jamás
+                    ejecuta texto libre del cliente (cero inyección de comandos).
+                </p>
+
+                <div class="cc-master-bar">
+                    <button id="btn-tarea-master" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_ingesta_total')">🚀 Ejecutar Cadena de Ingesta Total</button>
+                    <span id="cc-estado" class="cc-badge cc-badge-idle">● En espera</span>
+                </div>
+
+                <div class="cc-groups">
+                    <div class="cc-group">
+                        <h4 class="cc-group-title">🧠 Recolección de Inteligencia</h4>
+                        <div class="cc-tasks">
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_deportivo')">🏟️ Centinela Deportivo · FotMob (J1-J17)</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_mercado')">💰 Centinela de Mercado · Caliente + Betway</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_progol')">🎟️ Centinela Progol · Concurso #2352</button>
+                        </div>
+                    </div>
+
+                    <div class="cc-group">
+                        <h4 class="cc-group-title">🗄️ Activos y Mantenimiento 3NF</h4>
+                        <div class="cc-tasks">
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('sincronizar_activos')">🖼️ Sincronizar Escudos y Logos</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')">🧹 Purga Selectiva de Snapshots</button>
+                        </div>
+                    </div>
+
+                    <div class="cc-group">
+                        <h4 class="cc-group-title">🛡️ Auditoría y Diagnóstico</h4>
+                        <div class="cc-tasks">
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pureza_vol1')">📐 Pureza Matemática · Tratado I</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_cartera_shield')">🔍 Invarianzas de Cartera · Shield</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('consultar_uso_llm')">🔑 Salud de Llaves Gemini y Tokens</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cc-terminal-shell">
+                    <div class="cc-terminal-head">
+                        <span>📡 Terminal de Streaming</span>
+                        <span id="cc-terminal-meta">tarea: — · exit: — · duración: —</span>
+                    </div>
+                    <div id="terminal-stream-output">[SISTEMA] Consola lista. Seleccione una tarea certificada de la whitelist para iniciar el despacho.</div>
+                </div>
+            </div>
+        </section>
 
     <!-- MODAL HUD: PROCESAMIENTO CUANTITATIVO EN VIVO (DARK FINTECH) -->
     <div id="modal-hud-procesamiento" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(5px); z-index: 20000; justify-content: center; align-items: center;">

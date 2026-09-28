@@ -683,9 +683,10 @@ let currentPortfolioData = null;
 
 function renderizarResultadosPortafolio(data) {
     currentPortfolioData = data;
-    const orders = data.ordenes || [];
-    const control = data.control || {};
-    const balance = data.balance || {};
+    // [DES-QBE-045] Consumo de las claves canónicas 3NF emitidas por markets.py (con fallback declarado).
+    const orders = data.ordenes_ejecucion_partidos || data.ordenes || [];
+    const control = data.control_portafolio || data.control || {};
+    const balance = data.balance_global_portafolio || data.balance || {};
     const meta = data.metadata || {};
 
     // 1. Encabezado Macro
@@ -776,6 +777,8 @@ function renderizarResultadosPortafolio(data) {
             const tablas = ord.proyecciones?.resultado_tablas_mxn || 0;
             const roi = ord.proyecciones?.roi_principal_porcentaje || 0;
             const cod = ord.estrategia_seleccionada?.codigo || "";
+            // [DES-QBE-045] Paleta canónica de las 9 familias estratégicas Q-BE.
+            const pal = _paletaEstrategia(cod);
             sumaInv += inv;
             sumaPremios += gan;
 
@@ -792,7 +795,7 @@ function renderizarResultadosPortafolio(data) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td style="font-weight:700; color:#fff;">${ord.partido}</td>
-                <td style="text-align:center;"><span class="badge-status-live" style="background:rgba(56,189,248,0.15); color:#38BDF8; border-color:#38BDF8;">${cod}</span></td>
+                <td style="text-align:center;"><span class="badge-status-live" style="background:${pal.bg}; color:${pal.fg}; border-color:${pal.borde};">${cod}</span></td>
                 <td style="text-align:right; font-weight:700;">$${inv.toFixed(2)}</td>
                 <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>
                 <td>${coberturaHtml}</td>
@@ -821,6 +824,9 @@ function renderizarResultadosPortafolio(data) {
             const b1 = ord.boletos?.boleto_1_seguro || {};
             const b2 = ord.boletos?.boleto_2_ganancia || {};
             const est = ord.estrategia_seleccionada || {};
+            // [DES-QBE-045] Paleta canónica de familia + distintivo de Pago Anticipado gobernado por bandera.
+            const pal = _paletaEstrategia(est.codigo || "");
+            const paBadgeHtml = _badgePagoAnticipado(ord, est);
             const proy = ord.proyecciones || {};
             const inv = ord.boletos?.inversion_partido_A_i || 0;
 
@@ -862,9 +868,9 @@ function renderizarResultadosPortafolio(data) {
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                     <div>
                         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
-                            <span class="badge-status-live" style="background:rgba(56,189,248,0.2); color:#38BDF8; border-color:#38BDF8; font-weight:800;">${est.codigo}</span>
+                            <span class="badge-status-live" style="background:${pal.bg}; color:${pal.fg}; border-color:${pal.borde}; font-weight:800;">${est.codigo}</span>
                             <span style="font-size:7.5pt; color:#cbd5e1;">${est.descripcion_ejecutiva}</span>
-                            <span style="font-size:7.5pt; color:#00E676; font-weight:700;">🏷️ ${est.linea_promocional || 'Pago Anticipado'}</span>
+                            ${paBadgeHtml}
                         </div>
                         <h3 style="margin:0; font-size:1.15rem; color:#fff;">${ord.partido}</h3>
                         <div style="font-size:7.5pt; color:#94A3B8; margin-top:3px;">⏰ ${ord.horario_evento} ${momiosCompletos ? `<span style="color:#64748B; margin:0 4px;">•</span> <span style="color:#38BDF8; font-weight:700;">${momiosCompletos}</span>` : ''}</div>
@@ -990,10 +996,14 @@ function _hidratarTablasRadiografia(p) {
 }
 
 async function abrirRadiografiaForense(matchId) {
-    if (!currentPortfolioData) return;
-    const analisisList = currentPortfolioData.partidos_analisis || [];
-    const p = analisisList.find(x => x.id_partido === matchId);
-    if (!p) return;
+    // [DES-QBE-045 cláusula 4] Autarquía de la Radiografía Forense: no exige cálculo de cartera previo.
+    // Fuente 1: análisis soberano de la cartera. Fuente 2: datos soberanos del Live Board (fixtures).
+    let p = (currentPortfolioData?.partidos_analisis || []).find(x => x.id_partido === matchId);
+    if (!p) {
+        const fixture = (currentLiveBoard?.fixtures || []).find(x => x.id_partido === matchId);
+        if (!fixture) return;
+        p = _adaptarFixtureARadiografia(fixture);
+    }
 
     document.getElementById("modal-radiografia-forense").style.display = "block";
     document.getElementById("rad-estrategia-badge").textContent = p.strategy_code || "QBE";
@@ -1206,12 +1216,405 @@ document.addEventListener('DOMContentLoaded', () => {
             const btnTxt = document.getElementById('btn-toggle-txt');
             const btnIcon = document.getElementById('btn-toggle-icon');
             const btn = document.getElementById('btn-toggle-standings');
-            if (btnTxt && btnIcon && btn) {
-                btnIcon.textContent = '◧';
-                btnTxt.textContent = 'Ver Tabla';
-                btn.classList.add('active-focus');
-            }
         }
     }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [DES-QBE-045] PALETA CANÓNICA DE LAS 9 ESTRATEGIAS Q-BE Y PAGO ANTICIPADO
+// Familias: D1/D2 (cian) · H1/H2 (verde) · R1/R2 (ámbar) · C1/C2 (violeta) · 00 (coral)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Paleta soberana por familia estratégica (LOGIC.md [LN-QBE-060-B], DESIGN.md [DES-QBE-045]). */
+const PALETA_ESTRATEGIAS_QBE = {
+    "QBE-D": { bg: "rgba(56,189,248,0.18)", fg: "#38BDF8", borde: "#38BDF8" },
+    "QBE-H": { bg: "rgba(0,230,118,0.18)", fg: "#00E676", borde: "#00E676" },
+    "QBE-R": { bg: "rgba(245,158,11,0.18)", fg: "#F59E0B", borde: "#F59E0B" },
+    "QBE-C": { bg: "rgba(168,85,247,0.18)", fg: "#A855F7", borde: "#A855F7" },
+    "QBE-00": { bg: "rgba(239,68,68,0.18)", fg: "#EF4444", borde: "#EF4444" }
+};
+
+/** Resuelve la familia canónica de un código; degrada a gris neutro si el código no está declarado. */
+function _paletaEstrategia(codigo) {
+    const cod = String(codigo || "").toUpperCase();
+    const familia = Object.keys(PALETA_ESTRATEGIAS_QBE).find(k => cod.startsWith(k));
+    return familia
+        ? PALETA_ESTRATEGIAS_QBE[familia]
+        : { bg: "rgba(148,163,184,0.15)", fg: "#94A3B8", borde: "#64748B" };
+}
+
+/** [DES-QBE-045] El distintivo (+PA) se gobierna por bandera booleana, nunca por el sufijo '+' heredado. */
+function _badgePagoAnticipado(ord, est) {
+    const activo = (ord && ord.pa_activo === true) || Boolean(est && est.linea_promocional);
+    if (!activo) return "";
+    const etiqueta = String((est && est.linea_promocional) || "Pago Anticipado").replace(/\+PA/gi, "").trim();
+    return `<span class="badge-status-live" style="background:rgba(0,230,118,0.12); color:#00E676; border-color:#00E676; font-size:7.5pt; font-weight:700;">🏷️ ${etiqueta} (+PA)</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [DES-QBE-046] SUB-VISTA QUINIELAS PROGOL — CONTRATO FÁCTICO CONSUMIDO
+//   GET  /api/markets/progol/slates/active  -> markets.py:497-509
+//   POST /api/markets/progol/optimize       -> progol_math.py:156-162
+// Cero mapeo a claves hipotéticas: la UI sirve al contrato real (desviación D-3 autorizada).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let currentProgolSlate = null;
+
+/** Conmuta la Mesa de Apuestas entre la sub-vista Sportsbook y la sub-vista Progol. */
+function conmutarSubvistaMercados(vista) {
+    const esProgol = vista === "progol";
+    const contSportsbook = document.getElementById("contenedor-sportsbook");
+    const contProgol = document.getElementById("contenedor-progol");
+    const btnSportsbook = document.getElementById("btn-subtab-sportsbook");
+    const btnProgol = document.getElementById("btn-subtab-progol");
+
+    if (contSportsbook) contSportsbook.style.display = esProgol ? "none" : "";
+    if (contProgol) contProgol.style.display = esProgol ? "" : "none";
+    if (btnSportsbook) btnSportsbook.classList.toggle("active", !esProgol);
+    if (btnProgol) btnProgol.classList.toggle("active", esProgol);
+
+    if (esProgol && !currentProgolSlate) cargarSlateProgolActivo();
+}
+
+/** Hidrata el encabezado y el retículo del concurso vigente desde la bóveda 3NF. */
+async function cargarSlateProgolActivo() {
+    const cont = document.getElementById("progol-reticulo-container");
+    if (!cont) return;
+    cont.innerHTML = '<div style="font-size: 8.5pt; color: #94A3B8;">Consultando bóveda 3NF…</div>';
+    try {
+        const resp = await fetch("/api/markets/progol/slates/active");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const slate = await resp.json();
+        currentProgolSlate = slate;
+        _renderEncabezadoProgol(slate);
+        _renderReticuloProgol(slate);
+    } catch (e) {
+        console.error("Fallo hidratando el concurso Progol:", e);
+        currentProgolSlate = null;
+        cont.innerHTML = `<div style="font-size: 8.5pt; color: #F87171;">⚠️ No fue posible leer la bóveda 3NF del concurso Progol (${e.message}). Cero cifras se muestran sin respaldo.</div>`;
+    }
+}
+
+/** [GOVERNANCE-01] Encabezado honesto: si la bóveda no declara un dato, se rotula con '—'. */
+function _renderEncabezadoProgol(slate) {
+    const elNombre = document.getElementById("progol-slate-nombre");
+    const elCasillas = document.getElementById("progol-slate-casillas");
+    const elBolsa = document.getElementById("progol-slate-bolsa");
+    const elCierre = document.getElementById("progol-slate-cierre");
+    const elFuente = document.getElementById("progol-sesgo-fuente");
+
+    const sinConcurso = !slate || !slate.slate_id;
+    if (elNombre) {
+        elNombre.textContent = sinConcurso
+            ? "Sin concurso Progol OPEN en la bóveda 3NF"
+            : (slate.name || "Concurso Progol");
+    }
+    if (elCasillas) {
+        elCasillas.textContent = sinConcurso
+            ? "—"
+            : `${slate.items_total} casillas · ${slate.soberanos} soberanas (3NF) · ${slate.priors} con Prior Base (1/3)`;
+    }
+    if (elBolsa) {
+        const bolsa = slate ? slate.bolsa_garantizada_mxn : null;
+        elBolsa.textContent = (bolsa === null || bolsa === undefined)
+            ? "—"
+            : `$${Number(bolsa).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+    }
+    if (elCierre) {
+        elCierre.textContent = `Tiempo límite: ${(slate && slate.fecha_cierre) ? slate.fecha_cierre : "—"}`;
+    }
+    if (elFuente) {
+        const fuente = slate ? slate.sesgo_fuente : null;
+        elFuente.textContent = (fuente === "MOMIOS_DE_CASINO")
+            ? "📡 Contraste con venta pública: momios de casino de la jornada"
+            : `📡 Contraste con venta pública: no disponible (${fuente || "SIN_BOVEDA"})`;
+    }
+}
+
+/** Retículo de casillas del concurso (14 PROGOL REGULAR + 7 REVANCHA) leído de la bóveda 3NF. */
+function _renderReticuloProgol(slate) {
+    const cont = document.getElementById("progol-reticulo-container");
+    if (!cont) return;
+    const items = (slate && slate.items) || [];
+    if (items.length === 0) {
+        cont.textContent = "";
+        const aviso = document.createElement("div");
+        aviso.style.cssText = "font-size: 8.5pt; color: #94A3B8;";
+        aviso.textContent = `⚠️ La bóveda 3NF no declara casillas para el concurso activo (fuente: ${(slate && slate.sesgo_fuente) || "SIN_BOVEDA"}). No se fabrican casillas ni probabilidades.`;
+        cont.appendChild(aviso);
+        return;
+    }
+
+    const fmtP = (v) => (v === null || v === undefined) ? "—" : `${(Number(v) * 100).toFixed(1)}%`;
+
+    const filas = items.map(it => {
+        const p = it.p_qbe || {};
+        const badge = it.es_prior_ignorancia
+            ? '<span class="badge-status-live" style="background:rgba(148,163,184,0.15); color:#cbd5e1; border-color:#64748B;">Prior Base (1/3)</span>'
+            : '<span class="badge-status-live" style="background:rgba(0,230,118,0.15); color:#00E676; border-color:#00E676;">Soberano 3NF</span>';
+        return `
+            <tr>
+                <td style="text-align:center; font-weight:800; color:#38BDF8;">${it.order}</td>
+                <td style="text-align:center; font-size:7.5pt; color:#94A3B8;">${it.tipo_concurso || "—"}</td>
+                <td style="font-weight:700; color:#fff;">${it.local || "—"}</td>
+                <td style="font-weight:700; color:#fff;">${it.visitante || "—"}</td>
+                <td style="text-align:center;">${fmtP(p.L)}</td>
+                <td style="text-align:center;">${fmtP(p.E)}</td>
+                <td style="text-align:center;">${fmtP(p.V)}</td>
+                <td style="text-align:center;">${badge}</td>
+                <td style="text-align:center;">${_badgeSesgoProgol(it)}</td>
+            </tr>`;
+    }).join("");
+
+    cont.innerHTML = `
+        <table class="fintech-table" style="width: 100%; font-size: 8.5pt;">
+            <thead>
+                <tr>
+                    <th>#</th><th>Bloque</th><th>Local</th><th>Visitante</th>
+                    <th>P(1)</th><th>P(X)</th><th>P(2)</th><th>Origen</th><th>Sesgo público</th>
+                </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+        </table>`;
+}
+
+/** [GOVERNANCE-01] El sesgo sólo se declara con captura fáctica de momios públicos de la jornada. */
+function _badgeSesgoProgol(it) {
+    const motivo = it.sesgo_motivo || "";
+    if (!it.sesgo_disponible) {
+        return `<span style="font-size:7.2pt; color:#64748B;" title="${motivo}">Venta pública no ingesta</span>`;
+    }
+    const s = it.analisis_sesgo || {};
+    const pct = (v) => `${(Number(v || 0) * 100).toFixed(1)}%`;
+    const detalle = `Sesgo L ${pct(s.sesgo_local)} · X ${pct(s.sesgo_empate)} · V ${pct(s.sesgo_visitante)}`;
+    if (s.alerta_sesgo) {
+        return `<span class="badge-status-live" style="background:rgba(245,158,11,0.15); color:#F59E0B; border-color:#F59E0B;" title="${detalle}">⚠️ ${s.recomendacion_cobertura || "Sesgo popular"}</span>`;
+    }
+    return `<span style="font-size:7.2pt; color:#00E676;" title="${detalle}">${s.recomendacion_cobertura || "Sin sesgo explotable"}</span>`;
+}
+
+/** Ejecuta el optimizador combinatorio del backend (Costo = 15.00 × 2^D × 3^T ≤ presupuesto). */
+async function ejecutarOptimizadorProgol() {
+    const cont = document.getElementById("progol-resultado-optimizador");
+    const input = document.getElementById("input-progol-presupuesto");
+    if (!cont) return;
+
+    const presupuesto = parseFloat(input ? input.value : "");
+    if (!Number.isFinite(presupuesto) || presupuesto < 15.0) {
+        cont.style.display = "block";
+        cont.textContent = "";
+        const aviso = document.createElement("div");
+        aviso.style.cssText = "font-size: 8.5pt; color: #F87171;";
+        aviso.textContent = "⚠️ El presupuesto mínimo aceptado es $15.00 MXN (invariante del request schema ProgolOptimizeRequest).";
+        cont.appendChild(aviso);
+        return;
+    }
+
+    cont.style.display = "block";
+    cont.textContent = "";
+    const carga = document.createElement("div");
+    carga.style.cssText = "font-size: 8.5pt; color: #38BDF8;";
+    carga.textContent = "⚡ Optimizando cobertura 2^D × 3^T sobre la bóveda 3NF…";
+    cont.appendChild(carga);
+
+    try {
+        const resp = await fetch("/api/markets/progol/optimize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                slate_id: currentProgolSlate ? currentProgolSlate.slate_id : null,
+                presupuesto_mxn: presupuesto
+            })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        _renderResultadoOptimizadorProgol(await resp.json());
+    } catch (e) {
+        console.error("Fallo optimizando Progol:", e);
+        cont.textContent = "";
+        const error = document.createElement("div");
+        error.style.cssText = "font-size: 8.5pt; color: #F87171;";
+        error.textContent = `⚠️ Sin concurso optimizable en la bóveda 3NF (${e.message}). Cero matrices se muestran sin respaldo.`;
+        cont.appendChild(error);
+    }
+}
+
+/** [D-3] Renderiza la matriz con las claves FÁCTICAS del plano (progol_math.py:156-162). */
+function _renderResultadoOptimizadorProgol(data) {
+    const cont = document.getElementById("progol-resultado-optimizador");
+    if (!cont || !data) return;
+
+    const matriz = data.matriz_quiniela || [];
+    const casilla = (jugada, etiqueta) => jugada
+        ? `<span style="color:#38BDF8; font-weight:900;" title="Se juega ${etiqueta}">●</span>`
+        : '<span style="color:#334155;">·</span>';
+
+    if (matriz.length === 0) {
+        cont.textContent = "";
+        const aviso = document.createElement("div");
+        aviso.style.cssText = "font-size: 8.5pt; color: #94A3B8;";
+        aviso.textContent = "⚠️ El optimizador no devolvió matriz de casillas: la bóveda 3NF no expone el bloque REGULAR del concurso.";
+        cont.appendChild(aviso);
+        return;
+    }
+
+    const filas = matriz.map(row => `
+        <tr>
+            <td style="text-align:center; font-weight:800; color:#38BDF8;">${row.order}</td>
+            <td style="font-weight:700; color:#fff;">${row.local || "—"} vs ${row.visitante || "—"}</td>
+            <td style="text-align:center;">${casilla(row.juega_L, "1")}</td>
+            <td style="text-align:center;">${casilla(row.juega_E, "X")}</td>
+            <td style="text-align:center;">${casilla(row.juega_V, "2")}</td>
+            <td style="font-size:7.5pt; color:#cbd5e1;">${row.recomendacion || "—"}</td>
+            <td style="text-align:center;">${row.alerta_sesgo ? "⚠️" : "—"}</td>
+        </tr>`).join("");
+
+    cont.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+            <div>
+                <span style="font-size: 7.2pt; color: #38BDF8; text-transform: uppercase; font-weight: 800;">Matriz de Quiniela Optimizada</span>
+                <h3 style="margin: 2px 0 0 0; font-size: 1.05rem; color: #fff;">${data.combinaciones_totales} combinaciones · ${data.dobles_asignados} dobles · ${data.triples_asignados} triples</h3>
+            </div>
+            <div style="text-align: right;">
+                <span style="font-size: 7pt; color: #94A3B8; text-transform: uppercase;">Costo real del boleto</span>
+                <div style="font-size: 1.15rem; font-weight: 900; color: #00E676;">$${Number(data.costo_total_mxn || 0).toFixed(2)} MXN</div>
+            </div>
+        </div>
+        <table class="fintech-table" style="width: 100%; font-size: 8.5pt;">
+            <thead>
+                <tr><th>#</th><th>Partido</th><th>1</th><th>X</th><th>2</th><th>Recomendación</th><th>Sesgo</th></tr>
+            </thead>
+            <tbody>${filas}</tbody>
+        </table>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [DES-QBE-045 cláusula 4] ADAPTADOR AUTÁRQUICO DEL LIVE BOARD HACIA LA RADIOGRAFÍA
+// Sólo se escriben claves sobre hechos presentes en el fixture (SovereignDistribution +
+// momios 1X2). Si un dato no existe, la clave no se crea: cero cifras inventadas.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function _adaptarFixtureARadiografia(f) {
+    const num = (v) => (v === null || v === undefined || v === "") ? null : Number(v);
+    const etiqueta = `${f.local || "—"} vs ${f.visitante || "—"}`;
+    const momios = f.momios || {};
+
+    const p = {
+        id_partido: f.id_partido,
+        partido: etiqueta,
+        partido_nombre: etiqueta,
+        origen_datos: "LIVE_BOARD_SOBERANO"
+    };
+
+    // Tabla Pronóstico vs Mercado: soberana persistida contra el momio 1X2 del fixture.
+    const claves = [
+        { clave: "L", resultado: f.local || "Local", soberana: num(f.p_local) },
+        { clave: "E", resultado: "Empate", soberana: num(f.p_empate) },
+        { clave: "V", resultado: f.visitante || "Visitante", soberana: num(f.p_visitante) }
+    ];
+    const filas = [];
+    claves.forEach(({ clave, resultado, soberana }) => {
+        if (soberana === null) return;
+        const momio = num(momios[clave]);
+        const probCasino = (momio !== null && momio > 0) ? (1.0 / momio) * 100.0 : null;
+        const probReal = soberana * 100.0;
+        filas.push({
+            resultado: resultado,
+            prob_real: probReal,
+            momio: momio,
+            prob_casino: probCasino,
+            edge: (probCasino === null) ? 0.0 : probReal - probCasino
+        });
+    });
+    if (filas.length > 0) p.probabilidades_3vias = filas;
+
+    // Poisson Boxes: lambdas persistidos; el total es la suma aritmética y sólo si ambos existen.
+    const lambdaLocal = num(f.lambda_home);
+    const lambdaVisita = num(f.lambda_away);
+    if (lambdaLocal !== null) p.lambda_local = lambdaLocal;
+    if (lambdaVisita !== null) p.mu_visita = lambdaVisita;
+    if (lambdaLocal !== null && lambdaVisita !== null) p.xg_total = lambdaLocal + lambdaVisita;
+    const phiLead2 = num(f.phi_lead2_home);
+    if (phiLead2 !== null) p.phi_lead2_pct = phiLead2 * 100.0;
+
+    return p;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// [DES-QBE-048 / ARCH-1.4.12] CENTRO DE CONTROL — DESPACHO GOBERNADO DE TAREAS
+// El cliente SÓLO transmite el identificador certificado: el servidor resuelve la
+// whitelist estricta y materializa el comando (cero texto libre, cero inyección).
+// ══════════════════════════════════════════════════════════════════════════════
+
+function bloquearBotonesAdmin(congelado) {
+    document.querySelectorAll('.cc-task-btn, .cc-btn-master').forEach(btn => {
+        btn.disabled = !!congelado;
+    });
+}
+
+async function ejecutarTareaAdmin(taskId) {
+    const identificador = String(taskId || '').trim();
+    if (!identificador) return;
+
+    const consola = document.getElementById('terminal-stream-output');
+    const meta = document.getElementById('cc-terminal-meta');
+    const badge = document.getElementById('cc-estado');
+
+    bloquearBotonesAdmin(true);
+    if (badge) {
+        badge.className = 'cc-badge cc-badge-running';
+        badge.textContent = `● En ejecución: ${identificador}`;
+    }
+    if (meta) meta.textContent = `tarea: ${identificador} · exit: en curso · duración: —`;
+    if (consola) consola.textContent = `[SISTEMA] Despachando tarea '${identificador}'...\n`;
+
+    try {
+        const resp = await fetch('/api/admin/tasks/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id: identificador })
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
+        }
+
+        const data = await resp.json();
+        const salidaTexto = (data.output && data.output.length) ? data.output : '[SISTEMA] La tarea no emitió salida estándar.';
+
+        // [GOVERNANCE-01] La salida se pinta como TEXTO PLANO: la consola nunca interpreta HTML.
+        if (consola) {
+            consola.textContent = salidaTexto;
+            consola.scrollTop = consola.scrollHeight;
+        }
+
+        const exito = Number(data.exit_code) === 0;
+        if (badge) {
+            badge.className = `cc-badge ${exito ? 'cc-badge-ok' : 'cc-badge-fail'}`;
+            badge.textContent = `${exito ? '✔ Completada' : '✖ Fallida'}: ${identificador}`;
+        }
+        if (meta) meta.textContent = `tarea: ${identificador} · exit: ${data.exit_code} · duración: ${data.duration_s}s`;
+    } catch (e) {
+        console.error('Fallo despachando tarea administrativa:', e);
+        if (badge) {
+            badge.className = 'cc-badge cc-badge-fail';
+            badge.textContent = `✖ Error de despacho: ${identificador}`;
+        }
+        if (meta) meta.textContent = `tarea: ${identificador} · exit: — · duración: —`;
+        if (consola) consola.textContent = `[ERROR] Despacho fallido: ${e.message}`;
+    } finally {
+        bloquearBotonesAdmin(false);
+    }
+}
+
+window.ejecutarTareaAdmin = ejecutarTareaAdmin;
+window.bloquearBotonesAdmin = bloquearBotonesAdmin;
+
+window.conmutarSubvistaMercados = conmutarSubvistaMercados;
+window.cargarSlateProgolActivo = cargarSlateProgolActivo;
+window.ejecutarOptimizadorProgol = ejecutarOptimizadorProgol;
+
+// Arranque de la SPA: se hidrata el concurso Progol vigente sin bloquear el render del Live Board.
+document.addEventListener("DOMContentLoaded", function () {
+    cargarSlateProgolActivo();
 });
 

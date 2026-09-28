@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from src.storage.database import Base
@@ -181,19 +181,47 @@ class SovereignDistribution(Base):
 
 
 class Slate(Base):
+    """
+    [ARCH-1.5.1-C] Cabecera de concurso de quiniela (Progol Regular + Revancha).
+    Régimen: [DIRGEN-STRICT] — diccionario de datos sellado, sin margen creativo.
+    """
     __tablename__ = "slates"
-    id = Column(String(50), primary_key=True)  # Ej: 'PROGOL_2245', 'PRONOSPORTS_754'
-    name = Column(String(100), nullable=False)
-    market_type = Column(String(50), default="PROGOL")  # 'PROGOL', 'PRONOSPORTS', 'MIXTO'
-    closing_utc = Column(DateTime, nullable=True)
+    id = Column(String(50), primary_key=True)  # Ej: 'PROGOL-2352', 'PRONOSPORTS-754'
+    name = Column(String(120), nullable=False)
+    competition_id = Column(String(50), ForeignKey("competitions.id"), nullable=True)
+    matchday_num = Column(Integer, nullable=True)
+    bolsa_estimada = Column(Float, nullable=True)
+    fecha_cierre = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="OPEN")  # OPEN | CLOSED | SETTLED
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    items = relationship("SlateItem", back_populates="slate", cascade="all, delete-orphan")
 
 
 class SlateItem(Base):
+    """
+    [ARCH-1.5.1-C] Casilla de quiniela — 21 por concurso (1..14 REGULAR, 15..21 REVANCHA).
+    [LN-QBE-075] `match_id` es NULLABLE: casilla sin vínculo soberano => Prior de Ignorancia
+    Fiduciario (0.3333, 0.3333, 0.3334) con `es_prior_ignorancia = True`.
+    """
     __tablename__ = "slate_items"
-    slate_id = Column(String(50), ForeignKey("slates.id"), primary_key=True)
-    match_id = Column(String(100), ForeignKey("matches.id"), primary_key=True)
-    item_order = Column(Integer, nullable=False)  # Orden 1 a 14 en la quiniela
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    slate_id = Column(String(50), ForeignKey("slates.id"), nullable=False, index=True)
+    tipo_concurso = Column(String(20), nullable=False, default="REGULAR")  # REGULAR | REVANCHA
+    position = Column(Integer, nullable=False)  # 1..21 en la quiniela
+    local_raw = Column(String(100), nullable=True)
+    visitante_raw = Column(String(100), nullable=True)
+    local_canonico = Column(String(100), nullable=True)
+    visitante_canonico = Column(String(100), nullable=True)
+    match_id = Column(String(100), ForeignKey("matches.id"), nullable=True)
+    p_local = Column(Float, nullable=True)
+    p_empate = Column(Float, nullable=True)
+    p_visitante = Column(Float, nullable=True)
+    es_prior_ignorancia = Column(Boolean, nullable=False, default=False)
+
+    slate = relationship("Slate", back_populates="items")
+
+    __table_args__ = (UniqueConstraint("slate_id", "position", name="uq_slate_item_position"),)
 
 
 

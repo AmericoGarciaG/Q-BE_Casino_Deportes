@@ -55,6 +55,14 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
  └──────────────┘
 ```
 
+### 1.1 Notas de Derogación Normativa (Enmienda P.I.R. — Tratado Volumen II)
+
+* **[DEROGADO: Se prohíbe tratar a D1+, H1+ o H2+ como estrategias independientes. Las estrategias canónicas son exactamente 9 (QBE-D1 a QBE-00); el Pago Anticipado es un atributo contractual ortogonal (pago_anticipado: bool)].**
+* **Alcance:** Las entidades históricas `QBE-D1+`, `QBE-H1+` y `QBE-H2+` (referidas en `[LN-QBE-060]` y `[LN-QBE-070]`) pierden estatus de estrategia independiente: son exactamente la misma estrategia canónica portando la bandera ortogonal `pago_anticipado = True`, propagada conforme a `[ARCH-1.6.9]`.
+* **Partición Canónica Vigente:** Las estrategias canónicas son exactamente 9 (`QBE-D1`, `QBE-D2`, `QBE-H1`, `QBE-H2`, `QBE-R1`, `QBE-R2`, `QBE-C1`, `QBE-C2` y `QBE-00`), mutuamente excluyentes y colectivamente exhaustivas. La cascada determinista de asignación queda legislada en `[LN-QBE-060-B]` y sellada en `[VAULT-CORE-070-TRIAJE]`.
+* **[DEROGADO: Se deroga formalmente el método select_best_strategy basado en comparaciones heurísticas de utilidad arbitraria y generación de sufijos '+' (QBE-D1+, QBE-H1+, QBE-H2+). A partir de la Fase 5, la selección de estrategia se rige de forma unívoca por triaje_determinista_9_estrategias ([LN-QBE-060-B]), y el Pago Anticipado se desacopla como el atributo booleano ortogonal pa_activo: bool].**
+* **Alcance (Fase 5 — Derogación de la Escalera Heurística V2.5):** `PortfolioEngine.select_best_strategy` deja de ser fuente de verdad de la selección: la partición canónica se resuelve de forma unívoca mediante `triaje_determinista_9_estrategias(payload, cuotas)` (`[LN-QBE-060-B]` / `[VAULT-CORE-070-TRIAJE]`), y el Pago Anticipado viaja como el atributo booleano ortogonal `pa_activo: bool`, contractualizado en `[LN-QBE-070-C]`. Queda prohibida toda comparación de utilidad arbitraria ($U_{\text{Directo}}$, $U_{\text{Cobertura}}$) y toda generación de sufijos `+` como identidad de estrategia. Sustituto legislado: `[LN-QBE-070-D]`.
+
 ---
 
 ## 2. CATÁLOGO MAESTRO DE NODOS LÓGICOS IPO
@@ -378,10 +386,11 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - **Candado 3:** Inmunidad histórica: $P_{\text{H2H}}(X2) \ge 0.4000$.
      - Si no supera los 3 candados $\implies \text{viable: False}$ (Veto Inverso).
 
-### [LN-QBE-060-R] Estado de Sueño Profundo para la Familia R (R1 y R2) [GOVERNANCE] [ALGO-PROTECTED]
-* **Estado:** DESCONECTADA / EN REFORMULACIÓN HOLÍSTICA.
-* **Mandato:** Queda estrictamente prohibida la emisión de órdenes bajo los códigos `QBE-R1` y `QBE-R2` en el evaluador de estrategias.
-* **Comportamiento:** Toda evaluación de R1 y R2 debe retornar `viable = False` con el motivo `"ESTRATEGIA EN SUEÑO PROFUNDO (REFORMULACIÓN HOLÍSTICA EN CURSO)"`. Todo partido con ineficiencia en el no-favorito o empate debe derivar a `QBE-H2` o a `QBE-00` (Veto preventivo).
+### [LN-QBE-060-R] NOTA FORMAL DE DEROGACIÓN — Sueño Profundo de la Familia R (R1 y R2) [GOVERNANCE]
+
+* **Estado:** `DEROGADO` — Sustituido por `[LN-QBE-060-R-AWAKEN]`.
+* **[DEROGADO por Enmienda LN-QBE-060-R-AWAKEN: Se cancela el sueño profundo; las estrategias R1 y R2 quedan activas bajo las Cuatro Leyes de Hierro del Underdog].**
+* **Efecto Normativo:** Queda revocado el mandato de retorno forzado `viable = False` con motivo `"ESTRATEGIA EN SUEÑO PROFUNDO (REFORMULACIÓN HOLÍSTICA EN CURSO)"`. Los códigos `QBE-R1` y `QBE-R2` regresan al catálogo evaluable, sujetos exclusivamente a las Cuatro Leyes de Hierro de `[LN-QBE-060-R-AWAKEN]` y a los Candados Fácticos vigentes de `[LN-QBE-060]`.
 
 * **Candado 4 para Familia R (Filtro Anti-Contracorriente Obligatorio) [BIZ-LOGIC] [ALGO-PROTECTED]:**
   - Queda estrictamente prohibido autorizar estrategias de la Familia R (`QBE-R1` o `QBE-R2`) si el favorito del mercado mantiene la probabilidad individual dominante en el modelo Q-BE ($P_{\text{Fav}} > P_{\text{Und}}$) y el no-favorito posee ventaja matemática negativa ($Edge_{\text{Und}} \le 0.0$).
@@ -390,6 +399,33 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   - *Motivo:* Previene apostar capital a la derrota del desenlace más probable cuando el valor real está concentrado exclusivamente en el empate. El partido debe derivar a `QBE-H2` o a `QBE-00` (Veto preventivo).
 * **O (Output):** `StrategyComplianceMatrix`.
 * **Φ (Transición):** Hacia **[LN-QBE-070]**.
+
+---
+
+### ID: [LN-QBE-060-B] Partición Exhaustiva de las 9 Estrategias Canónicas y Cascada de Triaje
+
+* **Ω (Resumen):** Partición formal del espacio de inversión en exactamente nueve estrategias mutuamente excluyentes y colectivamente exhaustivas: `QBE-D1`, `QBE-D2`, `QBE-H1`, `QBE-H2`, `QBE-R1`, `QBE-R2`, `QBE-C1`, `QBE-C2` y `QBE-00`.
+* **I (Input):** Tupla $\mathcal{T}_i = \langle \vec{p}_i, \Delta_{\text{epist}}, S(\mathcal{I}_i), \vec{O}_i, \vec{\alpha}_i, \theta^*, \Phi_{\text{Lead2}}, Q_{\text{mod}} \rangle$.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  Árbol de decisión determinista en cascada de 7 pasos:
+  1. Si $S(\mathcal{I}_i) = 0 \lor \Delta_{\text{epist}} > 0.12 \implies$ **`QBE-00`** (Cuarentena / Capital = $\$0.00$).
+  2. Si $p_{\text{fav}} \ge 0.65 \land \Delta_{\text{epist}} \le 0.04 \land \alpha_{\text{fav}} > 0.05 \implies$ **`QBE-D1`** (Local) o **`QBE-D2`** (Visita).
+  3. Si cumple las Cuatro Leyes del Underdog ($\alpha_{\text{dog}} \ge +0.20 \land O_{\text{dog}} \ge 3.50 \land \Delta_{\text{epist}} \le 0.05 \land Q_{\text{mod}} \ge 0.98) \implies$ **`QBE-R1`** (Dog Local) o **`QBE-R2`** (Dog Visita).
+  4. Si $0.40 \le p_{\text{fav}} < 0.65 \land O_{\text{Empate}} > \theta^* \land \alpha_H > 0 \implies$ **`QBE-H1`** (Local) o **`QBE-H2`** (Visita) con seguro $V=0$.
+  5. Si $O_{\text{Empate}} \le \theta^*$ (empate caro) $\land \alpha_{\text{DNB}} > 0.05 \implies$ **`QBE-C1`** (Draw No Bet / AH 0.0).
+  6. Si $\max(\alpha_{1X2}) \le 0 \land \alpha_{\text{Totales}} > 0.06 \implies$ **`QBE-C2`** (Derivado Totales en $M_{xy}^*$).
+  7. Por defecto ante ausencia de valor $\implies$ **`QBE-00`** (Abstención).
+* **O (Output):** `strategy_code: str`, `pago_anticipado: bool`, `alpha_neto: float`.
+* **Φ (Transición):** Hacia [LN-QBE-070-B] (Asignación de Capital).
+
+---
+
+### ID: [LN-QBE-060-R-AWAKEN] Las Cuatro Leyes de Hierro del Underdog (Familia R)
+* **Ω (Resumen):** Condiciones sine qua non para autorizar posiciones en perros de cuota alta ($O \ge 3.50$):
+  - **Ley 1:** Retorno neto esperado $\alpha_{\text{dog}} \ge +0.20$ ($+20.0\%$ de EV neto).
+  - **Ley 2:** Discrepancia epistémica inter-generadores $\Delta_{\text{epist}} \le 0.05$.
+  - **Ley 3:** Exposición máxima acotada por evento: $B_{\text{dog}} \le 0.015 \cdot \text{Bankroll}$ (máximo 1.5% del capital total).
+  - **Ley 4:** Factor contextual $Q_{\text{mod}}^{\text{dog}} \ge 0.98$ (sin bajas críticas en el perro).
 
 ---
 
@@ -410,11 +446,15 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      $$U_{\text{Cobertura}} = EV_{\text{Cobertura}} \times (1.0 - \Psi_{\text{Ruina}})$$
      - Si $U_{\text{Directo}} > U_{\text{Cobertura}} \land \Psi_{\text{Ruina}} \le 0.08 \implies$ Seleccionar **`QBE-D1+` (o `D1`)**.
   4. **Escalera de Prioridad:** `H2+` $\rightarrow$ Max($U$) entre `D1+/H1+` $\rightarrow$ Max($U$) entre `D1/H1` $\rightarrow$ `H2` $\rightarrow$ `R1/R2` $\rightarrow$ `QBE-00`.
+     * **[DEROGADO en Fase 5]:** el método `select_best_strategy` basado en comparaciones heurísticas de utilidad arbitraria ($U_{\text{Directo}}$, $U_{\text{Cobertura}}$) y en la generación de sufijos `+` (`QBE-D1+`, `QBE-H1+`, `QBE-H2+`) queda **prohibido** como identidad de estrategia. La selección se rige de forma unívoca por `triaje_determinista_9_estrategias` (`[LN-QBE-060-B]`) y el Pago Anticipado se desacopla como el atributo booleano ortogonal `pa_activo: bool`. Sustituto legislado: `[LN-QBE-070-D]`.
   5. **Asignación de Capital:**
      - $S_i = \frac{EV_i}{\Psi_i}$, $w_i = \frac{S_i}{\sum S_j}$.
      - $\text{Bolsa}_{\text{Core}} = B \times \min(0.25, 0.06 \cdot K)$.
-     - $\text{Cap}_i = \min(0.08, \max(0.02, \frac{EV_i}{3.0 \cdot \Psi_i}))$.
-     - $A_i = \min(\text{Bolsa}_{\text{Core}} \times w_i, B \times \text{Cap}_i)$ con piso operativo de $4.00 MXN.
+     - $\text{Cap}_i$ — **[DEROGADO en Fase 4: el divisor heurístico `3.0` y el piso artificial `0.02` quedan erradicados por [LN-QBE-070-B]]**
+       La fórmula histórica $\text{Cap}_i = \min(0.08, \max(0.02, \frac{EV_i}{3.0 \cdot \Psi_i}))$ queda **prohibida** por (a) contener el número mágico `3.0` y (b) clavar un piso artificial `0.02` contrario a la [INVARIANZA #7].
+       Sustituto canónico — **Kelly Fraccional Atenuado**: $\text{Cap}_i = \texttt{calcular\_kelly\_atenuado}(p_i, O_i, \Delta_{\text{epist}, i}) = \gamma_{\text{Kelly}} \cdot \frac{\alpha_i}{O_i - 1} \cdot \Psi_{\text{epist}}(\Delta_{\text{epist}})$, con $\gamma_{\text{Kelly}} = 0.25$, techo duro $0.0800$ y **cero pisos artificiales**. Fuente única: `[VAULT-CORE-070-KELLY]` / `src/core/contracts/portfolio_math.py`.
+       **Nota de materialización (Fase 4):** la sustitución directa en `PortfolioEngine.build_plan` exige que el contrato de `approved_matches` exponga $p_i$, $O_i$ y $\Delta_{\text{epist}}$. Mientras ese contrato no se extienda, el techo de cartera se aplica con `aplicar_hard_caps_constitucionales` (8% individual / 25% global) y el piso con `[LN-QBE-071]`. Nodo de seguimiento declarado en `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-070-073.md`.
+     - $A_i = \min(\text{Bolsa}_{\text{Core}} \times w_i, B \times \text{Cap}_i)$ con **piso de ventanilla canónico de $2.00 MXN** `[LN-QBE-071]` (`PISO_MINIMO_BOLETO`). El literal histórico `4.00` queda derogado por no estar legislado en la bóveda.
   6. **Dutching Exacto:**
      - Familia H2: Boleto 1 (Seguro Fav) $= A_i / O_{\text{Fav}}$, Boleto 2 (Ganancia Emp) $= A_i - \text{Boleto 1}$.
      - Familia H1 / R1: Boleto 1 (Seguro Emp) $= A_i / O_{\text{Emp}}$, Boleto 2 $= A_i - \text{Boleto 1}$.
@@ -425,6 +465,55 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - Techo estricto: $EV_{\text{Global}} \le \sum_{i=1}^K \text{Ganancia\_Máxima\_Partido}_i$.
 * **O (Output):** `PortfolioExecutionPlan`.
 * **Φ (Transición):** Hacia **[LN-QBE-013]**, **[LN-QBE-014]** y **[LN-QBE-090]**.
+
+---
+
+### ID: [LN-QBE-070-B] Asignación con Kelly Fraccional Atenuado y Hard-Caps Constitucionales
+
+* **Ω (Resumen):** Cálculo analítico del tamaño de posición libre de números mágicos:
+  $$f_{\text{adj}}^* = \gamma_{\text{Kelly}} \cdot f^* \cdot \Psi_{\text{epist}}(\Delta_{\text{epist}})$$
+  donde $\gamma_{\text{Kelly}} = 0.25$ (Cuarto de Kelly) y $\Psi_{\text{epist}} = \max\left(0, 1 - (\Delta_{\text{epist}} / 0.12)^2\right)$.
+* **Hard-Caps de Preservación Innegociables:**
+  - Partido individual: $B_i \le 0.0800 \cdot B_{\text{total}}$ (máximo 8.0%).
+  - Cartera global de jornada: $\sum B_i \le 0.2500 \cdot B_{\text{total}}$ (máximo 25.0%).
+  - Techo Aritmético: $EV_{\text{Cartera}} \le \sum \text{Ganancia\_Máxima\_Neta}_i$.
+
+### ID: [LN-QBE-070-C] Contrato Extendido de Partidos Candidatos (CandidateMatchPayload)
+* **Ω (Resumen):** Garantiza que cada partido entregado al motor de portafolios transporte íntegros los estratos de probabilidad soberana e incertidumbre epistémica, permitiendo que la asignación de Kelly opere sobre matemáticas analíticas puras sin atajos ni proxies empíricos.
+* **I (Input):** Snapshot relacional 3NF de Fixture y SovereignDistribution.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  Todo diccionario de partido aprobado en `approved_matches` debe contener obligatoriamente:
+  - `id_partido`: str
+  - `partido_nombre`: str
+  - `p_fav`: float (probabilidad soberana del favorito $\in (0, 1)$)
+  - `p_emp`: float (probabilidad soberana del empate)
+  - `p_und`: float (probabilidad soberana del underdog)
+  - `delta_epist`: float (discrepancia ponderada $\Delta_{\text{epist}} \in [0, 1)$)
+  - `psi_epist`: float (factor cuadrático de atenuación $\Psi_{\text{epist}} \in [0, 1]$)
+  - `phi_lead2`: float (tasa de Pago Anticipado de Désiré André)
+  - `q_mod_fav`, `q_mod_und`: float (factores contextuales de fuerza mayor)
+  - `odd_fav`, `odd_emp`, `odd_und`: float (cuotas comerciales efectivas $> 1.0$)
+  - `fav_name`, `und_name`: str
+  - `pago_anticipado`: bool
+* **O (Output):** Payload certificado listo para alimentar `build_plan()`.
+* **Φ (Transición):** Hacia [LN-QBE-070-B] (Kelly fraccional y Hard-Caps).
+
+---
+
+### ID: [LN-QBE-070-D] Orquestación Analítica de Cartera en build_plan()
+* **Ω (Resumen):** Subordina la construcción de la cartera en `src/core/portfolio.py` a las funciones canónicas inmutables de `portfolio_math.py`:
+  1. Ordenamiento previo de los partidos mediante `calcular_ranking_friccion(approved_matches)`.
+  2. Dimensionamiento de cada posición mediante `calcular_kelly_atenuado(p_fav, o_fav, delta_epist, gamma_kelly=0.25)`.
+  3. Aplicación estricta de topes mediante `aplicar_hard_caps_constitucionales(inversiones, bankroll)`.
+  4. Escalamiento al piso de $\$2.00\text{ MXN}$ mediante `escalar_a_piso_ventanilla()` preservando $V=0$.
+
+---
+
+### ID: [LN-QBE-073-B] Algoritmo de Ranking de Fricción de Jornada
+
+* **Ω (Resumen):** Ordenamiento formal de la cartelera por Calidad Distributiva:
+  $$\text{Score}_i = \left( \frac{\alpha_i^*}{\Delta_{\text{epist}, i} + 0.01} \right) \cdot \Psi_{\text{epist}, i} \cdot \mathbb{I}_{\{\text{Estrategia}_i \ne \text{QBE-00}\}}$$
+* Los partidos se ordenan descendentemente según $\text{Score}_i$, priorizando activos de alta convicción y gran $+EV$.
 
 ---
 
@@ -674,6 +763,27 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   2. **Regla de Asignación:** Ordena los 14 encuentros por magnitud de sesgo popular descendente ($|\text{Sesgo}_k|$). Asigna los Triples a los partidos de máxima incertidumbre/sesgo, los Dobles a los partidos con sesgo $\ge +0.20$, y fija como "Bases Simples" los partidos de alta probabilidad ($P_L \ge 0.65$ o $P_V \ge 0.65$).
 * **O (Output):** Diccionario de respuesta `{ combinaciones_totales, costo_total_mxn, matriz_quiniela: List[Dict] }`.
 * **Φ (Transición):** Hacia `/api/markets/progol/optimize` y motor de quinielas.
+
+---
+
+### ID: [LN-QBE-075] Ingesta Fáctica de Concursos Progol y Resiliencia Multi-Torneo
+
+* **Ω (Resumen):** Extracción fáctica del concurso Progol vigente (14 encuentros Regular + 7 Revancha = 21 casillas) desde el DOM oficial, resolución del corte canónico local/visitante y degradación fiduciaria ante cualquier ausencia de información. Ninguna casilla congela el sistema.
+* **I (Input):** Texto fáctico del DOM oficial del concurso: `concurso_num`, `bolsa` (ej. `$8,800,000.00`), `fecha_cierre` y las 21 casillas en layout de 1 o 3 líneas. Queda prohibido inventar casillas, fechas o bolsas.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Segmentación por torneo:** `Progol` ⇒ `REGULAR` (posiciones $1..14$); `Revancha` ⇒ `REVANCHA` (posiciones $1..7$ del bloque, persistidas como $15..21$ mediante $position = pos + 14$). Total: $14 + 7 = 21$ casillas.
+  2. **Corte canónico local/visitante:** sobre el espacio de la línea se puntúan todas las biparticiones de tokens contra el catálogo canónico de clubes y se retiene la de mayor evidencia; nunca se divide por espacio ciego (protege abreviaturas tipo `C. AZUL`, `S. LAGUNA`, `ROSARIO CEN`).
+  3. **Caso A — Vínculo Soberano:** club canónico resoluble $\wedge$ partido en `matches` $\wedge$ distribución en `sovereign_distributions` $\implies$ $P_{\text{soberana}} = (p_1, p_X, p_2)$, `match_id` poblado y `es_prior_ignorancia = False`.
+  4. **Caso B — Prior de Ignorancia Fiduciaria:** club fuera de catálogo $\vee$ partido ausente $\vee$ bóveda inaccesible $\implies$
+     $$P = (0.3333,\ 0.3333,\ 0.3334), \qquad \text{match\_id} = NULL, \qquad \text{es\_prior\_ignorancia} = True$$
+     La casilla se persiste igualmente con su cadena fáctica (`local_raw`, `visitante_raw`) intacta.
+  5. **Guardas de integridad fáctica [ALTO AL FUEGO]:** la ingesta se aborta con `exit 1` sin escribir en `slates`/`slate_items` si:
+     - produce $0$ casillas fácticas (vacuidad), o
+     - alguna casilla presenta par local/visitante incompleto ($\text{local\_raw} = \emptyset \vee \text{visitante\_raw} = \emptyset$), síntoma inequívoco de un corte estructural fallido. Una casilla Progol siempre tiene dos clubes: un par incompleto jamás es un dato legítimo, por lo que su persistencia silenciosa está prohibida.
+  6. **Fidelidad de monto y de fecha:** `slates.bolsa_estimada` preserva la escala publicada (`$8,800,000.00` $\Rightarrow 8.8 \times 10^{6}$, con la coma como separador de miles) y `slates.fecha_cierre` permanece `NULL` mientras el sitio publique día/mes sin año: la inferencia de año o la recomposición de la escala quedan **prohibidas por no ser dato fáctico**.
+* **O (Output):** Un registro `slates` (bolsa, estado `OPEN`) más 21 registros `slate_items` conforme a `[ARCH-1.5.1-C]`, cada uno con su par fáctico (`*_raw`) y su par calibrado (`*_canonico`), la terna de probabilidades y la bandera de origen epistémico.
+* **Φ (Transición):** Hacia `[LN-QBE-037]` (sesgo popular), `[LN-QBE-073]` (Risk Dial) y `[LN-QBE-074]` (matriz de quiniela).
+* **[SHIELD]:** `tests/shield/test_shield_progol_ingestion.py`
 
 ---
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**

@@ -167,6 +167,15 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
    - `POST /api/markets/progol/optimize`:
      Acepta `{ slate_id: str, presupuesto_mxn: float }` y retorna `{ combinaciones_totales, costo_total_mxn, matriz_quiniela: List[Dict] }`.
 
+### [ARCH-1.4.5-C] Unificación del Controlador Financiero REST en markets.py [ARCH-PILLAR]
+* El endpoint oficial para generación de cartera Sportsbook es exclusivamente:
+  `POST /api/markets/sportsbook/portfolio/generate`
+* Consume directamente la base de datos 3NF SQLite (`PersistenceGateway`) y delega el cálculo a `portfolio_math.py`.
+* **Materialización (Fase 4):** la ruta canónica `POST /api/markets/sportsbook/portfolio/generate` cierra la cartera con la **ley financiera canónica** de `portfolio_math.py`: `aplicar_hard_caps_constitucionales` (techo individual 8.0% y prorrateo global de jornada 25.0%) y piso de ventanilla `PISO_MINIMO_BOLETO` (`[LN-QBE-071]`). Queda **pendiente de migración** la capa de *orquestación* (hidratación 3NF + pipeline Poisson), aún servida por el router legado; mientras subsista, `src/web/routes/portfolio.py` conserva el estatus de **deprecada** y no debe exponerse como endpoint público.
+* **Frontera de selección:** la selección manual se gobierna por el Live Board (`[ARCH-1.6.2-B]`); el despacho automático de jornada opera sobre el pool multiversal de snapshots. Ver `[ARCH-1.6.2-B]`.
+* La ruta `src/web/routes/portfolio.py` queda oficialmente **deprecada** para eliminar duplicidades y acoplamiento con adaptadores legacy.
+* **[DEROGADO: Se prohíbe terminantemente invocar QBEPipelineEngine o importar src/web/routes/portfolio.py desde la Estación de Mercados. El pipeline monolítico queda restringido a tareas batch de sincronización de tablas; el despacho financiero de apuestas opera de forma desacoplada y directa sobre la base de datos 3NF].**
+
 ---
 
 ### [ARCH-1.4.6] Topología de Ingesta Multi-Operador y Persistencia Relacional [ARCH-PILLAR]
@@ -267,6 +276,45 @@ Cada partido almacenarás en `matches_json`:
   3. Ejecuta el filtro de rentabilidad: si ningún desenlace ofrece Esperanza Matemática Positiva ($+EV \le 0$) o si el encuentro es un volado simétrico sin asimetría explotable, el partido se deriva de inmediato a `QBE-00` (Descarte Preventivo / Veto) con asignación de $\$0.00\text{ MXN}$.
 * **Hidratación Soberana Obligatoria:** Las órdenes de los partidos rentables se construyen consumiendo exclusivamente las intensidades acotadas ($\lambda_H, \lambda_A$), el Símplex $\Delta^2$ y el Pago Anticipado de André ($\Phi_{\text{Lead2}}$) calculados por el Tratado Volumen I.
 
+### [ARCH-1.4.9] Módulo de Contratos Matemáticos Inmutables (portfolio_math.py) [ARCH-PILLAR]
+* **Ubicación:** `src/core/contracts/portfolio_math.py`
+* **Régimen:** `[DIRGEN-STRICT]` (Plano canónico en `docs/DIRGEN_VAULT.md`).
+* **Responsabilidad:** Biblioteca matemática funcional pura, sin I/O, sin Pydantic y sin dependencias de base de datos.
+* **Funciones requeridas:**
+  - `calcular_alpha_edge(p, O) -> float`
+  - `calcular_umbral_theta_estrella(o_fav) -> float`
+  - `calcular_dutching_v0(b_total, o_fav, o_emp) -> Tuple[float, float, float, float]`
+  - `escalar_a_piso_ventanilla(b_seg, o_emp, piso=2.0) -> Tuple[float, float, float]`
+  - `triaje_determinista_9_estrategias(payload_soberano, cuotas) -> dict`
+  - `calcular_ranking_friccion(partidos) -> list`
+  - `calcular_kelly_atenuado(p, O, delta_epist, gamma=0.25) -> float`
+  - `aplicar_hard_caps_constitucionales(inversiones, bankroll) -> list`
+
+### [ARCH-1.4.10] Despacho Financiero 3NF en markets.py [ARCH-PILLAR]
+* **Endpoint:** `POST /api/markets/sportsbook/portfolio/generate`
+* **Arquitectura de Ejecución:**
+  1. Consulta en modo lectura atómica `PersistenceGateway.read_session()` sobre `FixtureSnapshot` y `SovereignDistribution` de la jornada activa (Jornada 10).
+  2. Extrae las cuotas comerciales desde `matches_json` (`momios_operadores`).
+  3. Ejecuta el triaje determinista de 9 estrategias y el ranking de fricción directamente en memoria.
+  4. Invoca `PortfolioEngine.build_plan()` alimentado por el `CandidateMatchPayload` extendido.
+  5. Retorna la respuesta con latencia $< 20\text{ms}$, eliminando recálculos pesados o llamadas redundantes a disco.
+
+### [ARCH-1.4.12] Servicio del Centro de Control y Despacho de Tareas Administrativas [ARCH-PILLAR]
+
+* **Endpoint:** `POST /api/admin/tasks/run`
+* **Contrato de Entrada:** `AdminTaskRequest(task_id: str)`
+* **Whitelist Estricta de Seguridad:** Se prohíbe la ejecución de comandos arbitrarios. Solo se autorizan los identificadores certificados:
+  - `centinela_deportivo` (FotMob J1-J17)
+  - `centinela_mercado` (Caliente + Betway dinámico)
+  - `centinela_progol` (Progol #2352 miloteria.mx)
+  - `sincronizar_activos` (Escudos y logos locales)
+  - `cadena_ingesta_total` (Secuencia encadenada: Deportivo ➔ Mercado ➔ Progol)
+  - `auditar_pureza_vol1` (7/7 tests Tratado I)
+  - `auditar_cartera_shield` (Invarianzas en DB)
+  - `consultar_uso_llm` (Salud de llaves y tokens)
+  - `purgar_base_datos` (Reset selectivo de snapshots)
+* **Contrato de Salida:** `AdminTaskResponse(task_id: str, exit_code: int, output: str, duration_s: float)`
+
 ---
 
 ### [ARCH-1.5.0] Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR]
@@ -357,24 +405,40 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
 | `audit_trace_json` | `TEXT` | | JSON de trazabilidad de auditoría completa |
 | `created_at` | `DATETIME` | `NOT NULL` | Timestamp UTC de creación del registro |
 
-#### Tablas: `slates` y `slate_items`
+#### Tablas: `slates` y `slate_items` — [ARCH-1.5.1-C]
+**Diccionario de datos sellado del subsistema de quinielas (Progol Regular + Revancha).**
+El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_items.match_id` es `NULLABLE` porque la legislación `[LN-QBE-075]` ordena que una casilla sin vínculo soberano degrade al **Prior de Ignorancia Fiduciario** sin bloquear la ingesta. La clave primaria de `slate_items` es **sustituta** (`id` autoincremental) y la unicidad de casilla se garantiza por `UNIQUE (slate_id, position)` (`uq_slate_item_position`).
+
 **`slates`** — Concurso principal (Progol, quiniela multitorneo):
 | Columna | Tipo | Restricción | Descripción |
 |---|---|---|---|
-| `id` | `VARCHAR` | `PK` | ID único del concurso (ej. `PROGOL-2026-J17`) |
-| `name` | `VARCHAR` | `NOT NULL` | Nombre del concurso |
-| `competition_id` | `VARCHAR` | `FK → competitions.id` | Liga principal del concurso |
-| `matchday_num` | `INTEGER` | `NOT NULL` | Jornada asociada |
-| `status` | `VARCHAR` | `NOT NULL` | Estado del concurso: `OPEN`, `CLOSED`, `SETTLED` |
+| `id` | `VARCHAR(50)` | `PK` | ID único del concurso (ej. `PROGOL-2352`, `PRONOSPORTS-754`) |
+| `name` | `VARCHAR(120)` | `NOT NULL` | Nombre del concurso |
+| `competition_id` | `VARCHAR(50)` | `FK → competitions.id` | Liga principal del concurso |
+| `matchday_num` | `INTEGER` | | Jornada asociada |
+| `bolsa_estimada` | `FLOAT` | | Bolsa fáctica ofrecida por el concurso (MXN) |
+| `fecha_cierre` | `DATETIME` | | Cierre del concurso; `NULL` si la fuente no publica el año |
+| `status` | `VARCHAR(20)` | `NOT NULL` | Estado del concurso: `OPEN`, `CLOSED`, `SETTLED` |
 | `created_at` | `DATETIME` | `NOT NULL` | Timestamp de creación |
 
-**`slate_items`** — Partidos incluidos en cada concurso:
+**`slate_items`** — Casilla de quiniela (21 por concurso: `1..14` Regular, `15..21` Revancha):
 | Columna | Tipo | Restricción | Descripción |
 |---|---|---|---|
-| `id` | `INTEGER` | `PK` | ID autoincremental |
-| `slate_id` | `VARCHAR` | `FK → slates.id` | Concurso al que pertenece |
-| `match_id` | `VARCHAR` | `FK → matches.id` | Partido incluido |
-| `position` | `INTEGER` | `NOT NULL` | Posición en la quiniela (1–N) |
+| `id` | `INTEGER` | `PK` | ID autoincremental (surrogate key) |
+| `slate_id` | `VARCHAR(50)` | `FK → slates.id`, `NOT NULL` | Concurso al que pertenece |
+| `tipo_concurso` | `VARCHAR(20)` | `NOT NULL` | Torneo de origen: `REGULAR` \| `REVANCHA` |
+| `position` | `INTEGER` | `NOT NULL` | Posición en la quiniela (`1..14` Regular, `15..21` Revancha) |
+| `local_raw` | `VARCHAR(100)` | | Cadena fáctica del DOM (local), sin interpretar |
+| `visitante_raw` | `VARCHAR(100)` | | Cadena fáctica del DOM (visitante), sin interpretar |
+| `local_canonico` | `VARCHAR(100)` | | Identidad canónica normalizada (local) |
+| `visitante_canonico` | `VARCHAR(100)` | | Identidad canónica normalizada (visitante) |
+| `match_id` | `VARCHAR(100)` | `FK → matches.id`, `NULLABLE` | Vínculo soberano; `NULL` ⇒ Prior Fiduciario |
+| `p_local` | `FLOAT` | | $P(\text{local})$ soberana, u $0.3333$ bajo Prior |
+| `p_empate` | `FLOAT` | | $P(\text{empate})$ soberana, u $0.3333$ bajo Prior |
+| `p_visitante` | `FLOAT` | | $P(\text{visitante})$ soberana, u $0.3334$ bajo Prior |
+| `es_prior_ignorancia` | `BOOLEAN` | `NOT NULL` | `True` ⇔ distribución fiduciaria $(1/3, 1/3, 1/3)$ de `[LN-QBE-075]` |
+
+* **Migración física:** SQLite no permite `ALTER` sobre una clave primaria compuesta, por lo que la recreación se ejecuta mediante `scripts/utilidades/migrar_schema_slates.py`, utilitario con **guarda fiduciaria** que aborta (`exit 2`) si alguna de las dos tablas contiene filas.
 
 ### [ARCH-1.5.2] Persistencia Local en Base de Datos SQLite [ARCH-PILLAR]
 
@@ -483,6 +547,17 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
 
 ---
 
+### [ARCH-1.6.2-B] Ancla Temporal Canónica, Cuarentena por Staleness y Orden Topológico Materializado [ARCH-PILLAR] [GOVERNANCE-01]
+
+* **Reloj Soberano Único:** Toda evaluación de vigencia temporal de la cartelera se computa contra `datetime.now()` del proceso servidor **en el instante de materialización del payload**. Queda prohibido usar la marca `updated_at` del snapshot como sustituto del reloj: la antigüedad del snapshot no exime a un partido ya disputado de ser materializado como tal.
+* **Cuarentena por Staleness:** Si $(\text{ahora} - \text{fecha\_dt}) > 150$ minutos, el fixture es **incompatible** con el estado `PROGRAMADO`. `sync_league_live_board` lo materializa como `FINALIZADO` con `marcador_actual = "MARCADOR_PENDIENTE"` (token formal de resultado no capturado) y `disponible_para_seleccion = False`. **Queda prohibido fabricar marcadores**; el token declara la ausencia fáctica de resultado ([GOVERNANCE-01]).
+* **Armonización del Umbral:** el umbral operativo queda **unificado en 150 min (2.5 h)**, en paridad exacta con la Invariante #5 del Juez `[LN-QBE-025]`, sustituyendo la mención genérica de 120 min del axioma anti-degradación.
+* **Operabilidad Total de Cuotas:** Un fixture no finalizado sin cuotas válidas ($L, E, V > 1.0$) se materializa con `disponible_para_seleccion = False` (paridad con la Invariante #4 del Juez `[LN-QBE-025]`).
+* **Orden Topológico Materializado en Backend:** `LiveBoardOut.fixtures` se ordena en `sync_league_live_board` (no en el cliente) bajo la jerarquía inmutable de `[ARCH-1.6.3]`, mediante ordenamiento **estable** que preserva la cronología dentro de cada capa semántica. El mapa `_ORDEN_TOPOLOGICO` de `src/web/routes/leagues.py` es la única fuente semántica de la jerarquía.
+* **Frontera de Despacho (reconciliación con [ARCH-1.4.5-C]):** la selección **manual** de partidos está gobernada por el Live Board (veto de `FINALIZADO` y de la cuarentena por staleness). El **despacho automático de jornada** (`selected_match_ids = []`) opera sobre el pool multiversal de snapshots capturados, por tratarse de un lote de refresco total sobre cuotas ya publicadas; no puede ser vetado por staleness sin declarar la jornada completa inoperable. Cualquier endurecimiento de esta frontera requiere VAR previa del Director.
+
+---
+
 ### [ARCH-1.6.4] Desacoplamiento Absoluto de Scraping en el Plano Web (Bus de Datos SQLite) [ARCH-PILLAR] [PERF-MANDATE]
 
 * **Axioma de Desconexión de Red:** Queda strictly prohibido que el servidor web (`src/web/`) o sus servicios de sincronización (`src/storage/sync_service.py`) importen `playwright`, ejecuten navegadores headless o realicen llamadas HTTP síncronas durante el ciclo de vida de las peticiones de los usuarios.
@@ -575,6 +650,24 @@ La persistencia abandona el almacenamiento ciego en listas JSON y se estructura 
   - Persiste un `StandingSnapshot` y un `FixtureSnapshot` para cada jornada de la temporada en SQLite.
 * **Soberanía Dinámica:** Cero constantes o tuplas de partidos quemadas en código Python (`[GOVERNANCE-01]`). Todo emana dinámicamente de la red vía FotMob Opta (League 230).
 
+### [ARCH-1.6.15] Resolución Dinámica de Jornada Activa en Sensores de Mercado [ARCH-PILLAR]
+* **Problema:** Un valor quemado por defecto (`--jornada 10`) provoca que al concluir los partidos de una fecha, el sensor escanee una jornada finalizada cuyas cuotas han sido retiradas por los casinos (0/9 encontrados).
+* **Mecanismo Obligatorio:** Si `centinela_mercado.py` se invoca sin el argumento `--jornada` (o en modo automático):
+  1. Consulta en SQLite los `FixtureSnapshot` de la competición activa.
+  2. Resuelve la **primera jornada que contenga al menos un partido en estado `PROGRAMADO`**.
+  3. Si la Jornada 10 ya finalizó en su totalidad, conmuta automáticamente a la **Jornada 11**.
+  4. Si todas las jornadas están concluidas, selecciona la última disponible.
+
+### [ARCH-1.6.16] Política de Depuración y Archivado de Sondas Temporales [ARCH-PILLAR]
+* Las herramientas de diagnóstico de un solo uso o superadas (`sonda_diagnostico_progol.py`, `sonda_diagnostico_betway.py`, `aislar_fuga_probabilidades.py`, `comprobar_payload_http.py`, `simulador_pantalla_soberana.py`, `migrar_schema_slates.py`, `exportar_volumen1_word.py`) se mueven a `scripts/archive/` para preservar la higiene del repositorio.
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7:** los nodos `[ARCH-1.6.15]`,
+> `[ARCH-1.4.12]` y `[ARCH-1.6.16]` se incorporan en su familia numérica canónica
+> (`1.6.x` tras `[ARCH-1.6.13]`; `1.4.x` tras `[ARCH-1.4.10]`) sin alterar ningún nodo
+> sellado. Los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no
+> asignados** (cero reutilización). Juez Inmutable asociado:
+> `tests/shield/test_shield_admin_tasks_and_dynamic_matchday.py`.
+
 ---
 
 ## 2. ESTRUCTURA LIMPIA DE MÓDULOS Y MAPEO DE CÓDIGO
@@ -606,7 +699,7 @@ Q_BE_CD_WEB/
 │   │
 │   ├── storage/                    # Persistencia y Base de Datos Local
 │   │   ├── database.py             # Conexión SQLAlchemy SQLite
-│   │   ├── models.py               # Tablas: League, StandingSnapshot, FixtureSnapshot, PortfolioRecord
+│   │   ├── models.py               # Tablas: League, StandingSnapshot, FixtureSnapshot, PortfolioRecord, Slate, SlateItem
 │   │   ├── repository.py           # Operaciones CRUD tipadas
 │   │   ├── seeder.py               # Precarga de Ligas Oficiales (Liga MX)
 │   │   └── sync_service.py         # Sincronización en arranque FotMob -> DB
@@ -614,6 +707,7 @@ Q_BE_CD_WEB/
 │   ├── ingestion/                  # Capa de Ingesta y Sensores de Mercado
 │   │   ├── normalizer.py           # Normalizador difuso de clubes (18 Liga MX + Internacionales)
 │   │   ├── caliente_scraper.py     # Extracción headless de cuotas Caliente.mx
+│   │   ├── progol_scraper.py       # [LN-QBE-075] Ingesta fáctica Progol (14 Regular + 7 Revancha)
 │   │   ├── ocr_parser.py           # Extracción OCR desde capturas
 │   │   ├── quota_manager.py        # Gestor de Cuotas y Circuit Breaker de Gemini
 │   │   └── providers/
@@ -864,6 +958,7 @@ class PortfolioExecutionPlan(BaseModel):
 | `/api/portfolio/{id}/pdf` | `GET` | — | `FileResponse` | Compilación y descarga de reporte oficial A4 (Playwright). |
 | `/api/admin/catalogs/staging` | `GET` | `league_id: int` | `List[Dict]` | Lectura de candidatos de clubes prospectados (HITL). |
 | `/api/admin/catalogs/commit` | `POST` | `CommitCatalogRequest` | `{"status": "SEALED"}` | Sellado definitivo de clubes y escudos en SQLite. |
+| `/api/admin/tasks/run` | `POST` | `AdminTaskRequest` | `AdminTaskResponse` | Despacho gobernado de tareas administrativas bajo whitelist estricta ([ARCH-1.4.12]). |
 | `/health` | `GET` | — | `{"status": "HEALTHY"}` | Sonda de salud de servidor para auto-lanzador. |
 
 ---

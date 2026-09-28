@@ -60,6 +60,61 @@ def deducir_proximo_rival_dinamico(equipo: str, fixtures_activos: List[Dict[str,
     return "Rival por Definir"
 
 
+# ── [ARCH-1.6.15 / ARCH-1.4.10] JORNADA ACTIVA DINÁMICA (CERO CONSTANTES QUEMADAS) ──
+# [GOVERNANCE-01] Prohibido el uso de celdas de jornada rígidas en el lector del bus:
+# la jornada administrativa emana del estado fáctico capturado en la bóveda 3NF.
+
+
+def _fixture_operable_en_ventanilla(fx: Dict[str, Any]) -> bool:
+    """
+    [ARCH-1.6.2] Un fixture es operable en la ventanilla de capital si NO está concluido y
+    porta captura fáctica de cuotas 1X2 (L > 1.0). Cero cuotas inventadas [GOVERNANCE-01].
+    """
+    if str(fx.get("estado", "")) == "FINALIZADO":
+        return False
+
+    capturas: List[Dict[str, Any]] = [fx.get("momios") or {}]
+    capturas.extend((fx.get("momios_operadores") or {}).values())
+
+    for m_data in capturas:
+        try:
+            if float((m_data or {}).get("L", 0.0) or 0.0) > 1.0:
+                return True
+        except (TypeError, ValueError):
+            continue
+
+    return False
+
+
+def resolver_jornada_actual_dinamica(db: Session, league_id: int) -> Optional[int]:
+    """
+    [ARCH-1.6.15 / ARCH-1.4.10] Resuelve la jornada administrativa activa del Live Board sin
+    constantes quemadas, en paridad exacta con la ventanilla de capital que ya materializa
+    `src/web/routes/markets.py` bajo el mismo nodo legislativo:
+
+      1. Se recorren los snapshots de la competición del más reciente al más antiguo.
+      2. La jornada activa es la del PRIMER snapshot que porte al menos un partido operable
+         (no concluido con cuotas publicadas): mientras el mercado permanezca abierto la
+         jornada no conmuta; al retirarse las cuotas tras concluir la fecha, conmuta sola.
+      3. Si ninguna jornada porta mercado publicado, devuelve la jornada del snapshot más
+         reciente (la última registrada en la bóveda) — [ARCH-1.6.15] §4.
+      4. Bóveda vacía ⇒ `None` (cero invención de datos).
+    """
+    snapshots = db.query(FixtureSnapshot).filter(
+        FixtureSnapshot.league_id == league_id
+    ).order_by(FixtureSnapshot.updated_at.desc()).all()
+
+    if not snapshots:
+        return None
+
+    for snap in snapshots:
+        if any(_fixture_operable_en_ventanilla(fx) for fx in (snap.matches_json or [])):
+            return int(snap.matchday) if snap.matchday is not None else None
+
+    ultima = snapshots[0].matchday
+    return int(ultima) if ultima is not None else None
+
+
 def sync_current_team_standings_table(db: Session, league_id: int, standings_formatted: List[Dict[str, Any]], ahora: datetime):
     """[ARCH-1.5.6] Persiste o actualiza relacionalmente cada fila en la tabla current_team_standings."""
     for row in standings_formatted:
@@ -136,10 +191,18 @@ def sync_league_live_board(
     # 1. Determinar dinámicamente la jornada activa real de la competición
     m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
     
-    # Si la J9 ya finalizó, la jornada activa es la 10
-    jornada_actual = 10
-    if m_state:
-        m_state.matchday_num = 10
+    # ── [ARCH-1.6.15 / ARCH-1.4.10] JORNADA ACTUAL DINÁMICA: CERO CONSTANTES QUEMADAS ──
+    # [GOVERNANCE-01] Antes existía una celda rígida (`jornada_actual = 10`) que al concluir
+    # la fecha dejaba el tablero anclado en una jornada sin mercado. Ahora la jornada activa
+    # se resuelve algebraicamente del estado fáctico de la bóveda (ver
+    # `resolver_jornada_actual_dinamica`) y se refleja en el ledger `MatchdayState` para el
+    # puente PM-FACE. Cero invención de datos: bóveda vacía ⇒ se conserva el valor ledgerado.
+    jornada_actual = resolver_jornada_actual_dinamica(db, league.id)
+    if jornada_actual is None and m_state and m_state.matchday_num:
+        jornada_actual = int(m_state.matchday_num)
+
+    if m_state and jornada_actual is not None and int(m_state.matchday_num or 0) != int(jornada_actual):
+        m_state.matchday_num = int(jornada_actual)
         db.commit()
 
     jornada_mostrada = int(target_jornada) if target_jornada is not None else jornada_actual
@@ -193,6 +256,61 @@ def sync_league_live_board(
         fixtures_con_distribucion.append(fx)
 
     fixtures = fixtures_con_distribucion
+
+    # ── [ARCH-1.6.2-B] ANCLA TEMPORAL CANÓNICA Y CUARENTENA POR STALENESS ──────
+    # [GOVERNANCE-01] Ley vigente (docs/ARCH.md [ARCH-1.6.2]): ningún partido cuyo
+    # inicio exceda los 150 minutos (2.5 h) respecto del reloj soberano puede
+    # permanecer catalogado como PROGRAMADO. Al cruzar el umbral, el fixture entra
+    # en CUARENTENA_SIN_RESULTADO: FINALIZADO + marcador formal MARCADOR_PENDIENTE
+    # y selección desactivada. Cero datos inventados: no se fabrica marcador real.
+    from datetime import datetime, timedelta
+
+    UMBRAL_STALENESS_MIN = 150
+    _reloj_soberano = datetime.now()
+
+    for fx in fixtures:
+        fecha_iso = fx.get("fecha_dt")
+        if not fecha_iso:
+            continue
+        try:
+            dt_partido = datetime.fromisoformat(fecha_iso)
+        except ValueError:
+            continue
+
+        if fx.get("estado") == "FINALIZADO":
+            continue
+
+        if (_reloj_soberano - dt_partido) > timedelta(minutes=UMBRAL_STALENESS_MIN):
+            fx["estado"] = "FINALIZADO"
+            fx["marcador_actual"] = "MARCADOR_PENDIENTE"
+            fx["minuto_juego"] = None
+            fx["disponible_para_seleccion"] = False
+
+    # ── [ARCH-1.6.2] CICLO DE VIDA DE CUOTAS: OPERABILIDAD TOTAL ───────────────
+    # Un fixture sin cuotas 1X2 válidas publicadas (L, E, V > 1.0) no es operable
+    # y por ley no puede ofrecerse a selección. Paridad con la Invariante #4.
+    # ── [ARCH-1.6.3] OPERABILIDAD TOTAL: PARTIDO CONCLUIDO ⇒ NO SELECCIONABLE ──
+    # Paridad exacta con la Invariante #4 del Juez [LN-QBE-025]: todo fixture
+    # materializado como FINALIZADO desactiva su checkbox por ley, sin importar la
+    # bandera almacenada en el snapshot (cero datos inventados, cero selección tardía).
+    for fx in fixtures:
+        if fx.get("estado") == "FINALIZADO":
+            fx["disponible_para_seleccion"] = False
+            continue
+        momios = fx.get("momios") or {}
+        try:
+            tiene_cuotas = float(momios.get("L", 0.0) or 0.0) > 1.0
+        except (TypeError, ValueError):
+            tiene_cuotas = False
+        if not tiene_cuotas:
+            fx["disponible_para_seleccion"] = False
+
+    # ── [ARCH-1.6.3] ORDENAMIENTO TOPOLÓGICO OBLIGATORIO DE LA CARTELERA ──────
+    # Jerarquía inmutable: EN_CURSO → PROGRAMADO (cronológico) → REPROGRAMADO →
+    # FINALIZADO al fondo. El ordenamiento es estable, de modo que la cronología
+    # se preserva íntegra dentro de cada capa semántica.
+    _orden_topologico = {"EN_CURSO": 1, "PROGRAMADO": 2, "REPROGRAMADO": 3, "FINALIZADO": 4}
+    fixtures.sort(key=lambda f: _orden_topologico.get(f.get("estado", ""), 99))
 
     # Deducir proximo_rival dinámicamente si falta o es placeholder
     for row in standings:

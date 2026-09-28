@@ -396,6 +396,78 @@
     `max-width: 880px !important; width: 100% !important; margin: 0 auto !important;`
   - Transición fluida sin parpadeos de interfaz.
 
+---
+
+### [DES-QBE-045] Contrato de Claves Frontend y Soporte de las 9 Estrategias Canónicas [UX-MANDATE]
+* **Sincronización de Contratos JSON (3NF):**  
+  La función cliente `renderizarResultadosPortafolio(data)` debe consumir obligatoriamente las claves canónicas emitidas por el backend 3NF:
+  - `data.ordenes_ejecucion_partidos` (con fallback de retrocompatibilidad a `data.ordenes`).
+  - `data.control_portafolio` (con fallback a `data.control`).
+  - `data.balance_global_portafolio` (con fallback a `data.balance`).
+* **Insignias Visuales de las 9 Estrategias:**  
+  La interfaz debe soportar formalmente la paleta y semántica de las 9 estrategias canónicas:
+  - `QBE-D1` y `QBE-D2` (Directas): Azul Cian `#38BDF8` (Ataque Puro).
+  - `QBE-H1` y `QBE-H2` (Híbridas V=0): Verde Neón `#00E676` (Preservación en Tablas).
+  - `QBE-R1` y `QBE-R2` (Reversas Underdog): Ámbar `#F59E0B` (Alto Retorno Asimétrico).
+  - `QBE-C1` (DNB) y `QBE-C2` (Totales): Violeta `#A855F7` (Derivados).
+  - `QBE-00` (Cuarentena / Veto): Rojo Coral `#EF4444` (Veto Total de Capital).
+* **Desacoplamiento de Pago Anticipado:**  
+  El distintivo `🏷️ Pago Anticipado (+PA)` se gobierna mediante la bandera booleana `ord.pa_activo` o `ord.estrategia_seleccionada.linea_promocional`, suprimiendo los códigos heredados con signo `+` (`D1+`, `H1+`).
+* **Independencia de la Radiografía Forense:**  
+  El clic sobre las tarjetas de la Cartelera (`abrirRadiografiaForense(matchId)`) debe operar de forma autónoma con los datos soberanos del Live Board (`f.p_local`, `f.lambda_home`, etc.) sin requerir la preexistencia de un cálculo de cartera.
+
+### [DES-QBE-046] Sub-Pestaña de Quinielas Progol #2352 en la Mesa de Apuestas [UX-MANDATE]
+* **Navegación de Segundo Piso en `#tab-portfolio`:**  
+  La Mesa de Apuestas incorpora un selector de submódulo con botones de píldora:
+  - `[ 🎰 Sportsbook Casino 1X2 ]` (Sub-vista activa por defecto: órdenes split, Kelly, hard-caps).
+  - `[ 🎟️ Quinielas Progol #2352 ]` (Sub-vista de pronósticos deportivos).
+* **Geometría de la Sub-Vista Progol (`#contenedor-progol`):**  
+  - Encabezado: Número de Concurso (`#2352`), Bolsa Acumulada (`$8,800,000.00 MXN`) y Tiempo Límite.
+  - Retículo de 21 Casillas (14 Progol Regular + 7 Revancha): Despliega local, visitante, probabilidades soberanas Q-BE y badge de `Prior Base (1/3)` para partidos internacionales.
+  - Barra de Control de Presupuesto: Input monetario (`$360 MXN` default) y botón **`[ ⚡ Optimizar Presupuesto ]`** conectado a `/api/markets/progol/optimize`.
+* **Token Tolerado de Compatibilidad:** el contenedor expone adicionalmente la clase `progol-slate-container` como alias CSS, sin sustituir jamás al ID canónico `#contenedor-progol` (desviación declarada `D-1`).
+
+### [DES-QBE-047] Selector Multi-Operador en Mesa de Apuestas [UX-MANDATE]
+* El elemento `<select id="casino-operator-select">` debe exponer formalmente los operadores certificados en backend:
+  - `<option value="caliente" selected>Caliente_Deportes.MX</option>`
+  - `<option value="betway">Betway.MX</option>`
+* El header macro de la cartera debe actualizarse dinámicamente según la jornada activa consultada, erradicando textos fijos de jornadas anteriores (`Jornada 8` quemado).
+
+> **Trazabilidad de registro (VARIANCE-01):** los nodos solicitados como `[DES-QBE-042]`,
+> `[DES-QBE-043]` y `[DES-QBE-044]` en la Directiva Maestra Fase 6 se registran como
+> `[DES-QBE-045]`, `[DES-QBE-046]` y `[DES-QBE-047]` por colisión con los nodos `042`
+> (Contención Maestra Split-View) y `043` (Respaldo Narrativo de 4 Puntos Focales), ya
+> sellados en `docs/DESIGN.md` (líneas 387 y 390). Referencia cruzada: `LOGIC.md [LN-QBE-060-B]`
+> (9 estrategias canónicas) y `DIRGEN_VAULT.md` (`[VAULT-CORE-070-TRIAJE]`, línea 30) — sin contradicción.
+> **Ajuste de dictamen Q9 (autoridad humana):** el ID canónico del contenedor Progol es
+> `#contenedor-progol`; el token `progol-slate-container` sobrevive únicamente como alias de
+> compatibilidad para el Juez Inmutable (desviación declarada `D-1`).
+
+### [DES-QBE-048] Cockpit: Cuarta Pestaña [ ⚙️ Centro de Control ] y Terminal de Streaming [UX-MANDATE]
+* **Navegación Superior:** Se añade la pestaña `[ ⚙️ Centro de Control ]` (`data-tab="view-control-center"`).
+* **Geometría de la Vista:**
+  - **Comando Maestro Superior:** Botón destacado `[ ⚡ EJECUTAR TODA LA INGESTA EN CADENA ]`.
+  - **Tres Grupos de Control:**
+    1. *Grupo 1: Daemons de Carga (Ingesta 3NF):* Botones individuales para Deportivo, Mercado, Progol y Escudos.
+    2. *Grupo 2: Auditoría y Certificación:* Botones para Pureza Vol. 1, Cartera Shield y Llaves LLM.
+    3. *Grupo 3: Mantenimiento:* Botón para Purga de Base de Datos.
+  - **Consola Integrada en Vivo (`#terminal-stream-output`):**  
+    Ventana monospaciada de estilo terminal (`background: #050B14; border: 1px solid #334155; font-family: monospace; color: #38BDF8; max-height: 380px; overflow-y: auto;`) que despliega la salida estándar en tiempo real de la tarea ejecutada.
+
+### [DES-QBE-049] Saneamiento Tipográfico de Celdas de Equipo (Anti-Truncamiento Real) [UX-MANDATE]
+* **Derogación de Restricción Rígida:** Se deroga formalmente el uso de `max-width: 145px;` en `.team-home-cell` y `.team-away-cell`.
+* **Regla Tipográfica:** Las celdas adoptan `min-width: 0; width: 100%; font-size: 0.88rem; font-weight: 700;`. El texto largo debe fluir de forma elástica dentro del grid simétrico `1fr auto 1fr`, impidiendo que nombres como *"Chivas Guadalajara"* o *"Rayados de Monterrey"* sean truncados prematuramente.
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7:** los nodos `[ARCH-1.6.15]`,
+> `[ARCH-1.4.12]` y `[ARCH-1.6.16]` (registrados en `docs/ARCH.md`) y `[DES-QBE-048]` /
+> `[DES-QBE-049]` se sellan sin colisión con los identificadores `042`–`047` previamente
+> legislados. Los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no
+> asignados** en esta ventana (sin contradicción ni reutilización). Referencia cruzada:
+> `tests/shield/test_shield_admin_tasks_and_dynamic_matchday.py` (Juez Inmutable Twin-Test).
+> **Derogación expresa:** `[DES-QBE-049]` deroga la restricción `max-width: 145px;` y la
+> deuda abierta `O-2` declarada en `src/web/static/css/theme.css` (bloque `[DES-QBE-046]`).
+
+
 
 
 

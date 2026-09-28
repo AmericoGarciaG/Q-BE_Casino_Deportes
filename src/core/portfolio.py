@@ -9,11 +9,16 @@ el techo aritmético de cartera.
 import itertools
 from typing import List, Dict, Any
 from src.core.catalog import STRATEGY_CATALOG
+from src.core.contracts.portfolio_math import aplicar_hard_caps_constitucionales
 from src.models.decision import (
     MatchExecutionOrder, StrategySelection, KeyMetrics, TicketOrder,
     MatchTickets, Projections, CashoutTargets, SatelliteModule,
     PortfolioControl, PortfolioBalance, PortfolioExecutionPlan
 )
+
+# [LN-QBE-071] Piso canónico de ventanilla: ÚNICA fuente de verdad del piso mínimo por boleto.
+# Erradica los literales históricos (4.00 en asignación y 2.00 redeclarado dentro del bucle).
+PISO_MINIMO_BOLETO = 2.00
 
 
 def calcular_trinidad_resiliencia_3k(ordenes_data: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -185,11 +190,20 @@ class PortfolioEngine:
                                     # Nivel 6: Protección de Capital (QBE-00)
                                     return "QBE-00", evals.get("QBE_00", {}).get("nombre_oficial", "Veto Preventivo de Capital"), 0.0, "N/A"
 
+        # ── [LN-QBE-060-B] Convergencia canónica: el código devuelto es estrictamente uno
+        # de los 9 canónicos puros (QBE-D1/D2, H1/H2, R1/R2, C1/C2, 00). El sufijo histórico
+        # `+` (Pago Anticipado) se DESACOPLA como anomalía de identidad de estrategia y viaja
+        # como el atributo ortogonal `promocion` / `pago_anticipado: bool` ([LN-QBE-070-C]).
+        codigo_canonico = code.replace("+", "").replace("_plus", "").replace("_", "-").strip()
+        if codigo_canonico.endswith("-"):
+            codigo_canonico = codigo_canonico[:-1]
+
         clean_key = code.replace("+", "_plus").replace("-", "_")
-        nombre = evals[clean_key]["nombre_oficial"]
-        ev = evals[clean_key]["ev_neto_roi"]
+        nombre = evals.get(clean_key, {}).get("nombre_oficial") or evals.get(codigo_canonico.replace("-", "_"), {}).get("nombre_oficial", "Estrategia Cuantitativa")
+        ev = evals.get(clean_key, {}).get("ev_neto_roi") or evals.get(codigo_canonico.replace("-", "_"), {}).get("ev_neto_roi", 0.0)
         promocion = "Pago Anticipado (+2 goles)" if ("+" in code or code == "QBE-R1" or pago_anticipado) else "Estándar"
-        return code, nombre, ev, promocion
+
+        return codigo_canonico, nombre, ev, promocion
 
     @classmethod
     def build_plan(
@@ -198,6 +212,19 @@ class PortfolioEngine:
         bankroll: float,
         mode: str = "BANKROLL"
     ) -> PortfolioExecutionPlan:
+        # [LN-QBE-070-C] Contrato Extendido R-1 (Estratos Epistemicos).
+        # Todo `CandidateMatchPayload` porta obligatoriamente delta_epist (discrepancia ponderada)
+        # y psi_epist (factor cuadratico de atenuacion). Defaults legislados por la Directiva
+        # Fase 5 Paso 3: delta_epist = 0.02 y psi_epist = 0.97.
+        # [LN-QBE-060-B] / [LN-QBE-070-B] Frontera de incertidumbre tau_disp = 0.12:
+        # delta_epist > 0.12 <=> psi_epist = 0 => f*_adj = 0 => Cuarentena Fiduciaria (QBE-00, $0.00).
+        # El filtro se ejecuta ANTES del ordenamiento para que la ruina conjunta, los pesos
+        # y la Trinidad 3^K se computen exclusivamente sobre activos con capital autorizado.
+        approved_matches = [
+            m for m in approved_matches
+            if float(m.get("delta_epist", 0.02)) <= 0.12
+            and float(m.get("psi_epist", 0.97)) > 0.0
+        ]
         # ── 1. Ordenamiento Jerárquico Doble (Probabilidad de Éxito y ROI) ──
         approved_matches = sorted(
             approved_matches,
@@ -244,9 +271,19 @@ class PortfolioEngine:
             suffix_pa = " + PA" if pa_activo else ""
 
             if mode == "BANKROLL":
-                cap_i = min(0.08, max(0.02, ev_roi / (3.0 * max(0.01, psi))))
-                inv_partido = min(bolsa_core * weights[idx], bankroll * cap_i)
-                inv_partido = round(max(4.00, inv_partido), 2)
+                # [LN-QBE-070-B] Dimensionamiento canónico SIN números mágicos.
+                # Erradicados: (a) el divisor heurístico `3.0`, (b) el piso artificial `max(0.02, ...)`
+                # y (c) el piso no legislado `max(4.00, ...)`. Los techos (8.0% individual y 25.0%
+                # global de jornada) son competencia EXCLUSIVA de `aplicar_hard_caps_constitucionales`
+                # (portfolio_math.py); el piso operativo es el de ventanilla [LN-QBE-071].
+                # Techo por partido derivado del Edge soberano: f* = α / (O_primaria − 1) (Kelly puro).
+                o_primaria = m.get("odd_emp") if "H2" in code else (
+                    m.get("odd_und") if code in ("QBE-R1", "QBE-R2") else m.get("odd_fav")
+                )
+                o_primaria = float(o_primaria or 0.0)
+                f_kelly_puro = (float(ev_roi) / (o_primaria - 1.0)) if o_primaria > 1.0 else 0.0
+                inv_partido = min(bolsa_core * weights[idx], bankroll * max(0.0, f_kelly_puro))
+                inv_partido = round(max(PISO_MINIMO_BOLETO, inv_partido), 2)
             else:
                 inv_partido = 10.00
 
@@ -300,7 +337,6 @@ class PortfolioEngine:
                 out_min85 = "N/A (Dejar correr al 90' o cobrado anticipadamente por ventaja de 2 goles)."
                 tablas_amt = 0.0
 
-            PISO_MINIMO_BOLETO = 2.00
             if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
                 if 0.0 < b1_monto < PISO_MINIMO_BOLETO:
                     b1_monto = PISO_MINIMO_BOLETO
@@ -329,10 +365,15 @@ class PortfolioEngine:
                 "out_min85": out_min85, "tablas_amt": tablas_amt
             })
 
-        # ── ESCALAMIENTO HARD-CAP GLOBAL (<= 25% BANKROLL) ────────────────────
-        max_bankroll_cap = round(bankroll * 0.25, 2)
-        if total_inv_core > max_bankroll_cap and orders_raw:
-            scale_factor = max_bankroll_cap / total_inv_core
+        # ── [LN-QBE-070-B] HARD-CAPS CONSTITUCIONALES CANÓNICOS ───────────────
+        # Los techos dejan de ser literales locales: la acotación individual (8.0%) y el
+        # prorrateo global de jornada (25.0%) se delegan íntegramente a portfolio_math.py.
+        inv_canonicas = aplicar_hard_caps_constitucionales(
+            [item["inv_partido"] for item in orders_raw], bankroll
+        )
+        total_canonico = round(sum(inv_canonicas), 2)
+        if orders_raw and total_inv_core > 0.0 and total_canonico < total_inv_core:
+            scale_factor = round(total_canonico / total_inv_core, 8)
             total_inv_core = 0.0
             for item in orders_raw:
                 code = item["code"]
@@ -406,7 +447,9 @@ class PortfolioEngine:
                 partido=m["partido_nombre"],
                 horario_evento=m.get("horario", "Fin de Semana"),
                 estrategia_seleccionada=StrategySelection(
-                    codigo=code,
+                    # [LN-QBE-070-C] La orden Pydantic expone EXCLUSIVAMENTE el código canónico puro;
+                    # el Pago Anticipado se hereda como atributo ortogonal (`linea_promocional` / `+ PA`).
+                    codigo=code.replace("+", "").strip(),
                     nombre_oficial=nombre,
                     descripcion_ejecutiva=cls.DESCRIPCIONES_OFICIALES.get(code, "Estrategia Cuantitativa"),
                     linea_promocional="Pago Anticipado (+2 goles)" if (pa_activo or code == "QBE-R1") else "Estándar"

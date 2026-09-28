@@ -27,6 +27,11 @@
 18. `[VAULT-UI-001-B]` Alternador Modo Enfoque con Persistencia en localStorage (`app.js`)
 19. `[VAULT-UI-002-B]` Micro-Malla de Consenso de Mercado 26px 42px 42px 42px (`theme.css`)
 20. `[VAULT-UI-002-C]` Geometría de Modo Enfoque Centrado a 880px (`theme.css`)
+21. `[VAULT-CORE-070-TRIAJE]` Cascada Determinista de las 9 Estrategias (`src/core/contracts/portfolio_math.py`)
+22. `[VAULT-CORE-070-DUTCHING]` Dutching Asimétrico con Seguro en Tablas V=0 (`src/core/contracts/portfolio_math.py`)
+23. `[VAULT-CORE-070-RANKING]` Ranking de Fricción de Jornada (`src/core/contracts/portfolio_math.py`)
+24. `[VAULT-CORE-070-KELLY]` Kelly Fraccional Atenuado y Hard-Caps Constitucionales (`src/core/contracts/portfolio_math.py`)
+25. `[VAULT-CORE-071-PISO]` Umbral de Indiferencia y Escalamiento al Piso de Ventanilla (`src/core/contracts/portfolio_math.py`)
 
 ---
 
@@ -690,18 +695,19 @@ def sincronizar_distribuciones_soberanas_partidos(
 ---
 
 ## [VAULT-CORE-006] Modulador Adaptativo del Slider de Certeza en Espacio 3^K (`src/core/risk_dial_modulator.py`)
-**Estado:** `[CANON EN FORJA]`  
+**Estado:** `[CANON EN FORJA — REVISIÓN 2]` (Fase 4: erradicación del factor mágico `0.70`)  
 **Régimen:** `[DIRGEN-STRICT]`  
-**Nodo Lógico:** `[LN-QBE-073]`  
-**Sprint:** `6.4 — Paso 1` (Legislación; pendiente materialización en Paso 3)  
+**Nodo Lógico:** `[LN-QBE-073]` / `[LN-QBE-073-B]`  
+**Sprint:** `6.4 — Paso 1` (Legislación; materialización sincronizada con `src/`)  
 
 ```python
 # [VAULT-CORE-006] Modulador Adaptativo del Slider de Certeza en Espacio 3^K
 # src/core/risk_dial_modulator.py
-# Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
+# Estado: [CANON EN FORJA — REVISIÓN 2] | Régimen: [DIRGEN-STRICT]
 
 from typing import List, Dict, Any
 from src.core.portfolio import calcular_trinidad_resiliencia_3k
+from src.core.contracts.portfolio_math import calcular_ganancia_cobertura_v0
 
 
 def modular_cartera_por_slider_certeza(
@@ -748,9 +754,16 @@ def modular_cartera_por_slider_certeza(
             od["estrategia_codigo"] = "QBE-H1"
             od["linea_promocional"] = "Cobertura por Certeza Slider"
             
-            # Recalcular ganancia sacrificando prima para tablas V=0
-            # Al volverse cobertura, el empate ya no pierde dinero: pnl_draw pasa de -inversión a $0.00
-            od["ganancia"] = round(float(od.get("ganancia", 0.0)) * 0.70, 2)
+            # [LN-QBE-073-B] Prima de Cobertura Canónica: se erradica el factor mágico 0.70.
+            # El sacrificio de premio se DERIVA del dutching V=0 a cuotas soberanas justas
+            # (o_fav_implícita = 1 + g/B, b_seguro = B · p_draw, b_primario = B · (1 − p_draw)):
+            #     g_cob = g · (1 − p_draw) − B · p_draw
+            # Función pura: src/core/contracts/portfolio_math.py::calcular_ganancia_cobertura_v0
+            od["ganancia"] = calcular_ganancia_cobertura_v0(
+                ganancia_directa=float(od.get("ganancia", 0.0)),
+                inversion=float(od.get("inversion", 0.0)),
+                p_draw=float(od.get("p_draw", 0.0))
+            )
             continue
 
         # 3. Si ya no hay órdenes directas y aún no alcanza el target:
@@ -1422,6 +1435,166 @@ def american_to_decimal(val_str: str) -> float:
 }
 ```
 
+---
+
+## [VAULT-CORE-070-TRIAJE] Cascada Determinista de las 9 Estrategias (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-STRATEGIES-9-CASCADE  
+
+```python
+def triaje_determinista_9_estrategias(payload: dict, cuotas: dict) -> dict:
+    """[LN-QBE-060-B] Clasificación en cascada pura de las 9 estrategias."""
+    # 1. Cuarentena
+    if not payload.get("es_operable", True) or payload.get("delta_epist", 0.0) > 0.12:
+        return {"codigo": "QBE-00", "nombre": "Cuarentena Fiduciaria", "alpha": 0.0, "pa": False}
+    # 2. Directas Régimen I
+    p1, pX, p2 = payload["p_local"], payload["p_empate"], payload["p_visitante"]
+    oL, oX, oV = cuotas.get("L", 0.0), cuotas.get("E", 0.0), cuotas.get("V", 0.0)
+    delta_epist = payload.get("delta_epist", 0.0)
+    pa = bool(cuotas.get("pa", False) or cuotas.get("pago_anticipado", False))
+
+    aL = p1 * oL - 1.0 if oL > 1.0 else -1.0
+    aV = p2 * oV - 1.0 if oV > 1.0 else -1.0
+
+    if p1 >= 0.65 and delta_epist <= 0.04 and aL > 0.05:
+        return {"codigo": "QBE-D1", "nombre": "Directa Local", "alpha": aL, "pa": pa}
+    if p2 >= 0.65 and delta_epist <= 0.04 and aV > 0.05:
+        return {"codigo": "QBE-D2", "nombre": "Directa Visita", "alpha": aV, "pa": pa}
+    # 3. Underdogs Familia R
+    if p1 >= 0.20 and oL >= 3.50 and aL >= 0.20 and delta_epist <= 0.05:
+        return {"codigo": "QBE-R1", "nombre": "Reversa Local Underdog", "alpha": aL, "pa": pa}
+    if p2 >= 0.20 and oV >= 3.50 and aV >= 0.20 and delta_epist <= 0.05:
+        return {"codigo": "QBE-R2", "nombre": "Reversa Visita Underdog", "alpha": aV, "pa": pa}
+    # 4. Híbridas Dutching V=0
+    theta_1 = oL / (oL - 1.0) if oL > 1.0 else 99.0
+    theta_2 = oV / (oV - 1.0) if oV > 1.0 else 99.0
+    if 0.40 <= p1 < 0.65 and oX > theta_1 and aL > 0:
+        return {"codigo": "QBE-H1", "nombre": "Híbrida Local + Empate V=0", "alpha": aL, "pa": pa}
+    if 0.40 <= p2 < 0.65 and oX > theta_2 and aV > 0:
+        return {"codigo": "QBE-H2", "nombre": "Híbrida Visita + Empate V=0", "alpha": aV, "pa": pa}
+    # 5. DNB
+    p_dnb_l = p1 / (p1 + p2) if (p1 + p2) > 0 else 0.0
+    o_dnb_l = cuotas.get("DNB_L", oL * 0.75)
+    if (p_dnb_l * o_dnb_l - 1.0) > 0.05:
+        return {"codigo": "QBE-C1", "nombre": "Cobertura DNB", "alpha": (p_dnb_l * o_dnb_l - 1.0), "pa": False}
+    # 6. Totales
+    p_under = payload.get("p_under_25", 0.0)
+    o_under = cuotas.get("Under_25", 0.0)
+    if o_under > 1.0 and (p_under * o_under - 1.0) > 0.06:
+        return {"codigo": "QBE-C2", "nombre": "Cobertura Derivada Totales", "alpha": (p_under * o_under - 1.0), "pa": False}
+    # 7. Descarte
+    return {"codigo": "QBE-00", "nombre": "Cuarentena / Sin Valor", "alpha": 0.0, "pa": False}
 ```
 
+---
+
+## [VAULT-CORE-070-DUTCHING] Dutching Asimétrico con Seguro en Tablas V=0 (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+def calcular_dutching_v0(b_total: float, o_fav: float, o_emp: float) -> Tuple[float, float, float, float]:
+    """[LN-QBE-070] Resuelve importes y ROI garantizando V=0 en empate."""
+    if o_emp <= 1.0 or o_fav <= 1.0 or b_total <= 0.0:
+        return (0.0, 0.0, 0.0, 0.0)
+    b_seg = round(b_total / o_emp, 2)
+    b_prio = round(b_total - b_seg, 2)
+    ganancia_neta = round((b_prio * o_fav) - b_total, 2)
+    roi_pct = round((ganancia_neta / b_total) * 100.0, 2)
+    return (b_prio, b_seg, ganancia_neta, roi_pct)
+```
+
+---
+
+## [VAULT-CORE-070-RANKING] Ranking de Fricción de Jornada (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+
+```python
+def calcular_ranking_friccion(partidos: List[dict]) -> List[dict]:
+    """[LN-QBE-073-B] Ordenamiento por Calidad Distributiva descendente."""
+    for p in partidos:
+        alpha = max(0.0, float(p.get("alpha", 0.0)))
+        delta_epist = max(0.0, float(p.get("delta_epist", 0.0)))
+        psi = max(0.0, 1.0 - (delta_epist / 0.12) ** 2) if delta_epist <= 0.12 else 0.0
+        score = (alpha / (delta_epist + 0.01)) * psi if p.get("codigo") != "QBE-00" else 0.0
+        p["score_friccion"] = round(score, 4)
+        p["psi_epist"] = round(psi, 4)
+    return sorted(partidos, key=lambda x: x["score_friccion"], reverse=True)
+```
+
+---
+
+## [VAULT-CORE-070-KELLY] Kelly Fraccional Atenuado y Hard-Caps Constitucionales (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-KELLY-HARDCAPS-001  
+
+```python
+def calcular_alpha_edge(p: float, o: float) -> float:
+    """[LN-QBE-007-C] Retorno neto esperado por unidad de capital (Edge)."""
+    if p <= 0.0 or o <= 1.0:
+        return -1.0
+    return round(p * o - 1.0, 4)
+
+
+def calcular_kelly_atenuado(p: float, o: float, delta_epist: float, gamma_kelly: float = 0.25) -> float:
+    """[LN-QBE-070-B] Kelly Fraccional modulado por atenuación cuadrática de incertidumbre."""
+    alpha = calcular_alpha_edge(p, o)
+    if alpha <= 0.0 or o <= 1.0:
+        return 0.0
+    f_puro = alpha / (o - 1.0)
+    psi = max(0.0, 1.0 - (delta_epist / 0.12) ** 2) if delta_epist <= 0.12 else 0.0
+    f_adj = gamma_kelly * f_puro * psi
+    return round(max(0.0, min(0.08, f_adj)), 4)
+
+
+def aplicar_hard_caps_constitucionales(inversiones: List[float], bankroll: float) -> List[float]:
+    """[LN-QBE-070-B] Aplica techo individual (8.0%) y prorrateo global de jornada (25.0%)."""
+    if bankroll <= 0.0 or not inversiones:
+        return [0.0] * len(inversiones)
+    cap_indiv = bankroll * 0.0800
+    cap_global = bankroll * 0.2500
+
+    # 1. Cap individual
+    acotadas = [min(max(0.0, float(inv)), cap_indiv) for inv in inversiones]
+    total_inv = sum(acotadas)
+
+    # 2. Cap global prorrateado
+    if total_inv > cap_global and total_inv > 0.0:
+        escala = cap_global / total_inv
+        return [round(inv * escala, 2) for inv in acotadas]
+    return [round(inv, 2) for inv in acotadas]
+```
+
+---
+
+## [VAULT-CORE-071-PISO] Umbral de Indiferencia y Escalamiento al Piso de Ventanilla (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-PISO-VENTANILLA-001  
+
+```python
+def calcular_umbral_theta_estrella(o_fav: float) -> float:
+    """[LN-QBE-050] Umbral de indiferencia theta* para cobertura viable en tablas."""
+    if o_fav <= 1.0:
+        return 999.0
+    return round(o_fav / (o_fav - 1.0), 4)
+
+
+def escalar_a_piso_ventanilla(b_total: float, o_emp: float, piso_min: float = 2.00) -> Tuple[float, float, float]:
+    """[LN-QBE-071] Reescalado proporcional si el seguro cae por debajo de $2.00 MXN preservando V=0."""
+    if o_emp <= 1.0 or b_total <= 0.0:
+        return (0.0, 0.0, 0.0)
+    b_seg_teorico = b_total / o_emp
+    if b_seg_teorico < piso_min:
+        b_seg = float(piso_min)
+        b_total_reescalado = round(b_seg * o_emp, 2)
+        b_prio = round(b_total_reescalado - b_seg, 2)
+        return (b_prio, b_seg, b_total_reescalado)
+
+    b_seg = round(b_seg_teorico, 2)
+    b_prio = round(b_total - b_seg, 2)
+    return (b_prio, b_seg, round(b_total, 2))
 ```

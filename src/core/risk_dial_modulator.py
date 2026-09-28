@@ -7,6 +7,7 @@ Base de Gobierno: Kybern Framework v12.0 [LN-QBE-073]
 
 from typing import List, Dict, Any
 from src.core.portfolio import calcular_trinidad_resiliencia_3k
+from src.core.contracts.portfolio_math import calcular_ganancia_cobertura_v0
 
 
 def modular_cartera_por_slider_certeza(
@@ -53,9 +54,15 @@ def modular_cartera_por_slider_certeza(
             od["estrategia_codigo"] = "QBE-H1"
             od["linea_promocional"] = "Cobertura por Certeza Slider"
 
-            # Recalcular ganancia sacrificando prima para tablas V=0
-            # Al volverse cobertura, el empate ya no pierde dinero: pnl_draw pasa de -inversión a $0.00
-            od["ganancia"] = round(float(od.get("ganancia", 0.0)) * 0.70, 2)
+            # [LN-QBE-073-B] Prima de Cobertura Canónica (dutching V=0 a cuotas soberanas justas).
+            # Al volverse cobertura, el empate ya no pierde dinero: pnl_draw pasa de -inversión a $0.00.
+            # El sacrificio de premio se DERIVA de la masa de probabilidad transferida al seguro;
+            # se erradica el factor mágico `0.70` (ver portfolio_math.calcular_ganancia_cobertura_v0).
+            od["ganancia"] = calcular_ganancia_cobertura_v0(
+                ganancia_directa=float(od.get("ganancia", 0.0)),
+                inversion=float(od.get("inversion", 0.0)),
+                p_draw=float(od.get("p_draw", 0.0))
+            )
             continue
 
         # 3. Si ya no hay órdenes directas y aún no alcanza el target:

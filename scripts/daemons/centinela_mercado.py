@@ -14,7 +14,7 @@ import time
 import argparse
 import logging
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -152,6 +152,59 @@ def extraer_mercado_viva(partidos_slate: List[Dict[str, Any]], operador: str = "
             resultados["betway"] = []
 
     return resultados
+
+
+# ── [ARCH-1.6.15] RESOLUCIÓN DINÁMICA DE LA JORNADA ACTIVA ───────────────────
+# [GOVERNANCE-01] Cero jornadas quemadas en el intérprete de comandos: la jornada
+# del sensor de mercado emana de la bóveda 3NF, nunca de un valor por defecto.
+
+def resolver_jornada_activa_dinamica(fixtures_por_jornada: Dict[int, List[Dict[str, Any]]]) -> Optional[int]:
+    """
+    [ARCH-1.6.15] Resuelve la jornada activa sin constantes quemadas.
+
+    Mecanismo obligatorio (determinista):
+      1. Se ordenan ascendentemente las jornadas registradas en la bóveda.
+      2. La jornada activa es la PRIMERA que contenga al menos un partido en
+         estado `PROGRAMADO`.
+      3. Si todas las jornadas están concluidas, devuelve la ÚLTIMA registrada.
+      4. Sin jornadas registradas devuelve `None` (cero invención de datos).
+    """
+    if not fixtures_por_jornada:
+        return None
+
+    jornadas = sorted(int(j) for j in fixtures_por_jornada.keys())
+
+    for jornada in jornadas:
+        partidos = fixtures_por_jornada.get(jornada) or []
+        if any(str((p or {}).get("estado", "")) == "PROGRAMADO" for p in partidos):
+            return jornada
+
+    return jornadas[-1]
+
+
+def cargar_fixtures_por_jornada(league_id: Optional[int] = None) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    [ARCH-1.6.4] Lector puro de la bóveda 3NF: agrupa los fixtures persistidos por
+    jornada para alimentar la resolución dinámica [ARCH-1.6.15]. Cero red, cero scrape.
+    """
+    gateway = PersistenceGateway()
+    por_jornada: Dict[int, List[Dict[str, Any]]] = {}
+
+    with gateway.read_session() as session:
+        query = session.query(FixtureSnapshot.matchday).distinct()
+        if league_id is not None:
+            query = query.filter(FixtureSnapshot.league_id == league_id)
+
+        jornadas = sorted({int(j[0]) for j in query.all() if j[0] is not None})
+
+        for jornada in jornadas:
+            snap_query = session.query(FixtureSnapshot).filter(FixtureSnapshot.matchday == jornada)
+            if league_id is not None:
+                snap_query = snap_query.filter(FixtureSnapshot.league_id == league_id)
+            snap = snap_query.order_by(FixtureSnapshot.updated_at.desc()).first()
+            por_jornada[jornada] = list(snap.matches_json) if (snap and snap.matches_json) else []
+
+    return por_jornada
 
 
 def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[str, Any]]], operador_sel: str = "todos") -> List[Dict[str, Any]]:
@@ -338,29 +391,42 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
 
 def main():
     parser = argparse.ArgumentParser(description="Centinela de Mercado Autónomo Q-BE Multi-Operador")
-    parser.add_argument("--jornada", type=int, default=10, help="Jornada a escanear (default: 10)")
+    parser.add_argument("--jornada", type=int, default=None, help="Override manual de jornada (default: resolución dinámica [ARCH-1.6.15])")
     parser.add_argument("--operador", choices=["caliente", "betway", "todos"], default="todos", help="Operador objetivo (caliente|betway|todos)")
     parser.add_argument("--loop", type=int, default=0)
     args = parser.parse_args()
 
     while True:
         t0 = time.perf_counter()
-        logger.info(f"Iniciando escaneo multi-operador [{args.operador}] para Jornada {args.jornada}...")
+
+        # [ARCH-1.6.15] Cero jornadas quemadas: el override manual (`--jornada`) tiene
+        # precedencia; en su ausencia la jornada activa emana de la bóveda 3NF (la primera
+        # jornada que registre partidos en estado PROGRAMADO).
+        if args.jornada is not None:
+            jornada_activa = args.jornada
+        else:
+            jornada_activa = resolver_jornada_activa_dinamica(cargar_fixtures_por_jornada())
+
+        if jornada_activa is None:
+            logger.error("La bóveda 3NF no registra jornadas. Corre primero centinela_deportivo.py.")
+            return
+
+        logger.info(f"Iniciando escaneo multi-operador [{args.operador}] para Jornada {jornada_activa}...")
 
         gateway = PersistenceGateway()
         with gateway.read_session() as session:
-            fix_snap = session.query(FixtureSnapshot).filter(FixtureSnapshot.matchday == args.jornada).order_by(FixtureSnapshot.updated_at.desc()).first()
+            fix_snap = session.query(FixtureSnapshot).filter(FixtureSnapshot.matchday == jornada_activa).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if not fix_snap or not fix_snap.matches_json:
-            logger.error(f"No hay partidos en SQLite para Jornada {args.jornada}. Corre primero centinela_deportivo.py.")
+            logger.error(f"No hay partidos en SQLite para Jornada {jornada_activa}. Corre primero centinela_deportivo.py.")
             return
 
         slate = [{"local": f["local"], "visitante": f["visitante"]} for f in fix_snap.matches_json]
         dict_cuotas = extraer_mercado_viva(slate, operador=args.operador)
-        partidos_proc = actualizar_cuotas_en_sqlite(args.jornada, dict_cuotas, operador_sel=args.operador)
+        partidos_proc = actualizar_cuotas_en_sqlite(jornada_activa, dict_cuotas, operador_sel=args.operador)
 
         t_total = time.perf_counter() - t0
-        imprimir_tablero_mercado(partidos_proc, t_total, args.jornada, args.operador)
+        imprimir_tablero_mercado(partidos_proc, t_total, jornada_activa, args.operador)
 
         if args.loop <= 0:
             break
