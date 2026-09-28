@@ -15,12 +15,20 @@ class TestLiveScraping:
         assert "xg" in standings[0], "Falta métrica xG en la tabla de FotMob"
 
     def test_pachuca_standings_matches_live_fotmob(self):
-        """[E2E] Verificación en vivo de Pachuca en la tabla de posiciones."""
+        """[E2E] Verificación en vivo de Pachuca en la tabla de posiciones.
+
+        [LN-QBE-003] Ítem 1 manda reflejar la tabla "al momento de la consulta"; por tanto la
+        vigilancia se ejerce sobre INVARIANTES CONTABLES (3 puntos por victoria, 1 por empate),
+        jamás sobre magnitudes fechadas del mundo real (cero valores quemados).
+        """
         standings = FotMobProvider.obtener_tabla_posiciones(262)
         pachuca = next((t for t in standings if "PACHUCA" in t["equipo"].upper()), None)
         assert pachuca is not None, "Club Pachuca no encontrado en la tabla."
-        assert pachuca["puntos"] == 8, f"Pachuca debe tener 8 puntos, se encontró: {pachuca['puntos']}."
-        assert pachuca["pj"] == 7, f"Pachuca debe tener 7 partidos jugados, se encontró: {pachuca['pj']}."
+        assert pachuca["pj"] == pachuca["pg"] + pachuca["pe"] + pachuca["pp"], \
+            f"Incoherencia de partidos jugados en Pachuca: {pachuca}."
+        assert pachuca["puntos"] == 3 * pachuca["pg"] + pachuca["pe"], \
+            f"Incoherencia de puntos en Pachuca (3·PG + PE): {pachuca}."
+        assert pachuca["pj"] >= 1, f"Pachuca no registra partidos jugados: {pachuca}."
 
     def test_all_18_teams_have_valid_dynamic_crests(self):
         """[E2E] Verificación de rutas de escudos dinámicos en vivo."""

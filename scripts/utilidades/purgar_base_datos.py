@@ -22,38 +22,36 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from src.storage.database import SessionLocal
 from src.storage.models import (
-    FixtureSnapshot,
-    StandingSnapshot,
-    PortfolioRecord,
-    CurrentTeamStanding,
-    MatchdayState
+    FixtureSnapshot, StandingSnapshot, PortfolioRecord,
+    CurrentTeamStanding, MatchdayState, Match,
+    SovereignDistribution, Slate, SlateItem
 )
 
 
 def purgar_base_datos():
-    """Ejecuta la purga selectiva de tablas volátiles en SQLite."""
-    print("🧹 Iniciando protocolo de saneamiento y purga selectiva SQLite...")
+    """[ARCH-1.6.10-B] Purga atómica total de entidades 3NF y snapshots volátiles."""
+    print("🧹 Iniciando protocolo de saneamiento y purga atómica 3NF...")
     session = SessionLocal()
     try:
+        n_items = session.query(SlateItem).delete()
+        n_slates = session.query(Slate).delete()
+        n_dist = session.query(SovereignDistribution).delete()
+        n_matches = session.query(Match).delete()
         n_fixtures = session.query(FixtureSnapshot).delete()
         n_standings = session.query(StandingSnapshot).delete()
         n_portfolio = session.query(PortfolioRecord).delete()
-        n_current_standings = session.query(CurrentTeamStanding).delete()
-        n_matchday_states = session.query(MatchdayState).delete()
+        n_current = session.query(CurrentTeamStanding).delete()
+        n_states = session.query(MatchdayState).delete()
 
         session.commit()
-
-        print("✅ Purga selectiva ejecutada con éxito:")
-        print(f"   - Fixture Snapshots eliminados: {n_fixtures}")
-        print(f"   - Standing Snapshots eliminados: {n_standings}")
-        print(f"   - Portfolio Records eliminados: {n_portfolio}")
-        print(f"   - Current Team Standings eliminados: {n_current_standings}")
-        print(f"   - Matchday States eliminados: {n_matchday_states}")
-        print("🔒 Catálogos inmutables de 'leagues' y 'teams' PRESERVADOS INTACATOS.")
+        print("✅ Purga atómica 3NF completada:")
+        print(f"   - SlateItems: {n_items} | Slates: {n_slates}")
+        print(f"   - SovereignDistributions: {n_dist} | Matches: {n_matches}")
+        print(f"   - Snapshots: {n_fixtures + n_standings} | Standings: {n_current}")
+        print("🔒 Catálogos maestros de 'leagues' y 'teams' PRESERVADOS INTATCOS.")
     except Exception as e:
         session.rollback()
-        print(f"❌ Error durante la purga de SQLite: {e}")
-        sys.exit(1)
+        raise e
     finally:
         session.close()
 

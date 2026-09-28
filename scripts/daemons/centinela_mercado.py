@@ -159,21 +159,25 @@ def extraer_mercado_viva(partidos_slate: List[Dict[str, Any]], operador: str = "
 # del sensor de mercado emana de la bóveda 3NF, nunca de un valor por defecto.
 
 def resolver_jornada_activa_dinamica(fixtures_por_jornada: Dict[int, List[Dict[str, Any]]]) -> Optional[int]:
-    """
-    [ARCH-1.6.15] Resuelve la jornada activa sin constantes quemadas.
-
-    Mecanismo obligatorio (determinista):
-      1. Se ordenan ascendentemente las jornadas registradas en la bóveda.
-      2. La jornada activa es la PRIMERA que contenga al menos un partido en
-         estado `PROGRAMADO`.
-      3. Si todas las jornadas están concluidas, devuelve la ÚLTIMA registrada.
-      4. Sin jornadas registradas devuelve `None` (cero invención de datos).
-    """
+    """[ARCH-1.6.15-B] Resuelve la jornada con cartelera regular abierta inmediata (ignora fechas lejanas)."""
     if not fixtures_por_jornada:
         return None
 
     jornadas = sorted(int(j) for j in fixtures_por_jornada.keys())
 
+    # 1. Buscar la jornada que tenga una cartelera regular activa inmediata (no lejana)
+    for jornada in jornadas:
+        partidos = fixtures_por_jornada.get(jornada) or []
+        partidos_inmediatos = [
+            p for p in partidos
+            if str((p or {}).get("estado", "")) == "PROGRAMADO"
+            and (p or {}).get("sub_badge") != "Fecha Lejana"
+        ]
+        # Si tiene partidos programados en la ventana corriente, es la jornada viva de ventanilla
+        if len(partidos_inmediatos) >= 3:
+            return jornada
+
+    # 2. Fallback: última jornada registrada
     for jornada in jornadas:
         partidos = fixtures_por_jornada.get(jornada) or []
         if any(str((p or {}).get("estado", "")) == "PROGRAMADO" for p in partidos):

@@ -221,9 +221,26 @@ def sync_league_live_board(
     ).order_by(StandingSnapshot.captured_at.desc()).first()
 
     if not snap_jornada:
+        # [ARCH-1.6.15-B] CORTE VIGENTE: si la jornada mostrada todavía no registra corte
+        # propio (fecha no concluida), la tabla válida es la acumulada al cierre de la ÚLTIMA
+        # jornada CONCLUIDA registrada en la bóveda (mayor `matchday <= jornada_mostrada`).
+        # PROHIBIDO el corte regresivo: `captured_at` NO discrimina (las capturas masivas
+        # comparten timestamp) y ordenar sólo por él entregaba el corte de la J1.
+        snap_jornada = db.query(StandingSnapshot).filter(
+            StandingSnapshot.league_id == league.id,
+            StandingSnapshot.matchday <= jornada_mostrada
+        ).order_by(
+            StandingSnapshot.matchday.desc(),
+            StandingSnapshot.captured_at.desc()
+        ).first()
+
+    if not snap_jornada:
         snap_jornada = db.query(StandingSnapshot).filter(
             StandingSnapshot.league_id == league.id
-        ).order_by(StandingSnapshot.captured_at.desc()).first()
+        ).order_by(
+            StandingSnapshot.matchday.desc(),
+            StandingSnapshot.captured_at.desc()
+        ).first()
 
     if not snap_jornada or not snap_jornada.positions_json:
         raise RuntimeError("Base de datos sin tabla de posiciones.")

@@ -104,7 +104,17 @@ async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = n
         }
 
         renderizarPildorasJornada(currentLiveBoard);
-        renderizarTabla18Clubes(currentLiveBoard.standings);
+
+        // [DES-QBE-051] Guarda de bóveda vacía: banner didáctico, jamás excepción roja
+        if (!currentLiveBoard.standings || currentLiveBoard.standings.length === 0) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:#94A3B8;">
+                ℹ️ Base de datos en reposo / vacía.<br>
+                <span style="font-size:8pt; color:#38BDF8;">Vaya a <strong>[ ⚙️ Centro de Control ]</strong> y presione <em>"⚡ Ejecutar Cadena de Ingesta Total"</em> para sincronizar la liga en vivo.</span>
+            </td></tr>`;
+        } else {
+            renderizarTabla18Clubes(currentLiveBoard.standings);
+        }
+
         renderizarCartelera(currentLiveBoard.fixtures);
     } catch (e) {
         console.error("Error cargando live board:", e);

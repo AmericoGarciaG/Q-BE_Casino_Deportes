@@ -415,7 +415,8 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
 
         # ── PERSISTENCIA DE SNAPSHOTS CON PROBABILIDADES YA INTEGRADAS ──
         for r, fixtures_r in datos["fixtures_por_jornada"].items():
-            lista_final = (fixtures_r + datos["reprogramados"]) if r == 8 else fixtures_r
+            # [ARCH-1.6.13-B] Erradicación de duplicados: se respeta la jornada de origen
+            lista_final = fixtures_r  # CERO inyecciones arbitrarias en r == 8
 
             snap_fix = tx.query(FixtureSnapshot).filter(
                 FixtureSnapshot.league_id == league.id,

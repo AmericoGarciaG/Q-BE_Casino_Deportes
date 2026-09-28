@@ -458,6 +458,16 @@
 * **Derogación de Restricción Rígida:** Se deroga formalmente el uso de `max-width: 145px;` en `.team-home-cell` y `.team-away-cell`.
 * **Regla Tipográfica:** Las celdas adoptan `min-width: 0; width: 100%; font-size: 0.88rem; font-weight: 700;`. El texto largo debe fluir de forma elástica dentro del grid simétrico `1fr auto 1fr`, impidiendo que nombres como *"Chivas Guadalajara"* o *"Rayados de Monterrey"* sean truncados prematuramente.
 
+### [DES-QBE-050] Tooltips Didácticos Fiduciarios en el Centro de Control [UX-MANDATE]
+* Cada botón de tarea en `#view-control-center` debe incorporar un atributo descriptivo explícito (`title` o tarjeta hover) estructurado en tres niveles:
+  1. **Qué hace:** La subrutina exacta que invoca.
+  2. **Cuándo usar:** El momento operativo del ciclo de jornada.
+  3. **Impacto y Restauración:** Para herramientas destructivas (purga), advierte qué tablas vacía y explica que se restaura pulsando `[ ⚡ Ejecutar Toda la Cadena de Ingesta ]`.
+
+### [DES-QBE-051] Banner Didáctico de Base de Datos Vacía en Live Board [UX-MANDATE]
+* Si el cliente consulta la cartelera y la base de datos ha sido purgada, el panel izquierdo y derecho no deben exhibir errores de red (`❌ Error al conectar`); deben desplegar un banner estilizado Dark Fintech:
+  `ℹ️ Base de datos en reposo / vacía. Vaya a [ ⚙️ Centro de Control ] y presione "⚡ Ejecutar Cadena de Ingesta Total" para sincronizar la liga.`
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 7:** los nodos `[ARCH-1.6.15]`,
 > `[ARCH-1.4.12]` y `[ARCH-1.6.16]` (registrados en `docs/ARCH.md`) y `[DES-QBE-048]` /
 > `[DES-QBE-049]` se sellan sin colisión con los identificadores `042`–`047` previamente
@@ -466,6 +476,12 @@
 > `tests/shield/test_shield_admin_tasks_and_dynamic_matchday.py` (Juez Inmutable Twin-Test).
 > **Derogación expresa:** `[DES-QBE-049]` deroga la restricción `max-width: 145px;` y la
 > deuda abierta `O-2` declarada en `src/web/static/css/theme.css` (bloque `[DES-QBE-046]`).
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7.5:** los nodos `[DES-QBE-050]` y
+> `[DES-QBE-051]` se sellan sin colisión con los identificadores `042`–`049` previamente
+> legislados. Referencia cruzada: `docs/ARCH.md` (`[ARCH-1.6.15-B]`, `[ARCH-1.6.10-B]`,
+> `[ARCH-1.4.13]`) y `tests/shield/test_shield_market_resolution_and_purge.py` (Juez
+> Inmutable Twin-Test en Estado RED certificado).
 
 
 

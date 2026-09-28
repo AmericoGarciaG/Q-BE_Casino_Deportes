@@ -315,6 +315,10 @@ Cada partido almacenarás en `matches_json`:
   - `purgar_base_datos` (Reset selectivo de snapshots)
 * **Contrato de Salida:** `AdminTaskResponse(task_id: str, exit_code: int, output: str, duration_s: float)`
 
+### [ARCH-1.4.13] Guarda de Resiliencia ante Base de Datos Vacía en Live Board [ARCH-PILLAR]
+* Si `sync_league_live_board` o `leagues.py` se consultan tras una purga (cuando no existen snapshots en SQLite), el backend tiene prohibido arrojar HTTP 500 ("Error al obtener Live Board").
+* Debe retornar HTTP 200 con payload neutro estructurado (`{"standings": [], "fixtures": [], "db_vacia": true}`), permitiendo que la UI muestre una guía didáctica en lugar de un fallo roto.
+
 ---
 
 ### [ARCH-1.5.0] Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR]
@@ -604,6 +608,17 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 * **Utilidad de Purga (`scripts/utilidades/purgar_base_datos.py`):** Permite el reseteo selectivo de las tablas volátiles de snapshots (`fixture_snapshots`, `standing_snapshots`, `portfolio_records`) preservando de forma inmutable el catálogo de `leagues` y `teams`.
 * **Axioma de Inferencia Diferida (Lazy-Loading Cognitivo):** Al generar la cartera en `POST /api/portfolio/generate`, el campo `tesis_didactica` debe emitirse strictly como `None` o `"PENDIENTE"`. La invocación a `GeminiCognitiveGateway` se ejecuta de forma exclusiva bajo demanda a través de `POST /api/portfolio/match-thesis` al abrir el modal de Radiografía Forense.
 
+### [ARCH-1.6.10-B] Purga Atómica y Limpieza Relacional 3NF [ARCH-PILLAR]
+* Al invocar la purga de la base de datos, el script debe vaciar en una sola transacción todas las tablas dependientes y volátiles:
+  - `portfolio_records`
+  - `slate_items` y `slates`
+  - `sovereign_distributions`
+  - `matches`
+  - `standing_snapshots` y `fixture_snapshots`
+  - `current_team_standings` y `matchday_states`
+* **Inmutabilidad de Catálogo:** Las tablas maestras `leagues` y `teams` quedan estrictamente preservadas e intactas.
+* Se erradica cualquier estado zombi (tener partidos pero no tablas, o tener cuotas sin distribución).
+
 ### [ARCH-1.6.11] Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`) [DIRGEN-SEALED]
 
 * **Propósito:** Actuar como el puente transaccional definitivo entre los datos deportivos y la tabla relacional 3NF `sovereign_distributions`.
@@ -650,6 +665,10 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
   - Persiste un `StandingSnapshot` y un `FixtureSnapshot` para cada jornada de la temporada en SQLite.
 * **Soberanía Dinámica:** Cero constantes o tuplas de partidos quemadas en código Python (`[GOVERNANCE-01]`). Todo emana dinámicamente de la red vía FotMob Opta (League 230).
 
+### [ARCH-1.6.13-B] Unicidad Estricta de Encuentros Reprogramados [ARCH-PILLAR]
+* **Regla de No Duplicación:** Queda estrictamente prohibido inyectar partidos reprogramados en jornadas arbitrarias mediante condiciones fijas (`if r == 8: ...`).
+* Un partido reprogramado pertenece exclusivamente a su jornada de origen o se consolida en una sola bandeja de pendientes; jamás debe coexistir duplicado en los snapshots de dos jornadas distintas (ej. aparecer en J7 y J8 simultáneamente).
+
 ### [ARCH-1.6.15] Resolución Dinámica de Jornada Activa en Sensores de Mercado [ARCH-PILLAR]
 * **Problema:** Un valor quemado por defecto (`--jornada 10`) provoca que al concluir los partidos de una fecha, el sensor escanee una jornada finalizada cuyas cuotas han sido retiradas por los casinos (0/9 encontrados).
 * **Mecanismo Obligatorio:** Si `centinela_mercado.py` se invoca sin el argumento `--jornada` (o en modo automático):
@@ -657,6 +676,16 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
   2. Resuelve la **primera jornada que contenga al menos un partido en estado `PROGRAMADO`**.
   3. Si la Jornada 10 ya finalizó en su totalidad, conmuta automáticamente a la **Jornada 11**.
   4. Si todas las jornadas están concluidas, selecciona la última disponible.
+
+### [ARCH-1.6.15-B] Desacoplamiento Cronológico en Sensores de Mercado [ARCH-PILLAR]
+* **Principio de Asincronía Fáctica:**
+  - En la federación (LigaMX.net / FotMob), una jornada permanece administrativamente "activa" en sus calendarios incluso después de que los 9 partidos han finalizado el domingo, hasta que ellos cambian el ciclo a mitad de semana.
+  - En las casas de apuestas (Caliente.mx / Betway.mx), las cuotas se retiran en el minuto en que los partidos concluyen. Los casinos ofrecen exclusivamente los partidos por jugarse y abren de inmediato la **siguiente jornada cronológica**.
+* **Mecanismo de Resolución del Slate de Mercado:**
+  Para determinar qué jornada debe escanear `centinela_mercado.py`:
+  1. No debe depender de la etiqueta administrativa "activa" de la liga.
+  2. Debe identificar la jornada con la **fecha de juego más próxima hacia el futuro** ($t_{\text{kickoff}} \ge t_{\text{ahora}}$), descartando jornadas cuyos 9 partidos ya finalizaron.
+  3. Los partidos reprogramados a fechas lejanas ($> 14$ días, ej. juegos de noviembre) no deben desviar el sensor hacia jornadas pasadas vacías. El sensor debe apuntar a la jornada ordinaria con cartelera regular abierta (ej. Jornada 11).
 
 ### [ARCH-1.6.16] Política de Depuración y Archivado de Sondas Temporales [ARCH-PILLAR]
 * Las herramientas de diagnóstico de un solo uso o superadas (`sonda_diagnostico_progol.py`, `sonda_diagnostico_betway.py`, `aislar_fuga_probabilidades.py`, `comprobar_payload_http.py`, `simulador_pantalla_soberana.py`, `migrar_schema_slates.py`, `exportar_volumen1_word.py`) se mueven a `scripts/archive/` para preservar la higiene del repositorio.
@@ -667,6 +696,16 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 > sellado. Los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no
 > asignados** (cero reutilización). Juez Inmutable asociado:
 > `tests/shield/test_shield_admin_tasks_and_dynamic_matchday.py`.
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7.5:** los nodos `[ARCH-1.6.15-B]`,
+> `[ARCH-1.6.13-B]`, `[ARCH-1.6.10-B]` y `[ARCH-1.4.13]` se incorporan como enmiendas
+> correctivas ancladas a sus nodos matrices sellados (`[ARCH-1.6.15]`, `[ARCH-1.6.13]`,
+> `[ARCH-1.6.10]`, `[ARCH-1.4.12]`) sin alterar una sola coma de los planos vigentes.
+> Los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no asignados**
+> (cero reutilización). Juez Inmutable asociado:
+> `tests/shield/test_shield_market_resolution_and_purge.py` (Twin-Test en Estado RED
+> certificado; la materialización en `src/` y `scripts/` queda supeditada a la
+> autorización de la Tríada).
 
 ---
 
