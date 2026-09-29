@@ -30,6 +30,10 @@ class TicketOrder(BaseModel):
     seleccion: str
     momio: float = Field(ge=0.0)  # Permite 0.0 en boletos sin seguro (D1)
     monto_mxn: float = Field(ge=0.0)
+    # [ARCH-1.5.10 / DES-QBE-053] Casa patrocinadora que publica el momio de ESTA pierna.
+    # En modalidad MEJOR_COMBINACION cada boleto puede viajar en un operador distinto;
+    # el campo es opcional para no romper el contrato de la modalidad mono-operador.
+    operador: Optional[str] = None
 
 
 class MatchTickets(BaseModel):
@@ -87,6 +91,19 @@ class PortfolioControl(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
     modalidad: Literal["BANKROLL", "VAQUITA"]
     total_partidos_core_aprobados: int
+    # [ARCH-1.4.14] Denominador fáctico de cartelera: partidos que componen la fecha en
+    # `FixtureSnapshot.matches_json` (ej. 9 en Liga MX). Garantiza que el frontend exhiba
+    # con veracidad K / 9 y nunca K / K. Viaja junto al numerador core aprobado.
+    total_partidos_jornada: int = Field(
+        default=9,
+        ge=0,
+        description="Total de partidos que componen la fecha oficial"
+    )
+    total_partidos_escaneados: int = Field(
+        default=9,
+        ge=0,
+        description="[ARCH-1.4.14] Partidos escaneados de la jornada (denominador fáctico KPI)"
+    )
     capital_total_core_mxn: float
     probabilidad_ruina_total_porcentaje: float
     blindaje_global_preservacion_porcentaje: float

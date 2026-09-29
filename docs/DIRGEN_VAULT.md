@@ -1598,3 +1598,54 @@ def escalar_a_piso_ventanilla(b_total: float, o_emp: float, piso_min: float = 2.
     b_prio = round(b_total - b_seg, 2)
     return (b_prio, b_seg, round(b_total, 2))
 ```
+---
+
+## [VAULT-CORE-070-PRORRATEO] Prorrateo Resiliente con Respeto al Piso de Ventanilla (`portfolio_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-PRORRATEO-PISO-2PESOS  
+
+```python
+def aplicar_hard_caps_con_respeto_a_piso(
+    ordenes: List[Dict[str, Any]],
+    bankroll: float,
+    cap_partido_pct: float = 0.08,
+    cap_cartera_pct: float = 0.25,
+    piso_min_boleto: float = 2.00
+) -> List[Dict[str, Any]]:
+    """[LN-QBE-070-E] Prorratea el capital respetando el piso de $2.00 MXN en el seguro."""
+    if bankroll <= 0.0 or not ordenes:
+        return ordenes
+
+    cap_max_partido = round(bankroll * cap_partido_pct, 2)
+    cap_max_cartera = round(bankroll * cap_cartera_pct, 2)
+
+    # 1. Aplicar tope individual
+    for ord_item in ordenes:
+        inv = float(ord_item.get("inversion_total", 0.0))
+        if inv > cap_max_partido:
+            ord_item["inversion_total"] = cap_max_partido
+
+    total_inv = sum(float(o.get("inversion_total", 0.0)) for o in ordenes)
+
+    # 2. Prorrateo global si excede el 25% del bankroll
+    if total_inv > cap_max_cartera and total_inv > 0.0:
+        factor_escala = cap_max_cartera / total_inv
+        for ord_item in ordenes:
+            inv_inicial = float(ord_item.get("inversion_total", 0.0))
+            nueva_inv = round(inv_inicial * factor_escala, 2)
+
+            # Si es orden con seguro en tablas (H1/H2), proteger el piso de $2.00
+            o_emp = float(ord_item.get("odd_emp", 3.30))
+            seguro_teorico = nueva_inv / o_emp if o_emp > 1.0 else 0.0
+
+            if seguro_teorico < piso_min_boleto and ord_item.get("strategy_code") in ("QBE-H1", "QBE-H2"):
+                # Fijar el seguro en el piso mínimo y ajustar la inversión
+                b_seg = piso_min_boleto
+                nueva_inv = max(nueva_inv, round(b_seg * o_emp, 2))
+
+            ord_item["inversion_total"] = nueva_inv
+
+    return ordenes
+```
+

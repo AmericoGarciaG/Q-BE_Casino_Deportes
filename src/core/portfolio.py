@@ -7,9 +7,9 @@ el techo aritmético de cartera.
 """
 
 import itertools
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.core.catalog import STRATEGY_CATALOG
-from src.core.contracts.portfolio_math import aplicar_hard_caps_constitucionales
+from src.core.contracts.portfolio_math import calcular_kelly_atenuado, aplicar_hard_caps_constitucionales
 from src.models.decision import (
     MatchExecutionOrder, StrategySelection, KeyMetrics, TicketOrder,
     MatchTickets, Projections, CashoutTargets, SatelliteModule,
@@ -19,6 +19,33 @@ from src.models.decision import (
 # [LN-QBE-071] Piso canónico de ventanilla: ÚNICA fuente de verdad del piso mínimo por boleto.
 # Erradica los literales históricos (4.00 en asignación y 2.00 redeclarado dentro del bucle).
 PISO_MINIMO_BOLETO = 2.00
+
+
+def _casa_de_la_pierna(m: Dict[str, Any], momio_pierna: float,
+                       o_fav: float, o_emp: float, o_und: float) -> Optional[str]:
+    """[DES-QBE-053 / ARCH-1.5.10] Casa patrocinadora que publica el momio de UNA pierna.
+
+    Atribución fáctica por IDENTIDAD del momio: cada boleto viaja con la casa que realmente
+    publica la cuota que ese boleto transporta (`H2`: boleto 1 -> o_fav, boleto 2 -> o_emp;
+    `H1`: boleto 1 -> o_emp, boleto 2 -> o_fav; `R1`/`R2`: boleto 2 -> o_und). Cero heurística
+    de nombres y cero invención: si el payload no declara casas (modalidad mono-operador
+    heredada) devuelve `None` y la ventanilla exhibe su rótulo genérico de degradación.
+    Función de ROTULADO: no interviene en ninguna magnitud de capital, Kelly o Hard-Caps.
+    """
+    op_fav = m.get("operador_ataque")
+    op_emp = m.get("operador_seguro")
+    op_und = m.get("operador_und") or op_fav
+    try:
+        leg = round(float(momio_pierna), 4)
+    except (TypeError, ValueError):
+        return str(op_fav) if op_fav else (str(op_emp) if op_emp else None)
+    if op_fav is not None and leg == round(float(o_fav), 4):
+        return str(op_fav)
+    if op_emp is not None and leg == round(float(o_emp), 4):
+        return str(op_emp)
+    if op_und is not None and leg == round(float(o_und), 4):
+        return str(op_und)
+    return None
 
 
 def calcular_trinidad_resiliencia_3k(ordenes_data: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -210,8 +237,12 @@ class PortfolioEngine:
         cls,
         approved_matches: List[Dict[str, Any]],
         bankroll: float,
-        mode: str = "BANKROLL"
+        mode: str = "BANKROLL",
+        total_jornada: int = 9
     ) -> PortfolioExecutionPlan:
+        # [ARCH-1.4.14] `total_jornada` es el denominador fáctico de la cartelera: la cantidad
+        # total de partidos que componen la fecha oficial (ej. 9 en Liga MX). Se propaga VERBATIM
+        # desde el snapshot de origen; el motor NO lo deriva de K (jamás K / K).
         # [LN-QBE-070-C] Contrato Extendido R-1 (Estratos Epistemicos).
         # Todo `CandidateMatchPayload` porta obligatoriamente delta_epist (discrepancia ponderada)
         # y psi_epist (factor cuadratico de atenuacion). Defaults legislados por la Directiva
@@ -263,7 +294,14 @@ class PortfolioEngine:
             nombre = m["strategy_nombre"]
             ev_roi = m["ev_neto_roi"]
             psi = m["psi_downside"]
-            phi = m["phi_lead2"]
+            phi = m.get("phi_lead2", 0.0)
+            # [LN-QBE-070-C] `phi_lead2` es el diagnóstico André del partido. Un payload que
+            # omite la llave (snapshot sin evaluación André) se declara NO EVALUADO con el valor
+            # neutro ya legislado en el plano canónico (`docs/DIRGEN_VAULT.md`: `phi_lead2_home=0.0,
+            # phi_lead2_away=0.0` en la rama de suficiencia informativa insuficiente). Cero número
+            # nuevo y cero efecto sobre Kelly / Hard-Caps: el campo sólo alimenta el reporte
+            # descriptivo `KeyMetrics.phi_lead2_prob_ventaja_2_goles`.
+            # VARIANCE-03-F7.6 (sometida a ratificación de la Tríada).
             o_fav, o_emp, o_und = m["odd_fav"], m["odd_emp"], m["odd_und"]
             fav_name, und_name = m["fav_name"], m["und_name"]
 
@@ -276,13 +314,14 @@ class PortfolioEngine:
                 # y (c) el piso no legislado `max(4.00, ...)`. Los techos (8.0% individual y 25.0%
                 # global de jornada) son competencia EXCLUSIVA de `aplicar_hard_caps_constitucionales`
                 # (portfolio_math.py); el piso operativo es el de ventanilla [LN-QBE-071].
-                # Techo por partido derivado del Edge soberano: f* = α / (O_primaria − 1) (Kelly puro).
-                o_primaria = m.get("odd_emp") if "H2" in code else (
-                    m.get("odd_und") if code in ("QBE-R1", "QBE-R2") else m.get("odd_fav")
-                )
-                o_primaria = float(o_primaria or 0.0)
-                f_kelly_puro = (float(ev_roi) / (o_primaria - 1.0)) if o_primaria > 1.0 else 0.0
-                inv_partido = min(bolsa_core * weights[idx], bankroll * max(0.0, f_kelly_puro))
+                # [LN-QBE-070-B] Delegación analítica pura a Kelly atenuado sin divisores empíricos.
+                p_fav_i = float(m.get("prob_fav", 55.0)) / 100.0 if float(m.get("prob_fav", 55.0)) > 1.0 else float(m.get("prob_fav", 0.55))
+                o_fav_i = float(m.get("odd_fav", 2.0))
+                delta_epist_i = float(m.get("delta_epist", 0.02))
+
+                f_kelly = calcular_kelly_atenuado(p=p_fav_i, o=o_fav_i, delta_epist=delta_epist_i, gamma_kelly=0.25)
+                cap_i = min(0.08, max(0.02, f_kelly)) if f_kelly > 0 else 0.02
+                inv_partido = min(bolsa_core * weights[idx], bankroll * cap_i)
                 inv_partido = round(max(PISO_MINIMO_BOLETO, inv_partido), 2)
             else:
                 inv_partido = 10.00
@@ -421,6 +460,11 @@ class PortfolioEngine:
             b2_monto = item["b2_monto"]
             out_min85 = item["out_min85"]
             tablas_amt = item["tablas_amt"]
+            # [DES-QBE-053 / ARCH-1.5.10] Cuotas CANÓNICAS DE ESTE ÍTEM. La casa de cada pierna se
+            # resuelve contra las cuotas del partido en curso; jamás contra variables heredadas de
+            # otra iteración del bucle anterior (defecto de variable obsoleta detectado en la prueba
+            # de fuego E2E: el boleto del partido N se comparaba contra el momio del partido último).
+            o_fav_i, o_emp_i, o_und_i = m["odd_fav"], m["odd_emp"], m["odd_und"]
 
             if code == "QBE-R2":
                 ganancia_neta = round(min(b1_monto * b1_momio, b2_monto * b2_momio) - inv_partido, 2)
@@ -467,8 +511,10 @@ class PortfolioEngine:
                 },
                 boletos=MatchTickets(
                     inversion_partido_A_i=inv_partido,
-                    boleto_1_seguro=TicketOrder(seleccion=b1_sel, momio=b1_momio, monto_mxn=b1_monto),
-                    boleto_2_ganancia=TicketOrder(seleccion=b2_sel, momio=b2_momio, monto_mxn=b2_monto)
+                    boleto_1_seguro=TicketOrder(seleccion=b1_sel, momio=b1_momio, monto_mxn=b1_monto,
+                                                operador=_casa_de_la_pierna(m, b1_momio, o_fav_i, o_emp_i, o_und_i)),
+                    boleto_2_ganancia=TicketOrder(seleccion=b2_sel, momio=b2_momio, monto_mxn=b2_monto,
+                                                  operador=_casa_de_la_pierna(m, b2_momio, o_fav_i, o_emp_i, o_und_i))
                 ),
                 proyecciones=Projections(
                     ganancia_neta_principal_mxn=ganancia_neta,
@@ -574,6 +620,8 @@ class PortfolioEngine:
             control_portafolio=PortfolioControl(
                 modalidad="BANKROLL" if mode == "BANKROLL" else "VAQUITA",
                 total_partidos_core_aprobados=k_count,
+                total_partidos_jornada=int(total_jornada),
+                total_partidos_escaneados=int(total_jornada),
                 capital_total_core_mxn=total_inv_core,
                 probabilidad_ruina_total_porcentaje=round(p_ruina_total, 4),
                 blindaje_global_preservacion_porcentaje=round(blindaje, 4),

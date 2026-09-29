@@ -192,11 +192,10 @@ def sync_league_live_board(
     m_state = db.query(MatchdayState).filter(MatchdayState.league_id == league.id).first()
     
     # ── [ARCH-1.6.15 / ARCH-1.4.10] JORNADA ACTUAL DINÁMICA: CERO CONSTANTES QUEMADAS ──
-    # [GOVERNANCE-01] Antes existía una celda rígida (`jornada_actual = 10`) que al concluir
-    # la fecha dejaba el tablero anclado en una jornada sin mercado. Ahora la jornada activa
-    # se resuelve algebraicamente del estado fáctico de la bóveda (ver
-    # `resolver_jornada_actual_dinamica`) y se refleja en el ledger `MatchdayState` para el
-    # puente PM-FACE. Cero invención de datos: bóveda vacía ⇒ se conserva el valor ledgerado.
+    # [ARCH-1.6.15-C] Resolución dinámica de jornada_actual (se resuelve con resolver_jornada_activa_dinamica)
+    # [GOVERNANCE-01] La jornada nunca se transcribe: emana del estado fáctico de la bóveda
+    # (ver `resolver_jornada_actual_dinamica`) y se refleja en el ledger `MatchdayState` para
+    # el puente PM-FACE. Cero invención de datos: bóveda vacía ⇒ se conserva el valor ledgerado.
     jornada_actual = resolver_jornada_actual_dinamica(db, league.id)
     if jornada_actual is None and m_state and m_state.matchday_num:
         jornada_actual = int(m_state.matchday_num)

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-🏆 Q-BE CD WEB — CENTINELA AUTÓNOMO DE MERCADO Y CUOTAS MULTI-OPERADOR (CALIENTE & BETWAY)
+🏆 Q-BE CD WEB — CENTINELA AUTÓNOMO DE MERCADO Y CUOTAS MULTI-OPERADOR (CALIENTE, BETWAY & NOVIBET)
 [SDLC-02: Standalone Background Engine — Market & Ledger Edition]
-[LN-QBE-007-B, C, D, E] & [ARCH-1.4.7]
+[LN-QBE-007-B, C, D, E] & [ARCH-1.4.7] & [ARCH-1.4.6-F]
 Ingesta Fáctica, Normalización, Descuento de Margen, Arbitraje Cross-Market y Consenso Multi-Operador.
 Base de Gobierno: Kybern Framework v12.0 / v13.5
 """
@@ -28,6 +28,7 @@ from src.storage.gateway import PersistenceGateway
 from src.storage.models import League, FixtureSnapshot, SovereignDistribution
 from src.ingestion.caliente_scraper import CalienteMarketScraper
 from src.ingestion.betway_scraper import BetwayMarketScraper
+from src.ingestion.novibet_scraper import NovibetMarketScraper
 from src.ingestion.normalizer import canonicalize_team_name
 from src.core.triage import evaluar_viabilidad_cuotas
 
@@ -131,7 +132,8 @@ def calcular_consenso_y_deltas(prob_ops: Dict[str, Dict[str, float]], p_qbe: Tup
 
 def extraer_mercado_viva(partidos_slate: List[Dict[str, Any]], operador: str = "todos") -> Dict[str, List[Dict[str, Any]]]:
     """
-    Sincroniza la ingesta de cuotas 1X2 desde los operadores especificados (caliente, betway, todos).
+    Sincroniza la ingesta de cuotas 1X2 desde los operadores especificados
+    (caliente, betway, novibet, todos).
     """
     resultados = {}
 
@@ -150,6 +152,17 @@ def extraer_mercado_viva(partidos_slate: List[Dict[str, Any]], operador: str = "
         except Exception as e:
             logger.error(f"Error escaneando Betway.mx: {e}")
             resultados["betway"] = []
+
+    # [ARCH-1.4.6-F] Frente Novibet.mx: sensor Feed-First (intercepción de /spt/feed/). Es el
+    # tercer operador del terceto Caliente–Betway–Novibet; su captura entra al mismo mapa
+    # `momios_operadores` y por tanto al comparador de arbitraje cross-market.
+    if operador in ("novibet", "todos"):
+        logger.info(f"Escaneando Novibet.mx para {len(partidos_slate)} partidos...")
+        try:
+            resultados["novibet"] = NovibetMarketScraper.extraer_cuotas_focalizadas(partidos_slate)
+        except Exception as e:
+            logger.error(f"Error escaneando Novibet.mx: {e}")
+            resultados["novibet"] = []
 
     return resultados
 
@@ -241,6 +254,9 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
             # Mapa de operadores preservando estado previo si existe
             momios_operadores = dict(fx.get("momios_operadores") or {})
 
+            # [ARCH-1.4.6-F] El bucle es genérico sobre `dict_cuotas`: la captura de Novibet se
+            # persiste en `momios_operadores["novibet"]` sin ramas especiales, alimentando de
+            # forma automática las probabilidades sin comisión y el detector de arbitraje.
             for op_name, cuotas_list in dict_cuotas.items():
                 cuota_match = None
                 for c in cuotas_list:
@@ -299,6 +315,7 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
 
             caliente_m = momios_operadores.get("caliente")
             betway_m = momios_operadores.get("betway")
+            novibet_m = momios_operadores.get("novibet")
 
             l_cal = caliente_m["L"] if caliente_m else 0.0
             e_cal = caliente_m["E"] if caliente_m else 0.0
@@ -307,6 +324,10 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
             l_btw = betway_m["L"] if betway_m else 0.0
             e_btw = betway_m["E"] if betway_m else 0.0
             v_btw = betway_m["V"] if betway_m else 0.0
+
+            l_nov = novibet_m["L"] if novibet_m else 0.0
+            e_nov = novibet_m["E"] if novibet_m else 0.0
+            v_nov = novibet_m["V"] if novibet_m else 0.0
 
             best_l = arb_res["mejor_L"]["momio"]
             best_e = arb_res["mejor_E"]["momio"]
@@ -328,6 +349,7 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
                 "horario": fx.get("horario", ""),
                 "caliente": {"L": l_cal, "E": e_cal, "V": v_cal, "pa": caliente_m.get("pa") if caliente_m else False},
                 "betway": {"L": l_btw, "E": e_btw, "V": v_btw, "pa": betway_m.get("pa") if betway_m else False},
+                "novibet": {"L": l_nov, "E": e_nov, "V": v_nov, "pa": novibet_m.get("pa") if novibet_m else False},
                 "best": {"L": best_l, "E": best_e, "V": best_v},
                 "consenso": consenso_res,
                 "deltas": (consenso_res["delta_L"], consenso_res["delta_E"], consenso_res["delta_V"]),
@@ -345,8 +367,11 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
 
 
 def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jornada: int, operador_sel: str) -> None:
-    banner = "=" * 165
-    subbanner = "-" * 165
+    # [ARCH-1.4.6-F] El tablero expone el terceto completo (Caliente | Betway | Novibet).
+    # El comparador `MEJOR 1X2` incorpora a Novibet de forma automática porque
+    # `evaluar_arbitraje_partido` itera sobre todo `momios_operadores`.
+    banner = "=" * 184
+    subbanner = "-" * 184
 
     print("\n" + banner)
     print(f"🏆 Q-BE CD WEB — TABLERO DE MERCADO Y TELEMETRÍA MULTI-CASINO (JORNADA {jornada})")
@@ -355,13 +380,15 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
     print(subbanner)
     print(
         f" #  {'HORARIO':<11} {'PARTIDO':<28} {'CALIENTE 1X2':<18} {'BETWAY 1X2':<18} "
-        f"{'MEJOR 1X2':<18} {'CONSENSO SIN COMISIÓN':<23} {'Q-BE VS MERCADO (DIFF)':<24} {'ARBITRAJE'}"
+        f"{'NOVIBET 1X2':<18} {'MEJOR 1X2':<18} {'CONSENSO SIN COMISIÓN':<23} "
+        f"{'Q-BE VS MERCADO (DIFF)':<24} {'ARBITRAJE'}"
     )
     print(subbanner)
 
     for idx, p in enumerate(partidos, 1):
         cal = p["caliente"]
         btw = p["betway"]
+        nov = p.get("novibet") or {"L": 0.0, "E": 0.0, "V": 0.0, "pa": False}
         bst = p["best"]
         con = p["consenso"]
         dL, dE, dV = p["deltas"]
@@ -369,6 +396,7 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
 
         c_txt = f"{cal['L']:.2f}/{cal['E']:.2f}/{cal['V']:.2f}" if cal['L'] > 0 else "—"
         b_txt = f"{btw['L']:.2f}/{btw['E']:.2f}/{btw['V']:.2f}" if btw['L'] > 0 else "—"
+        n_txt = f"{nov['L']:.2f}/{nov['E']:.2f}/{nov['V']:.2f}" if nov['L'] > 0 else "—"
         m_txt = f"{bst['L']:.2f}/{bst['E']:.2f}/{bst['V']:.2f}" if bst['L'] > 0 else "—"
         con_txt = f"{con['p_L_mercado']:.3f}/{con['p_E_mercado']:.3f}/{con['p_V_mercado']:.3f}" if con['p_L_mercado'] > 0 else "—"
         diff_txt = f"{dL:+.3f}/{dE:+.3f}/{dV:+.3f}" if con['p_L_mercado'] > 0 else "—"
@@ -380,23 +408,24 @@ def imprimir_tablero_mercado(partidos: List[Dict[str, Any]], duracion: float, jo
 
         print(
             f" {idx:<2} {p['horario']:<11} {p['partido']:<28} {c_txt:<18} {b_txt:<18} "
-            f"{m_txt:<18} {con_txt:<23} {diff_txt:<24} {arb_txt}"
+            f"{n_txt:<18} {m_txt:<18} {con_txt:<23} {diff_txt:<24} {arb_txt}"
         )
 
     print(subbanner)
     con_caliente = sum(1 for p in partidos if p["caliente"]["L"] > 1.0)
     con_betway = sum(1 for p in partidos if p["betway"]["L"] > 1.0)
+    con_novibet = sum(1 for p in partidos if (p.get("novibet") or {}).get("L", 0.0) > 1.0)
     aprobados = sum(1 for p in partidos if p["triaje"] == "APROBADO")
     arbitrajes = sum(1 for p in partidos if p["arbitraje"]["existe"])
 
-    print(f"INTEGRIDAD: Caliente ({con_caliente}/{len(partidos)}) | Betway ({con_betway}/{len(partidos)}) | Triaje Aprobados: {aprobados} | Arbitrajes (+EV): {arbitrajes}")
+    print(f"INTEGRIDAD: Caliente ({con_caliente}/{len(partidos)}) | Betway ({con_betway}/{len(partidos)}) | Novibet ({con_novibet}/{len(partidos)}) | Triaje Aprobados: {aprobados} | Arbitrajes (+EV): {arbitrajes}")
     print(banner + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Centinela de Mercado Autónomo Q-BE Multi-Operador")
     parser.add_argument("--jornada", type=int, default=None, help="Override manual de jornada (default: resolución dinámica [ARCH-1.6.15])")
-    parser.add_argument("--operador", choices=["caliente", "betway", "todos"], default="todos", help="Operador objetivo (caliente|betway|todos)")
+    parser.add_argument("--operador", choices=["caliente", "betway", "novibet", "todos"], default="todos", help="Operador objetivo (caliente|betway|novibet|todos)")
     parser.add_argument("--loop", type=int, default=0)
     args = parser.parse_args()
 

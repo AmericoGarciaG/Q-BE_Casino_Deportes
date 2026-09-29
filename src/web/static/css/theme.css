@@ -959,3 +959,26 @@ table.fintech-table {
 
 
 
+/* [DES-QBE-055 / ARCH-1.5.10-B] Emblema de Casa Patrocinadora en Boletos Split.
+   Deroga [DES-QBE-053]: alto máximo fijo 18px, sin borde azul tosco y CERO texto duplicado.
+   Pieza servida desde la boveda LOCAL de activos (/static/img/bookmakers/{slug}.png).
+   Cero hotlinking a servidores de terceros ([GOVERNANCE-01]). */
+.bookmaker-logo-inline {
+    height: 18px;
+    max-height: 18px;
+    width: auto;
+    vertical-align: middle;
+    margin-left: 4px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+}
+
+.ticket-action-label {
+    font-size: 7pt;
+    color: #94A3B8;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+

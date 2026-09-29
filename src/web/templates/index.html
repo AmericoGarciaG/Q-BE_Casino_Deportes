@@ -150,7 +150,13 @@
                     <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Casino:</label>
                         <select id="casino-operator-select" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; font-weight: 700; font-size: 8.5pt;">
-                            <option value="caliente" selected>Caliente_Deportes.MX</option>
+                            <!-- [DES-QBE-052] Mejor Combinación Cross-Market por defecto: el motor elige la casa máxima por pierna. -->
+                            <option value="mejor_combinacion" selected>⚡ Mejor Combinación (Cross-Market)</option>
+                            <option value="caliente">Caliente_Deportes.MX</option>
+                            <!-- [DES-QBE-057] Tercer operador del terceto: sensor Feed-First
+                                 ([ARCH-1.4.6-F], /spt/feed/marketviews/location/v2/) que persiste
+                                 en momios_operadores["novibet"]. -->
+                            <option value="novibet">Novibet.MX</option>
                             <!-- [DES-QBE-047] Operador certificado en backend ([LN-QBE-007], markets.py:332 momios_operadores) -->
                             <option value="betway">Betway.MX</option>
                         </select>

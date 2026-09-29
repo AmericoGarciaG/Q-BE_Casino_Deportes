@@ -221,6 +221,25 @@ Todo sensor de mercado (`caliente_scraper.py`, `betway_scraper.py`) debe emitir 
 ### [ARCH-1.4.6-E] Filtro de Descontaminación de Filas de Evento en Caliente [ARCH-PILLAR]
 * **Mecanismo:** Documentar el descarte de filas cruzadas que mencionen a clubes populares ajenos al par objetivo del slate oficial durante el scraping en Caliente.mx para prevenir la contaminación de mercados.
 
+### [ARCH-1.4.6-F] Sensor de Ingesta Novibet.mx por Intercepción de Feed JSON [ARCH-PILLAR]
+* **Fuente de Datos:** `https://www.novibet.mx/apuestas-deportivas/futbol/mexico/liga-mx`
+* **Arquitectura de Extracción:**
+  - Se materializa `src/ingestion/novibet_scraper.py` encapsulado en la clase `NovibetMarketScraper`.
+  - Emplea Playwright headless con pre-siembra de cookie de consentimiento (`CookieConsent`) para saltar Cookiebot en 0ms.
+  - Intercepta directamente las respuestas de red dirigidas a `/spt/feed/marketviews/location/v2/`.
+  - Extrae el mercado canónico `betTypeSysname == "SOCCER_MATCH_RESULT"` (1X2), leyendo `price` decimal nativo.
+  - Verifica la presencia del tag `SOCCER_2_GOALS_AHEAD_EARLY_PAYOUT` para activar `pago_anticipado = True`.
+  - **Ruta de Transporte Auditada (VARIANCE-01 §V-3-bis):** la hidratación del componente Angular de mercados y la emisión del feed se obtienen navegando la ruta de carrusel `https://www.novibet.mx/apuestas-deportivas/populares/4561745/competitions?ids=6791922,4596556,6589925&t=6792246` (el parámetro `t` transporta el `locationId` 6792246 del feed), esperando la señal DOM `sb-market-bet-item`. La ruta `/apuestas-deportivas/futbol/mexico/liga-mx` responde HTTP 200 pero no monta el componente de mercados y emite 0 respuestas del namespace.
+* **Persistencia en 3NF:**
+  - Almacena en `FixtureSnapshot.matches_json` bajo `momios_operadores["novibet"]`.
+
+> **Trazabilidad de registro (VARIANCE-01) — Volumen III (Novibet):** el nodo
+> `[ARCH-1.4.6-F]` se incorpora como **enmienda correctiva** anclada a su nodo matriz sellado
+> `[ARCH-1.4.6]` inmediatamente después de `[ARCH-1.4.6-E]`, sin colisión con los
+> identificadores previamente legislados (`[ARCH-1.4.6]`, `-C`, `-D`, `-E`). El contrato de
+> telemetría `[ARCH-1.4.6-C]` rige íntegramente sobre el nuevo sensor. Juez Inmutable:
+> `tests/shield/test_shield_novibet_ingestion.py`.
+
 ---
 
 ### [ARCH-1.4.7] Contrato de Telemetría Extendida en FixtureSnapshot.matches_json [ARCH-PILLAR]
@@ -707,6 +726,56 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 > certificado; la materialización en `src/` y `scripts/` queda supeditada a la
 > autorización de la Tríada).
 
+### [ARCH-1.4.14] Denominador Fáctico de Cartelera en Macro KPIs [ARCH-PILLAR]
+* En el payload emitido por el generador de cartera, el campo `total_partidos_escaneados` debe transportar estrictamente la cantidad total de partidos que componen la fecha en `FixtureSnapshot.matches_json` (ej. 9 partidos en Liga MX), garantizando que el frontend exhiba con veracidad $K / 9$ y no $K / K$.
+
+### [ARCH-1.4.15] Contrato de Disponibilidad Dinámica de Operadores en Ventanilla [ARCH-PILLAR]
+* El endpoint que alimenta el selector de casinos no debe fallar silenciosamente usando datos de otro casino. Si un operador carece de cuotas en la jornada activa, el backend debe marcarlo con `disponible: false`, y el frontend debe deshabilitarlo o rotularlo como `(Sin cuotas disponibles)`.
+
+### [ARCH-1.5.10] Bóveda de Activos de Operadores de Casino [ARCH-PILLAR]
+* El script `sincronizar_boveda_activos.py` debe descargar y anclar en disco local los logotipos oficiales de las casas de apuestas en `/static/img/bookmakers/{slug}.png` (caliente, betway).
+* Queda prohibido el hotlinking a servidores de terceros para logos de casinos.
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7.6:** la Directiva Maestra solicitó el
+> identificador `[ARCH-1.5.4]` para la Bóveda de Activos de Operadores de Casino; dicho
+> identificador ya se encuentra **sellado** desde la Fase 6 en `docs/ARCH.md` (línea 472,
+> *Espejeo Físico de Aliases y Axioma Anti-Archivos Fantasma*, referenciado también por
+> `src/storage/curation_service.py`). Por axioma de **cero reutilización** de identificadores
+> canónicos, el nodo se registra como `[ARCH-1.5.10]` (primer identificador libre tras
+> `[ARCH-1.5.9]`), y la referencia `[ARCH-1.5.4]` contenida en el docstring del Juez
+> Inmutable `tests/shield/test_shield_cross_market_best_execution.py` queda **mapeada por
+> trazabilidad** a `[ARCH-1.5.10]`, sin que ello altere el contenido normativo del nodo.
+> Los nodos `[ARCH-1.4.14]` y `[ARCH-1.4.15]` se incorporan en su familia numérica canónica
+> (`1.4.x` tras `[ARCH-1.4.13]`) sin colisión. Los identificadores `[ARCH-1.4.11]` y
+> `[ARCH-1.6.14]` permanecen **no asignados** (cero reutilización). Juez Inmutable asociado:
+> `tests/shield/test_shield_cross_market_best_execution.py` (Twin-Test en Estado RED
+> certificado; la materialización en `src/` y `scripts/` queda supeditada a la autorización
+> de la Tríada).
+
+### [ARCH-1.5.10-B] Bóveda de Emblemas de Operadores Oficiales y Anti-Hotlinking [ARCH-PILLAR]
+* **Ubicación Local Obligatoria:**  
+  - Caliente.mx: `/static/img/bookmakers/caliente.png` (descargado desde `https://sports.caliente.mx/es_MX/desktop_header_logo.png`).
+  - Betway.mx: `/static/img/bookmakers/betway.svg` (vectorizado oficial del portal).
+* El script `sincronizar_boveda_activos.py` debe gestionar la existencia y descarga autónoma de estos recursos locales sin hotlinking externo.
+
+### [ARCH-1.6.17] Resiliencia de Sensores ante Acordeones de Fechas Calendario (Betway) [ARCH-PILLAR]
+* En partidos programados a más de 5 días de distancia, las plataformas de apuestas deportivas reemplazan los nombres de días relativos (*"Hoy"*, *"Mañana"*) por cadenas de fecha calendario (ej. *"Viernes 9 Oct"*, *"10/10"*).
+* El script `betway_scraper.py` debe expandir acordeones evaluando contención semántica (`el.textContent.includes('oct')`, `el.textContent.includes('vie')`, o elementos con atributos `aria-expanded="false"`), impidiendo que las jornadas futuras queden colapsadas en 0 eventos.
+
+### [ARCH-1.6.15-C] Apertura Dinámica de Jornada en Live Board (sync_service.py) [ARCH-PILLAR]
+* En `src/storage/sync_service.py:140`, la variable `jornada_actual` no debe estar quemada en 10.
+* Debe resolverse dinámicamente mediante `resolver_jornada_activa_dinamica()`, garantizando que la pantalla «Equipos y Partidos» abra automáticamente en la fecha con partidos `PROGRAMADO` (Jornada 11).
+
+> **Trazabilidad de registro (VARIANCE-01) — Volumen II:** los nodos `[ARCH-1.5.10-B]`,
+> `[ARCH-1.6.17]` y `[ARCH-1.6.15-C]` se incorporan como **enmiendas correctivas** ancladas a
+> sus nodos matrices sellados (`[ARCH-1.5.10]`, `[ARCH-1.4.6-D]`, `[ARCH-1.6.15]`) sin alterar
+> una sola coma de los planos vigentes, y sin colisión con los identificadores previamente
+> legislados (`1.5.1`–`1.5.10`, `1.6.0`–`1.6.16`). Los identificadores `[ARCH-1.4.11]` y
+> `[ARCH-1.6.14]` permanecen **no asignados** (cero reutilización). Juez Inmutable asociado:
+> `tests/shield/test_shield_volume2_consolidation.py` (Twin-Test volumétrico; el estado fáctico
+> de sus cuatro sensores se certifica por salida cruda de `pytest` y queda supeditado a la
+> autorización de la Tríada para el Paso 3).
+
 ---
 
 ## 2. ESTRUCTURA LIMPIA DE MÓDULOS Y MAPEO DE CÓDIGO
@@ -1008,6 +1077,19 @@ class PortfolioExecutionPlan(BaseModel):
 2. **Invarianza de Clamps (`[ALGO-PROTECTED]`):** Todo multiplicador o factor sintético ($FCF, E_{\text{att}}, \Omega_{\text{perf}}, \theta^*$) debe pasar por funciones `np.clip` o `min/max` antes de ingresar a los modelos de Poisson o Kelly.
 3. **Audit Hard-Stop (`[GOVERNANCE]`):** Si `auditor.py` detecta una violación a las 8 Pruebas del Shield, el pipeline lanza `ShieldInvariantException`, abortando la emisión de boletos y la compilación del PDF de forma atómica.
 4. **Zero-Mock Policy en Runtime (`[GOVERNANCE-01]`):** Queda prohibida la fabricación de partidos o fechas H2H falsas ante caídas de red. Si una fuente falla, el partido se declara en `CUARENTENA` y se preserva el capital en $0.00 MXN.
+
+---
+
+### [ARCH-1.4.16] Contrato de Atribución Unívoca de Operador en Boletos [ARCH-PILLAR]
+* En el payload emitido por el generador de cartera, **todo boleto individual (`boleto_1_seguro` y `boleto_2_ganancia`) debe portar obligatoriamente la propiedad `operador: str` con el slug de la casa correspondiente**, incluso en modalidad mono-operador (`operador: "caliente"` o `"novibet"`).
+* Queda terminantemente prohibido que `operador` sea `None` o vacío, impidiendo la degradación al texto plano "VENTANILLA".
+
+### [ARCH-1.3.4] Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR]
+* El endpoint `POST /api/portfolio/generate` en `src/web/routes/portfolio.py` queda oficialmente **deprecado y desconectado**. El archivo conserva exclusivamente el servicio de tesis `/api/portfolio/match-thesis`. Toda generación de cartera es gobernada por `src/web/routes/markets.py`.
+
+### [ARCH-1.6.18] Resiliencia de Navegación de Torneo en Sensores de Mercado [ARCH-PILLAR]
+* En `betway_scraper.py`, el sensor debe realizar un clic preventivo en el selector de competición de Liga MX antes de leer el DOM, forzando la apertura de la cartelera completa de jornadas futuras (Jornada 11).
+* En `novibet_scraper.py`, el `locationId` debe resolverse a través de la API de navegación del operador, tolerando cambios estacionales de identificador sin requerir parches de código.
 
 ---
 

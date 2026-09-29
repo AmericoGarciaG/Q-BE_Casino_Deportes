@@ -18,10 +18,15 @@ if sys.platform == "win32" and hasattr(sys.stdout, 'reconfigure'):
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CRESTS_DIR = os.path.join(PROJECT_ROOT, "src", "web", "static", "img", "crests")
 LEAGUES_DIR = os.path.join(PROJECT_ROOT, "src", "web", "static", "img", "leagues")
+# [ARCH-1.5.10] Bóveda de Activos de Operadores de Casino: los emblemas de las casas de
+# apuestas se anclan en disco local (`/static/img/bookmakers/{slug}.(png|svg)`). Queda
+# PROHIBIDO el hotlinking a servidores de terceros para logos de casinos.
+BOOKMAKERS_DIR = os.path.join(PROJECT_ROOT, "src", "web", "static", "img", "bookmakers")
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "qbe_database.db")
 
 os.makedirs(CRESTS_DIR, exist_ok=True)
 os.makedirs(LEAGUES_DIR, exist_ok=True)
+os.makedirs(BOOKMAKERS_DIR, exist_ok=True)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -64,12 +69,124 @@ CLUBS_MASTER = [
     {"nombre": "Atlante", "slug": "atlante", "aliases": ["potros-hierro"], "urls": ["https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/14257/14257.png", "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/2/2.png"]}
 ]
 
+# 3. [ARCH-1.5.10] Catálogo Oficial de Casas de Apuestas de la Ventanilla
+# [GOVERNANCE-01] `urls` se puebla ÚNICAMENTE con endpoints de activos verificados por la
+# capa de ingesta (evidencia fáctica). Una lista vacía es un estado legítimo y explícito:
+# en su ausencia el script ancla el emblema LOCAL de respaldo (`{slug}.svg`) garantizando
+# cero hotlink y cero uso de marca ajena, sin inventar rutas remotas.
+# [ARCH-1.5.10-B] El endpoint de Caliente queda DECLARADO en el catálogo soberano. Evidencia
+# fáctica del turno (2026-09-28): ese endpoint responde HTTP 404 (`text/html`, 29 KB) con UA de
+# navegador ⇒ la firma PNG se rechaza y el emblema local ya anclado (caliente.png, 4451 B,
+# cabecera `89 50 4E 47 0D 0A 1A 0A`) permanece como pieza autoritativa. Cero hotlink.
+BOOKMAKERS_MASTER = [
+    {"slug": "caliente", "nombre": "Caliente_Deportes.MX",
+     "urls": ["https://sports.caliente.mx/es_MX/desktop_header_logo.png"]},
+    # [ARCH-1.5.10-B] Vector de Betway: geometría fijada por el inspector en el catálogo.
+    # `urls` vacío es estado legítimo ⇒ se ancla el trazo PROPIO en esa ventana. Cero marca
+    # ajena inventada: si el vector corporativo verificado se incorpora, entra por `urls`.
+    {"slug": "betway", "nombre": "Betway.MX", "viewbox": "0 -2 55 20", "urls": []},
+    # [ARCH-1.4.6-F] Vector de Novibet: el emblema oficial fue adquirido por transporte de
+    # navegador (Playwright `page.goto`) y anclado en la bóveda local (novibet.svg, 5 859 B).
+    # Evidencia fáctica del turno (2026-09-28): `httpx.GET` y `context.request.get` al asset
+    # devuelven HTTP 403 (Cloudflare) ⇒ `urls` permanece vacío como estado legítimo.
+    # La geometría declarada (`viewBox="0 0 164 38"`) coincide exactamente con el vector
+    # anclado, por lo que `sincronizar_emblemas_casinos` PRESERVA la pieza oficial y jamás la
+    # sobrescribe con el emblema de respaldo. Cero hotlink.
+    {"slug": "novibet", "nombre": "Novibet.MX", "viewbox": "0 0 164 38", "urls": []},
+]
+
+
+def generar_emblema_local_svg(casino: dict) -> str:
+    """[ARCH-1.5.10-B] Emblema vectorial propio, generado localmente (cero hotlink).
+
+    No replica el logotipo registrado de la casa: rotula el nombre oficial del operador
+    declarado en el catálogo, por lo que la pieza es propia y auditable. Si el catálogo fija
+    `viewbox` (geometría del inspector), el trazo se adapta a esa ventana declarada.
+    """
+    nombre = casino["nombre"]
+    viewbox = str(casino.get("viewbox", "0 0 240 60"))
+    vb_x, vb_y, vb_w, vb_h = (float(v) for v in viewbox.split())
+    pad = vb_h * 0.18
+    radio = vb_h * 0.18
+    centro_x = vb_x + pad + radio
+    texto_x = vb_x + pad + radio * 2 + vb_h * 0.16
+    # El rótulo se ajusta a la ventana disponible: la pieza jamás desborda su viewBox.
+    disponible = max(vb_w - (texto_x - vb_x) - pad, vb_h * 0.2)
+    fuente = min(vb_h * 0.34, disponible / max(len(nombre) * 0.58, 1.0))
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!-- [ARCH-1.5.10-B] Emblema de respaldo anclado por scripts/utilidades/sincronizar_boveda_activos.py -->
+<!-- Origen: generacion local. Cero hotlinking. Geometria fijada: viewBox="{viewbox}". -->
+<!-- Pieza sin marca ajena: rotula el nombre oficial del operador registrado en el catalogo. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="{vb_w:g}" height="{vb_h:g}" viewBox="{viewbox}" role="img" aria-label="{nombre}">
+  <rect x="{vb_x:g}" y="{vb_y:g}" width="{vb_w:g}" height="{vb_h:g}" rx="{vb_h * 0.16:g}" fill="#0f172a"/>
+  <circle cx="{centro_x:g}" cy="{vb_y + vb_h / 2:g}" r="{radio:g}" fill="none" stroke="#38BDF8" stroke-width="{vb_h * 0.09:g}"/>
+  <circle cx="{centro_x:g}" cy="{vb_y + vb_h / 2:g}" r="{vb_h * 0.045:g}" fill="#38BDF8"/>
+  <text x="{texto_x:g}" y="{vb_y + vb_h * 0.67:g}" font-family="Segoe UI, Arial, sans-serif" font-size="{fuente:g}" font-weight="700" fill="#ffffff">{nombre}</text>
+</svg>
+"""
+
+
+def sincronizar_emblemas_casinos(client: httpx.Client) -> int:
+    """[ARCH-1.5.10] Ancla en disco los emblemas de las casas de apuestas de la ventanilla."""
+    print("\n🎰 [3/3] Sincronizando Emblemas de Casas de Apuestas (Bóveda de Operadores)...")
+    anclados = 0
+
+    for casino in BOOKMAKERS_MASTER:
+        pri_png = os.path.join(BOOKMAKERS_DIR, f"{casino['slug']}.png")
+        alt_svg = os.path.join(BOOKMAKERS_DIR, f"{casino['slug']}.svg")
+
+        if os.path.exists(pri_png) and os.path.getsize(pri_png) > 1000:
+            print(f"   ℹ️ Preservado emblema oficial: {casino['nombre']} ({os.path.getsize(pri_png)/1024:.1f} KB)")
+            anclados += 1
+            continue
+
+        # [ARCH-1.5.10-B] Auto-sanación de geometría: si el vector anclado no declara la ventana
+        # fijada por el catálogo (geometría del inspector), se reemite el trazo propio conforme.
+        viewbox_esperado = casino.get("viewbox")
+        if os.path.exists(alt_svg) and viewbox_esperado:
+            with open(alt_svg, "r", encoding="utf-8") as f:
+                svg_anclado = f.read()
+            if f'viewBox="{viewbox_esperado}"' in svg_anclado:
+                print(f"   ℹ️ Preservado vector local: {casino['slug']}.svg (viewBox conforme)")
+                anclados += 1
+                continue
+            print(f"   ♻️ Reemitiendo {casino['slug']}.svg con viewBox='{viewbox_esperado}' (inspector)")
+
+        descargado = False
+        for u in casino.get("urls", []):
+            try:
+                r = client.get(u)
+                if r.status_code == 200 and len(r.content) > 1000 and r.content.startswith(b"\x89PNG"):
+                    with open(pri_png, "wb") as f:
+                        f.write(r.content)
+                    print(f"   ✅ Emblema oficial anclado: {casino['nombre']} -> {casino['slug']}.png ({len(r.content)/1024:.1f} KB)")
+                    descargado = True
+                    break
+            except Exception as ex:
+                print(f"   ⚠️ Error en {u}: {ex}")
+
+        if not descargado:
+            with open(alt_svg, "w", encoding="utf-8") as f:
+                f.write(generar_emblema_local_svg(casino))
+            print(f"   🛡️ Emblema local de respaldo anclado: {casino['slug']}.svg (sin logotipo oficial verificado)")
+            anclados += 1
+
+    print(f"   Total emblemas de casino verificados en bóveda: {anclados}/{len(BOOKMAKERS_MASTER)}")
+    return anclados
+
 def purgar_archivos_vacios():
     print("🧹 Purgando archivos fantasma en bóveda (< 1 KB)...")
     purgados = 0
-    for folder in [CRESTS_DIR, LEAGUES_DIR]:
+    # [ARCH-1.5.10] Los emblemas de casino aceptan respaldo vectorial local (`.svg`): sólo los
+    # `.png` de casino se consideran fantasma si pesan menos de 1 KB.
+    objetivos = [
+        (CRESTS_DIR, (".png", ".svg")),
+        (LEAGUES_DIR, (".png", ".svg")),
+        (BOOKMAKERS_DIR, (".png",)),
+    ]
+    for folder, extensiones in objetivos:
         for f in os.listdir(folder):
-            if f.endswith((".png", ".svg")):
+            if f.endswith(extensiones):
                 p = os.path.join(folder, f)
                 if os.path.getsize(p) < 1000:
                     os.remove(p)
@@ -150,8 +267,11 @@ def sincronizar_activos():
             conn.close()
             print("\n💾 [DATABASE] SQLite sincronizado con rutas locales /static/img/...")
 
+        # D. [ARCH-1.5.10] Emblemas de las casas de apuestas de la ventanilla
+        emblemas_casinos = sincronizar_emblemas_casinos(client)
+
     print("="*85)
-    print(f"🏁 RESULTADO: {exitosos} clubes y {len(LEAGUES_MASTER)} ligas verificados en bóveda física.")
+    print(f"🏁 RESULTADO: {exitosos} clubes, {len(LEAGUES_MASTER)} ligas y {emblemas_casinos} emblemas de casino verificados en bóveda física.")
     print("="*85 + "\n")
 
 if __name__ == "__main__":

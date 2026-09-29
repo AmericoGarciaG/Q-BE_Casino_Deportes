@@ -786,6 +786,73 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **[SHIELD]:** `tests/shield/test_shield_progol_ingestion.py`
 
 ---
+
+### ID: [LN-QBE-076] Arbitraje Sintético de Mejor Combinación Multi-Operador
+
+* **Ω (Resumen):** Optimización desacoplada de cuotas para posiciones con cobertura (H1, H2, R1, R2). En lugar de contratar ambos boletos en la misma casa, se selecciona el operador que maximice el rendimiento de cada pierna por separado:
+  $$O_{\text{Ataque}}^* = \max_{b \in \mathcal{B}} O_{\text{fav}, b}, \quad O_{\text{Seguro}}^* = \max_{b \in \mathcal{B}} O_{\text{emp}, b}$$
+* **I (Input):** Diccionario de cuotas por operador `{operador: {L, E, V, pa}}` de un mismo partido y la identidad del favorito (`fav ∈ {L, V}`) bajo `[LN-QBE-007]`.
+* **P (Process) [ALGO-PROTECTED]:**
+  1. Si se selecciona la opción "Mejor Combinación", el seguro en tablas se calcula con la mejor cuota de empate disponible:
+     $$B_{\text{seg}} = \frac{B_i}{O_{\text{Seguro}}^*}$$
+  2. Reduce el capital absorbido por la cobertura, reduce el umbral de breakeven $\theta^*$ y rescata partidos previamente vetados por cuotas castigadas de un solo casino.
+* **O (Output):** Resolución independiente por pierna `{"ataque": {"operador", "momio"}, "seguro": {"operador", "momio"}}`, reteniendo el máximo momio disponible en $\mathcal{B}$ para cada pierna.
+* **Φ (Transición):** Hacia `[LN-QBE-070]` (dutching $V=0$) y `[LN-QBE-071]` (piso de ventanilla).
+* **[SHIELD]:** `tests/shield/test_shield_cross_market_best_execution.py`
+
+---
+
+### ID: [LN-QBE-077] Ecuación de Decisión: Pago Anticipado (+PA) vs. Cuota Nominal Pura
+
+* **Ω (Resumen):** Resuelve formalmente el dilema comercial: ¿cuándo conviene tomar una cuota nominalmente menor que incluya la cláusula de Pago Anticipado (+PA) frente a una cuota más alta sin la promoción?
+* **I (Input):** `o_pa` (cuota del operador con `+PA`), `o_vanilla` (cuota nominal del operador sin `+PA`), `p_fav` (probabilidad soberana del favorito) y `delta_freeroll` (valor esperado de la cláusula `+PA`).
+* **P (Process) [ALGO-PROTECTED]:**
+  Sean:
+  - $O_{\text{PA}}$: Cuota de la casa con Pago Anticipado (+PA) y probabilidad efectiva $p_{\text{PA}} = p_{\text{fav}} + \Delta_{\text{Freeroll}}$.
+  - $O_{\text{Vanilla}}$: Cuota de la casa sin Pago Anticipado y probabilidad $p_{\text{fav}}$.
+  Se define la **Cuota Umbral de Indiferencia ($O_{\text{indif}}$)**:
+  $$O_{\text{indif}} = O_{\text{Vanilla}} \cdot \left( \frac{p_{\text{fav}}}{p_{\text{fav}} + \Delta_{\text{Freeroll}}} \right)$$
+  **Regla de Decisión Fiduciaria:**
+  - Si $O_{\text{PA}} > O_{\text{indif}} \implies$ **Dominancia de Pago Anticipado:** La protección de cobro ante empate/derrota compensa la cuota menor. Se selecciona la casa con `+PA`.
+  - Si $O_{\text{PA}} \le O_{\text{indif}} \implies$ **Dominancia de Cuota Pura:** El sobreprecio del mercado supera el valor del seguro gratuito. Se selecciona la cuota nominal más alta.
+* **O (Output):** Diccionario `{"recomendar_pa": bool, "ev_pa": float, "ev_vanilla": float}` con $EV = p \cdot O - 1.0$ para cada alternativa.
+* **Φ (Transición):** Hacia `[LN-QBE-076]` (mejor combinación) y `[LN-QBE-070]` (asignación de capital).
+* **[SHIELD]:** `tests/shield/test_shield_cross_market_best_execution.py`
+
+---
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7.6:** los nodos `[LN-QBE-076]` y
+> `[LN-QBE-077]` se incorporan en su familia numérica canónica (`076` y `077` tras
+> `[LN-QBE-075]`, sin reutilización de identificadores). Los campos `I (Input)`, `O (Output)`
+> y `Φ (Transición)` se transcriben del Contrato IPO ya fijado por el Juez Inmutable
+> `tests/shield/test_shield_cross_market_best_execution.py` (`evaluar_tradeoff_pago_anticipado`
+> y `resolver_mejor_combinacion_cuotas`), sin margen creativo sobre la matemática sellada.
+> Juez Inmutable asociado: `tests/shield/test_shield_cross_market_best_execution.py`
+> (Twin-Test en Estado RED certificado; la materialización en `src/` y `scripts/` queda
+> supeditada a la autorización de la Tríada).
+
+---
+
+### ID: [LN-QBE-070-E] Prorrateo Resiliente de Hard-Caps con Respeto al Piso de Ventanilla
+* **Ω (Resumen):** Resuelve la colisión entre el Hard-Cap global de cartera ($\sum B_i \le 25\% \cdot \text{Bankroll}$) y el piso mínimo de ventanilla ($B_{\text{seg}} \ge \$2.00\text{ MXN}$).
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. Si la suma total de inversiones supera el $25\%$ del bankroll, se calcula el factor de escala: $\text{escala} = \frac{0.25 \cdot B_{\text{total}}}{\sum B_i}$.
+  2. En toda orden híbrida ($H1, H2$), si tras aplicar la escala el seguro comprimido resulta $B_{\text{seg}} < \$2.00\text{ MXN}$, se impone la **Regla de Clamping Fiduciario**:
+     $$B_{\text{seg}}^* = \$2.00\text{ MXN}$$
+     El ajuste residual necesario para no rebasar el tope de cartera se absorbe reduciendo el boleto de ataque ($B_{\text{prio}}$) o prorrateando sobre las demás posiciones con holgura.
+  3. Garantiza simultáneamente que ningún boleto sea rechazado por la ventanilla del casino y que la cartera jamás arriesgue más del $25.0\%$.
+
+---
+
+### ID: [LN-QBE-078] Cuantificación Transparente del Veto Fiduciario (Descartes QBE-00)
+* **Ω (Resumen):** Erradica los textos descriptivos genéricos en las órdenes descartadas. Todo partido vetado debe exponer en su contrato los parámetros cuantitativos exactos que dictaron su exclusión:
+  - Probabilidad Soberana del Favorito ($p_{\text{fav}}$).
+  - Cuotas de Mercado disponibles ($O_L, O_X, O_V$).
+  - Alpha Edge Máximo ($\alpha_{\max} = \max_k(p_k O_k - 1)$), demostrando que $\alpha \le 0.0$ (-EV).
+  - Umbral de Indiferencia de Cobertura ($\theta^* = \frac{O_{\text{fav}}}{O_{\text{fav}} - 1}$) contrastado contra el momio real del empate ($O_X$).
+
+---
+
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
 
 ```

@@ -488,3 +488,81 @@
 
 
 
+
+### [DES-QBE-052] Selector Multi-Operador con Opción "Mejor Combinación" por Defecto [UX-MANDATE]
+* El desplegable `#casino-operator-select` se estructura con:
+  - `<option value="mejor_combinacion" selected>⚡ Mejor Combinación (Cross-Market)</option>`
+  - `<option value="caliente">Caliente_Deportes.MX</option>`
+  - `<option value="betway">Betway.MX</option>` *(con sufijo " (Sin cuotas)" y disabled si carece de datos)*.
+
+### [DES-QBE-053] Boletos Split con Logo de Casa Patrocinadora por Boleto [UX-MANDATE]
+* En cada tarjeta de orden split, el rótulo genérico `APOSTAR EN VENTANILLA:` se sustituye por:
+  `APOSTAR EN: <img src="/static/img/bookmakers/{slug}.png" class="bookmaker-logo-mini"> {NOMBRE_CASINO}`
+  permitiendo que el usuario identifique de inmediato en qué casa meter el Boleto 1 (Ataque) y en cuál meter el Boleto 2 (Seguro).
+
+### [DES-QBE-054] Corrección de Macro KPI "Posiciones del Total" [UX-MANDATE]
+* El elemento `#kpi-posiciones-core` debe renderizar con fidelidad:
+  `${kAprobados} / ${totalJornada}` (ej. `1 / 9` o `4 / 9`), reflejando cuántos partidos de la jornada activa superaron el triaje fiduciario.
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 7.6:** los nodos `[DES-QBE-052]`,
+> `[DES-QBE-053]` y `[DES-QBE-054]` se sellan de forma consecutiva tras `[DES-QBE-051]`
+> sin colisión con los identificadores `042`–`051` previamente legislados. Referencia
+> cruzada: `docs/ARCH.md` (`[ARCH-1.4.14]`, `[ARCH-1.4.15]`, `[ARCH-1.5.10]` — este último
+> registrado por remapeo de colisión VARIANCE-01 del `[ARCH-1.5.4]` solicitado),
+> `docs/LOGIC.md` (`[LN-QBE-076]`, `[LN-QBE-077]`) y el Juez Inmutable
+> `tests/shield/test_shield_cross_market_best_execution.py` (Twin-Test en Estado RED
+> certificado). La Carta de Clase `bookmaker-logo-mini` (`[DES-QBE-053]`) y la opción
+> `mejor_combinacion` (`[DES-QBE-052]`) quedan pendientes de materialización en
+> `src/web/templates/index.html`, `src/web/static/js/app.js` y `src/web/static/css/theme.css`
+> bajo autorización de la Tríada (Paso 3).
+
+### [DES-QBE-055] Micro-Insignia de Operador en Boletos Split (Cero Texto Duplicado) [UX-MANDATE]
+* En las tarjetas de órdenes de boletos split, queda estrictamente prohibido repetir el nombre textual del casino después del logo (ej. erradicar `APOSTAR EN: [LOGO] Caliente_Deportes.MX:`).
+* El bloque de pie de boleto se estructura limpiamente como:
+  `<span class="ticket-action-label">APOSTAR EN:</span> <img src="/static/img/bookmakers/${slug}.png" class="bookmaker-logo-inline" alt="${slug}">`
+  eliminando bordes azules toscos y asegurando una altura máxima de `18px` para el logo.
+
+### [DES-QBE-056] Apertura Dinámica del Live Board en Jornada Vigente [UX-MANDATE]
+* Al ingresar a la vista `view-matchday-selection`, la cartelera debe posicionarse por defecto en la jornada con partidos activos por disputarse (Jornada 11), mostrando el selector de píldoras centrado en `[J10] [J11 Activa] [J12]`.
+
+### [DES-QBE-057] Selector de Mercados con Tríada de Operadores y "Mejor Combinación" [UX-MANDATE]
+* El selector `#casino-operator-select` se expande formalmente a:
+  - `<option value="mejor_combinacion" selected>⚡ Mejor Combinación (Cross-Market)</option>`
+  - `<option value="caliente">Caliente_Deportes.MX</option>`
+  - `<option value="novibet">Novibet.MX</option>`
+  - `<option value="betway">Betway.MX</option>`
+* El logotipo oficial `/static/img/bookmakers/novibet.svg` se renderiza automáticamente en los boletos split cuando la pierna sea asignada a Novibet.
+
+> **Trazabilidad de registro (VARIANCE-01) — Volumen III (Novibet):** el nodo `[DES-QBE-057]`
+> se sella de forma consecutiva tras `[DES-QBE-056]` sin colisión con los identificadores
+> `042`–`056` previamente legislados. El emblema `novibet.svg` se ancla en la bóveda local de
+> activos bajo `[ARCH-1.5.10-B]` (vector oficial auditado, 5 859 B, `viewBox="0 0 164 38"`),
+> consumido automáticamente por la cadena de degradación declarada de `_rotuloCasaApostar`
+> (PNG → SVG → ocultar) sin hotlinking a terceros. Referencia cruzada: `docs/ARCH.md`
+> (`[ARCH-1.4.6-F]`), Juez Inmutable `tests/shield/test_shield_novibet_ingestion.py`.
+
+> **Trazabilidad de registro (VARIANCE-01) — Volumen II:** los nodos `[DES-QBE-055]` y
+> `[DES-QBE-056]` se sellan de forma consecutiva tras `[DES-QBE-054]` sin colisión con los
+> identificadores `042`–`054` previamente legislados. `[DES-QBE-055]` **enmienda y deroga
+> parcialmente** la fórmula de `[DES-QBE-053]`: la Carta de Clase `bookmaker-logo-mini` con
+> sufijo textual `{NOMBRE_CASINO}` queda sustituida por la Carta de Clase
+> `bookmaker-logo-inline` (alto máximo `18px`, cero texto duplicado, cero borde azul tosco).
+> `[DES-QBE-056]` es enmienda de presentación de `docs/ARCH.md` (`[ARCH-1.6.15]`,
+> `[ARCH-1.6.15-C]`). Referencia cruzada: Juez Inmutable
+> `tests/shield/test_shield_volume2_consolidation.py`. La materialización en
+> `src/web/static/js/app.js`, `src/web/static/css/theme.css` y `src/web/templates/index.html`
+> queda supeditada a la autorización de la Tríada (Paso 3).
+
+---
+
+### [DES-QBE-058] Desglose Cuantitativo en Tarjetas de Partidos Vetados [UX-MANDATE]
+* La sección de *Partidos Vetados (QBE-00)* en la Mesa de Apuestas debe sustituir las explicaciones narrativas por un bloque de datos transparente:
+  `Q-BE: {p1}% · {pX}% · {p2}% | Momios: {OL} / {OX} / {OV} | α_max = {alpha}% (EV Negativo) | θ* = {theta} vs Empate @{OX}`
+
+### [DES-QBE-059] Renderizado Universal de Emblema de Casino en Boletos Mono-Operador [UX-MANDATE]
+* En el pie de cada boleto de apuesta, el rótulo debe renderizar siempre el logo oficial del operador:
+  `APOSTAR EN: <img src="/static/img/bookmakers/${slug}.png" class="bookmaker-logo-inline">`
+  tanto si la orden proviene de *Mejor Combinación* como si proviene de una selección mono-casino (*Caliente* o *Novibet*).
+
+---
+

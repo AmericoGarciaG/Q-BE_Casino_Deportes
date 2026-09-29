@@ -170,3 +170,106 @@ def aplicar_hard_caps_constitucionales(inversiones: List[float], bankroll: float
         escala = cap_global / total_inv
         return [round(inv * escala, 2) for inv in acotadas]
     return [round(inv, 2) for inv in acotadas]
+
+
+def evaluar_tradeoff_pago_anticipado(
+    o_pa: float,
+    o_vanilla: float,
+    p_fav: float,
+    delta_freeroll: float
+) -> Dict[str, Any]:
+    """
+    [LN-QBE-077] Cuantifica analíticamente si conviene tomar la cuota con Pago Anticipado (+PA)
+    o la cuota nominal más alta sin la promoción.
+    """
+    if o_pa <= 1.0 or o_vanilla <= 1.0 or p_fav <= 0.0:
+        return {"recomendar_pa": False, "ev_pa": -1.0, "ev_vanilla": -1.0, "cuota_indiferencia": 99.0}
+
+    p_pa = p_fav + delta_freeroll
+    ev_pa = round(p_pa * o_pa - 1.0, 4)
+    ev_vanilla = round(p_fav * o_vanilla - 1.0, 4)
+    o_indif = round(o_vanilla * (p_fav / p_pa), 4)
+
+    return {
+        "recomendar_pa": ev_pa > ev_vanilla,
+        "ev_pa": ev_pa,
+        "ev_vanilla": ev_vanilla,
+        "cuota_indiferencia": o_indif,
+        "delta_ev": round(ev_pa - ev_vanilla, 4)
+    }
+
+
+def resolver_mejor_combinacion_cuotas(
+    cuotas_operadores: Dict[str, Dict[str, Any]],
+    fav: str = "L"
+) -> Dict[str, Any]:
+    """
+    [LN-QBE-076] Resuelve la Mejor Combinación Cross-Market: selecciona el operador
+    que maximiza la cuota del Favorito (Ataque) y el operador que maximiza el Empate (Seguro).
+    """
+    best_ataque = {"operador": "caliente", "momio": 0.0, "pa": False}
+    best_seguro = {"operador": "caliente", "momio": 0.0, "pa": False}
+
+    key_fav = "L" if fav.upper() in ("L", "LOCAL", "1") else "V"
+
+    for op_name, m in cuotas_operadores.items():
+        if not m:
+            continue
+        m_fav = float(m.get(key_fav, 0.0))
+        m_emp = float(m.get("E", 0.0))
+        pa_val = bool(m.get("pa", False) or m.get("pago_anticipado", False))
+
+        if m_fav > best_ataque["momio"]:
+            best_ataque = {"operador": op_name, "momio": m_fav, "pa": pa_val}
+
+        if m_emp > best_seguro["momio"]:
+            best_seguro = {"operador": op_name, "momio": m_emp, "pa": pa_val}
+
+    return {
+        "ataque": best_ataque,
+        "seguro": best_seguro,
+        "fav_key": key_fav
+    }
+
+
+def aplicar_hard_caps_con_respeto_a_piso(
+    ordenes: List[Dict[str, Any]],
+    bankroll: float,
+    cap_partido_pct: float = 0.08,
+    cap_cartera_pct: float = 0.25,
+    piso_min_boleto: float = 2.00
+) -> List[Dict[str, Any]]:
+    """[LN-QBE-070-E] Prorratea el capital respetando el piso de $2.00 MXN en el seguro."""
+    if bankroll <= 0.0 or not ordenes:
+        return ordenes
+
+    cap_max_partido = round(bankroll * cap_partido_pct, 2)
+    cap_max_cartera = round(bankroll * cap_cartera_pct, 2)
+
+    # 1. Aplicar tope individual
+    for ord_item in ordenes:
+        inv = float(ord_item.get("inversion_total", 0.0))
+        if inv > cap_max_partido:
+            ord_item["inversion_total"] = cap_max_partido
+
+    total_inv = sum(float(o.get("inversion_total", 0.0)) for o in ordenes)
+
+    # 2. Prorrateo global si excede el 25% del bankroll
+    if total_inv > cap_max_cartera and total_inv > 0.0:
+        factor_escala = cap_max_cartera / total_inv
+        for ord_item in ordenes:
+            inv_inicial = float(ord_item.get("inversion_total", 0.0))
+            nueva_inv = round(inv_inicial * factor_escala, 2)
+
+            # Si es orden con seguro en tablas (H1/H2), proteger el piso de $2.00
+            o_emp = float(ord_item.get("odd_emp", 3.30))
+            seguro_teorico = nueva_inv / o_emp if o_emp > 1.0 else 0.0
+
+            if seguro_teorico < piso_min_boleto and ord_item.get("strategy_code") in ("QBE-H1", "QBE-H2"):
+                # Fijar el seguro en el piso mínimo y ajustar la inversión
+                b_seg = piso_min_boleto
+                nueva_inv = max(nueva_inv, round(b_seg * o_emp, 2))
+
+            ord_item["inversion_total"] = nueva_inv
+
+    return ordenes

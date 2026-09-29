@@ -97,7 +97,13 @@ async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = n
         const lblTabla = document.getElementById("lbl-nombre-tabla");
         if (lblTabla) lblTabla.textContent = currentLiveBoard.league_name || "Liga MX";
         const lblJornada = document.getElementById("lbl-nombre-jornada");
-        if (lblJornada) lblJornada.textContent = currentLiveBoard.jornada || `Jornada ${currentLiveBoard.jornada_mostrada || 8}`;
+        if (lblJornada) {
+            // [DES-QBE-056 / ARCH-1.6.15-C] Etiqueta derivada del payload: cero celdas quemadas.
+            const vigenteLbl = (currentLiveBoard.jornada_actual !== null && currentLiveBoard.jornada_actual !== undefined)
+                ? currentLiveBoard.jornada_actual : currentLiveBoard.jornada_mostrada;
+            lblJornada.textContent = currentLiveBoard.jornada ||
+                (Number.isInteger(vigenteLbl) ? `Jornada ${vigenteLbl}` : "Jornada —");
+        }
         const lblTime = document.getElementById("lbl-timestamp-tabla");
         if (lblTime) {
             lblTime.textContent = `🕒 Tabla Oficial: Sincronizada en vivo (${_formatearFechaHoraActual()})`;
@@ -122,6 +128,28 @@ async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = n
     }
 }
 
+// [DES-QBE-056] Apertura determinista en la jornada VIGENTE: la píldora activa emana del estado
+// fáctico de la bóveda (`jornada_actual` → primer partido PROGRAMADO), jamás de una celda fija.
+// Cero invención: si la bóveda no dicta jornada, no se fabrica ninguna.
+function resolverJornadaVigenteLiveBoard(liveBoard) {
+    if (!liveBoard) return null;
+    if (Number.isInteger(liveBoard.jornada_actual)) return liveBoard.jornada_actual;
+    const fixtures = Array.isArray(liveBoard.fixtures) ? liveBoard.fixtures : [];
+    const jornadaDe = (f) => {
+        if (!f) return null;
+        if (Number.isInteger(f.jornada)) return f.jornada;
+        if (Number.isInteger(f.matchday)) return f.matchday;
+        return null;
+    };
+    const pendientes = fixtures
+        .filter(f => f && String(f.estado || "").toUpperCase() === "PROGRAMADO")
+        .map(jornadaDe).filter(j => j !== null);
+    if (pendientes.length > 0) return Math.min.apply(null, pendientes);
+    const ledgeradas = fixtures.map(jornadaDe).filter(j => j !== null);
+    if (ledgeradas.length > 0) return Math.max.apply(null, ledgeradas);
+    return null;
+}
+
 // [DES-QBE-037] Carrusel Ventanizado Determinista (Máximo 3 píldoras en pantalla)
 function renderizarPildorasJornada(liveBoard) {
     const container = document.getElementById("matchday-pill-selector");
@@ -129,8 +157,12 @@ function renderizarPildorasJornada(liveBoard) {
     container.innerHTML = "";
 
     const disponibles = liveBoard.jornadas_disponibles || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-    const mostrada = liveBoard.jornada_mostrada || 10;
-    const actual = liveBoard.jornada_actual || 10;
+    const actual = resolverJornadaVigenteLiveBoard(liveBoard);
+    if (!Number.isInteger(actual)) {
+        container.innerHTML = '<span style="font-size:7.5pt; color:#94A3B8;">ℹ️ Sin jornadas ledgeradas en la bóveda: ejecute la ingesta en el Centro de Control.</span>';
+        return;
+    }
+    const mostrada = Number.isInteger(liveBoard.jornada_mostrada) ? liveBoard.jornada_mostrada : actual;
 
     // 1. Calcular la ventana de 3 jornadas visibles [mostrada - 1, mostrada, mostrada + 1]
     let ventana = [mostrada - 1, mostrada, mostrada + 1];
@@ -192,7 +224,12 @@ function renderizarPildorasJornada(liveBoard) {
 
 function navegarCarruselTemporal(delta) {
     if (!currentLiveBoard) return;
-    const mostrada = currentLiveBoard.jornada_mostrada || 10;
+    // [DES-QBE-056] La navegación parte de la jornada vigente derivada, nunca de una celda fija.
+    const vigenteCarrusel = resolverJornadaVigenteLiveBoard(currentLiveBoard);
+    const mostrada = Number.isInteger(currentLiveBoard.jornada_mostrada)
+        ? currentLiveBoard.jornada_mostrada
+        : vigenteCarrusel;
+    if (!Number.isInteger(mostrada)) return;
     const targetJornada = mostrada + delta;
     if (targetJornada >= 1 && targetJornada <= 17) {
         const leagueId = currentLiveBoard.league_id || 262;
@@ -630,6 +667,7 @@ async function ejecutarDespachoPortafolio() {
 
     const operatorSelect = document.getElementById('casino-operator-select');
     const operador = operatorSelect ? operatorSelect.value : "caliente";
+    currentCasinoOperador = operador;
 
     const certaintySlider = document.getElementById('slider-risk-certainty');
     const certeza = certaintySlider ? parseFloat(certaintySlider.value) / 100.0 : 0.80;
@@ -690,6 +728,54 @@ window.ejecutarDespachoPortafolio = ejecutarDespachoPortafolio;
 window.ejecutarDespachoMesaApuestas = ejecutarDespachoPortafolio;
 
 let currentPortfolioData = null;
+let currentCasinoOperador = "caliente";
+
+// ─── [DES-QBE-055 / ARCH-1.5.10-B] Rótulo de Casa Patrocinadora por Boleto ─────
+// El emblema viaja desde la bóveda LOCAL de activos (`/static/img/bookmakers/{slug}.png`,
+// anclada por `scripts/utilidades/sincronizar_boveda_activos.py`). Cero hotlinking a
+// servidores de terceros ([ARCH-1.5.10-B]). Si el plan no expone operador (modalidad
+// mono-casa heredada), se conserva el rótulo genérico de ventanilla: degradación
+// declarada, jamás una casa inventada ([GOVERNANCE-01]).
+// [DES-QBE-055] Pie de boleto split sobrio: rótulo + emblema de la bóveda local, SIN el nombre
+// textual del casino (deroga el sufijo `{NOMBRE_CASINO}` de [DES-QBE-053]). El operador se
+// identifica por el logo y por su tooltip fiduciario; jamás se duplica el texto en el boleto.
+function _rotuloCasaApostar(slugOperador) {
+    const etiqueta = `<span class="ticket-action-label" style="font-size:7pt; color:#94A3B8; font-weight:700;">APOSTAR EN:</span>`;
+    if (!slugOperador) return `${etiqueta} <span style="font-size:7pt; color:#94A3B8;">VENTANILLA</span>`;
+    const slug = String(slugOperador).toLowerCase();
+    // Bóveda local ([ARCH-1.5.10-B]): PNG oficial si está anclado; si no, respaldo SVG local;
+    // en última instancia el emblema se oculta (degradación declarada, cero hotlink).
+    const onerror = "if(!this.dataset.fb){this.dataset.fb='1';this.src='/static/img/bookmakers/" +
+        slug + ".svg';}else{this.style.display='none';}";
+    return `${etiqueta} <img src="/static/img/bookmakers/${slug}.png" class="bookmaker-logo-inline" alt="${slug}" title="Operador: ${slug.toUpperCase()}" style="height:18px; vertical-align:middle; margin-left:4px;" onerror="${onerror}">`;
+}
+
+// ─── [ARCH-1.4.15] Disponibilidad Dinámica de Operadores en Ventanilla ───────
+// El backend declara la captura fáctica por casa. Una casa con `disponible: false` no
+// puede simular cuotas ajenas: se inhabilita y se rotula explícitamente.
+function _aplicarDisponibilidadOperadores(mapaOperadores) {
+    const sel = document.getElementById("casino-operator-select");
+    if (!sel || !mapaOperadores || Object.keys(mapaOperadores).length === 0) return;
+
+    const etiquetaBase = {};
+    Array.from(sel.options).forEach(op => {
+        etiquetaBase[op.value] = (op.textContent || "").replace(/\s*\(Sin cuotas disponibles\)\s*$/, "").trim();
+    });
+
+    Array.from(sel.options).forEach(op => {
+        const info = mapaOperadores[op.value];
+        if (!info || info.disponible === undefined) return;
+        const disponible = info.disponible !== false;
+        op.disabled = !disponible;
+        op.textContent = disponible ? etiquetaBase[op.value] : `${etiquetaBase[op.value]} (Sin cuotas disponibles)`;
+    });
+
+    const actual = sel.options[sel.selectedIndex];
+    if (actual && actual.disabled) {
+        const primera = Array.from(sel.options).find(op => !op.disabled);
+        if (primera) sel.value = primera.value;
+    }
+}
 
 function renderizarResultadosPortafolio(data) {
     currentPortfolioData = data;
@@ -698,6 +784,10 @@ function renderizarResultadosPortafolio(data) {
     const control = data.control_portafolio || data.control || {};
     const balance = data.balance_global_portafolio || data.balance || {};
     const meta = data.metadata || {};
+
+    // [ARCH-1.4.15] Contrato de disponibilidad: una casa sin cuotas capturadas en la jornada
+    // activa se rotula `(Sin cuotas disponibles)` y queda inhabilitada en el selector.
+    _aplicarDisponibilidadOperadores(data.operadores_disponibles || {});
 
     // 1. Encabezado Macro
     const elTorneo = document.getElementById("hdr-torneo-portfolio");
@@ -712,7 +802,10 @@ function renderizarResultadosPortafolio(data) {
     const blindajePct = control.blindaje_global_preservacion_porcentaje || 99.9;
     const ruinaPct = control.probabilidad_ruina_total_porcentaje || 0.1;
     const kAprobados = control.total_partidos_core_aprobados || orders.length;
-    const kEscaneados = control.total_partidos_escaneados || orders.length;
+    // [ARCH-1.4.14 / DES-QBE-054] Denominador fáctico de cartelera: el KPI se lee K / 9 (jornada
+    // oficial), nunca K / K. `total_partidos_jornada` es el campo legislado; se conserva el
+    // fallback declarado a `total_partidos_escaneados` y al tamaño de la cartera entregada.
+    const totalJornada = control.total_partidos_jornada || control.total_partidos_escaneados || orders.length;
 
     // Calcular suma de premios máximos netos (Ganancia Neta Potencial)
     let sumaPremios = 0;
@@ -744,7 +837,7 @@ function renderizarResultadosPortafolio(data) {
     if (elRuina) elRuina.textContent = `Probabilidad Ruina: ${ruinaPct.toFixed(4)}%  (de perder todas las apuestas)`;
 
     const elCore = document.getElementById("kpi-posiciones-core");
-    if (elCore) elCore.textContent = `${kAprobados} / ${kEscaneados}`;
+    if (elCore) elCore.textContent = `${kAprobados} / ${totalJornada}`;
 
     // 3. Banner de Certeza Tripartito (La Trinidad de Resiliencia) [DES-QBE-027]
     const trinidad = control.desglose_bankroll?.trinidad_resiliencia;
@@ -833,6 +926,8 @@ function renderizarResultadosPortafolio(data) {
         orders.forEach(ord => {
             const b1 = ord.boletos?.boleto_1_seguro || {};
             const b2 = ord.boletos?.boleto_2_ganancia || {};
+            const opSlugB1 = (b1.operador || currentCasinoOperador || "caliente");
+            const opSlugB2 = (b2.operador || currentCasinoOperador || "caliente");
             const est = ord.estrategia_seleccionada || {};
             // [DES-QBE-045] Paleta canónica de familia + distintivo de Pago Anticipado gobernado por bandera.
             const pal = _paletaEstrategia(est.codigo || "");
@@ -899,7 +994,7 @@ function renderizarResultadosPortafolio(data) {
                         <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b2.seleccion || 'Victoria Principal'}</div>
                         <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b2.momio || 0).toFixed(2)}</div>
                         <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
-                            <span style="font-size:7pt; color:#94A3B8;">APOSTAR EN VENTANILLA:</span>
+                            <span>${_rotuloCasaApostar(opSlugB2)}</span>
                             <span style="font-size:1.35rem; font-weight:900; color:#00E676;">$${(b2.monto_mxn || 0).toFixed(2)} MXN</span>
                         </div>
                     </div>
@@ -910,7 +1005,7 @@ function renderizarResultadosPortafolio(data) {
                         <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b1.seleccion || 'N/A ($0.00)'}</div>
                         <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b1.momio || 0).toFixed(2)}</div>
                         <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
-                            <span style="font-size:7pt; color:#94A3B8;">APOSTAR EN VENTANILLA:</span>
+                            <span>${_rotuloCasaApostar(opSlugB1)}</span>
                             <span style="font-size:1.35rem; font-weight:900; color:#38BDF8;">$${(b1.monto_mxn || 0).toFixed(2)} MXN</span>
                         </div>
                     </div>
@@ -941,6 +1036,11 @@ function renderizarResultadosPortafolio(data) {
             contDescartes.innerHTML = '<div style="color:#94A3B8; font-size:8pt; padding:8px;">Cero partidos vetados en esta selección.</div>';
         } else {
             descartes.forEach(d => {
+                const m = d.metricas || {};
+                const cifrasHtml = m.alpha_max !== undefined ?
+                    `<div style="font-family: monospace; font-size: 7.2pt; color: #94A3B8; margin-top: 4px;">
+                        Fav: ${(m.p_fav * 100).toFixed(0)}% (@${m.cuota_fav}) · Emp: @${m.cuota_empate} · α_max: <span style="color:#ef4444;">${(m.alpha_max * 100).toFixed(1)}% (-EV)</span> · θ*: ${m.theta_estrella}
+                    </div>` : '';
                 const item = document.createElement("div");
                 item.style.cssText = "background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 14px;";
                 item.innerHTML = `
@@ -949,6 +1049,7 @@ function renderizarResultadosPortafolio(data) {
                         <span style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; padding:2px 6px; border-radius:4px; font-size:7pt; font-weight:800;">VETO: ${d.motivo_codigo || 'QBE-00'}</span>
                     </div>
                     <div style="color:#cbd5e1; font-size:7.8pt;">${d.explicacion_didactica || d.motivo}</div>
+                    ${cifrasHtml}
                 `;
                 contDescartes.appendChild(item);
             });

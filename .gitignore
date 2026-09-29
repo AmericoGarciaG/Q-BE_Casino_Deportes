@@ -146,3 +146,14 @@ scratch/telemetria_compuerta_A.py
 scratch/telemetria_compuerta_A.txt
 scratch/telemetria_paso3_cierre.py
 scratch/verificar_boveda_A.py
+scratch/_auditoria_fuente_j11.py
+scratch/auditoria_antes_despues_ruta01.py
+scratch/auditoria_estratos_ruta01.py
+scratch/inspeccion_constantes_endpoint.py
+scratch/peritaje_epistemic_delta.py
+scratch/telemetria_fasttrack_ruta01.py
+scripts/archive/sonda_diagnostico_novibet.py
+src/web/static/img/bookmakers/betway.svg
+src/web/static/img/bookmakers/caliente.png
+src/web/static/img/bookmakers/caliente.svg
+src/web/static/img/bookmakers/novibet.svg

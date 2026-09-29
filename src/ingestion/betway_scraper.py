@@ -114,12 +114,15 @@ class BetwayMarketScraper:
 
                     page.wait_for_timeout(4000)
 
-                    # [DESPLEGAR ACORDEONES COLAPSADOS] Abre Domingo, Sábado o cualquier día cerrado
+                    # [ARCH-1.6.17] Despliegue elástico de acordeones de fecha (relativos y calendario)
                     page.evaluate("""() => {
-                        const elementos = Array.from(document.querySelectorAll('div, button, span, header'));
+                        const elementos = Array.from(document.querySelectorAll('div, button, span'));
+                        const tokensFecha = ['domingo', 'sábado', 'sabado', 'lunes', 'viernes', 'oct', 'nov', 'próximos', 'jornada'];
                         for (let el of elementos) {
                             const t = el.textContent ? el.textContent.trim().toLowerCase() : '';
-                            if (['domingo', 'sábado', 'sabado', 'lunes', 'viernes'].includes(t) && el.children.length <= 3) {
+                            const esAriaClosed = el.getAttribute('aria-expanded') === 'false';
+                            const esFechaToken = tokensFecha.some(tok => t.includes(tok)) && el.children.length <= 2;
+                            if (esAriaClosed || esFechaToken) {
                                 try { el.click(); } catch(e) {}
                             }
                         }
