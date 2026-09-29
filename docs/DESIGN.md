@@ -564,5 +564,33 @@
   `APOSTAR EN: <img src="/static/img/bookmakers/${slug}.png" class="bookmaker-logo-inline">`
   tanto si la orden proviene de *Mejor Combinación* como si proviene de una selección mono-casino (*Caliente* o *Novibet*).
 
+### [DES-QBE-060] Anatomía Enriquecida de Boletos Split con Momio Casino, P' y Opción No Jugada [UX-MANDATE]
+* **Rótulos Estandarizados por Pierna (Boleto 1 y 2):**
+  - Línea de Cuota: `Momio Casino: @{cuota}` (se erradica la etiqueta genérica "Momio:"). **Formato SUPERSEDED por `[DES-QBE-061]` (Fase 7.9): el vigente es `Momio Casino: {prob_implicita}% (@{momio})`.**
+  - Línea de Probabilidad Fiduciaria: `Predicción Q-BE con P': {prob_efectiva}%` (exhibe el porcentaje fiduciario P' asociado a ese desenlace).
+  - Línea de Casa Patrocinadora: `APOSTAR EN: <img src="/static/img/bookmakers/{slug}.png" class="bookmaker-logo-inline">` (sin texto repetido).
+* **Bloque de Transparencia 360° al Pie de Tarjeta:**
+  - Separado por una línea sutil (`border-top: 1px solid rgba(51,65,85,0.4)`).
+  - Se erradican títulos ruidosos (prohibido `📊 CIFRAS COMPLETAS DEL ENCUENTRO`) y jerga técnica compleja (prohibido `Overround` y `θ*`).
+  - Despliega exclusivamente el desenlace descartado:
+    `• Opción No Jugada: {nombre_descartado} ──► Momio Casino: @{cuota} | Predicción Q-BE con P': {prob_P}%` **Formato SUPERSEDED por `[DES-QBE-061]`: `Momio Casino: {prob_implicita}% (@{momio})`.**
+
+### [DES-QBE-061] Formato Dual de Cuotas de Casino: Probabilidad Implícita + Decimal [UX-MANDATE]
+* En cada pierna de apuesta (Boleto 1, Boleto 2 y Opción No Jugada), el momio comercial debe exhibir primero la probabilidad implícita del mercado y entre paréntesis el decimal:
+  `Momio Casino: {prob_implicita}% (@{momio})`
+  donde $\text{prob\_implicita} = \frac{100.0}{O_{\text{casino}}}$ con 1 decimal.
+* Directamente debajo se mantiene:
+  `Predicción Q-BE con P': {prob_efectiva}%`
+  permitiendo contrastar instantáneamente la creencia del casino contra la certeza de Q-BE.
+
+### [DES-QBE-062] Despliegue de la Tetralogía de Escenarios en Boletos Split [UX-MANDATE]
+* En el bloque de texto informativo de cada tarjeta split, se deben renderizar en orden estricto los siguientes cuatro renglones:
+  1. `• Ganancia Principal: Cobro de $X.XX MXN (++$Y.YY netos, +ZZ.Z% ROI).`
+  2. `• Cobertura en Empate: Recuperación de $B.BB MXN ($0.00 pérdida de capital).`
+  3. `• Pago Anticipado con Empate: Cobro de AMBOS boletos por $X.XX MXN (++$Y.YY netos, +ZZ.Z% ROI) si el favorito toma ventaja de 2 goles y el juego concluye empatado.` *(Solo si pa_activo es True y existe boleto seguro).* **[Enmienda Fase 7.9 — Resolución `VARIANCE-01`: el rótulo canónico LITERAL es `Pago Anticipado con Empate:` (deroga a `Pago Anticipado + Empate:`), certificado por `tests/shield/test_shield_ticket_ux_and_cashout_refinement.py`.]**
+  4. `• Salida de Emergencia: Si el rival anota primero, ejecutar CashOut al empatar en el 2T en cuanto ofrezca Tablas ($B.BB MXN) para recuperar el 100% del capital.`
+* Debajo de este bloque se ubica la línea divisoria continua y la `• Opción No Jugada`.
+
+
 ---
 

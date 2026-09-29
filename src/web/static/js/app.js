@@ -947,24 +947,64 @@ function renderizarResultadosPortafolio(data) {
             const cobroPrincipal = (b2Monto * (b2.momio || 1)).toFixed(2);
             const retornoTablas = (b1Monto * (b1.momio || 1)).toFixed(2);
 
-            // Escenarios desglosados en estilo sobrio y limpio (CERO balazos)
+            // [DES-QBE-061] Formato Dual de la cuota: probabilidad implícita del casino + decimal.
+            // prob_implicita = 100.0 / O_casino (1 decimal, [DES-QBE-061]). Cero conversión en el
+            // cliente: los momios ya viajan canónicos desde el motor ([GOVERNANCE-01] paridad).
+            const _momioDual = (momio) => {
+                const m = Number(momio);
+                return (m > 1.0) ? `${(100.0 / m).toFixed(1)}% (@${m.toFixed(2)})` : '—';
+            };
+            const momioDualB1 = _momioDual(b2.momio);   // BOLETO 1 exhibido: GANANCIA (ataque)
+            const momioDualB2 = _momioDual(b1.momio);   // BOLETO 2 exhibido: SEGURO (recuperación)
+            // [DES-QBE-062] El renglón de Doble Cobro se gobierna por la bandera PA
+            // ([DES-QBE-045]: por bandera booleana, jamás por proxies de proyección heredados).
+            const paActivo = (ord.pa_activo === true) || Boolean(est.linea_promocional);
+
+            // [DES-QBE-062] Tetralogía de Escenarios en orden estricto y estilo sobrio (CERO balazos)
             let escenariosHtml = `
                 <div style="font-size: 7.8pt; line-height: 1.6; color: #94A3B8; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
                     <div>• <strong style="color: #e2e8f0;">Ganancia Principal:</strong> Cobro de $${cobroPrincipal} MXN (+$${proy.ganancia_neta_principal_mxn?.toFixed(2)} MXN netos, +${proy.roi_principal_porcentaje?.toFixed(1)}% ROI).</div>
             `;
-
-            if (proy.freeroll_doble_ganancia_mxn > 0) {
-                escenariosHtml += `
-                    <div>• <strong style="color: #e2e8f0;">Doble Cobro (Pago Anticipado):</strong> Cobro de ambos boletos sumando +$${proy.freeroll_doble_ganancia_mxn?.toFixed(2)} MXN netos (+${proy.freeroll_roi_porcentaje?.toFixed(1)}% ROI).</div>
-                `;
-            }
 
             if (b1Monto > 0) {
                 escenariosHtml += `
                     <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${retornoTablas} MXN ($0.00 pérdida de capital).</div>
                 `;
             }
+
+            // Renglón 3: Pago Anticipado con Empate (Doble Cobro) si pa_activo es True y existe seguro
+            if (paActivo && b1Monto > 0) {
+                const dobleCobroTot = (Number(cobroPrincipal) + Number(retornoTablas)).toFixed(2);
+                const dobleCobroNeto = Number(cobroPrincipal).toFixed(2);
+                const dobleRoi = ((Number(dobleCobroNeto) / Math.max(0.01, inv)) * 100).toFixed(1);
+                escenariosHtml += `
+                    <div>• <strong style="color: #00E676;">Pago Anticipado con Empate:</strong> Cobro de AMBOS boletos por $${dobleCobroTot} MXN (+$${dobleCobroNeto} netos, +${dobleRoi}% ROI) si el favorito toma ventaja de 2 goles y el juego concluye empatado.</div>
+                `;
+            }
+
+            // Renglón 4: Salida de Emergencia (Rompe-Quinielas)
+            if (b1Monto > 0) {
+                escenariosHtml += `
+                    <div>• <strong style="color: #F59E0B;">Salida de Emergencia:</strong> Si el rival anota primero, ejecutar CashOut al empatar en el 2T en cuanto ofrezca Tablas ($${inv.toFixed(2)} MXN) para recuperar el 100% del capital.</div>
+                `;
+            }
             escenariosHtml += `</div>`;
+
+            // [DES-QBE-060] Anatomía enriquecida del boleto: P' fiduciario por pierna y bloque de
+            // transparencia 360°. El cliente NO calcula probabilidades: consume el contrato
+            // hidratado por `PortfolioEngine.build_plan()` ([GOVERNANCE-01] paridad fáctica).
+            const probB1Txt = (b2.prob_qbe === null || b2.prob_qbe === undefined) ? '—' : `${Number(b2.prob_qbe).toFixed(1)}%`;
+            const probB2Txt = (b1.prob_qbe === null || b1.prob_qbe === undefined) ? '—' : `${Number(b1.prob_qbe).toFixed(1)}%`;
+            const unbet = ord.opcion_no_jugada || {};
+            const unbetNombre = unbet.nombre || 'Rival Descartado';
+            const momioDualUnbet = _momioDual(unbet.momio);
+            const unbetProb = (unbet.prob_qbe === null || unbet.prob_qbe === undefined) ? '—' : `${Number(unbet.prob_qbe).toFixed(1)}%`;
+            // Cero jerga técnica y cero títulos ruidosos en este bloque ([DES-QBE-060]).
+            const opcionNoJugadaHtml = `
+                <div style="margin-top:8px; padding-top:6px; border-top:1px solid rgba(51,65,85,0.4); font-size:7.5pt; color:#94A3B8; font-family:monospace;">
+                    • Opción No Jugada: <span style="color:#cbd5e1; font-weight:700;">${unbetNombre}</span> ──► Momio Casino: <strong style="color:#fff;">${momioDualUnbet}</strong> | Predicción Q-BE con P': <strong style="color:#38BDF8;">${unbetProb}</strong>
+                </div>
+            `;
 
             const card = document.createElement("div");
             card.className = "card";
@@ -992,7 +1032,8 @@ function renderizarResultadosPortafolio(data) {
                     <div style="background:#0f172a; border:1px solid rgba(0,230,118,0.4); border-radius:6px; padding:12px;">
                         <span style="font-size:7.2pt; color:#00E676; font-weight:800;">🎯 BOLETO 1: GANANCIA (ATAQUE)</span>
                         <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b2.seleccion || 'Victoria Principal'}</div>
-                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b2.momio || 0).toFixed(2)}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio Casino: <strong style="color:#fff;">${momioDualB1}</strong></div>
+                        <div style="font-size:7.5pt; color:#94A3B8;">Predicción Q-BE con P': <strong style="color:#38BDF8;">${probB1Txt}</strong></div>
                         <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
                             <span>${_rotuloCasaApostar(opSlugB2)}</span>
                             <span style="font-size:1.35rem; font-weight:900; color:#00E676;">$${(b2.monto_mxn || 0).toFixed(2)} MXN</span>
@@ -1003,7 +1044,8 @@ function renderizarResultadosPortafolio(data) {
                     <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:12px;">
                         <span style="font-size:7.2pt; color:#38BDF8; font-weight:800;">🛡️ BOLETO 2: SEGURO (RECUPERACIÓN)</span>
                         <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b1.seleccion || 'N/A ($0.00)'}</div>
-                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio: @${(b1.momio || 0).toFixed(2)}</div>
+                        <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio Casino: <strong style="color:#fff;">${momioDualB2}</strong></div>
+                        <div style="font-size:7.5pt; color:#94A3B8;">Predicción Q-BE con P': <strong style="color:#38BDF8;">${probB2Txt}</strong></div>
                         <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
                             <span>${_rotuloCasaApostar(opSlugB1)}</span>
                             <span style="font-size:1.35rem; font-weight:900; color:#38BDF8;">$${(b1.monto_mxn || 0).toFixed(2)} MXN</span>
@@ -1014,6 +1056,11 @@ function renderizarResultadosPortafolio(data) {
                 <!-- Escenarios Desglosados Sobrios -->
                 <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
                     ${escenariosHtml}
+                </div>
+
+                <!-- [DES-QBE-060] Bloque de Transparencia 360° al Pie de Tarjeta -->
+                <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:8px 14px; margin-bottom:12px;">
+                    ${opcionNoJugadaHtml}
                 </div>
 
                 <!-- Botón hacia Radiografía Forense -->

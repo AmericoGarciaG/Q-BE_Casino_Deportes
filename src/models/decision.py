@@ -34,6 +34,15 @@ class TicketOrder(BaseModel):
     # En modalidad MEJOR_COMBINACION cada boleto puede viajar en un operador distinto;
     # el campo es opcional para no romper el contrato de la modalidad mono-operador.
     operador: Optional[str] = None
+    # [DES-QBE-060] Probabilidad fiduciaria contraída P' (%) asociada al desenlace que
+    # transporta ESTA pierna. Variable DERIVADA downstream, hidratada por el motor de
+    # cartera desde la distribución contraída ([ARCH-1.4.17]); el frontend se limita a
+    # exhibirla ([GOVERNANCE-01] paridad fáctica backend↔pantalla). Opcional para no
+    # romper payloads históricos.
+    prob_qbe: Optional[float] = Field(
+        default=None,
+        description="Probabilidad fiduciaria contraída P' (%) asociada al desenlace"
+    )
 
 
 class MatchTickets(BaseModel):
@@ -72,6 +81,13 @@ class MatchExecutionOrder(BaseModel):
     boletos: MatchTickets
     proyecciones: Projections
     cashout_targets: CashoutTargets
+    # [DES-QBE-060] Bloque de Transparencia 360°: métricas del desenlace rival DESCARTADO
+    # (el que la estrategia no juega). Hidratado por el motor con la terna contraída
+    # canónica; el frontend exhibe nombre, momio y P' sin recalcular nada.
+    opcion_no_jugada: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Métricas del desenlace rival descartado (nombre, momio, prob_qbe)"
+    )
 
 
 class SatelliteModule(BaseModel):

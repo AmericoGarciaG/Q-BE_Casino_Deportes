@@ -157,3 +157,4 @@ src/web/static/img/bookmakers/betway.svg
 src/web/static/img/bookmakers/caliente.png
 src/web/static/img/bookmakers/caliente.svg
 src/web/static/img/bookmakers/novibet.svg
+scripts/auditoria/auditar_pureza_matematica_vol1.py

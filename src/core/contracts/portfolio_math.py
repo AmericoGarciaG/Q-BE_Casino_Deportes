@@ -3,7 +3,7 @@
 🏆 Q-BE SOVEREIGN FINANCIAL ENGINE — CONTRATOS MATEMÁTICOS DE PORTAFOLIO Y 9 ESTRATEGIAS
 [ARCH-1.4.9] Biblioteca Funcional Pura de Asignación, Coberturas V=0, Kelly y Triaje Canónico.
 [VAULT-CORE-070-TRIAJE], [VAULT-CORE-070-DUTCHING], [VAULT-CORE-070-RANKING],
-[VAULT-CORE-070-KELLY], [VAULT-CORE-071-PISO]
+[VAULT-CORE-070-KELLY], [VAULT-CORE-071-PISO], [VAULT-CORE-079-SHRINKAGE]
 Régimen: [DIRGEN-STRICT]
 Axioma: Cero dependencias de base de datos. Cero I/O. Cero números mágicos.
 """
@@ -273,3 +273,93 @@ def aplicar_hard_caps_con_respeto_a_piso(
             ord_item["inversion_total"] = nueva_inv
 
     return ordenes
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# [VAULT-CORE-079-SHRINKAGE] Contracción Baricéntrica y Ordenamiento Monótono
+# Firma: SHA256-VAULT-CORE-BARYCENTRIC-SHRINKAGE-001
+# [LN-QBE-079] / [LN-QBE-081] / [LN-QBE-082] — Transcripción canónica VERBATIM.
+# Nota de trazabilidad: el bloque fue inyectado como [LN-QBE-080]/[LN-QBE-081] y remapeado
+# a [LN-QBE-081]/[LN-QBE-082] por colisión con el nodo sellado [LN-QBE-080] (Compilador PDF A4).
+# Ver docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+
+def contraer_distribucion_fiduciaria(
+    p_l: float, p_e: float, p_v: float, delta_epist: float
+) -> Tuple[float, float, float]:
+    """[LN-QBE-079] Contracción convexa hacia el baricentro (1/3, 1/3, 1/3) modulada por incertidumbre."""
+    delta = max(0.0, float(delta_epist))
+    psi = max(0.0, 1.0 - (delta / 0.12) ** 2) if delta <= 0.12 else 0.0
+    p0 = 1.0 / 3.0
+    p_l_c = round(psi * p_l + (1.0 - psi) * p0, 4)
+    p_e_c = round(psi * p_e + (1.0 - psi) * p0, 4)
+    p_v_c = round(1.0 - p_l_c - p_e_c, 4)
+    return (p_l_c, p_e_c, p_v_c)
+
+
+def calcular_probabilidad_exito_estrategia(
+    codigo_estrategia: str, p_fav_p: float, p_emp_p: float, p_und_p: float = 0.0
+) -> float:
+    """[LN-QBE-081] Calcula la probabilidad efectiva de éxito según la estructura de cobertura."""
+    cod = str(codigo_estrategia).upper().replace("+", "").strip()
+    if cod in ("QBE-H1", "QBE-H2"):
+        return round(p_fav_p + p_emp_p, 4)
+    elif cod in ("QBE-D1", "QBE-D2"):
+        return round(p_fav_p, 4)
+    elif cod in ("QBE-R1", "QBE-R2"):
+        return round(p_und_p, 4)
+    elif cod == "QBE-C1":
+        denom = p_fav_p + p_und_p
+        return round(p_fav_p / denom, 4) if denom > 0 else 0.50
+    return 0.3333
+
+
+def ordenar_cartera_por_certeza_lexicografica(partidos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """[LN-QBE-081] Ordena: 1° Probabilidad Efectiva de Éxito (desc), 2° Ganancia Neta (desc)."""
+    return sorted(
+        partidos,
+        key=lambda x: (
+            round(float(x.get("prob_exito_efectiva", 0.0)), 4),
+            round(float(x.get("ganancia_neta", 0.0)), 2)
+        ),
+        reverse=True
+    )
+
+
+def asignar_capital_monotono_cartera(
+    partidos_ordenados: List[Dict[str, Any]],
+    bankroll: float,
+    cap_max_partido_pct: float = 0.08,
+    cap_max_cartera_pct: float = 0.25
+) -> List[Dict[str, Any]]:
+    """[LN-QBE-082] Asigna capital en degradé monótono no creciente según la certeza."""
+    if bankroll <= 0.0 or not partidos_ordenados:
+        return partidos_ordenados
+
+    K = len(partidos_ordenados)
+    cap_max_partido = round(bankroll * cap_max_partido_pct, 2)
+    bolsa_disponible = round(bankroll * cap_max_cartera_pct, 2)
+
+    probabilidades = [max(0.01, float(p.get("prob_exito_efectiva", 0.33))) for p in partidos_ordenados]
+    suma_prob = sum(probabilidades)
+    pesos = [pr / suma_prob for pr in probabilidades]
+
+    for idx, p in enumerate(partidos_ordenados):
+        inv_teorica = round(bolsa_disponible * pesos[idx], 2)
+        p["inversion_total"] = min(cap_max_partido, max(5.00, inv_teorica))
+
+    # Forzar monotonía no creciente: B_(1) >= B_(2) >= ... >= B_(K)
+    for i in range(1, K):
+        if partidos_ordenados[i]["inversion_total"] > partidos_ordenados[i-1]["inversion_total"]:
+            partidos_ordenados[i]["inversion_total"] = partidos_ordenados[i-1]["inversion_total"]
+
+    # Prorrateo si excede el tope de cartera
+    total_inv = sum(float(p["inversion_total"]) for p in partidos_ordenados)
+    if total_inv > bolsa_disponible and total_inv > 0:
+        escala = bolsa_disponible / total_inv
+        for p in partidos_ordenados:
+            p["inversion_total"] = round(float(p["inversion_total"]) * escala, 2)
+
+    return partidos_ordenados
+

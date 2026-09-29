@@ -1093,6 +1093,30 @@ class PortfolioExecutionPlan(BaseModel):
 
 ---
 
+### [ARCH-1.4.17] Contrato de la Distribución Fiduciaria Contraída en el Pipeline de Cartera [ARCH-PILLAR]
+* La función `build_plan()` en `src/core/portfolio.py` debe consumir `p_fav` y `p_emp` del contrato extendido, calcular la probabilidad efectiva de éxito $P_{\text{éxito}}'$ y ordenar la cartera antes de dimensionar stakes.
+* Se erradica formalmente la clave de ordenamiento muerta `(-(1.0 - x["psi_downside"]), -x["ev_neto_roi"])`.
+* **Frontera de mutación:** $\hat{P}_i$ (Poisson 6x6 + 3NF) es INMUTABLE. $\hat{P}_i'$ es variable derivada downstream que vive exclusivamente dentro del motor de cartera (`portfolio_math.py` y `portfolio.py`); queda prohibido sobreescribir la distribución soberana persistida. El resultado viaja como el campo derivado `prob_exito_efectiva` en el payload de partidos aprobados.
+* **Alcance de materialización:** el ordenamiento se resuelve con `ordenar_cartera_por_certeza_lexicografica` (`[VAULT-CORE-079-SHRINKAGE]`) sobre `prob_exito_efectiva`, con desempate por `ganancia_neta` descendente.
+
+### [ARCH-1.4.18] Algoritmo de Sizing Monótono Proporcional a la Certeza [ARCH-PILLAR]
+* La inversión de cada partido se calcula de forma proporcional a su probabilidad efectiva de éxito:
+  $$w_i = \frac{P_{\text{éxito}, i}'}{\sum_{j=1}^K P_{\text{éxito}, j}'}$$
+  forzando la condición $B_{(1)} \ge B_{(2)} \ge \dots \ge B_{(K)}$ y aplicando los hard-caps del 8% individual y 25% de cartera total.
+* **Erradicación formal:** el piso `max(0.02, f_kelly)` y la bolsa heurística `bolsa_core = bankroll · min(0.25, 0.06·K)` quedan extintos como generadores de tamaño (deuda técnica). El piso operativo subsistente es el de ventanilla `PISO_MINIMO_BOLETO = 2.00` (`[LN-QBE-071]`).
+* **Conciliación con `[LN-QBE-070-B]`:** `calcular_kelly_atenuado` subsiste en `build_plan()` exclusivamente como **cota analítica de auditoría NO vinculante** (control TD-COR-01, exigido por el AST de `tests/shield/test_shield_technical_debt_liquidation.py`) y se reporta en `control_portafolio.desglose_bankroll.auditoria_kelly_atenuado`. Ningún peso de cartera se deriva de Kelly.
+* **Orden de aplicación:** (1) contracción `[LN-QBE-079]` → (2) orden lexicográfico `[LN-QBE-081]` → (3) sizing monótono `[LN-QBE-082]` → (4) hard-caps constitucionales `[LN-QBE-070-B]` + piso de ventanilla `[LN-QBE-071]`.
+* **[SHIELD]:** `tests/shield/test_shield_fiduciary_shrinkage_and_monotonic_ordering.py` y `tests/shield/test_shield_technical_debt_liquidation.py`.
+
+### [ARCH-1.4.19] Monotonía Estricta Post-Dutching en PortfolioEngine.build_plan() [ARCH-PILLAR]
+* **Problema:** El escalamiento a piso de ventanilla ($\$2.00\text{ MXN}$) y el recálculo $B_{\text{seg}} \times O_{\text{emp}}$ para garantizar $V=0$ pueden re-inflar el monto de un partido inferior, rompiendo la jerarquía monetaria de certeza.
+* **Mecanismo Obligatorio:** Tras resolver las piernas split de cada orden, el motor debe aplicar un **segundo pase de monotonía no creciente**:
+  $$B_{(1)} \ge B_{(2)} \ge \dots \ge B_{(K)}$$
+  Si $B_{(i)} > B_{(i-1)}$, se trunca $B_{(i)} = B_{(i-1)}$ y se recalculan proporcionalmente $B_{\text{seg}}$ y $B_{\text{prio}}$ preservando el piso de $\$2.00$ y la indemnidad $V=0$.
+
+
+---
+
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**
 
 ```

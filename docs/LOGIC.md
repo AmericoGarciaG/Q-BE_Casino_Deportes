@@ -853,6 +853,74 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-079] Operador de Contracción Fiduciaria Baricéntrica (Barycentric Dirichlet Shrinkage)
+* **Ω (Resumen):** Genera la variable derivada downstream $\hat{P}_i' \in \Delta^2$ contrayendo la distribución soberana nominal hacia el baricentro de ignorancia $P^{(0)} = (1/3, 1/3, 1/3)$ mediante el factor de consenso $\Psi_{\text{epist}, i} \in [0, 1]$:
+  $$\mathbf{p_{i, k}' = \Psi_{\text{epist}, i} \cdot p_{i, k} + (1.0 - \Psi_{\text{epist}, i}) \cdot \frac{1}{3} \quad \forall k \in \{1, X, 2\}}$$
+* **Invarianza de Cierre:** $\sum_{k} p_{i, k}' \equiv 1.000000$ por combinación convexa exacta. No reemplaza a $\hat{P}_i$; opera como métrica de ordenamiento y ponderación de capital.
+* **Frontera ontológica [DIRGEN-STRICT]:** la distribución soberana base $\hat{P}_i = (p_1, p_X, p_2)$ nace de la física del fútbol (Poisson / Dixon-Coles / Opta xG), reside intacta en `matches_json` y en la 3NF, y gobierna la cartelera y el triaje de las 9 estrategias. **Queda estrictamente prohibido modificar, sobreescribir o mutar $\hat{P}_i$.** El baricentro $P^{(0)}$ y el factor $\Psi_{\text{epist}, i} = \max\left(0.0, 1.0 - (\Delta_{\text{epist}, i}/0.12)^2\right)$ reutilizan literales ya sellados por `[LN-QBE-070-B]` (frontera $\tau_{\text{disp}} = 0.12$); cero números nuevos.
+* **Materialización:** `contraer_distribucion_fiduciaria` (`[VAULT-CORE-079-SHRINKAGE]`).
+* **Φ (Transición):** Hacia `[LN-QBE-081]` (probabilidad efectiva de éxito) y `[LN-QBE-082]` (asignación monótona de capital).
+* **[SHIELD]:** `tests/shield/test_shield_fiduciary_shrinkage_and_monotonic_ordering.py`
+
+---
+
+### ID: [LN-QBE-081] Probabilidad Efectiva de Éxito de la Posición (P_éxito') y Ordenamiento Lexicográfico
+* **Ω (Resumen):** Calcula la certeza real de preservar o incrementar el capital según la estructura de cobertura:
+  $$P_{\text{éxito}}' = \begin{cases}
+  p_{\text{fav}}' + p_{\text{emp}}' & \text{para estrategias híbridas con seguro en tablas } (QBE-H1, QBE-H2) \\
+  p_{\text{fav}}' & \text{para apuestas directas sin seguro } (QBE-D1, QBE-D2) \\
+  p_{\text{dog}}' & \text{para estrategias reversas } (QBE-R1, QBE-R2) \\
+  p_{\text{fav}}' / (p_{\text{fav}}' + p_{\text{dog}}') & \text{para apuestas sin empate } (QBE-C1) \\
+  0.3333 & \text{para cuarentena } (QBE-00)
+  \end{cases}$$
+* **Regla de Ordenamiento Lexicográfico de Cartera:**
+  $$\mathbf{\text{Clave Primaria: } P_{\text{éxito}}' \quad \text{Descendente} \quad \longrightarrow \quad \text{Clave Secundaria: } \text{Ganancia Neta} \quad \text{Descendente}}$$
+* **Materialización:** `calcular_probabilidad_exito_estrategia` y `ordenar_cartera_por_certeza_lexicografica` (`[VAULT-CORE-079-SHRINKAGE]`). El campo derivado viaja como `prob_exito_efectiva` dentro del payload de partidos aprobados (`[ARCH-1.4.17]`).
+* **Φ (Transición):** Hacia `[LN-QBE-082]`.
+* **[SHIELD]:** `tests/shield/test_shield_fiduciary_shrinkage_and_monotonic_ordering.py`
+
+---
+
+### ID: [LN-QBE-082] Principio de Asignación Monótona de Capital
+* **Ω (Resumen):** El capital asignado debe ser una función monótona no creciente de la certeza:
+  $$P_{\text{éxito}, (1)}' \ge P_{\text{éxito}, (2)}' \ge \dots \ge P_{\text{éxito}, (K)}' \implies B_{(1)} \ge B_{(2)} \ge \dots \ge B_{(K)}$$
+  El partido con mayor probabilidad de éxito recibe la mayor inversión (hasta el hard-cap del 8.0%), y ningún partido con menor probabilidad de éxito puede recibir un importe superior a uno precedente.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC] (`asignar_capital_monotono_cartera`):**
+  1. Bolsa de jornada $= \text{Bankroll} \times 0.25$; tope individual $= \text{Bankroll} \times 0.08$.
+  2. Pesos $w_i \propto P_{\text{éxito}, i}'$ con piso analítico de probabilidad $0.01$ (evita división por cero; no altera la jerarquía).
+  3. $B_i = \min\left(\text{cap}_{8\%},\ \max(5.00,\ \text{bolsa} \cdot w_i)\right)$ y luego la **guarda de monotonía**: $B_{(i)} := \min\left(B_{(i)},\ B_{(i-1)}\right)$.
+  4. Prorrateo uniforme si $\sum B_i > 0.25 \cdot \text{Bankroll}$ (escalado preserva el orden).
+* **Conciliación con `[LN-QBE-070-B]` (Kelly Fraccional Atenuado):** queda **erradicado** el piso `max(0.02, f_kelly)` como generador de tamaño. La delegación analítica `calcular_kelly_atenuado` subsiste en `build_plan()` **exclusivamente como cota de auditoría NO vinculante** (control de deuda técnica TD-COR-01), reportada en `control_portafolio.desglose_bankroll.auditoria_kelly_atenuado`; ningún peso de cartera se deriva de ella.
+* **Materialización:** `asignar_capital_monotono_cartera` (`[VAULT-CORE-079-SHRINKAGE]`), consumida antes del despacho de órdenes (`[ARCH-1.4.18]`).
+* **Φ (Transición):** Hacia `[LN-QBE-070-B]` (hard-caps constitucionales) y `[LN-QBE-071]` (piso de ventanilla).
+* **[SHIELD]:** `tests/shield/test_shield_fiduciary_shrinkage_and_monotonic_ordering.py`
+
+### ID: [LN-QBE-083] Formalización de la Tetralogía de Escenarios de Liquidación
+* **Ω (Resumen):** En toda posición híbrida con cobertura en tablas ($H1, H2$) dotada de cláusula $+PA$, la tarjeta de ejecución debe cuantificar y desglosar de forma determinista cuatro escenarios de desenlace:
+  1. **Ganancia Principal:** Victoria ordinaria del favorito.
+  2. **Cobertura en Empate:** Recuperación del $100\%$ del capital ($V=0$).
+  3. **Pago Anticipado con Empate (¡Doble Cobro Simultáneo!):** *(rótulo canónico de UI sancionado por la Resolución `VARIANCE-01` de la Fase 7.9: `Pago Anticipado con Empate:`; el rótulo histórico `Pago Anticipado + Empate:` queda derogado. Se exhibe únicamente si `pa_activo = True` y existe boleto seguro.)*
+     $$\text{Retorno Bruto} = B_{\text{prio}} \cdot O_{\text{fav}} + B_i$$
+     $$\text{Ganancia Neta} = B_{\text{prio}} \cdot O_{\text{fav}} \implies \text{ROI}_{\text{doble}} = \left( 1 - \frac{1}{O_{\text{emp}}} \right) O_{\text{fav}} \times 100\%$$
+     Se activa si el favorito alcanza ventaja $+2$ en $t < 90'$ y el encuentro concluye empatado (ej. $2-2$).
+  4. **Salida de Emergencia (Rompe-Quinielas):** Regla de CashOut defensivo si el rival anota primero ($0-1$) y el juego se empata en el 2T ($1-1$), asegurando el rescate del $100\%$ de la inversión ($B_i$).
+* **Φ (Transición):** Hacia `[ARCH-1.4.19]` (monotonía fiduciaria post-piso de ventanilla), `[DES-QBE-061]` (formato dual de cuotas) y `[DES-QBE-062]` (tetralogía de escenarios), materializados en `src/web/static/js/app.js`.
+* **[SHIELD]:** `tests/shield/test_shield_ticket_ux_and_cashout_refinement.py`
+
+
+---
+
+> **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
+> solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
+> `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,
+> `src/reporting/compiler.py`). Conforme al precedente de trazabilidad `[LN-QBE-076]`/`[LN-QBE-077]`
+> (*"sin reutilización de identificadores"*), el bloque se remapea a **`081`** y **`082`**
+> conservando el orden ascendente, el contenido matemático VERBATIM y la frontera
+> `[DIRGEN-STRICT]`. Solicitud formal registrada en
+> `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md`.
+
+---
+
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**
 
 ```

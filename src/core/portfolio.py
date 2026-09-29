@@ -1,15 +1,22 @@
 # Q-BE Casino Deportes — Portfolio & Router Engine (src/core/portfolio.py)
 """
 Router de Portafolio, Dimensionamiento Fraccional de Kelly y Asignación de Capital.
-[LN-QBE-070] [BIZ-LOGIC] [ALGO-PROTECTED]
+[LN-QBE-070] [LN-QBE-079] [LN-QBE-081] [LN-QBE-082] [BIZ-LOGIC] [ALGO-PROTECTED]
 Calcula la asignación de capital y el Dutching exacto eliminando pisos fijos y respetando
 el techo aritmético de cartera.
+[ARCH-1.4.17] / [ARCH-1.4.18]: la cartera se ordena por P_éxito' (distribución contraída) y el
+capital se asigna de forma monótona no creciente. `calcular_kelly_atenuado` subsiste como cota
+de auditoría NO vinculante (TD-COR-01).
 """
 
 import itertools
 from typing import List, Dict, Any, Optional
 from src.core.catalog import STRATEGY_CATALOG
-from src.core.contracts.portfolio_math import calcular_kelly_atenuado, aplicar_hard_caps_constitucionales
+from src.core.contracts.portfolio_math import (
+    calcular_kelly_atenuado, aplicar_hard_caps_constitucionales,
+    contraer_distribucion_fiduciaria, calcular_probabilidad_exito_estrategia,
+    ordenar_cartera_por_certeza_lexicografica, asignar_capital_monotono_cartera
+)
 from src.models.decision import (
     MatchExecutionOrder, StrategySelection, KeyMetrics, TicketOrder,
     MatchTickets, Projections, CashoutTargets, SatelliteModule,
@@ -19,6 +26,37 @@ from src.models.decision import (
 # [LN-QBE-071] Piso canónico de ventanilla: ÚNICA fuente de verdad del piso mínimo por boleto.
 # Erradica los literales históricos (4.00 en asignación y 2.00 redeclarado dentro del bucle).
 PISO_MINIMO_BOLETO = 2.00
+
+
+def _reimponer_monotonia_fiduciaria(orders_raw: List[Dict[str, Any]]) -> float:
+    """[ARCH-1.4.19 / ALT-1] Pase de monotonía fiduciaria no creciente sobre el libro de órdenes.
+
+    El piso de ventanilla ([LN-QBE-071]) re-deriva A_i = B_seg × O_seg y acopla el tamaño al momio
+    del desenlace de cobertura, de modo que una posición de certeza INFERIOR puede quedar por
+    encima de su predecesora. Este pase reimpone B_(1) >= B_(2) >= ... >= B_(K) truncando el techo
+    al de la posición precedente y RE-DERIVA los boletos con Clamping Fiduciario
+    (B_seg >= $2.00 MXN): el excedente se absorbe reduciendo el boleto de ataque B_prio, NUNCA
+    degradando el seguro por debajo del piso legal ([LN-QBE-070-E]). La identidad
+    B_seg + B_prio = A_i se preserva, por lo que el capital total jamás se infla: sólo decrece.
+
+    Función pura sobre el libro recibido (cero I/O, cero estado externo). Devuelve el capital
+    realmente comprometido tras el pase.
+    """
+    for i in range(1, len(orders_raw)):
+        if orders_raw[i]["inv_partido"] > orders_raw[i - 1]["inv_partido"]:
+            orders_raw[i]["inv_partido"] = orders_raw[i - 1]["inv_partido"]
+            # Reajustar boletos split preservando V=0 (o V>=0 favorable si el piso clampa)
+            code_i = orders_raw[i]["code"]
+            inv_i = orders_raw[i]["inv_partido"]
+            if any(f in code_i for f in ["H1", "H1+", "H2", "H2+", "R1"]):
+                b1_mom_i = orders_raw[i]["b1_momio"]
+                if b1_mom_i > 0:
+                    b1_m_i = max(PISO_MINIMO_BOLETO, round(inv_i / b1_mom_i, 2))
+                    orders_raw[i]["b1_monto"] = b1_m_i
+                    orders_raw[i]["b2_monto"] = round(max(0.0, inv_i - b1_m_i), 2)
+            elif code_i in ["QBE-D1", "QBE-D1+", "QBE-D2"]:
+                orders_raw[i]["b2_monto"] = inv_i
+    return round(sum(item["inv_partido"] for item in orders_raw), 2)
 
 
 def _casa_de_la_pierna(m: Dict[str, Any], momio_pierna: float,
@@ -46,6 +84,33 @@ def _casa_de_la_pierna(m: Dict[str, Any], momio_pierna: float,
     if op_und is not None and leg == round(float(o_und), 4):
         return str(op_und)
     return None
+
+
+def _p_c_pierna_pct(seleccion: str, fav_name: Optional[str], und_name: Optional[str],
+                    p_c_fav: Optional[float], p_c_emp: Optional[float],
+                    p_c_und: Optional[float]) -> Optional[float]:
+    """[DES-QBE-060] P' contraído (%) del desenlace que transporta UNA pierna.
+
+    Resolución por IDENTIDAD de la etiqueta (mismo principio doctrinal que
+    `_casa_de_la_pierna`): los campos `boleto_1_seguro` / `boleto_2_ganancia` NO describen de
+    forma estable el rol de la pierna (en la familia H2 el "seguro" transporta a Gana-Favorito
+    y la "ganancia" al Empate), por lo que el rótulo fiduciario se ancla al desenlace
+    REALMENTE exhibido en la selección de la pierna. Función de ROTULADO: no interviene en
+    ninguna magnitud de capital, Kelly o Hard-Caps. Devuelve `None` ante una etiqueta no
+    reconocible, para que la ventanilla degrade a '—' antes que inventar una cifra
+    ([GOVERNANCE-01] cero cifras inventadas).
+    """
+    sel = str(seleccion or "").upper().replace(" + PA", "").strip()
+    if not sel:
+        return None
+    valor_c = None
+    if "EMPATE" in sel:
+        valor_c = p_c_emp
+    elif und_name and sel == f"GANA {str(und_name).upper()}":
+        valor_c = p_c_und
+    elif fav_name and sel == f"GANA {str(fav_name).upper()}":
+        valor_c = p_c_fav
+    return round(float(valor_c) * 100.0, 1) if valor_c is not None else None
 
 
 def calcular_trinidad_resiliencia_3k(ordenes_data: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -256,11 +321,36 @@ class PortfolioEngine:
             if float(m.get("delta_epist", 0.02)) <= 0.12
             and float(m.get("psi_epist", 0.97)) > 0.0
         ]
-        # ── 1. Ordenamiento Jerárquico Doble (Probabilidad de Éxito y ROI) ──
-        approved_matches = sorted(
-            approved_matches,
-            key=lambda x: (-(1.0 - x["psi_downside"]), -x["ev_neto_roi"])
-        )
+        # ── 1. [LN-QBE-079] Distribución Fiduciaria Contraída P̂_i' (variable DERIVADA downstream).
+        # La distribución soberana P̂_i (Poisson/Dixon-Coles 6x6, 3NF) se consume como entrada de
+        # SÓLO LECTURA: nunca se muta ni se sobreescribe ([ARCH-1.4.17]). La contracción baricéntrica
+        # hacia P⁽⁰⁾ = (1/3, 1/3, 1/3) se pondera por Ψ_epist,i = max(0, 1 - (Δ_epist,i/0.12)²) y el
+        # resultado se inyecta como campo derivado `prob_exito_efectiva` en el payload de trabajo.
+        for m in approved_matches:
+            p_l_c, p_e_c, p_v_c = contraer_distribucion_fiduciaria(
+                float(m.get("prob_fav", 55.0)) / 100.0,
+                float(m.get("prob_emp", 25.0)) / 100.0,
+                float(m.get("prob_und", 20.0)) / 100.0,
+                float(m.get("delta_epist", 0.02))
+            )
+            m["prob_exito_efectiva"] = calcular_probabilidad_exito_estrategia(
+                m.get("strategy_code", "QBE-H1"), p_l_c, p_e_c, p_v_c
+            )
+            # [DES-QBE-060] Los TRES componentes de la distribución contraída P̂_i' se preservan
+            # como campos derivados del payload, para que el motor rotule el P' fiduciario de
+            # CADA pierna y del desenlace descartado (paridad fáctica backend↔pantalla).
+            # Convención de la llamada canónica de arriba: p_l_c := prob_fav, p_e_c := prob_emp,
+            # p_v_c := prob_und. Cero matemática nueva: sólo se conserva el resultado ya
+            # calculado por el plano sellado ([VAULT-CORE-079-SHRINKAGE]). La distribución
+            # soberana P̂_i (Poisson 6x6 + 3NF) permanece INTACTA ([ARCH-1.4.17]).
+            m["p_c_fav"], m["p_c_emp"], m["p_c_und"] = p_l_c, p_e_c, p_v_c
+
+        # ── 2. [LN-QBE-081] Ordenamiento Lexicográfico por Certeza y Ganancia ──
+        # Erradicada la clave muerta `(-(1.0 - x["psi_downside"]), -x["ev_neto_roi"])`, que degeneraba
+        # a ROI bruto descendente porque `psi_downside` viajaba fijo para todos los partidos (colocaba
+        # a los volados de cuota alta arriba y a los favoritos seguros abajo). Clave vigente:
+        # 1° P_éxito' descendente, 2° ganancia neta descendente.
+        approved_matches = ordenar_cartera_por_certeza_lexicografica(approved_matches)
 
         k_count = len(approved_matches)
         if k_count == 0:
@@ -273,7 +363,10 @@ class PortfolioEngine:
         p_ruina_total = prod_psi * 100.0
         blindaje = 100.0 - p_ruina_total
 
-        # 2. Scores de Calidad y Asignación de Capital
+        # 2. Scores de Calidad [METRICAS DESCRIPTIVAS DEL CONTRATO — sin efecto sobre el capital]
+        # [LN-QBE-082] El capital NO se deriva de S_i ni de w_i: ambos alimentan exclusivamente
+        # `KeyMetrics.score_calidad_S_i` / `peso_portafolio_w_i`. El dimensionamiento monótono se
+        # resuelve abajo con `asignar_capital_monotono_cartera`.
         scores = []
         for m in approved_matches:
             s_i = max(0.01, m["ev_neto_roi"]) / max(0.01, m["psi_downside"])
@@ -282,12 +375,19 @@ class PortfolioEngine:
         sum_scores = sum(scores) if sum(scores) > 0 else 1.0
         weights = [s / sum_scores for s in scores]
 
-        bolsa_core = bankroll * min(0.25, 0.06 * k_count)  # Tope 25%
+        # ── 3. [LN-QBE-082] Asignación Monótona de Capital: B_(1) >= B_(2) >= ... >= B_(K) ──
+        # Erradicados como generadores de tamaño: (a) la bolsa heurística no legislada
+        # `bolsa_core = bankroll · min(0.25, 0.06·K)` y (b) el piso `max(0.02, f_kelly)`. El capital de
+        # cada partido viaja en `inversion_total` (bolsa de jornada 25%, tope individual 8%, piso de
+        # bolsa 5.00) y los hard-caps constitucionales siguen vigentes como segunda línea de defensa.
+        approved_matches = asignar_capital_monotono_cartera(approved_matches, bankroll)
 
         orders: List[MatchExecutionOrder] = []
         # 2. Generar estructuras intermedias de órdenes y validar Hard-Cap Global
         orders_raw = []
         total_inv_core = 0.0
+        # [LN-QBE-070-B] / TD-COR-01: bitácora de la cota analítica de Kelly atenuado (NO vinculante).
+        auditoria_kelly: List[Dict[str, Any]] = []
 
         for idx, m in enumerate(approved_matches):
             code = m["strategy_code"]
@@ -309,20 +409,32 @@ class PortfolioEngine:
             suffix_pa = " + PA" if pa_activo else ""
 
             if mode == "BANKROLL":
-                # [LN-QBE-070-B] Dimensionamiento canónico SIN números mágicos.
-                # Erradicados: (a) el divisor heurístico `3.0`, (b) el piso artificial `max(0.02, ...)`
-                # y (c) el piso no legislado `max(4.00, ...)`. Los techos (8.0% individual y 25.0%
-                # global de jornada) son competencia EXCLUSIVA de `aplicar_hard_caps_constitucionales`
-                # (portfolio_math.py); el piso operativo es el de ventanilla [LN-QBE-071].
-                # [LN-QBE-070-B] Delegación analítica pura a Kelly atenuado sin divisores empíricos.
+                # [LN-QBE-082] Dimensionamiento por Asignación Monótona de Capital: la inversión de
+                # cada partido es la magnitud ya jerarquizada por certeza en el paso 3 (el partido más
+                # seguro recibe el mayor capital). Erradicado el piso `max(0.02, f_kelly)`, que regalaba
+                # capital a las apuestas voladas y castigaba a los favoritos de cuota baja. El piso de
+                # ventanilla ([LN-QBE-071] PISO_MINIMO_BOLETO) y los techos (8.0% individual / 25.0% de
+                # jornada) ya fueron aplicados por el asignador y se re-verifican en la segunda línea
+                # de defensa `aplicar_hard_caps_constitucionales` (portfolio_math.py).
+                inv_partido = float(m["inversion_total"])
+                # [LN-QBE-070-B] / TD-COR-01 — COTA ANALÍTICA DE AUDITORÍA, **NO VINCULANTE**.
+                # `calcular_kelly_atenuado` subsiste únicamente como trazabilidad del techo fiduciario
+                # de sostenibilidad y se reporta en `desglose_bankroll.auditoria_kelly_atenuado`.
+                # Ningún peso de cartera se deriva de Kelly ([ARCH-1.4.18]).
                 p_fav_i = float(m.get("prob_fav", 55.0)) / 100.0 if float(m.get("prob_fav", 55.0)) > 1.0 else float(m.get("prob_fav", 0.55))
                 o_fav_i = float(m.get("odd_fav", 2.0))
                 delta_epist_i = float(m.get("delta_epist", 0.02))
 
                 f_kelly = calcular_kelly_atenuado(p=p_fav_i, o=o_fav_i, delta_epist=delta_epist_i, gamma_kelly=0.25)
-                cap_i = min(0.08, max(0.02, f_kelly)) if f_kelly > 0 else 0.02
-                inv_partido = min(bolsa_core * weights[idx], bankroll * cap_i)
-                inv_partido = round(max(PISO_MINIMO_BOLETO, inv_partido), 2)
+                cota_kelly = round(bankroll * f_kelly, 2) if f_kelly > 0.0 else 0.0
+                auditoria_kelly.append({
+                    "id_partido": m.get("id_partido"),
+                    "prob_exito_efectiva": m.get("prob_exito_efectiva"),
+                    "f_kelly_atenuado": f_kelly,
+                    "cota_kelly_mxn": cota_kelly,
+                    "capital_asignado_mxn": round(inv_partido, 2),
+                    "excede_cota_kelly": bool(round(inv_partido, 2) > cota_kelly)
+                })
             else:
                 inv_partido = 10.00
 
@@ -404,6 +516,12 @@ class PortfolioEngine:
                 "out_min85": out_min85, "tablas_amt": tablas_amt
             })
 
+        # ── [ARCH-1.4.19 / ALT-1] SEGUNDO PASE DE MONOTONÍA FIDUCIARIA NO CRECIENTE ──────────
+        # Ver `_reimponer_monotonia_fiduciaria`: la certeza gobierna el capital, nunca el momio.
+        # [LN-QBE-070-B] El libro debe reflejar el capital REALMENTE comprometido (si el total
+        # quedara obsoleto, el factor de prorrateo se calcularía contra un techo falso).
+        total_inv_core = _reimponer_monotonia_fiduciaria(orders_raw)
+
         # ── [LN-QBE-070-B] HARD-CAPS CONSTITUCIONALES CANÓNICOS ───────────────
         # Los techos dejan de ser literales locales: la acotación individual (8.0%) y el
         # prorrateo global de jornada (25.0%) se delegan íntegramente a portfolio_math.py.
@@ -428,6 +546,9 @@ class PortfolioEngine:
                     b2_m = round(b2_m * scale_factor, 2)
 
                 if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
+                    # [ARCH-1.4.19 / LN-QBE-071] Clamping Fiduciario: el prorrateo jamás puede
+                    # empujar el boleto seguro por debajo del piso legal de ventanilla ($2.00 MXN).
+                    b1_m = max(PISO_MINIMO_BOLETO, b1_m) if b1_m > 0 else 0.0
                     new_inv = round(b1_m * b1_mom, 2) if b1_mom > 0 else new_inv
                     b2_m = round(max(0.0, new_inv - b1_m), 2)
                 elif code in ["QBE-D1", "QBE-D1+"]:
@@ -437,6 +558,13 @@ class PortfolioEngine:
                 item["b1_monto"] = b1_m
                 item["b2_monto"] = b2_m
                 total_inv_core += new_inv
+
+        # [ARCH-1.4.19 / ALT-1] El pase de monotonía es la ÚLTIMA autoridad sobre A_i: el prorrateo
+        # del Hard-Cap global (25.0%) y su Clamping Fiduciario re-derivan A_i = B_seg × O_seg, lo
+        # que puede re-inflar una pierna por encima de su predecesora y rebasar el techo de jornada.
+        # Se reimpone la monotonía absorbiendo el excedente en B_prio (jamás en el seguro) y el
+        # libro vuelve a reflejar el capital realmente comprometido.
+        total_inv_core = _reimponer_monotonia_fiduciaria(orders_raw)
 
         # Materializar instancias Pydantic MatchExecutionOrder
         orders: List[MatchExecutionOrder] = []
@@ -465,6 +593,39 @@ class PortfolioEngine:
             # otra iteración del bucle anterior (defecto de variable obsoleta detectado en la prueba
             # de fuego E2E: el boleto del partido N se comparaba contra el momio del partido último).
             o_fav_i, o_emp_i, o_und_i = m["odd_fav"], m["odd_emp"], m["odd_und"]
+
+            # ── [DES-QBE-060] P' fiduciario por pierna y desenlace descartado ───────────────
+            # Los componentes contraídos viajan como campos derivados en el payload (paso 1);
+            # este bloque SÓLO los rotula. Cero números nuevos, cero recálculo y cero efecto
+            # sobre capital, Kelly o Hard-Caps: es metadata de exhibición.
+            # VARIANCE-04-F7.8 (sometida a ratificación de la Tríada): la Resolución nombra la
+            # terna como `p_fav_c` / `pe_c` / `pv_c` y los contenedores `boleto_1_ganancia` /
+            # `boleto_2_seguro`, nombres que NO existen en el código (la terna canónica es
+            # `p_l_c, p_e_c, p_v_c` y los contenedores legislados son `boleto_1_seguro` y
+            # `boleto_2_ganancia`, cuyo CONTENIDO se invierte entre las familias H1 y H2 — la
+            # prueba de fuego E2E del 2026-09 demostró que rotular por nombre de campo
+            # disparaba el P' del Empate sobre una pierna de Gana-Favorito). Se materializa la
+            # INTENCIÓN fiduciaria resolviendo por IDENTIDAD de la etiqueta, igual que
+            # `_casa_de_la_pierna`: el P' exhibido es siempre el del desenlace que la pierna
+            # realmente transporta.
+            p_c_fav = m.get("p_c_fav")
+            p_c_emp = m.get("p_c_emp")
+            p_c_und = m.get("p_c_und")
+            fav_name = m.get("fav_name")
+            und_name = m.get("und_name")
+            prob_b1 = _p_c_pierna_pct(b1_sel, fav_name, und_name, p_c_fav, p_c_emp, p_c_und)
+            prob_b2 = _p_c_pierna_pct(b2_sel, fav_name, und_name, p_c_fav, p_c_emp, p_c_und)
+            # El desenlace NO JUGADO es el rival que la estrategia no cubre por diseño: en
+            # H/D (cobertura Fav+Empate o sólo Fav) es el underdog; en R (cobertura Emp+Und)
+            # el descartado es el favorito — exhibir ahí al underdog contradiría al boleto de
+            # ataque que lo juega (paridad fáctica [DES-QBE-060]).
+            cobertura_emp_und = code in ("QBE-R1", "QBE-R2")
+            desc_p_c = p_c_fav if cobertura_emp_und else p_c_und
+            opcion_no_jugada = {
+                "nombre": (fav_name if cobertura_emp_und else und_name) or "Rival Descartado",
+                "momio": o_fav_i if cobertura_emp_und else o_und_i,
+                "prob_qbe": round(float(desc_p_c) * 100.0, 1) if desc_p_c is not None else None
+            }
 
             if code == "QBE-R2":
                 ganancia_neta = round(min(b1_monto * b1_momio, b2_monto * b2_momio) - inv_partido, 2)
@@ -512,9 +673,11 @@ class PortfolioEngine:
                 boletos=MatchTickets(
                     inversion_partido_A_i=inv_partido,
                     boleto_1_seguro=TicketOrder(seleccion=b1_sel, momio=b1_momio, monto_mxn=b1_monto,
-                                                operador=_casa_de_la_pierna(m, b1_momio, o_fav_i, o_emp_i, o_und_i)),
+                                                operador=_casa_de_la_pierna(m, b1_momio, o_fav_i, o_emp_i, o_und_i),
+                                                prob_qbe=prob_b1),
                     boleto_2_ganancia=TicketOrder(seleccion=b2_sel, momio=b2_momio, monto_mxn=b2_monto,
-                                                  operador=_casa_de_la_pierna(m, b2_momio, o_fav_i, o_emp_i, o_und_i))
+                                                  operador=_casa_de_la_pierna(m, b2_momio, o_fav_i, o_emp_i, o_und_i),
+                                                  prob_qbe=prob_b2)
                 ),
                 proyecciones=Projections(
                     ganancia_neta_principal_mxn=ganancia_neta,
@@ -529,7 +692,9 @@ class PortfolioEngine:
                     monto_salida_optima_min85=out_min85,
                     instruccion_emergencia_rompequinielas=f"CashOut en cuanto ofrezca Tablas (${inv_partido} MXN) al igualar en el 2T." if tablas_amt > 0 else "Monitorear en el 2T.",
                     instruccion_desarrollo_normal=out_min85
-                )
+                ),
+                # [DES-QBE-060] Bloque de Transparencia 360°: desenlace rival descartado.
+                opcion_no_jugada=opcion_no_jugada
             )
             orders.append(order)
 
@@ -632,7 +797,11 @@ class PortfolioEngine:
                     "porcentaje_total_arriesgado": round((total_inv_core / bankroll) * 100.0, 2),
                     "reveses_maximos_tolerados": reveses_tolerados,
                     "cascada_resiliencia": cascada_reveses,
-                    "trinidad_resiliencia": trinidad_resiliencia
+                    "trinidad_resiliencia": trinidad_resiliencia,
+                    # [LN-QBE-070-B] / TD-COR-01: cota analítica de Kelly atenuado (auditoría NO
+                    # vinculante). Informa el techo fiduciario de sostenibilidad frente al capital
+                    # realmente asignado por [LN-QBE-082]. No interviene en ninguna magnitud de cartera.
+                    "auditoria_kelly_atenuado": auditoria_kelly
                 }
             ),
             ordenes_ejecucion_partidos=orders,
