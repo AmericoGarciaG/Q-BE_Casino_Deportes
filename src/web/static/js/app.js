@@ -1626,6 +1626,22 @@ function _renderResultadoOptimizadorProgol(data) {
             <td style="text-align:center;">${row.alerta_sesgo ? "⚠️" : "—"}</td>
         </tr>`).join("");
 
+    // [ARCH-1.4.20 / VAULT-CORE-084-PROGOL-P-PRIME] Bloque aditivo del motor soberano de masa
+    // acumulada P': despliega las boletas priorizadas por maximización de C(M) y su garantía
+    // fiduciaria declarada por el backend. Sólo formatea claves ya calculadas por el motor.
+    const boletasP = data.boletas || [];
+    const bloqueMotorSoberano = boletasP.length === 0 ? "" : `
+        <div style="margin-top: 12px; border-top: 1px solid #1E293B; padding-top: 10px;">
+            <span style="font-size: 7.2pt; color: #00E676; text-transform: uppercase; font-weight: 800;">Motor de Masa Acumulada P' · ${data.motor || "PROGOL_P_PRIME_MASS"}</span>
+            <div style="font-size: 8pt; color: #CBD5E1; margin: 4px 0 6px 0;">
+                Garantía fiduciaria: <b style="color:#fff;">${data.garantia_fiduciaria || "—"}</b> ·
+                Masa acumulada capturada: <b style="color:#fff;">${Number(data.masa_acumulada_capturada || 0).toExponential(3)}</b>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                ${boletasP.map(b => `<span style="font-family: monospace; font-size: 7.5pt; color: #38BDF8; background: rgba(56,189,248,0.08); border: 1px solid #1E293B; border-radius: 4px; padding: 2px 6px;" title="Boleta #${b.boleta_id} · P' = ${Number(b.prob_conjunta || 0).toExponential(3)}">#${b.boleta_id} ${(b.combinacion || []).join("")}</span>`).join("")}
+            </div>
+        </div>`;
+
     cont.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
             <div>
@@ -1642,7 +1658,7 @@ function _renderResultadoOptimizadorProgol(data) {
                 <tr><th>#</th><th>Partido</th><th>1</th><th>X</th><th>2</th><th>Recomendación</th><th>Sesgo</th></tr>
             </thead>
             <tbody>${filas}</tbody>
-        </table>`;
+        </table>${bloqueMotorSoberano}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -32,6 +32,8 @@
 23. `[VAULT-CORE-070-RANKING]` Ranking de Fricción de Jornada (`src/core/contracts/portfolio_math.py`)
 24. `[VAULT-CORE-070-KELLY]` Kelly Fraccional Atenuado y Hard-Caps Constitucionales (`src/core/contracts/portfolio_math.py`)
 25. `[VAULT-CORE-071-PISO]` Umbral de Indiferencia y Escalamiento al Piso de Ventanilla (`src/core/contracts/portfolio_math.py`)
+26. `[VAULT-CORE-084-PROGOL-P-PRIME]` Motor de Selección por Masa Acumulada P' (`src/core/contracts/progol_math.py`)
+27. `[VAULT-CORE-088-JIT-RESOLVER]` Resolver Semántico JIT de Competiciones (`src/ingestion/progol_resolver.py`)
 
 ---
 
@@ -1744,4 +1746,229 @@ desde este módulo. Reutiliza exclusivamente literales ya sellados ($P^{(0)}=1/3
 **Trazabilidad de registro:** el bloque fue inyectado como `[LN-QBE-080]`/`[LN-QBE-081]`; remapeado a
 `[LN-QBE-081]`/`[LN-QBE-082]` por colisión con el nodo sellado `[LN-QBE-080] Compilador de Reportes
 Oficiales y PDF A4`. Ver `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md`.
+
+---
+
+## [VAULT-CORE-084-PROGOL-P-PRIME] Motor de Selección por Masa Acumulada P' (`progol_math.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-PROGOL-P-PRIME-MASS-001  
+
+```python
+from itertools import product
+from typing import List, Dict, Tuple, Any
+
+def seleccionar_cobertura_binaria_optima(partidos_14: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """[LN-QBE-085] Selecciona los 2 desenlaces con mayor probabilidad por partido."""
+    resultado = []
+    for p in partidos_14:
+        p_qbe = p.get("p_qbe") or {"L": 0.3333, "E": 0.3333, "V": 0.3334}
+        probs = [("L", float(p_qbe.get("L", 0.3333))), 
+                 ("E", float(p_qbe.get("E", 0.3333))), 
+                 ("V", float(p_qbe.get("V", 0.3334)))]
+        # Ordenar desenlaces por probabilidad descendente
+        probs.sort(key=lambda x: x[1], reverse=True)
+        top_2 = [probs[0][0], probs[1][0]]
+        masa_cubierta = round(probs[0][1] + probs[1][1], 4)
+        
+        resultado.append({
+            "order": p.get("order", 0),
+            "local": p.get("local", ""),
+            "visitante": p.get("visitante", ""),
+            "opciones": top_2,
+            "probs_dict": dict(probs),
+            "masa_2x": masa_cubierta
+        })
+    return resultado
+
+
+def generar_universo_restringido_y_ordenar_p_prime(partidos_14: List[Dict[str, Any]]) -> List[Tuple[Tuple[str, ...], float]]:
+    """[LN-QBE-084] Construye el espacio 2^K y ordena las boletas en la secuencia canónica P'."""
+    coberturas = seleccionar_cobertura_binaria_optima(partidos_14)
+    opciones_por_partido = [c["opciones"] for c in coberturas]
+    probs_por_partido = [c["probs_dict"] for c in coberturas]
+
+    candidatos = []
+    for combinacion in product(*opciones_por_partido):
+        p_conjunta = 1.0
+        for idx, signo in enumerate(combinacion):
+            p_conjunta *= probs_por_partido[idx].get(signo, 0.3333)
+        candidatos.append((combinacion, round(p_conjunta, 8)))
+
+    # Ordenamiento canónico descendente por masa probabilística P'
+    candidatos.sort(key=lambda x: x[1], reverse=True)
+    return candidatos
+
+
+
+def seleccionar_primeras_m_combinaciones(
+    p_prime_ordenado: List[Tuple[Tuple[str, ...], float]], 
+    m_cupo: int
+) -> Tuple[List[Dict[str, Any]], float]:
+    """[LN-QBE-084] Toma las primeras M boletas maximizando estrictamente la masa acumulada C(M)."""
+    seleccionadas = p_prime_ordenado[:max(1, m_cupo)]
+    masa_acumulada = round(sum(item[1] for item in seleccionadas), 6)
+    
+    boletas_formateadas = []
+    for idx, (comb, prob) in enumerate(seleccionadas, 1):
+        boletas_formateadas.append({
+            "boleta_id": idx,
+            "combinacion": list(comb),
+            "prob_conjunta": prob
+        })
+    return boletas_formateadas, masa_acumulada
+
+
+def reducir_a_garantia_hamming_l(
+    p_prime_ordenado: List[Tuple[Tuple[str, ...], float]],
+    l_aciertos_objetivo: int = 13,
+    max_boletas: int = 16
+) -> List[Dict[str, Any]]:
+    """[LN-QBE-086] Algoritmo Greedy de recubrimiento a distancia d_H <= 14 - L."""
+    d_max = max(0, 14 - l_aciertos_objetivo)
+    universo = [item[0] for item in p_prime_ordenado]
+    cubiertos = set()
+    seleccionadas = []
+
+    for comb, prob in p_prime_ordenado:
+        if len(seleccionadas) >= max_boletas:
+            break
+        # Calcular cuántos elementos nuevos cubre esta boleta dentro del radio de Hamming
+        nuevos = 0
+        indices_cubiertos = []
+        for idx, u in enumerate(universo):
+            if idx not in cubiertos:
+                dist = sum(1 for a, b in zip(comb, u) if a != b)
+                if dist <= d_max:
+                    nuevos += 1
+                    indices_cubiertos.append(idx)
+        
+        if nuevos > 0 or not seleccionadas:
+            seleccionadas.append({
+                "boleta_id": len(seleccionadas) + 1,
+                "combinacion": list(comb),
+                "prob_conjunta": prob,
+                "nuevos_cubiertos": nuevos
+            })
+            cubiertos.update(indices_cubiertos)
+
+    return seleccionadas
+
+
+def optimizar_quiniela_progol_soberana(
+    partidos_14: List[Dict[str, Any]], 
+    presupuesto_mxn: float = 360.0,
+    l_objetivo: int = 14
+) -> Dict[str, Any]:
+    """[LN-QBE-074] Orquestador maestro del optimizador combinatorio por presupuesto."""
+    m_cupo = int(presupuesto_mxn // 15.0)
+    p_prime = generar_universo_restringido_y_ordenar_p_prime(partidos_14)
+
+    if l_objetivo >= 14:
+        boletas, masa = seleccionar_primeras_m_combinaciones(p_prime, m_cupo)
+        garantia = "14 Aciertos (Premio Mayor por Maximización de Masa C(M))"
+    else:
+        boletas = reducir_a_garantia_hamming_l(p_prime, l_aciertos_objetivo=l_objetivo, max_boletas=m_cupo)
+        masa = round(sum(b["prob_conjunta"] for b in boletas), 6)
+        garantia = f"{l_objetivo} Aciertos Garantizados al 100% (Radio de Hamming d<={14 - l_objetivo})"
+
+    costo_total = len(boletas) * 15.0
+
+    return {
+        "combinaciones_totales": len(boletas),
+        "costo_total_mxn": costo_total,
+        "masa_acumulada_capturada": masa,
+        "garantia_fiduciaria": garantia,
+        "boletas": boletas
+    }
+```
+
+**Frontera ontológica [DIRGEN-STRICT]:** el bloque consume `p_qbe` (distribución fiduciaria $\hat{P}_i'$) como entrada de
+sólo lectura y devuelve boletas derivadas. Prohibido mutar `matches_json`/3NF desde este módulo y prohibido sustituir
+el orden canónico $P'$ por heurísticas subjetivas de selección de boletas (`[LN-QBE-084]`).
+
+**Nota de trazabilidad (VARIANZA V-4 / RATIFICADO):** el docstring del orquestador conserva la cita `[LN-QBE-074]` de su
+linaje (optimizador combinatorio por presupuesto); la familia de nodos gobernante de este bloque es
+`[LN-QBE-084/085/086]` con contrato de datos en `[ARCH-1.4.20]`. Se transcribió VERBATIM: la doble mención queda como
+traza documental menor sin efecto ejecutable. `[LN-QBE-087]` (Revancha K=7) queda PENDIENTE DIFERIDO conforme al
+dictamen V-2 / ALT-1.
+
+---
+
+## [VAULT-CORE-088-JIT-RESOLVER] Resolver Semántico JIT de Competiciones (`progol_resolver.py`)
+**Estado:** `[CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]`  
+**Firma:** SHA256-VAULT-CORE-PROGOL-JIT-RESOLVER-001  
+
+```python
+import urllib.parse
+from typing import Dict, Any, Optional, List
+
+def parsear_respuesta_search_fotmob(payload_json: Dict[str, Any], query_str: str) -> Optional[Dict[str, Any]]:
+    """[LN-QBE-088] Extrae la liga y el club de mayor relevancia desde la API de búsqueda de FotMob."""
+    if not payload_json:
+        return None
+
+    # Inspeccionar la sección 'teams' del buscador estructurado
+    teams_hits = []
+    # La API de FotMob agrupa por 'teams', 'squad', o resultados en lista
+    if isinstance(payload_json, dict):
+        if "teams" in payload_json and isinstance(payload_json["teams"], list):
+            teams_hits = payload_json["teams"]
+        elif "squad" in payload_json and isinstance(payload_json["squad"], list):
+            teams_hits = payload_json["squad"]
+        elif "data" in payload_json and isinstance(payload_json["data"], list):
+            teams_hits = payload_json["data"]
+
+    if not teams_hits:
+        return None
+
+    top_hit = teams_hits[0]
+    
+    # Extraer metadatos de liga y equipo de forma segura
+    team_id = top_hit.get("id") or top_hit.get("teamId")
+    team_name = top_hit.get("name") or top_hit.get("teamName") or query_str
+    
+    # Resolver la competición asociada al club
+    league_id = None
+    league_name = None
+    
+    if "leagueId" in top_hit:
+        league_id = top_hit.get("leagueId")
+        league_name = top_hit.get("leagueName", "Competición Internacional")
+    elif "primaryLeague" in top_hit and isinstance(top_hit["primaryLeague"], dict):
+        league_id = top_hit["primaryLeague"].get("id")
+        league_name = top_hit["primaryLeague"].get("name")
+
+    if not league_id:
+        return None
+
+    # [RULING-5 / VARIANZA V-6 RATIFICADA] Origen del club exigido por [LN-QBE-088].I
+    country_val = str(top_hit.get("country") or top_hit.get("ccode") or "Internacional").strip()
+
+    return {
+        "fotmob_team_id": int(team_id) if team_id else None,
+        "team_name": str(team_name).strip(),
+        "fotmob_league_id": int(league_id),
+        "league_name": str(league_name or "Torneo Internacional").strip(),
+        "country": country_val,
+        "query_original": query_str
+    }
+```
+
+**Nota de trazabilidad (VARIANZA V-6 / RULING-5 RATIFICADO):** el dictamen del Arquitecto para el Paso 3 (Ruling 5) añadió el campo `country`
+al contrato de retorno del parser JIT para honrar `[LN-QBE-088].I`. Se transcribió VERBATIM en `src/ingestion/progol_resolver.py`,
+preservando la paridad bóveda↔src (`[DIRGEN-STRICT]`, firma SHA256-VAULT-CORE-PROGOL-JIT-RESOLVER-001).
+
+**Nota de trazabilidad (VARIANCE-JIT-01 RATIFICADA):** el snippet táctico original asignaba `id=f"LEAGUE_{f_id}"` en
+`registrar_liga_descubierta_si_no_existe`. El PK físico `leagues.id` es `INTEGER` (rowid alias; verificado por `PRAGMA table_info`),
+por lo que dicho literal levanta `sqlite3.IntegrityError: datatype mismatch` (evidencia reproducida en SQLite en memoria, cero
+impacto en producción). La materialización delega el PK al autoincremento y usa `fotmob_id` (UNIQUE) como llave canónica de lookup
+—patrón idéntico al ya gobernado en `src/storage/seeder.py::seed_initial_data`—. Desviación mínima, sin cambio de esquema DDL.
+
+**Canon pendiente de dictamen ([ARCH-1.6.19-A]):** el extractor masivo de temporada por competición descubierta JIT
+(`sincronizar_temporada_completa` con `fotmob_id != 262`) queda DIFERIDO: se emite degradación explícita por log y CERO invención
+de datos fácticos (`[GOVERNANCE-01]`). La competición matriz (FotMob 262) opera con el extractor sellado `[VAULT-DAEMON-001-B]`.
+
+
 

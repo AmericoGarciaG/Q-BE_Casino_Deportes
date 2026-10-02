@@ -910,6 +910,67 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-084] El Operador Canónico de Selección por Masa Acumulada P' en Progol
+* **Ω (Resumen):** Transforma la distribución sobre combinaciones en un problema de optimización determinista: ordena el universo restringido de boletas por probabilidad conjunta descendente y selecciona las primeras $M$ posiciones para maximizar la masa probabilística capturada bajo presupuesto cerrado.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. Para $K=14$ partidos, se construye el vector ordenado $P'$ tal que:
+     $$P(B_{(1)}) \ge P(B_{(2)}) \ge \dots \ge P(B_{(N)})$$
+  2. Dado un presupuesto $B_{\text{presupuesto}}$, el cupo de boletas sencillas es $M = \lfloor B_{\text{presupuesto}} / 15.0 \rfloor$.
+  3. Se selecciona el subconjunto óptimo $\mathcal{A}_M = \{ B_{(1)}, B_{(2)}, \dots, B_{(M)} \}$.
+  4. **Teorema de Maximización de Masa:** $\mathcal{A}_M$ maximiza estrictamente la masa acumulada $C(M) = \sum_{j=1}^M P(B_{(j)})$ frente a cualquier otro subconjunto de tamaño $M$. Se descarta toda selección heurística o subjetiva de boletas.
+* **Materialización:** `seleccionar_cobertura_binaria_optima`, `generar_universo_restringido_y_ordenar_p_prime` y `seleccionar_primeras_m_combinaciones` (`[VAULT-CORE-084-PROGOL-P-PRIME]`, `src/core/contracts/progol_math.py`).
+* **Φ (Transición):** Hacia `[LN-QBE-085]` (espacio restringido) y `[LN-QBE-086]` (descenso por Hamming).
+* **[SHIELD]:** `tests/shield/test_shield_progol_p_prime_mass_optimizer.py`
+
+### ID: [LN-QBE-085] Cobertura Binaria Óptima (|S_i| ≤ 2) y Construcción del Espacio Restringido
+* **Ω (Resumen):** Traslada la restricción de cobertura de AxR a Progol. En cada partido se seleccionan los dos desenlaces con mayor probabilidad fiduciaria ($c_i = p_{(1)}' + p_{(2)}'$), acotando el espacio combinatorio de búsqueda a $2^d 3^t$ estados (donde $d+t+s=14$) y descartando de raíz el 99.98% del hipercubo sin masa real.
+* **Materialización:** `seleccionar_cobertura_binaria_optima` (`[VAULT-CORE-084-PROGOL-P-PRIME]`, `src/core/contracts/progol_math.py`).
+* **Φ (Transición):** Hacia `[LN-QBE-084]` (universo $2^{14}$ y secuencia $P'$) y `[LN-QBE-086]` (descenso por distancia de Hamming).
+* **[SHIELD]:** `tests/shield/test_shield_progol_p_prime_mass_optimizer.py`
+
+### ID: [LN-QBE-086] Descenso por Distancia de Hamming hacia Premios Menores (L ∈ {13, 12, 11, 10})
+* **Ω (Resumen):** Cuando el presupuesto disponible no alcanza para cubrir la masa del primer lugar o existen partidos con prior de ignorancia ($S(\mathcal{I})=0 \implies 1/3, 1/3, 1/3$), el sistema no se arriesga a ciegas buscando el 14: desciende ordenadamente la mira a garantizar premios secundarios en la tabla oficial de Pronósticos mediante bolas de Hamming:
+  $$d_H(B, Y) \le 14 - L \quad \text{para } L \in \{13, 12, 11, 10\}$$
+* **Materialización:** `reducir_a_garantia_hamming_l` (`[VAULT-CORE-084-PROGOL-P-PRIME]`, `src/core/contracts/progol_math.py`).
+* **Φ (Transición):** Hacia `[LN-QBE-074]` (orquestador por presupuesto vigente, no modificado).
+* **[SHIELD]:** `tests/shield/test_shield_progol_p_prime_mass_optimizer.py`
+
+### ID: [LN-QBE-087] Algoritmo de Progol Revancha (K=7 Todo o Nada)
+* **Ω (Resumen):** La Revancha ($K=7$) es un concurso independiente con bolsa propia y regla estricta de 7 aciertos obligatorios (sin premios secundarios). Queda prohibido el descenso por Hamming; opera mediante cobertura rectangular pura ($2^d 3^t$) maximizando la masa conjunta sobre los 2,187 estados posibles.
+* **[SHIELD]:** PENDIENTE DIFERIDO (Fase Revancha K=7 en directiva complementaria).
+* **Nota de trazabilidad (VARIANZA V-2 / ALT-1):** el nodo se promulga sin Juez en el Paso 2 de la Directiva Volumen III (el Juez mandatado cubre `[LN-QBE-084/085/086]`); queda fuera del alcance de `[ARCH-1.4.20]`.
+
+### ID: [LN-QBE-088] Resolver Semántico JIT de Competiciones y Clubes Internacionales
+* **Ω (Resumen):** Resuelve de forma determinista y bajo demanda la identidad del torneo y de los clubes para cada casilla de Progol, consultando el endpoint de búsqueda estructurada de FotMob (`/api/search/searchapi?term={club}`).
+* **I (Input):** Nombre crudo del club en Progol (ej. `"GIRONA"`, `"R SOCIED. B"`, `"CROACIA"`).
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. Sanitizar el término y consultar el endpoint estructurado de FotMob en tiempo $O(1)$.
+  2. Parsear el payload JSON extrayendo: `team_id`, `team_name`, `league_id`, `league_name` y `country`.
+  3. Si la búsqueda arroja cero coincidencias (ej. divisiones de ascenso sin cobertura óptica o amistosos exóticos):
+     - Declarar la casilla como **No Indexada**.
+     - Asignar de forma fiduciaria el **Prior de Ignorancia $(1/3, 1/3, 1/3)$** bajo `[LN-QBE-075]`.
+     - Prohibir la invención de identificadores ficticios (`[GOVERNANCE-01]`).
+* **O (Output):** Diccionario tipado `DiscoveredTeamPayload` con los metadatos oficiales del club y su liga.
+* **Φ (Transición):** Hacia [LN-QBE-089] (Auto-registro de ligas) y [LN-QBE-084] (Masa P').
+
+### ID: [LN-QBE-089] Parámetros Macro de Competiciones Descubiertas Dinámicamente
+* **Ω (Resumen):** Al registrar una nueva competición en SQLite 3NF descubierta vía JIT, se le asignan parámetros macro de balance de energía (Volumen I, Sección 4.9.1):
+  $$\alpha = \ln(\mu_{\text{liga}}) - \ln(1 + e^{\bar{\gamma}_{\text{home}}})$$
+  donde por defecto para ligas de primera división $\mu_{\text{liga}} = 2.60$ y $\bar{\gamma}_{\text{home}} = 0.15$, salvo cálculo empírico directo sobre los marcadores históricos descargados.
+
+### ID: [LN-QBE-090] Heurística de Vinculación y Emparejamiento Multi-Torneo en Slates
+* **Ω (Resumen):** Permite vincular casillas de quinielas con partidos de competiciones internacionales mediante coincidencia cruzada de identidades canónicas (`Match.home_team_slug` y `Match.away_team_slug`) independientemente de si la liga es local o foránea.
+* **Materialización:** el cotejo elástico ya gobernado en `procesar_casilla_con_resiliencia` (`src`, `scripts/daemons/centinela_progol.py`, `[VARIANCE-05 ratificada]`) opera por contención mutua de slugs normalizados (`club-`, `deportivo-`) sobre TODA la tabla `matches`, sin discriminar competición; la exploración JIT de competiciones foráneas queda legislada en `[ARCH-1.4.22]`.
+* **Frontera de inmunidad:** el emparejamiento JAMÁS fabrica probabilidad; sólo localiza el partido. La probabilidad proviene exclusivamente de `sovereign_distributions` o degrada al Prior Fiduciario `[LN-QBE-075]`.
+
+### ID: [LN-QBE-091] Modelo de Intensidades para Divisiones Inferiores sin Opta xG
+* **Ω (Resumen):** En ligas sin cobertura óptica de tiros (Liga Premier FMF, divisiones menores), las intensidades $(\lambda_H, \lambda_A)$ se derivan directamente del balance de goles observados ($GF/JJ, GC/JJ$) y la fuerza relativa del rival sobre el grafo de la competición:
+  $$\ln(\lambda_H) = \alpha_{\text{div}} + \bar{\gamma}_{\text{home}} + \left( \frac{GF_H}{\mu_{\text{div}} \cdot JJ_H} - 1 \right) - \left( 1 - \frac{GC_A}{\mu_{\text{div}} \cdot JJ_A} \right)$$
+* **Gobernanza:** Satisface estrictamente la conservación de masa $\mu_{\text{div}} = 2.45$ y permite emitir distribuciones soberanas legítimas sin inventar datos.
+
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,

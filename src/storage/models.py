@@ -17,6 +17,13 @@ class League(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
 
+    @property
+    def mu_liga(self) -> float:
+        """[LN-QBE-089] Media incondicional de goles: 2.65 para Liga MX, 2.60 para ligas descubiertas."""
+        if getattr(self, "fotmob_id", None) == 262:
+            return 2.65
+        return getattr(self, "_mu_liga", 2.60)
+
 class Team(Base):
     __tablename__ = "teams"
     id = Column(Integer, primary_key=True, index=True)

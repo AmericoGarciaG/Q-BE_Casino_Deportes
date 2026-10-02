@@ -1114,6 +1114,84 @@ class PortfolioExecutionPlan(BaseModel):
   $$B_{(1)} \ge B_{(2)} \ge \dots \ge B_{(K)}$$
   Si $B_{(i)} > B_{(i-1)}$, se trunca $B_{(i)} = B_{(i-1)}$ y se recalculan proporcionalmente $B_{\text{seg}}$ y $B_{\text{prio}}$ preservando el piso de $\$2.00$ y la indemnidad $V=0$.
 
+### [ARCH-1.4.20] Contrato de Datos del Optimizador de Masa P' en progol_math.py [ARCH-PILLAR]
+* **Módulo Canónico:** `src/core/contracts/progol_math.py`
+* **Régimen:** `[DIRGEN-STRICT]` (Plano sellado en `docs/DIRGEN_VAULT.md`).
+* **Responsabilidad:** Biblioteca matemática pura libre de dependencias I/O o heurísticas de "vibe coding".
+* **Firmas Canónicas Obligatorias** *(dictamen VARIANZA V-1 / ALT-1 — paridad 1:1 absoluta con `[VAULT-CORE-084-PROGOL-P-PRIME]` y el Juez Inmutable)*:
+  - `seleccionar_cobertura_binaria_optima(partidos_14: List[dict]) -> List[dict]`
+  - `generar_universo_restringido_y_ordenar_p_prime(partidos_14: List[dict]) -> List[Tuple[tuple, float]]`
+  - `seleccionar_primeras_m_combinaciones(p_prime_ordenado: List[Tuple[tuple, float]], m_cupo: int) -> Tuple[List[dict], float]`
+  - `reducir_a_garantia_hamming_l(p_prime_ordenado: List[Tuple[tuple, float]], l_aciertos_objetivo: int = 13, max_boletas: int = 16) -> List[Dict[str, Any]]`
+  - `optimizar_quiniela_progol_soberana(partidos_14: List[dict], presupuesto_mxn: float = 360.0, l_objetivo: int = 14) -> dict`
+* **Frontera de inmutabilidad:** el nodo sellado `[LN-QBE-074]` (`optimizar_quiniela_por_presupuesto`, `progol_math.py:48-162`) y `[LN-QBE-037]` (`calcular_sesgo_quiniela`) permanecen INTACTOS; la inyección es estrictamente aditiva (5 símbolos nuevos).
+* **Nota de trazabilidad (VARIANZA V-1 / ALT-1):** el resumen inicial de este nodo declaraba `reducir_a_garantia_hamming_l(combinaciones_m: List[dict], l_objetivo: int) -> List[dict]` y `optimizar_quiniela_progol_soberana(partidos_14, presupuesto_mxn)`; el dictamen ratifica el contrato de facto del plano sellado y del Juez (defaults `l_aciertos_objetivo=13`, `max_boletas=16`, `l_objetivo=14`), evitando el falso fallo por `TypeError`.
+* **[SHIELD]:** `tests/shield/test_shield_progol_p_prime_mass_optimizer.py`
+
+### [ARCH-1.4.21] Arquitectura de Ingesta Just-In-Time (JIT) Multi-Torneo [ARCH-PILLAR]
+* **Principio de Cero Ligas Zombis:** El sistema no almacena ni raspa ligas que no estén en juego. La ingesta se dispara exclusivamente por demanda guiada por el concurso oficial activo de Progol (`slates`).
+* **Módulo:** `src/ingestion/progol_resolver.py`
+  - Expone `resolver_casillas_concurso_jit(casillas_raw: List[dict]) -> Dict[str, Any]`.
+  - Agrupa las ligas descubiertas y registra transaccionalmente en la tabla `leagues` aquellas que no existan previamente en SQLite.
+
+### [ARCH-1.6.19] Desacoplamiento Multi-Liga del Centinela Deportivo [ARCH-PILLAR]
+* Se deroga la constante rígida `LEAGUE_ID = 262` en `centinela_deportivo.py`.
+* El Centinela Deportivo incorpora el modo `--todas-las-ligas`:
+  1. Consulta `League.all()` en `PersistenceGateway.read_session()`.
+  2. Descarga secuencialmente el JSON de temporada de FotMob para cada liga registrada.
+  3. Reconstruye tablas acumuladas (`StandingSnapshot`), partidos (`Match`) y calcula las distribuciones soberanas (`SovereignDistribution`) para todos los encuentros de las ligas activas.
+
+### [ARCH-1.6.19-B] Ingesta y Parser Genérico de Temporadas FotMob [ARCH-PILLAR]
+* **Endpoint de Ingesta:** `https://www.fotmob.com/api/leagues?id={fotmob_id}`
+* **Estandarización Universal:** Toda competición registrada en SQLite (LaLiga **87**, Premier League **47**, LaLiga2 **140**, Argentina **112**, Série A Brasil **268**, Nations League, etc.) debe poder procesarse mediante un parser genérico que extraiga:
+  1. Tabla de posiciones actual (`table` / `standings`).
+  2. Fixtures completos de la temporada (`matches`).
+  3. Metadatos de goles esperados ($xG$) cuando estén disponibles en Opta.
+* **Cero Degradación Silenciosa:** Se deroga la degradación vacía para `fotmob_id != 262`. Toda liga activa debe intentar la descarga fáctica antes de emitir log de estado.
+* **Materialización Canónica (`[DIRGEN-STRICT]` — `scripts/daemons/centinela_deportivo.py`):**
+  - `parsear_json_liga_fotmob_generico(payload: Dict[str, Any], fotmob_id: int) -> Dict[str, Any]` — transcrita VERBATIM del dictamen (Fase 8.2).
+  - `descargar_json_liga_fotmob(fotmob_id: int) -> Dict[str, Any]` — transporte httpx (timeout 15 s, headers de navegador).
+  - `persistir_temporada_generica(...)` — persiste `Competition` (`FOTMOB_{fotmob_id}`), `Match`, `StandingSnapshot`, `FixtureSnapshot` y las `SovereignDistribution` de los partidos activos mediante el puente gobernado `sincronizar_distribuciones_soberanas_partidos` (canon Vol. I; μ dinámica `[LN-QBE-089]`).
+  - `sincronizar_temporada_completa(league_id != 262)` enruta a la ingesta genérica (derogada la degradación vacía previa `[ARCH-1.6.19-A]`).
+* **Nota de trazabilidad (SONDEO-01 — hallazgo fáctico 2026-10-01, **DICTAMINADO Y APLICADO — ALT-1**, expediente `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.6.19-B_ENDPOINT.md`):** el endpoint legislado `https://www.fotmob.com/api/leagues?id={id}` responde **HTTP 404** (`text/html`) ante headers de navegador, `Referer` y `x-mas`, **incluido el control `id=262` (Liga MX)**. La página canónica de liga (`https://www.fotmob.com/es-419/leagues/{id}/overview/{slug}`) responde **HTTP 200** y embebe el JSON de Next.js (`__NEXT_DATA__`) que contiene `table[0].data.table.all`, `fixtures.allMatches` (380 partidos) y `scoresStr` **en la forma exacta que consume el parser sellado**. Artefacto formal: `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.6.19-B_ENDPOINT.md` (ALT-1: extracción `__NEXT_DATA__`, técnica ya gobernada por `[VAULT-DAEMON-001-B]`; ALT-2: credencial `x-mas` administrada por el Director). Adicionalmente, el identificador `47` corresponde fácticamente a **Premier League** (LaLiga = **87** en FotMob), no a LaLiga. Sondeo 2026-10-01: **112 = Liga Profesional Argentina**, **140 = LaLiga2**, **268 = Série A (Brasil)** (el ejemplo "Argentina 268" de `[ARCH-1.6.19-B]` era incorrecto). Validación en vivo post-dictamen: 4 competiciones ingeridas por `__NEXT_DATA__` ⇒ bóveda en `leagues` 5, `matches` 1789, `sovereign_distributions` 808; casillas del concurso 2353 `GIRONA vs MALLORCA` (match 5868476) y `CORDOBA vs TENERIFE` (match 5868474) vinculadas a distribución física real (LaLiga2, J8).
+* **Nota de trazabilidad (SONDEO-02):** el contrato sellado del parser no emite `pg`/`pe`/`pp`, `forma`, marcadores por fixture ni $xG$; en consecuencia `current_team_standings` y las tablas históricas por jornada NO se pueblan para competiciones descubiertas (cero invención `[GOVERNANCE-01]`), y las `SovereignDistribution` se alimentan con `{pj, gf, gc}` dejando que el canon Vol. I (§4.5) aplique su propio respaldo de $xG$ cuando Opta no lo suministra.
+* **[SHIELD]:** `tests/shield/test_shield_jit_competition_discovery.py`
+
+### [ARCH-1.4.22] Disparo JIT de Descubrimiento en centinela_progol.py [ARCH-PILLAR]
+* Al procesar cada una de las 21 casillas de Progol:
+  1. El centinela consulta el resolver semántico (`progol_resolver.py`).
+  2. Si el partido pertenece a una competición que aún no existe en SQLite, la inscribe atómicamente en la tabla `leagues` mediante `registrar_liga_descubierta_si_no_existe()`.
+  3. Esto deja la base de datos lista para que el Centinela Deportivo descargue los datos de esas ligas en la siguiente fase de la cadena.
+* **Materialización Canónica (`scripts/daemons/centinela_progol.py`):** `disparar_descubrimiento_jit(tx, analisis, cache)` se invoca al cierre de cada casilla que degradó al Prior (Caso B), con caché de corrida por club y degradación explícita ante fallo de red: la ingesta del concurso JAMÁS se interrumpe (`[LN-QBE-075]`).
+* **Nota de trazabilidad (SONDEO-03 — ABIERTO: mitigación operativa aplicada, **ALT-3 pendiente de autorización**):** el endpoint legislado `https://www.fotmob.com/api/search/searchapi?term={club}` responde **HTTP 404** (`text/html`) en el entorno de materialización (misma causa raíz que SONDEO-01). El disparo JIT queda operativo y no bloqueante, con degradación explícita a log (medición viva 2026-10-01: las 21 casillas del concurso 2353 cerraron en Prior, `leagues` sin altas automáticas). Mitigación operativa aplicada sin tocar código: registro de las competiciones **en juego** por el API sellado `registrar_liga_descubierta_si_no_existe()` (`[ARCH-1.4.21]`, *cero ligas zombis*) con ids verificados fácticamente; ver `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.6.19-B_ENDPOINT.md` (SONDEO-04 registra la dependencia dura de `persistir_temporada_generica` respecto de `leagues`).
+
+
+### [ARCH-1.4.23] Sensor de Ingesta Oficial de Liga Premier FMF (ligapremier.mx) [ARCH-PILLAR]
+* **Fuente Oficial:** `https://ligapremier.mx/estadisticas` y `https://ligapremier.mx/resultados/`
+* **Módulo:** `src/ingestion/ligapremier_scraper.py` (`LigaPremierScraper`)
+* **Responsabilidad:**
+  1. Extraer la tabla de posiciones oficial de Serie A / Serie B (`JJ, G, E, P, GF, GC, PTS`).
+  2. Extraer los marcadores de las jornadas disputadas (J1 a J5).
+  3. Registrar la competición `MEX_LIGAPREMIER` en SQLite 3NF con $\mu_{\text{premier}} = 2.45$ y $\bar{\gamma}_{\text{home}} = 0.16$.
+* **[SHIELD]:** `tests/shield/test_shield_ligapremier_and_global_aliases.py`
+
+### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
+* En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:
+  `https://www.fotmob.com/api/searchapi/suggest?term={club_sanitizado}`
+  sustituyendo el endpoint deprecado `/api/search/searchapi` para erradicar los errores 404.
+* **[SHIELD]:** `tests/shield/test_shield_ligapremier_and_global_aliases.py`
+
+### [ARCH-1.5.11] Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR]
+* Se formaliza el diccionario de traducción determinista para las 21 casillas en `progol_resolver.py`:
+  - `"VERACRUZ"` $\to$ `"Racing de Veracruz"`
+  - `"OAXACA"` $\to$ `"Chapulineros de Oaxaca"`
+  - `"DURANGO"` $\to$ `"Alacranes de Durango"`
+  - `"ZACATECAS"` $\to$ `"Zacatepec"` (o `"Mineros de Zacatecas"`)
+  - `"CANCUN"` $\to$ `"Cancún FC"` | `"TAPATIO"` $\to$ `"Tapatío"`
+  - `"AGUILAS F"` $\to$ `"Club América Femenil"` | `"RAYADOS DE MONTERREY"` (en Femenil) $\to$ `"CF Monterrey Femenil"`
+  - `"MILAN F"` $\to$ `"AC Milan Femenil"` | `"JUVENTUS F"` $\to$ `"Juventus Femenil"`
+  - `"R SOCIED. B"` $\to$ `"Real Sociedad B"` | `"E.U.A."` $\to$ `"USA"`
+* **[SHIELD]:** `tests/shield/test_shield_ligapremier_and_global_aliases.py`
 
 ---
 

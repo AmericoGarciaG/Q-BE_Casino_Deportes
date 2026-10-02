@@ -17,7 +17,12 @@ from sqlalchemy.orm import Session
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, League, SovereignDistribution, Slate, SlateItem
 from src.storage.database import get_db
-from src.core.contracts.progol_math import calcular_sesgo_quiniela, optimizar_quiniela_por_presupuesto
+from src.core.contracts.progol_math import (
+    calcular_sesgo_quiniela,
+    optimizar_quiniela_por_presupuesto,
+    optimizar_quiniela_progol_soberana,
+    seleccionar_cobertura_binaria_optima,
+)
 
 router = APIRouter(prefix="/api/markets", tags=["Financial Markets"])
 
@@ -731,9 +736,14 @@ def get_active_progol_slate() -> Dict[str, Any]:
 @router.post("/progol/optimize")
 def optimize_progol_endpoint(req: ProgolOptimizeRequest) -> Dict[str, Any]:
     """
-    [LN-QBE-074] Optimiza la asignación de dobles y triples respetando el
-    presupuesto comercial. Costo = 15.00 × 2^D × 3^T ≤ presupuesto_mxn.
+    [ARCH-1.4.20 / VAULT-CORE-084-PROGOL-P-PRIME] Optimizador soberano por maximización de la masa
+    acumulada P'. Se fija M = floor(presupuesto / costo_simple) y se prioriza la secuencia canónica
+    P' del universo restringido 2^K (K = casillas con doble cobertura), maximizando C(M).
+    El retículo de la matriz expone la ventana de cobertura binaria canónica [LN-QBE-085] y el
+    bloque `boletas` expone cada quiniela priorizada por el motor, con su masa conjunta.
     El tablero se hidrata de `slate_items` (bloque REGULAR: las 14 casillas del concurso Progol).
+    La frontera de inmutabilidad [LN-QBE-074] (`optimizar_quiniela_por_presupuesto`) permanece
+    disponible para los consumidores históricos.
     """
     gateway = PersistenceGateway()
     with gateway.read_session() as session:
@@ -743,4 +753,46 @@ def optimize_progol_endpoint(req: ProgolOptimizeRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="No existe concurso Progol activo en la bóveda 3NF.")
 
     items_regular = [i for i in slate["items"] if i["tipo_concurso"] == "REGULAR"][:SLATE_PROGOL_14]
-    return optimizar_quiniela_por_presupuesto(items_regular, req.presupuesto_mxn)
+
+    resultado_soberano = optimizar_quiniela_progol_soberana(
+        partidos_14=items_regular,
+        presupuesto_mxn=req.presupuesto_mxn,
+        l_objetivo=14
+    )
+
+    cobertura_por_casilla = {
+        c["order"]: c["opciones"] for c in seleccionar_cobertura_binaria_optima(items_regular)
+    }
+
+    matriz_quiniela = []
+    for item in sorted(items_regular, key=lambda x: x.get("order", 0)):
+        opciones = cobertura_por_casilla.get(item.get("order"), [])
+        analisis = calcular_sesgo_quiniela(item.get("v_pub", {}), item.get("p_qbe", {}))
+        matriz_quiniela.append({
+            "order": item.get("order"),
+            "local": item.get("local"),
+            "visitante": item.get("visitante"),
+            "juega_L": "L" in opciones,
+            "juega_E": "E" in opciones,
+            "juega_V": "V" in opciones,
+            "alerta_sesgo": analisis.get("alerta_sesgo", False),
+            "recomendacion": analisis.get("recomendacion_cobertura", "SIN_ANALISIS")
+        })
+
+    return {
+        "motor": "PROGOL_P_PRIME_MASS",
+        "combinaciones_totales": resultado_soberano["combinaciones_totales"],
+        "costo_total_mxn": resultado_soberano["costo_total_mxn"],
+        "dobles_asignados": sum(
+            1 for fila in matriz_quiniela
+            if sum((fila["juega_L"], fila["juega_E"], fila["juega_V"])) == 2
+        ),
+        "triples_asignados": sum(
+            1 for fila in matriz_quiniela
+            if sum((fila["juega_L"], fila["juega_E"], fila["juega_V"])) == 3
+        ),
+        "masa_acumulada_capturada": resultado_soberano["masa_acumulada_capturada"],
+        "garantia_fiduciaria": resultado_soberano["garantia_fiduciaria"],
+        "boletas": resultado_soberano["boletas"],
+        "matriz_quiniela": matriz_quiniela
+    }

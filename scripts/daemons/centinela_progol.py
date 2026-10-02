@@ -20,11 +20,24 @@ exclusivamente de `sovereign_distributions` (cero cálculo paralelo en el plano 
 
 Guardas de integridad fáctica [VARIANCE-04]: 0 casillas o par local/visitante incompleto => ALTO AL FUEGO
 (exit 1), sin escribir nada en `slates`/`slate_items` (prohibida la persistencia silenciosa de datos corruptos).
+
+[ARCH-1.4.22] Al cierre de CADA casilla degradada al Prior (Caso B) se dispara el descubrimiento JIT de la
+competición del club (buscador estructurado de FotMob, caché de corrida por club). El descubrimiento se
+inscribe en la MISMA transacción de la ingesta y degrada de forma explícita: JAMÁS bloquea el concurso.
+
+[ARCH-1.6.20] El buscador estructurado de FotMob se fija al endpoint ACTIVO `/api/searchapi/suggest`,
+erradicando el HTTP 404 (text/html) del endpoint deprecado `/api/search/searchapi` (SONDEO-03).
+
+[ARCH-1.5.11] Estrato 0 de identidad: toda casilla (local y visitante) atraviesa el catálogo
+determinista `PROGOL_GLOBAL_ALIASES` ANTES del cotejo elástico en SQLite y ANTES del normalizador
+difuso. La traducción es puramente nominal: la probabilidad sigue proviniendo EXCLUSIVAMENTE de
+`sovereign_distributions` (cero fabricación de identidades ni de distribuciones en el plano de ingesta).
 """
 
 import re
 import sys
 import time
+import urllib.parse
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +58,11 @@ from src.ingestion.progol_scraper import (
     PRIOR_IGNORANCIA_FIDUCIARIA,
     ProgolMarketScraper,
 )
+from src.ingestion.progol_resolver import (
+    parsear_respuesta_search_fotmob,
+    traducir_jerga_global_progol,
+    registrar_liga_descubierta_si_no_existe,
+)
 from src.storage.crest_resolver import obtener_slug_club, resolver_escudo_canonico
 from src.storage.database import Base
 from src.storage.gateway import PersistenceGateway
@@ -54,6 +72,17 @@ logger = logging.getLogger("CentinelaProgol")
 
 ETIQUETA_PRIOR = "PRIOR DE IGNORANCIA FIDUCIARIA (1/3 - LN-QBE-075)"
 ETIQUETA_SOBERANO = "SOBERANO (DISTRIBUCIÓN 3NF)"
+
+# [ARCH-1.4.22] Descubrimiento JIT: buscador estructurado de FotMob (endpoint legislado).
+# [ARCH-1.6.20] Endpoint ACTIVO de sugerencias (firma `?term=`): `/api/search/searchapi` queda deprecado (HTTP 404).
+FOTMOB_SEARCH_API_URL = "https://www.fotmob.com/api/searchapi/suggest?term={term}"
+FOTMOB_JIT_TIMEOUT_S = 15.0
+FOTMOB_JIT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    "Referer": "https://www.fotmob.com/",
+}
 
 
 def _canonizar_seguro(nombre: str) -> str:
@@ -140,8 +169,14 @@ def procesar_casilla_con_resiliencia(local: str, visitante: str, db_session: Opt
     }
 
     try:
-        resultado["local_canonico"] = _canonizar_seguro(local)
-        resultado["visitante_canonico"] = _canonizar_seguro(visitante)
+        # [ARCH-1.5.11] Estrato 0: traducción determinista de jerga/aliases globales de las 21 casillas,
+        # aplicada ANTES del cotejo elástico en SQLite y ANTES del normalizador difuso. `local_raw` /
+        # `visitante_raw` conservan la literalidad fáctica del operador (procedencia intacta).
+        identidad_local = traducir_jerga_global_progol(local)
+        identidad_visitante = traducir_jerga_global_progol(visitante)
+
+        resultado["local_canonico"] = _canonizar_seguro(identidad_local)
+        resultado["visitante_canonico"] = _canonizar_seguro(identidad_visitante)
         resultado["slug_local"] = _slug_seguro(resultado["local_canonico"])
         resultado["slug_visitante"] = _slug_seguro(resultado["visitante_canonico"])
 
@@ -197,6 +232,81 @@ def procesar_casilla_con_resiliencia(local: str, visitante: str, db_session: Opt
     return resultado
 
 
+def _consultar_busqueda_fotmob(club: str) -> Optional[Dict[str, Any]]:
+    """[LN-QBE-088] GET del buscador estructurado de FotMob para un club.
+
+    Degradación explícita (SONDEO-03): cualquier fallo de red, HTTP no-200 o content-type no JSON
+    devuelve `None`; JAMÁS se propaga una excepción al bucle de ingesta.
+    """
+    import httpx
+
+    termino = urllib.parse.quote(str(club or "").strip())
+    if not termino:
+        return None
+    try:
+        resp = httpx.get(
+            FOTMOB_SEARCH_API_URL.format(term=termino),
+            headers=FOTMOB_JIT_HEADERS,
+            timeout=FOTMOB_JIT_TIMEOUT_S,
+            follow_redirects=True,
+        )
+        tipo = str(resp.headers.get("content-type") or "").lower()
+        if resp.status_code == 200 and "json" in tipo:
+            return resp.json()
+        logger.info(
+            "ℹ️ [ARCH-1.4.22] Buscador FotMob para '%s' HTTP %s (content-type=%s): descubrimiento diferido.",
+            club, resp.status_code, tipo or "desconocido"
+        )
+    except Exception as e:
+        logger.warning(
+            "⚠️ [ARCH-1.4.22] Buscador FotMob inaccesible para '%s' (%s: %s): descubrimiento diferido.",
+            club, type(e).__name__, e
+        )
+    return None
+
+
+def disparar_descubrimiento_jit(tx: Any, analisis: Dict[str, Any], cache: Dict[str, Any]) -> None:
+    """[ARCH-1.4.22] Inscribe atómicamente en `leagues` la competición de una casilla degradada al Prior.
+
+    Se dispara SÓLO en Caso B (`es_prior_ignorancia = True`), en la MISMA transacción de la ingesta
+    (atomicidad: si la ingesta aborta, el descubrimiento no queda huérfano). Guarda de corrida por
+    club (`cache`): a lo sumo UNA consulta por club y por corrida. La ingesta del concurso JAMÁS se
+    interrumpe: todo fallo se registra y la casilla conserva su Prior Fiduciario [LN-QBE-075].
+    """
+    clubes = (
+        analisis.get("local_canonico") or analisis.get("local_raw"),
+        analisis.get("visitante_canonico") or analisis.get("visitante_raw"),
+    )
+    for club in clubes:
+        nombre = str(club or "").strip()
+        if not nombre or nombre in cache:
+            continue
+        cache[nombre] = None
+        try:
+            payload = _consultar_busqueda_fotmob(nombre)
+            if not payload:
+                continue
+            hallazgo = parsear_respuesta_search_fotmob(payload, nombre)
+            if not hallazgo:
+                logger.info("ℹ️ [ARCH-1.4.22] Club '%s' sin competición resoluble: Prior Fiduciario preservado.", nombre)
+                continue
+            liga = registrar_liga_descubierta_si_no_existe(tx, {
+                "fotmob_league_id": hallazgo["fotmob_league_id"],
+                "league_name": hallazgo["league_name"],
+                "country": hallazgo.get("country") or "Internacional",
+            })
+            cache[nombre] = getattr(liga, "fotmob_id", hallazgo["fotmob_league_id"])
+            logger.info(
+                "🏛️ [ARCH-1.4.22] Competición '%s' (FotMob %s) disponible para '%s'.",
+                hallazgo["league_name"], hallazgo["fotmob_league_id"], nombre
+            )
+        except Exception as e:
+            logger.warning(
+                "⚠️ [ARCH-1.4.22] Descubrimiento JIT fallido para '%s' (%s: %s). La ingesta continúa.",
+                nombre, type(e).__name__, e
+            )
+
+
 def sincronizar_progol_en_sqlite(url: Optional[str] = None) -> int:
     """Ejecuta la ingesta fáctica y persiste el concurso completo (21 casillas) en SQLite."""
     t0 = time.perf_counter()
@@ -224,6 +334,7 @@ def sincronizar_progol_en_sqlite(url: Optional[str] = None) -> int:
 
     ahora = datetime.now(timezone.utc)
     casillas_procesadas = []
+    cache_descubrimiento_jit: Dict[str, Any] = {}  # [ARCH-1.4.22] Una consulta por club y por corrida.
 
     with gateway.write_transaction() as tx:
         bolsa_num = _bolsa_a_float(payload["bolsa"])
@@ -252,6 +363,8 @@ def sincronizar_progol_en_sqlite(url: Optional[str] = None) -> int:
         # 1. Procesar 14 partidos Progol Regular
         for p in payload["partidos_regular"]:
             analisis = procesar_casilla_con_resiliencia(p["local_raw"], p["visitante_raw"], db_session=tx)
+            if analisis["es_prior_ignorancia"]:
+                disparar_descubrimiento_jit(tx, analisis, cache_descubrimiento_jit)
             item = SlateItem(
                 slate_id=concurso_id,
                 tipo_concurso="REGULAR",
@@ -278,6 +391,8 @@ def sincronizar_progol_en_sqlite(url: Optional[str] = None) -> int:
         # 2. Procesar 7 partidos Revancha
         for p in payload["partidos_revancha"]:
             analisis = procesar_casilla_con_resiliencia(p["local_raw"], p["visitante_raw"], db_session=tx)
+            if analisis["es_prior_ignorancia"]:
+                disparar_descubrimiento_jit(tx, analisis, cache_descubrimiento_jit)
             item = SlateItem(
                 slate_id=concurso_id,
                 tipo_concurso="REVANCHA",

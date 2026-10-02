@@ -2,6 +2,7 @@
 """
 Q-BE CD WEB - CENTINELA AUTONOMO DE DATOS DEPORTIVOS (FMF + FOTMOB OPTA)
 [VAULT-DAEMON-001-B] Ingesta 100% Dinamica de Temporada Completa (J1 a J17) y Tablas Historicas.
+[ARCH-1.6.19-B] Carril generico multi-liga: parser y persistencia 3NF de competiciones descubiertas JIT.
 Base de Gobierno: Kybern Framework v12.0 [ARCH-1.6.13] / CERO ALAMBRADO [GOVERNANCE-01]
 """
 
@@ -13,7 +14,7 @@ import json
 import argparse
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -31,6 +32,25 @@ from src.storage.sync_service import sync_current_team_standings_table, LIGAMX_L
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("CentinelaDeportivo")
+
+# [ARCH-1.6.19] Identidad canónica de la competición base (FotMob) y μ macro de fallback.
+LIGAMX_FOTMOB_ID = 262
+MU_LIGA_DEFAULT = 2.6
+
+# [ARCH-1.6.19-B] Transporte genérico de temporadas FotMob: endpoint legislado + fallback gobernado.
+FOTMOB_API_LIGA_URL = "https://www.fotmob.com/api/leagues?id={fotmob_id}"
+FOTMOB_PAGINA_LIGA_URL = "https://www.fotmob.com/es-419/leagues/{fotmob_id}/overview"
+# [ARCH-1.6.19-B / DICTAMEN ALT-1 — SONDEO-01] Sonda REST legislada `/api/leagues`: responde HTTP 404
+# (SPA HTML) de forma generalizada (control id=262 incluido). Fuente primaria = `__NEXT_DATA__` [ARCH-1.4.4];
+# el sondeo legacy queda inactivo y sólo se reactiva para revalidar la baja ante FotMob.
+FOTMOB_API_LEGACY_PROBE = False
+FOTMOB_TIMEOUT_S = 15.0
+FOTMOB_HEADERS_NAVEGADOR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    "Referer": "https://www.fotmob.com/",
+}
 
 
 def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: int) -> Dict[str, Any]:
@@ -357,14 +377,19 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
     }
 
 
-def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
+def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FOTMOB_ID, mu_liga: Optional[float] = None) -> None:
     gateway = PersistenceGateway()
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    objetivo_id = int(league_fotmob_id)
 
     with gateway.write_transaction() as tx:
-        league = tx.query(League).filter((League.fotmob_id == 262) | (League.id == 262)).first()
+        league = tx.query(League).filter((League.fotmob_id == objetivo_id) | (League.id == objetivo_id)).first()
         if not league:
-            raise RuntimeError("Liga MX no existe en SQLite.")
+            raise RuntimeError(f"Liga FotMob {objetivo_id} no existe en SQLite (registro JIT requerido [ARCH-1.4.21]).")
+
+        # [ARCH-1.6.19] μ macro efectiva de la competición: explícita (JIT) o canon registrado en SQLite.
+
+        mu_efectivo = float(mu_liga) if mu_liga is not None else float(getattr(league, "mu_liga", MU_LIGA_DEFAULT))
 
         sync_current_team_standings_table(tx, league.id, datos["standings_viva"], ahora)
 
@@ -400,7 +425,7 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
                     dist_out = generar_distribucion_soberana(
                         match_id=f["id_partido"],
                         raw_match_data={"home_team_stats": h_st, "away_team_stats": a_st},
-                        mu_liga=2.65,
+                        mu_liga=mu_efectivo,
                         gamma_home_base=0.15
                     )
                     # INYECCIÓN DIRECTA AL FIXTURE: Cero dependencia de consultas cruzadas
@@ -460,6 +485,366 @@ def persistir_en_sqlite(datos: Dict[str, Any]) -> None:
     logger.info("✅ [PERSISTENCIA OK] Probabilidades inyectadas directamente en snapshots de J10 a J17.")
 
 
+def sincronizar_temporada_completa(league_id: int = LIGAMX_FOTMOB_ID, mu_liga: Optional[float] = None) -> None:
+    """[ARCH-1.6.19] Ciclo canónico de ingesta total de temporada para UNA competición.
+
+    - Liga MX (FotMob 262): se hidrata con el extractor sellado [VAULT-DAEMON-001-B]
+      (temporada completa J1 a J17, cero alambrado).
+    - Competiciones descubiertas JIT (FotMob id != 262): se enrutan al carril genérico
+      [ARCH-1.6.19-B] (`descargar_json_liga_fotmob` -> `parsear_json_liga_fotmob_generico`
+      -> `persistir_temporada_generica`). Si el transporte o el parseo no son conformes,
+      se degrada de forma explícita y NO se inventan datos fácticos (Cero Mocks en
+      Producción [GOVERNANCE-01]).
+    """
+    objetivo_id = int(league_id)
+    if objetivo_id != LIGAMX_FOTMOB_ID:
+        try:
+            payload = descargar_json_liga_fotmob(objetivo_id)
+            datos = parsear_json_liga_fotmob_generico(payload, objetivo_id)
+            mu_efectivo = float(mu_liga) if mu_liga is not None else None
+            persistir_temporada_generica(datos, league_fotmob_id=objetivo_id, mu_liga=mu_efectivo)
+            logger.info(
+                "[ARCH-1.6.19-B] Competición FotMob %d (%s) sincronizada: %d clubes, %d partidos, jornada activa %s.",
+                objetivo_id, datos["league_name"], datos["total_equipos"], datos["total_partidos"], datos["jornada_activa"]
+            )
+        except Exception as e:
+            logger.error(
+                "[ARCH-1.6.19-B] Transporte/parseo no conforme para FotMob %d (%s: %s): ingesta diferida (cero invención de datos, [GOVERNANCE-01]).",
+                objetivo_id, type(e).__name__, e
+            )
+        return
+
+    datos = extraer_datos_vivos_completos()
+    persistir_en_sqlite(datos, league_fotmob_id=objetivo_id, mu_liga=mu_liga)
+
+
+def sincronizar_todas_las_ligas_registradas() -> None:
+    """[ARCH-1.6.19] Recorre secuencialmente todas las competiciones activas registradas en SQLite.
+
+    Fuente de verdad: `League.all` (bóveda 3NF, tabla `leagues` filtrada por `is_active`); cero
+    semillas de liga hardcodeadas, el descubrimiento JIT alimenta este ciclo [ARCH-1.4.21].
+    """
+    gateway = PersistenceGateway()
+    with gateway.read_session() as session:
+        ligas_db = session.query(League).filter(League.is_active == True).all()
+
+    logger.info(f"Iniciando ciclo multi-liga para {len(ligas_db)} competiciones registradas...")
+    for liga in ligas_db:
+        mu_efectivo = getattr(liga, "mu_liga", MU_LIGA_DEFAULT)
+        logger.info(f"Sincronizando {liga.name} (FotMob ID: {liga.fotmob_id}) con mu={mu_efectivo}...")
+        try:
+            sincronizar_temporada_completa(league_id=liga.fotmob_id, mu_liga=mu_efectivo)
+        except Exception as e:
+            logger.error(f"Error sincronizando {liga.name}: {e}")
+
+
+def _goles_desde_scores_str(scores_str: Any) -> Tuple[Optional[int], Optional[int]]:
+    """[ARCH-1.6.19-B] Extrae (gf, gc) del marcador FotMob 'GF-GC'.
+
+    Cero invención [GOVERNANCE-01]: si el marcador no es interpretable devuelve (None, None)
+    y el consumidor decide el respaldo; JAMÁS se fabrica un 0-0 silencioso.
+    """
+    m = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", str(scores_str or "").strip())
+    if not m:
+        return None, None
+    return int(m.group(1)), int(m.group(2))
+
+
+def descargar_json_liga_fotmob(fotmob_id: int) -> Dict[str, Any]:
+    """[ARCH-1.6.19-B] Transporte httpx del payload de temporada de UNA competición FotMob.
+
+    Cadena de transporte dictaminada (ALT-1 — resolución del Director sobre SONDEO-01):
+      1. Fuente PRIMARIA: página canónica de liga y extracción del bloque Next.js `__NEXT_DATA__`
+         (misma técnica ya sellada en el extractor Liga MX [VAULT-DAEMON-001-B] y legislada por
+         [ARCH-1.4.4]: "extracción soberana sin dependencia de APIs deprecadas").
+      2. Sonda legacy `FOTMOB_API_LIGA_URL` (`/api/leagues`) desactivada por defecto: responde HTTP 404
+         (SPA HTML) de forma generalizada; sólo se activa con `FOTMOB_API_LEGACY_PROBE = True`.
+
+    Devuelve el payload canónico (con `table` / `fixtures`) o lanza excepción explícita.
+    """
+    import httpx
+
+    objetivo_id = int(fotmob_id)
+    if FOTMOB_API_LEGACY_PROBE:
+        url_api = FOTMOB_API_LIGA_URL.format(fotmob_id=objetivo_id)
+        try:
+            resp = httpx.get(url_api, headers=FOTMOB_HEADERS_NAVEGADOR, timeout=FOTMOB_TIMEOUT_S, follow_redirects=True)
+            tipo = str(resp.headers.get("content-type") or "").lower()
+            if resp.status_code == 200 and "json" in tipo:
+                payload = resp.json()
+                if isinstance(payload, dict) and ("table" in payload or "fixtures" in payload):
+                    return payload
+                logger.warning("[LEGACY-404] Endpoint API FotMob %d: JSON sin bloques canónicos.", objetivo_id)
+            else:
+                logger.warning(
+                    "[LEGACY-404] Endpoint API FotMob %d HTTP %s (content-type=%s). Se usa __NEXT_DATA__.",
+                    objetivo_id, resp.status_code, tipo or "desconocido"
+                )
+        except Exception as e:
+            logger.warning(
+                "[LEGACY-404] Transporte API fallido para FotMob %d (%s: %s). Se usa __NEXT_DATA__.",
+                objetivo_id, type(e).__name__, e
+            )
+
+    url_pagina = FOTMOB_PAGINA_LIGA_URL.format(fotmob_id=objetivo_id)
+    resp = httpx.get(url_pagina, headers=FOTMOB_HEADERS_NAVEGADOR, timeout=FOTMOB_TIMEOUT_S, follow_redirects=True)
+    if resp.status_code != 200:
+        raise RuntimeError(f"[ARCH-1.6.19-B] Página de liga FotMob {objetivo_id} HTTP {resp.status_code}: transporte no conforme.")
+
+    bloque = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.S)
+    if not bloque:
+        raise RuntimeError(f"[ARCH-1.6.19-B] FotMob {objetivo_id}: respuesta sin bloque __NEXT_DATA__ (formato no conforme).")
+
+    page_props = (json.loads(bloque.group(1)).get("props") or {}).get("pageProps") or {}
+    if not isinstance(page_props, dict) or not page_props:
+        raise RuntimeError(f"[ARCH-1.6.19-B] FotMob {objetivo_id}: __NEXT_DATA__ sin pageProps utilizables.")
+    return page_props
+
+
+def parsear_json_liga_fotmob_generico(payload: Dict[str, Any], fotmob_id: int) -> Dict[str, Any]:
+    """[ARCH-1.6.19-B] Parser genérico de temporada FotMob (tabla, fixtures y μ empírica).
+
+    Contrato sellado [ARCH-1.6.19-B] (cero invención [GOVERNANCE-01], SONDEO-02):
+      - `standings_viva`: tabla de posiciones con `{equipo, pj, gf, gc, pts, dg, pos}`. Los goles se
+        extraen del campo fáctico `scoresStr` ('GF-GC'); `pg/pe/pp`, forma y marcadores por partido
+        NO se emiten porque el payload de liga no los publica.
+      - `fixtures_por_jornada`: TODOS los partidos de la temporada agrupados por jornada, con estado
+        normalizado (FINALIZADO / PROGRAMADO / CANCELADO) y `horario` UTC fáctico.
+      - `tablas_historicas`: SIEMPRE vacío. El payload de liga no expone la tabla por jornada ya
+        disputada (SONDEO-02): el canon Vol. I §4.5 aplica su propio respaldo.
+      - `mu_liga_empirica`: μ incondicional observada (goles por partido finalizado) o None.
+      - `xg_disponible`: bandera fáctica de disponibilidad Opta (`tableFilterTypes`).
+    """
+    if not isinstance(payload, dict) or not payload:
+        raise ValueError("[ARCH-1.6.19-B] Payload FotMob vacío o no interpretable.")
+
+    liga_id = int(fotmob_id)
+    detalles = payload.get("details") or {}
+
+    # ── 1. TABLA DE POSICIONES ACTUAL ──
+    bloque_tabla = payload.get("table")
+    if bloque_tabla is None:
+        bloque_tabla = payload.get("standings")
+    if isinstance(bloque_tabla, list):
+        bloque_tabla = bloque_tabla[0] if bloque_tabla else {}
+    if not isinstance(bloque_tabla, dict):
+        bloque_tabla = {}
+    data_tabla = bloque_tabla.get("data") or {}
+    filas = ((data_tabla.get("table") or {}).get("all")) or []
+
+    standings_viva: List[Dict[str, Any]] = []
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        gf, gc = _goles_desde_scores_str(fila.get("scoresStr"))
+        standings_viva.append({
+            "equipo": str(fila.get("name") or fila.get("shortName") or "").strip(),
+            "pj": int(fila.get("played") or 0),
+            "gf": int(gf) if gf is not None else 0,
+            "gc": int(gc) if gc is not None else 0,
+            "pts": int(fila.get("pts") or 0),
+            "dg": int(fila.get("goalConDiff") or 0),
+            "pos": int(fila.get("idx") or (len(standings_viva) + 1)),
+        })
+    standings_viva = [s for s in standings_viva if s["equipo"]]
+
+    # ── 2. FIXTURES COMPLETOS DE LA TEMPORADA (agrupados por jornada) ──
+    bloque_fixtures = payload.get("fixtures") or {}
+    partidos = bloque_fixtures.get("allMatches") or []
+    fixtures_por_jornada: Dict[int, List[Dict[str, Any]]] = {}
+    goles_finalizados = 0
+    partidos_finalizados = 0
+
+    for pf in partidos:
+        if not isinstance(pf, dict):
+            continue
+        try:
+            jornada = int(pf.get("round") or 0)
+        except (TypeError, ValueError):
+            jornada = 0
+        estado_bruto = pf.get("status") or {}
+        local = str((pf.get("home") or {}).get("name") or "").strip()
+        visitante = str((pf.get("away") or {}).get("name") or "").strip()
+        if not local or not visitante:
+            logger.warning("[ARCH-1.6.19-B] Fixture FotMob %s sin par local/visitante: se omite (cero invención).", pf.get("id"))
+            continue
+        if estado_bruto.get("finished"):
+            estado = "FINALIZADO"
+            gf, gc = _goles_desde_scores_str(estado_bruto.get("scoreStr"))
+            if gf is not None and gc is not None:
+                goles_finalizados += gf + gc
+                partidos_finalizados += 1
+        elif estado_bruto.get("cancelled"):
+            estado = "CANCELADO"
+        else:
+            estado = "PROGRAMADO"
+
+        fixtures_por_jornada.setdefault(jornada, []).append({
+            "id_partido": str(pf.get("id") or ""),
+            "local": local,
+            "visitante": visitante,
+            "estado": estado,
+            "horario": str(estado_bruto.get("utcTime") or ""),
+        })
+
+    # ── 3. METADATOS ÓPTICOS Y μ EMPÍRICA [LN-QBE-089] ──
+    filtros = [str(t).lower() for t in (data_tabla.get("tableFilterTypes") or [])]
+    round_activo = (bloque_fixtures.get("fixtureInfo") or {}).get("activeRound") or {}
+    try:
+        jornada_activa = int(round_activo.get("roundId") or 0) or None
+    except (TypeError, ValueError):
+        jornada_activa = None
+
+    return {
+        "fotmob_id": liga_id,
+        "league_name": str(data_tabla.get("leagueName") or bloque_tabla.get("name") or f"Liga FotMob {liga_id}").strip(),
+        "country": str(detalles.get("country") or data_tabla.get("ccode") or "Internacional").strip(),
+        "season": str(detalles.get("selectedSeason") or data_tabla.get("selectedSeason") or "").strip(),
+        "jornada_activa": jornada_activa,
+        "xg_disponible": "xg" in filtros,
+        "mu_liga_empirica": round(goles_finalizados / partidos_finalizados, 4) if partidos_finalizados else None,
+        "partidos_finalizados": partidos_finalizados,
+        "standings_viva": standings_viva,
+        "tablas_historicas": {},
+        "fixtures_por_jornada": fixtures_por_jornada,
+        "total_equipos": len(standings_viva),
+        "total_partidos": sum(len(v) for v in fixtures_por_jornada.values()),
+    }
+
+
+def persistir_temporada_generica(datos: Dict[str, Any], league_fotmob_id: int, mu_liga: Optional[float] = None) -> Dict[str, Any]:
+    """[ARCH-1.6.19-B] Persiste una temporada genérica descubierta JIT en SQLite 3NF.
+
+    Materializa, en una única transacción atómica: `Competition` (μ macro y γ_home), todas las
+    entidades `Match` de la temporada, la `StandingSnapshot` de la jornada activa y una
+    `FixtureSnapshot` por jornada. Después, fuera de la transacción, delega el puente soberano
+    [ARCH-1.6.11] (`sincronizar_distribuciones_soberanas_partidos`) para los partidos NO finalizados.
+
+    Cero invención [GOVERNANCE-01]: la μ macro proviene de la μ empírica observada (respaldada por
+    `MU_LIGA_DEFAULT` [LN-QBE-089]) y los equipos sin fila en la tabla viva NO reciben distribución.
+    """
+    objetivo_id = int(league_fotmob_id)
+    comp_id = f"FOTMOB_{objetivo_id}"
+    mu_efectivo = float(mu_liga) if mu_liga is not None else float(datos.get("mu_liga_empirica") or MU_LIGA_DEFAULT)
+
+    gateway = PersistenceGateway()
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    standings_map = {s["equipo"]: s for s in datos.get("standings_viva", [])}
+    partidos_activos: List[Dict[str, Any]] = []
+    omitidos: List[str] = []
+
+    with gateway.write_transaction() as tx:
+        liga = tx.query(League).filter(League.fotmob_id == objetivo_id).first()
+        if not liga:
+            raise RuntimeError(
+                f"[ARCH-1.6.19-B] FotMob {objetivo_id} no está registrada en `leagues`: descubrimiento JIT no consumado."
+            )
+
+        comp = tx.query(Competition).filter(Competition.id == comp_id).first()
+        if not comp:
+            comp = Competition(
+                id=comp_id,
+                name=datos.get("league_name") or f"Liga FotMob {objetivo_id}",
+                country=datos.get("country") or "Internacional",
+                macro_mu_liga=mu_efectivo,
+                macro_gamma_home=0.15,
+                created_at=ahora
+            )
+            tx.add(comp)
+        else:
+            comp.name = datos.get("league_name") or comp.name
+            comp.macro_mu_liga = mu_efectivo
+            comp.macro_gamma_home = 0.15
+        tx.flush()
+
+        for jornada, fixtures_r in datos.get("fixtures_por_jornada", {}).items():
+            for f in fixtures_r:
+                m_id = str(f.get("id_partido") or "").strip()
+                if not m_id:
+                    continue
+                kickoff = None
+                horario = str(f.get("horario") or "").strip()
+                if horario:
+                    try:
+                        kickoff = datetime.fromisoformat(horario.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None)
+                    except ValueError:
+                        logger.warning("[ARCH-1.6.19-B] Horario no interpretable '%s' en %s: se persiste sin kickoff.", horario, m_id)
+
+                m_rec = tx.query(Match).filter(Match.id == m_id).first()
+                if not m_rec:
+                    tx.add(Match(
+                        id=m_id,
+                        competition_id=comp_id,
+                        season_id=None,
+                        matchday_num=int(jornada),
+                        kickoff_utc=kickoff,
+                        home_team_slug=obtener_slug_club(f["local"]),
+                        away_team_slug=obtener_slug_club(f["visitante"]),
+                        status=f["estado"]
+                    ))
+                else:
+                    m_rec.competition_id = comp_id
+                    m_rec.matchday_num = int(jornada)
+                    m_rec.status = f["estado"]
+                    if kickoff is not None:
+                        m_rec.kickoff_utc = kickoff
+
+                if f["estado"] == "FINALIZADO":
+                    continue
+                h_st = standings_map.get(f["local"])
+                a_st = standings_map.get(f["visitante"])
+                if not h_st or not a_st:
+                    omitidos.append(m_id)
+                    continue
+                partidos_activos.append({
+                    "match_id": m_id,
+                    "competition_id": comp_id,
+                    "home_team_stats": {"pj": h_st.get("pj", 0), "gf": h_st.get("gf", 0), "gc": h_st.get("gc", 0)},
+                    "away_team_stats": {"pj": a_st.get("pj", 0), "gf": a_st.get("gf", 0), "gc": a_st.get("gc", 0)},
+                    "delta_alt_metros": 0.0,
+                    "delta_descanso_dias": 0.0,
+                })
+
+            snap_fix = tx.query(FixtureSnapshot).filter(
+                FixtureSnapshot.league_id == liga.id, FixtureSnapshot.matchday == int(jornada)
+            ).first()
+            if not snap_fix:
+                tx.add(FixtureSnapshot(league_id=liga.id, matchday=int(jornada), matches_json=fixtures_r, updated_at=ahora))
+            else:
+                snap_fix.matches_json = fixtures_r
+                snap_fix.updated_at = ahora
+
+            # Tabla viva: UNA sola foto factual por corrida (SONDEO-02: el payload no expone históricos).
+            if int(jornada) == int(datos.get("jornada_activa") or 0):
+                snap_standing = tx.query(StandingSnapshot).filter(
+                    StandingSnapshot.league_id == liga.id, StandingSnapshot.matchday == int(jornada)
+                ).first()
+                if not snap_standing:
+                    tx.add(StandingSnapshot(
+                        league_id=liga.id,
+                        season=datos.get("season") or "2026",
+                        matchday=int(jornada),
+                        positions_json=datos.get("standings_viva", []),
+                        captured_at=ahora
+                    ))
+                else:
+                    snap_standing.positions_json = datos.get("standings_viva", [])
+                    snap_standing.captured_at = ahora
+
+    if omitidos:
+        logger.warning(
+            "[ARCH-1.6.19-B] %d partidos activos sin fila en la tabla viva (%s): sin distribución soberana (cero invención).",
+            len(omitidos), ", ".join(omitidos[:5])
+        )
+
+    resultado = sincronizar_distribuciones_soberanas_partidos(partidos_activos, gateway=gateway)
+    logger.info(
+        "[ARCH-1.6.19-B] Puente soberano [ARCH-1.6.11] para %s: %d procesados, %d exitosos, %d errores.",
+        comp_id, resultado.get("procesados", 0), resultado.get("exitosos", 0), len(resultado.get("errores", []))
+    )
+    return resultado
+
+
 def imprimir_resumen_telemetria(datos: Dict[str, Any], duracion: float) -> None:
     banner = "=" * 125
     subbanner = "-" * 125
@@ -499,19 +884,41 @@ def imprimir_resumen_telemetria(datos: Dict[str, Any], duracion: float) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Centinela Deportivo Autonomo Q-BE")
     parser.add_argument("--loop", type=int, default=0)
+    parser.add_argument("--liga", type=int, default=LIGAMX_FOTMOB_ID, help="FotMob league id a sincronizar (default: 262 Liga MX)")
+    parser.add_argument("--todas-las-ligas", dest="todas_las_ligas", action="store_true", help="[ARCH-1.6.19] Recorre secuencialmente todas las competiciones activas de SQLite")
     args = parser.parse_args()
 
-    while True:
-        t0 = time.perf_counter()
-        logger.info("Iniciando ciclo de ingesta deportiva total (J1 a J17)...")
-        datos = extraer_datos_vivos_completos()
-        persistir_en_sqlite(datos)
-        t_total = time.perf_counter() - t0
-        imprimir_resumen_telemetria(datos, t_total)
+    if args.todas_las_ligas:
+        while True:
+            t0 = time.perf_counter()
+            logger.info("Iniciando ciclo multi-liga [ARCH-1.6.19] sobre la bóveda SQLite...")
+            sincronizar_todas_las_ligas_registradas()
+            logger.info("Ciclo multi-liga concluido en %.2fs.", time.perf_counter() - t0)
+            if args.loop <= 0:
+                break
+            time.sleep(args.loop)
+        return
+    else:
+        while True:
+            t0 = time.perf_counter()
+            logger.info("Iniciando ciclo de ingesta deportiva total (J1 a J17)...")
 
-        if args.loop <= 0:
-            break
-        time.sleep(args.loop)
+            if int(args.liga) != LIGAMX_FOTMOB_ID:
+                sincronizar_temporada_completa(league_id=int(args.liga))
+                logger.info("Ciclo de competición FotMob %d concluido en %.2fs.", args.liga, time.perf_counter() - t0)
+                if args.loop <= 0:
+                    break
+                time.sleep(args.loop)
+                continue
+
+            datos = extraer_datos_vivos_completos()
+            persistir_en_sqlite(datos, league_fotmob_id=LIGAMX_FOTMOB_ID)
+            t_total = time.perf_counter() - t0
+            imprimir_resumen_telemetria(datos, t_total)
+
+            if args.loop <= 0:
+                break
+            time.sleep(args.loop)
 
 
 if __name__ == "__main__":

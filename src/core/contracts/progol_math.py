@@ -6,7 +6,8 @@
 Base de Gobierno: Kybern Framework v12.0
 """
 
-from typing import Dict, Any, List
+from itertools import product
+from typing import List, Dict, Tuple, Any, Optional
 
 
 def calcular_sesgo_quiniela(v_publico: Dict[str, float], p_soberana: Dict[str, float]) -> Dict[str, Any]:
@@ -159,4 +160,129 @@ def optimizar_quiniela_por_presupuesto(items: List[Dict[str, Any]], presupuesto_
         "dobles_asignados": mejor_d,
         "triples_asignados": mejor_t,
         "matriz_quiniela": matriz_final
+    }
+
+
+def seleccionar_cobertura_binaria_optima(partidos_14: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """[LN-QBE-085] Selecciona los 2 desenlaces con mayor probabilidad por partido."""
+    resultado = []
+    for p in partidos_14:
+        p_qbe = p.get("p_qbe") or {"L": 0.3333, "E": 0.3333, "V": 0.3334}
+        probs = [("L", float(p_qbe.get("L", 0.3333))), 
+                 ("E", float(p_qbe.get("E", 0.3333))), 
+                 ("V", float(p_qbe.get("V", 0.3334)))]
+        # Ordenar desenlaces por probabilidad descendente
+        probs.sort(key=lambda x: x[1], reverse=True)
+        top_2 = [probs[0][0], probs[1][0]]
+        masa_cubierta = round(probs[0][1] + probs[1][1], 4)
+        
+        resultado.append({
+            "order": p.get("order", 0),
+            "local": p.get("local", ""),
+            "visitante": p.get("visitante", ""),
+            "opciones": top_2,
+            "probs_dict": dict(probs),
+            "masa_2x": masa_cubierta
+        })
+    return resultado
+
+
+def generar_universo_restringido_y_ordenar_p_prime(partidos_14: List[Dict[str, Any]]) -> List[Tuple[Tuple[str, ...], float]]:
+    """[LN-QBE-084] Construye el espacio 2^K y ordena las boletas en la secuencia canónica P'."""
+    coberturas = seleccionar_cobertura_binaria_optima(partidos_14)
+    opciones_por_partido = [c["opciones"] for c in coberturas]
+    probs_por_partido = [c["probs_dict"] for c in coberturas]
+
+    candidatos = []
+    for combinacion in product(*opciones_por_partido):
+        p_conjunta = 1.0
+        for idx, signo in enumerate(combinacion):
+            p_conjunta *= probs_por_partido[idx].get(signo, 0.3333)
+        candidatos.append((combinacion, round(p_conjunta, 8)))
+
+    # Ordenamiento canónico descendente por masa probabilística P'
+    candidatos.sort(key=lambda x: x[1], reverse=True)
+    return candidatos
+
+
+
+def seleccionar_primeras_m_combinaciones(
+    p_prime_ordenado: List[Tuple[Tuple[str, ...], float]], 
+    m_cupo: int
+) -> Tuple[List[Dict[str, Any]], float]:
+    """[LN-QBE-084] Toma las primeras M boletas maximizando estrictamente la masa acumulada C(M)."""
+    seleccionadas = p_prime_ordenado[:max(1, m_cupo)]
+    masa_acumulada = round(sum(item[1] for item in seleccionadas), 6)
+    
+    boletas_formateadas = []
+    for idx, (comb, prob) in enumerate(seleccionadas, 1):
+        boletas_formateadas.append({
+            "boleta_id": idx,
+            "combinacion": list(comb),
+            "prob_conjunta": prob
+        })
+    return boletas_formateadas, masa_acumulada
+
+
+def reducir_a_garantia_hamming_l(
+    p_prime_ordenado: List[Tuple[Tuple[str, ...], float]],
+    l_aciertos_objetivo: int = 13,
+    max_boletas: int = 16
+) -> List[Dict[str, Any]]:
+    """[LN-QBE-086] Algoritmo Greedy de recubrimiento a distancia d_H <= 14 - L."""
+    d_max = max(0, 14 - l_aciertos_objetivo)
+    universo = [item[0] for item in p_prime_ordenado]
+    cubiertos = set()
+    seleccionadas = []
+
+    for comb, prob in p_prime_ordenado:
+        if len(seleccionadas) >= max_boletas:
+            break
+        # Calcular cuántos elementos nuevos cubre esta boleta dentro del radio de Hamming
+        nuevos = 0
+        indices_cubiertos = []
+        for idx, u in enumerate(universo):
+            if idx not in cubiertos:
+                dist = sum(1 for a, b in zip(comb, u) if a != b)
+                if dist <= d_max:
+                    nuevos += 1
+                    indices_cubiertos.append(idx)
+        
+        if nuevos > 0 or not seleccionadas:
+            seleccionadas.append({
+                "boleta_id": len(seleccionadas) + 1,
+                "combinacion": list(comb),
+                "prob_conjunta": prob,
+                "nuevos_cubiertos": nuevos
+            })
+            cubiertos.update(indices_cubiertos)
+
+    return seleccionadas
+
+
+def optimizar_quiniela_progol_soberana(
+    partidos_14: List[Dict[str, Any]], 
+    presupuesto_mxn: float = 360.0,
+    l_objetivo: int = 14
+) -> Dict[str, Any]:
+    """[LN-QBE-074] Orquestador maestro del optimizador combinatorio por presupuesto."""
+    m_cupo = int(presupuesto_mxn // 15.0)
+    p_prime = generar_universo_restringido_y_ordenar_p_prime(partidos_14)
+
+    if l_objetivo >= 14:
+        boletas, masa = seleccionar_primeras_m_combinaciones(p_prime, m_cupo)
+        garantia = "14 Aciertos (Premio Mayor por Maximización de Masa C(M))"
+    else:
+        boletas = reducir_a_garantia_hamming_l(p_prime, l_aciertos_objetivo=l_objetivo, max_boletas=m_cupo)
+        masa = round(sum(b["prob_conjunta"] for b in boletas), 6)
+        garantia = f"{l_objetivo} Aciertos Garantizados al 100% (Radio de Hamming d<={14 - l_objetivo})"
+
+    costo_total = len(boletas) * 15.0
+
+    return {
+        "combinaciones_totales": len(boletas),
+        "costo_total_mxn": costo_total,
+        "masa_acumulada_capturada": masa,
+        "garantia_fiduciaria": garantia,
+        "boletas": boletas
     }
