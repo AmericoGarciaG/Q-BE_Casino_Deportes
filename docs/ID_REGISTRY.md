@@ -169,23 +169,23 @@
 
 ---
 
-## 📋 FICHAS DE VARIANZA HISTÓRICAS RATIFICADAS (`docs/DIRGEN_VARIANCE_REQUEST_*.md`)
+## 📋 FICHAS DE VARIANZA HISTÓRICAS RATIFICADAS (`VAR-...`)
 
 | Ficha | Colisión / Hallazgo | Resolución | Estado |
 |---|---|:---:|:---:|
-| `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md` | `[LN-QBE-080]` ocupado por Compilador de Reportes | Remapeo a `[LN-QBE-081]` / `[LN-QBE-082]` | RATIFICADO |
-| `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.6.19-B_ENDPOINT.md` | Endpoint REST `/api/leagues?id=` → HTTP 404 | Extracción gobernada `__NEXT_DATA__` | RATIFICADO |
-| `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.5.11_COLLISION.md` | `[ARCH-1.5.11]` ocupado por PROGOL_GLOBAL_ALIASES | Remapeo a `[ARCH-1.5.12]` | RATIFICADO |
-| `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-070-073.md` | Contrato `approved_matches` para Kelly atenuado (familia 070–073) | Nodo de seguimiento declarado, abierto | ABIERTO |
-| `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-019_CATEGORY_AWARE_CREST.md` | Escalera de escudos `[LN-QBE-019]` ciega a la categoría de género (escudo varonil sobre club femenil) | ALT-1 ratificada (escalera categoría-consciente + cache-key blindada D-5) y **EJECUTADA** en Sprint 3 | RESUELTO |
-| `docs/DIRGEN_VARIANCE_REQUEST_NOVIBET_FASE1_PASO2.md` | Literales canónicos de la ingesta Novibet.mx (`Puebla`/`Toluca`/`Pachuca` vs contrato sellado `[LN-QBE-012]`) | ALT-1: contrato canónico intacto; se calibran los literales esperados del Juez | RATIFICADO HISTÓRICO |
+| `VAR-HIST-080-COLLISION` | `[LN-QBE-080]` ocupado por Compilador de Reportes | Remapeo a `[LN-QBE-081]` / `[LN-QBE-082]` | RATIFICADO |
+| `VAR-HIST-ARCH-1.6.19-B` | Endpoint REST `/api/leagues?id=` → HTTP 404 | Extracción gobernada `__NEXT_DATA__` | RATIFICADO |
+| `VAR-2026-ARCH-1.5.11` | `[ARCH-1.5.11]` ocupado por PROGOL_GLOBAL_ALIASES | Remapeo a `[ARCH-1.5.12]` | RATIFICADO |
+| `VAR-2026-LN-QBE-070-073` | Contrato `approved_matches` para Kelly atenuado (familia 070–073) | Nodo de seguimiento declarado, abierto | ABIERTO |
+| `VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST` | Escalera de escudos `[LN-QBE-019]` ciega a la categoría de género (escudo varonil sobre club femenil) | ALT-1 ratificada (escalera categoría-consciente + cache-key blindada D-5) y **EJECUTADA** en Sprint 3 | RESUELTO |
+| `VAR-2026-NOVIBET-FASE1-PASO2` | Literales canónicos de la ingesta Novibet.mx (`Puebla`/`Toluca`/`Pachuca` vs contrato sellado `[LN-QBE-012]`) | ALT-1: contrato canónico intacto; se calibran los literales esperados del Juez | RATIFICADO HISTÓRICO |
 
 ---
 
 ## ✅ DEUDA DEL PASO 0 — CERRADA (Decreto Sprint 3)
 
 * **Ficción documental materializada:** el Juez `tests/shield/test_shield_novibet_ingestion.py` (L17) cita la ficha
-  `DIRGEN_VARIANCE_REQUEST_NOVIBET_FASE1_PASO2` (reconciliación de literales canónicos `Club Puebla`,
+  `VAR-2026-NOVIBET-FASE1-PASO2` (reconciliación de literales canónicos `Club Puebla`,
   `Deportivo Toluca`, `Club Pachuca` frente al contrato sellado de `normalizer.py` / `[LN-QBE-012]`).
   **Dictamen:** materializada por transcripción verbatim del docstring del Juez citante, con estatus
   `RATIFICADO HISTÓRICO`.

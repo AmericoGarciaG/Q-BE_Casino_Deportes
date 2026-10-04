@@ -281,7 +281,7 @@ def aplicar_hard_caps_con_respeto_a_piso(
 # [LN-QBE-079] / [LN-QBE-081] / [LN-QBE-082] — Transcripción canónica VERBATIM.
 # Nota de trazabilidad: el bloque fue inyectado como [LN-QBE-080]/[LN-QBE-081] y remapeado
 # a [LN-QBE-081]/[LN-QBE-082] por colisión con el nodo sellado [LN-QBE-080] (Compilador PDF A4).
-# Ver docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md
+# Ver VAR-HIST-080-COLLISION
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 

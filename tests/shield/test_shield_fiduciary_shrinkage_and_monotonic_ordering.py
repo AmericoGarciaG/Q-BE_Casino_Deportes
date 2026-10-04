@@ -6,7 +6,7 @@ Régimen: [DIRGEN-STRICT]
 Axioma: Conservación estricta del símplex bajo contracción y jerarquía no creciente de capital.
 Nota de trazabilidad: el bloque fue inyectado como [LN-QBE-080]/[LN-QBE-081] y remapeado a
 [LN-QBE-081]/[LN-QBE-082] por colisión con el nodo sellado [LN-QBE-080] (Compilador PDF A4).
-Ver docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md
+Ver VAR-HIST-080-COLLISION
 """
 
 import pytest

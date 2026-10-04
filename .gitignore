@@ -157,5 +157,7 @@ src/web/static/img/bookmakers/betway.svg
 src/web/static/img/bookmakers/caliente.png
 src/web/static/img/bookmakers/caliente.svg
 src/web/static/img/bookmakers/novibet.svg
-scripts/auditoria/auditar_pureza_matematica_vol1.py
-scripts/auditoria/reconciliar_registro_legislativo.py
+# scripts/auditoria/*.py — HERRAMIENTAS DE GOBERNANZA VERSIONADAS (Decreto de versionado, 2026-10-04).
+# La reconciliación del Registro Maestro y la auditoría de pureza matemática NO son scripts
+# descartables: son salvaguardas constitucionales y deben permanecer bajo control de versiones
+# para que cualquier entorno o pipeline de CI/CD pueda ejecutar la auditoría en frío.

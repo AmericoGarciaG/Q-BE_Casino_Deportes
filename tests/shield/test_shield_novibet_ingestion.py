@@ -14,7 +14,7 @@ emite** — su tabla canónica publica `"Club Puebla"`, `"Deportivo Toluca"` y `
 el axioma del Juez (toda caption de competidor de Novibet resuelve a identidad canónica) y se
 corrigen exclusivamente los literales esperados, en lugar de mutar el contrato sellado del
 normalizador (lo que rompería `test_shield_multi_bookmaker_ingestion.py` y el catálogo
-`CLUBS_MASTER`). Detalle completo: `docs/DIRGEN_VARIANCE_REQUEST_NOVIBET_FASE1_PASO2.md`.
+`CLUBS_MASTER`). Detalle completo: `VAR-2026-NOVIBET-FASE1-PASO2`.
 """
 
 import pytest

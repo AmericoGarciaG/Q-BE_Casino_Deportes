@@ -8,7 +8,7 @@ Validación de:
 - [ARCH-1.5.12] Aprovisionamiento JIT de Ligas y Bóveda Soberana de Activos.
 Nota de trazabilidad (VAR-2026-ARCH-1.5.11): el bloque fue inyectado como [ARCH-1.5.11] y
 remapeado a [ARCH-1.5.12] por colisión con el nodo sellado (PROGOL_GLOBAL_ALIASES).
-Ver docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.5.11_COLLISION.md
+Ver VAR-2026-ARCH-1.5.11
 """
 
 from datetime import datetime, timezone, timedelta

@@ -472,7 +472,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - $\text{Cap}_i$ — **[DEROGADO en Fase 4: el divisor heurístico `3.0` y el piso artificial `0.02` quedan erradicados por [LN-QBE-070-B]]**
        La fórmula histórica $\text{Cap}_i = \min(0.08, \max(0.02, \frac{EV_i}{3.0 \cdot \Psi_i}))$ queda **prohibida** por (a) contener el número mágico `3.0` y (b) clavar un piso artificial `0.02` contrario a la [INVARIANZA #7].
        Sustituto canónico — **Kelly Fraccional Atenuado**: $\text{Cap}_i = \texttt{calcular\_kelly\_atenuado}(p_i, O_i, \Delta_{\text{epist}, i}) = \gamma_{\text{Kelly}} \cdot \frac{\alpha_i}{O_i - 1} \cdot \Psi_{\text{epist}}(\Delta_{\text{epist}})$, con $\gamma_{\text{Kelly}} = 0.25$, techo duro $0.0800$ y **cero pisos artificiales**. Fuente única: `[VAULT-CORE-070-KELLY]` / `src/core/contracts/portfolio_math.py`.
-       **Nota de materialización (Fase 4):** la sustitución directa en `PortfolioEngine.build_plan` exige que el contrato de `approved_matches` exponga $p_i$, $O_i$ y $\Delta_{\text{epist}}$. Mientras ese contrato no se extienda, el techo de cartera se aplica con `aplicar_hard_caps_constitucionales` (8% individual / 25% global) y el piso con `[LN-QBE-071]`. Nodo de seguimiento declarado en `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-070-073.md`.
+       **Nota de materialización (Fase 4):** la sustitución directa en `PortfolioEngine.build_plan` exige que el contrato de `approved_matches` exponga $p_i$, $O_i$ y $\Delta_{\text{epist}}$. Mientras ese contrato no se extienda, el techo de cartera se aplica con `aplicar_hard_caps_constitucionales` (8% individual / 25% global) y el piso con `[LN-QBE-071]`. Nodo de seguimiento declarado en `VAR-2026-LN-QBE-070-073`.
      - $A_i = \min(\text{Bolsa}_{\text{Core}} \times w_i, B \times \text{Cap}_i)$ con **piso de ventanilla canónico de $2.00 MXN** `[LN-QBE-071]` (`PISO_MINIMO_BOLETO`). El literal histórico `4.00` queda derogado por no estar legislado en la bóveda.
   6. **Dutching Exacto:**
      - Familia H2: Boleto 1 (Seguro Fav) $= A_i / O_{\text{Fav}}$, Boleto 2 (Ganancia Emp) $= A_i - \text{Boleto 1}$.
@@ -1115,7 +1115,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 > (*"sin reutilización de identificadores"*), el bloque se remapea a **`081`** y **`082`**
 > conservando el orden ascendente, el contenido matemático VERBATIM y la frontera
 > `[DIRGEN-STRICT]`. Solicitud formal registrada en
-> `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md`.
+> `VAR-HIST-080-COLLISION`.
 
 ---
 
