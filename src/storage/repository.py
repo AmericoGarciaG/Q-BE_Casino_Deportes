@@ -1,5 +1,6 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
+from src.storage.database import SessionLocal
 from src.storage.models import League, StandingSnapshot, FixtureSnapshot, PortfolioRecord
 
 class Repository:
@@ -45,3 +46,25 @@ class Repository:
         db.commit()
         db.refresh(record)
         return record
+
+
+# ── [LN-QBE-093] / [ARCH-1.4.24] PUERTO DE PERSISTENCIA INYECTABLE ──
+# [LN-QBE-017] Los sensores de ingesta pura reciben este callable por Inversión de
+# Dependencias: la capacidad offline ante contingencia de red NO se deroga, pero deja
+# de ejercerse mediante import estático dentro de `src/ingestion/providers/`.
+def cargar_snapshot_certificado_posiciones(fotmob_id: int) -> Optional[List[Dict[str, Any]]]:
+    """
+    Retorna el último snapshot certificado de posiciones de la bóveda 3NF.
+
+    Invariante de fidelidad: retorna `None` cuando no existe liga registrada o el snapshot
+    no alcanza 18 clubes (CERO MOCKS: jamás se fabrican posiciones federativas).
+    """
+    with SessionLocal() as db:
+        league = Repository.get_league_by_fotmob_id(db, fotmob_id)
+        if not league:
+            return None
+        snapshot = Repository.get_latest_standing(db, league.id)
+        if snapshot and snapshot.positions_json and len(snapshot.positions_json) >= 18:
+            return snapshot.positions_json
+    return None
+

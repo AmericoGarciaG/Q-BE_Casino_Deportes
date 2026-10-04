@@ -814,6 +814,7 @@ Q_BE_CD_WEB/
 │   │
 │   ├── ingestion/                  # Capa de Ingesta y Sensores de Mercado
 │   │   ├── normalizer.py           # Normalizador difuso de clubes (18 Liga MX + Internacionales)
+│   │   ├── schemas.py              # [ARCH-1.4.24] DTOs Pydantic V2 de la Capa 1 (Ingesta Pura)
 │   │   ├── caliente_scraper.py     # Extracción headless de cuotas Caliente.mx
 │   │   ├── progol_scraper.py       # [LN-QBE-075] Ingesta fáctica Progol (14 Regular + 7 Revancha)
 │   │   ├── ocr_parser.py           # Extracción OCR desde capturas
@@ -1052,6 +1053,8 @@ class PortfolioExecutionPlan(BaseModel):
     balance_global_portafolio: PortfolioBalance
 ```
 
+> **Nota de trazabilidad (`[ARCH-1.4.24]` / `[LN-QBE-093]`):** los DTOs de la Capa 1 (Ingesta Pura, Data Nexus) residen en `src/ingestion/schemas.py` y se rigen por el contrato hexagonal `[ARCH-1.4.24]`.
+
 ---
 
 ## 4. ENDPOINTS REST DE LA APLICACIÓN WEB
@@ -1084,8 +1087,19 @@ class PortfolioExecutionPlan(BaseModel):
 * En el payload emitido por el generador de cartera, **todo boleto individual (`boleto_1_seguro` y `boleto_2_ganancia`) debe portar obligatoriamente la propiedad `operador: str` con el slug de la casa correspondiente**, incluso en modalidad mono-operador (`operador: "caliente"` o `"novibet"`).
 * Queda terminantemente prohibido que `operador` sea `None` o vacío, impidiendo la degradación al texto plano "VENTANILLA".
 
-### [ARCH-1.3.4] Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR]
+### [ARCH-1.3.5] Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR]
 * El endpoint `POST /api/portfolio/generate` en `src/web/routes/portfolio.py` queda oficialmente **deprecado y desconectado**. El archivo conserva exclusivamente el servicio de tesis `/api/portfolio/match-thesis`. Toda generación de cartera es gobernada por `src/web/routes/markets.py`.
+
+> **Trazabilidad de registro (VAR-2026-ARCH-1.3.4 — Colisión histórica resuelta por Decreto de Saneamiento):**
+> el identificador `[ARCH-1.3.4]` ya se encuentra **sellado** desde la Fase 8 en `docs/ARCH.md`
+> (línea 95, *GeminiCognitiveGateway y Ledger Contable de Inferencia*, referenciado por
+> `src/services/gemini_gateway.py`, `src/core/sovereign_pipeline.py`, `src/reporting/narrative.py`
+> y `tests/shield/test_shield_gemini_gateway.py`). Por axioma de **cero reutilización**, este nodo
+> (Retiro de Rutas Legacy) se remapea a `[ARCH-1.3.5]` (primer identificador libre de la familia
+> `1.3.x`, verificado por auditoría de unicidad del Paso 0). La referencia `[ARCH-1.3.4]` contenida
+> en el docstring y en el mensaje de aserción del Juez Inmutable
+> `tests/shield/test_shield_technical_debt_liquidation.py` queda **mapeada por trazabilidad** a
+> `[ARCH-1.3.5]`, sin alterar el contenido normativo del nodo.
 
 ### [ARCH-1.6.18] Resiliencia de Navegación de Torneo en Sensores de Mercado [ARCH-PILLAR]
 * En `betway_scraper.py`, el sensor debe realizar un clic preventivo en el selector de competición de Liga MX antes de leer el DOM, forzando la apertura de la cartelera completa de jornadas futuras (Jornada 11).
@@ -1174,6 +1188,23 @@ class PortfolioExecutionPlan(BaseModel):
   2. Extraer los marcadores de las jornadas disputadas (J1 a J5).
   3. Registrar la competición `MEX_LIGAPREMIER` en SQLite 3NF con $\mu_{\text{premier}} = 2.45$ y $\bar{\gamma}_{\text{home}} = 0.16$.
 * **[SHIELD]:** `tests/shield/test_shield_ligapremier_and_global_aliases.py`
+
+### [ARCH-1.4.24] Contrato Hexagonal de Proveedores de Ingesta Pura y DTOs (Capa 1) [ARCH-PILLAR]
+La extracción de datos crudos se encapsula en proveedores sin estado y sus respuestas se tipifican rigurosamente mediante Data Transfer Objects (DTOs).
+
+* **Directiva de Directorios (Capa 1):**
+    * `src/ingestion/providers/`: Aloja exclusivamente sensores de red/API. Prohibido el acceso a la capa de persistencia.
+    * `src/ingestion/schemas.py`: Contiene exclusivamente las declaraciones DTO (Pydantic V2) para transporte de datos.
+* **Inyección de Dependencias:** Cualquier requerimiento de datos históricos o de persistencia debe ser satisfecho mediante inyección de dependencias desde el llamador (ej. `fallback_loader`), nunca mediante acoplamiento estático interno.
+* **Invariante de Pureza (`[LN-QBE-093]`):** Ningún archivo dentro de `src/ingestion/providers/` puede importar `src.storage`, `sqlalchemy` ni realizar I/O de escritura a disco.
+* **Nota de trazabilidad (VAR-2026-ARCH-1.4.24 — Resolución de colisión, **ALT-A ratificada**):** el identificador `[ARCH-1.4.23]` está sellado por el Sensor de Ingesta Oficial de Liga Premier FMF (`ligapremier.mx`); conforme al principio *"sin reutilización de identificadores"*, la Capa 1 Data Nexus se promulga como **`[ARCH-1.4.24]`** (nodo `[LN-QBE-093]`). La tensión legislativa entre el axioma de aislamiento y el fallback offline certificado de `[LN-QBE-017]` se resuelve por **Inversión de Dependencias**: el puerto `fallback_loader` se inyecta desde el llamador y su adaptador de lectura reside en `src/storage/repository.py` (`cargar_snapshot_certificado_posiciones`). La capacidad offline **NO se deroga**.
+* **[SHIELD]:** `tests/shield/test_shield_data_nexus_providers.py`
+
+### [ARCH-1.4.25] Módulo de Normalización, Jerga y Desambiguación (`src/normalization/`) [ARCH-PILLAR]
+La Capa 2 encapsula la inteligencia de resolución de entidades en un paquete autónomo:
+* `src/normalization/gender_guards.py`: Implementa `[LN-QBE-095]`.
+* `src/normalization/temporal_disambiguator.py`: Implementa `[LN-QBE-094]`.
+* `src/normalization/entity_resolver.py`: Mapea jerga de quinielas (`PROGOL_GLOBAL_ALIASES`) a identidades oficiales.
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:

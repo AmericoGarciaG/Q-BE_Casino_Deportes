@@ -4,13 +4,18 @@ Pruebas de Ingesta e Integración en Vivo (Scraping contra FotMob / Red Externa)
 """
 import pytest
 from src.ingestion.providers.fotmob_provider import FotMobProvider
+from src.storage.repository import cargar_snapshot_certificado_posiciones
+
+# [LN-QBE-093] Puerto de persistencia inyectado desde el llamador (cero acoplamiento
+# estático a SQLite dentro de `src/ingestion/providers/`).
+SNAPSHOT_PORT = cargar_snapshot_certificado_posiciones
 
 @pytest.mark.e2e
 class TestLiveScraping:
 
     def test_fotmob_standings_has_18_teams_and_xg(self):
         """[E2E] Ingesta real desde FotMob de la tabla de posiciones con 18 equipos y xG."""
-        standings = FotMobProvider.obtener_tabla_posiciones(262)
+        standings = FotMobProvider.obtener_tabla_posiciones(262, fallback_loader=SNAPSHOT_PORT)
         assert len(standings) == 18, f"Se esperaban 18 equipos en la tabla, se obtuvo {len(standings)}"
         assert "xg" in standings[0], "Falta métrica xG en la tabla de FotMob"
 
@@ -21,7 +26,7 @@ class TestLiveScraping:
         vigilancia se ejerce sobre INVARIANTES CONTABLES (3 puntos por victoria, 1 por empate),
         jamás sobre magnitudes fechadas del mundo real (cero valores quemados).
         """
-        standings = FotMobProvider.obtener_tabla_posiciones(262)
+        standings = FotMobProvider.obtener_tabla_posiciones(262, fallback_loader=SNAPSHOT_PORT)
         pachuca = next((t for t in standings if "PACHUCA" in t["equipo"].upper()), None)
         assert pachuca is not None, "Club Pachuca no encontrado en la tabla."
         assert pachuca["pj"] == pachuca["pg"] + pachuca["pe"] + pachuca["pp"], \
@@ -32,7 +37,7 @@ class TestLiveScraping:
 
     def test_all_18_teams_have_valid_dynamic_crests(self):
         """[E2E] Verificación de rutas de escudos dinámicos en vivo."""
-        standings = FotMobProvider.obtener_tabla_posiciones(262)
+        standings = FotMobProvider.obtener_tabla_posiciones(262, fallback_loader=SNAPSHOT_PORT)
         for t in standings:
             assert "escudo_url" in t and t["escudo_url"], f"Falta escudo_url para {t['equipo']}."
             assert (

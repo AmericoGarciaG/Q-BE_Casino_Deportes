@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 🛡️ THE SHIELD — TWIN-TEST: FINIQUITO TOTAL DE DEUDA TÉCNICA Y SANEAMIENTO FASE 8
-[LN-QBE-070-E, LN-QBE-078, ARCH-1.4.16, ARCH-1.3.4] & [DES-QBE-058, DES-QBE-059]
+[LN-QBE-070-E, LN-QBE-078, ARCH-1.4.16, ARCH-1.3.5] & [DES-QBE-058, DES-QBE-059]
+# NOTA DE TRAZABILIDAD (VAR-2026-ARCH-1.3.4): el retiro de rutas legacy se remapeó de
+# [ARCH-1.3.4] a [ARCH-1.3.5] por colisión con el GeminiCognitiveGateway (docs/ARCH.md:95).
 Régimen: [DIRGEN-STRICT]
 Axioma: Respeto al piso de $2.00 bajo prorrateo global y transparencia total de vetos.
 """
@@ -93,7 +95,7 @@ class AbstractTestTechnicalDebtLiquidation(ABC):
             code = f.read()
 
         assert "QBEPipelineEngine.run_full" not in code, \
-            "Violación ARCH-1.3.4: routes/portfolio.py sigue llamando al pipeline monolítico viejo"
+            "Violación ARCH-1.3.5: routes/portfolio.py sigue llamando al pipeline monolítico viejo"
 
 
 class TestTechnicalDebtLiquidation(AbstractTestTechnicalDebtLiquidation):

@@ -7,7 +7,7 @@ import logging
 import re
 import httpx
 from bs4 import BeautifulSoup
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from src.ingestion.providers.base_provider import BaseProvider
 from src.ingestion.normalizer import canonicalize_team_name
 
@@ -111,27 +111,33 @@ def extraer_tabla_general_ligamx() -> List[Dict[str, Any]]:
 
 class FotMobProvider(BaseProvider):
     @staticmethod
-    def obtener_tabla_posiciones(league_id: int) -> List[Dict[str, Any]]:
+    def obtener_tabla_posiciones(
+        league_id: int,
+        fallback_loader: Optional[Callable[[int], Optional[List[Dict[str, Any]]]]] = None,
+    ) -> List[Dict[str, Any]]:
         # 1. Para Liga MX (ID 262): Consumir la verdad oficial de ligamx.net [LN-QBE-017]
         if league_id == 262:
             tabla_fmf = extraer_tabla_general_ligamx()
             if tabla_fmf and len(tabla_fmf) == 18:
                 return tabla_fmf
 
-            # [LN-QBE-017] Preservar el último snapshot certificado de SQLite ante contingencia de red
-            try:
-                from src.storage.database import SessionLocal
-                from src.storage.models import StandingSnapshot, League
-                with SessionLocal() as db:
-                    league = db.query(League).filter(League.fotmob_id == league_id).first()
-                    if league:
-                        snap = db.query(StandingSnapshot).filter(
-                            StandingSnapshot.league_id == league.id
-                        ).order_by(StandingSnapshot.captured_at.desc()).first()
-                        if snap and snap.positions_json and len(snap.positions_json) >= 18:
-                            return snap.positions_json
-            except Exception as e:
-                logger.warning(f"Consulta a snapshot certificado de SQLite no disponible ({e}).")
+            # [LN-QBE-017] Preservar el último snapshot certificado ante contingencia de red.
+            # [LN-QBE-093] Inversión de Dependencias: la persistencia se consume EXCLUSIVAMENTE
+            # mediante el puerto `fallback_loader` inyectado por el llamador. Cero import estático
+            # de `src.storage` desde `providers/` (adaptador de lectura canónico:
+            # `src/storage/repository.py::cargar_snapshot_certificado_posiciones`).
+            if fallback_loader is not None:
+                try:
+                    snapshot = fallback_loader(league_id)
+                    if snapshot and len(snapshot) >= 18:
+                        return snapshot
+                except Exception as e:
+                    logger.warning(f"Puerto de snapshot certificado no disponible ({e}).")
+            else:
+                logger.info(
+                    "[LN-QBE-093] Sin puerto fallback_loader inyectado: "
+                    "se omite el snapshot certificado de SQLite."
+                )
 
         # 2. Para Ligas Internacionales: Consultar FotMob API
         url = f"https://www.fotmob.com/api/leagues?id={league_id}"

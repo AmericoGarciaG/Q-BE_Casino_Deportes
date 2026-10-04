@@ -958,7 +958,14 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   $$\alpha = \ln(\mu_{\text{liga}}) - \ln(1 + e^{\bar{\gamma}_{\text{home}}})$$
   donde por defecto para ligas de primera división $\mu_{\text{liga}} = 2.60$ y $\bar{\gamma}_{\text{home}} = 0.15$, salvo cálculo empírico directo sobre los marcadores históricos descargados.
 
-### ID: [LN-QBE-090] Heurística de Vinculación y Emparejamiento Multi-Torneo en Slates
+### ID: [LN-QBE-090-B] Heurística de Vinculación y Emparejamiento Multi-Torneo en Slates
+> **Trazabilidad de registro (VAR-2026-LN-QBE-090 — Colisión histórica resuelta por Decreto de Saneamiento):**
+> el identificador `[LN-QBE-090]` ya se encuentra **sellado** en este mismo libro (línea 566,
+> *Escudo Forense de Invarianzas (Shield Release Gate)*, referenciado por `src/core/auditor.py:4`
+> y `src/pipeline/engine.py:482`). Por axioma de **cero reutilización** de identificadores canónicos,
+> este nodo se remapea a `[LN-QBE-090-B]`, preservando el sufijo de familia y sin alterar una sola
+> coma de su contenido normativo. La primera instancia (L566) conserva la propiedad indisputable de
+> `[LN-QBE-090]`. Evidencia fáctica de la colisión: auditoría de unicidad del registro (Paso 0).
 * **Ω (Resumen):** Permite vincular casillas de quinielas con partidos de competiciones internacionales mediante coincidencia cruzada de identidades canónicas (`Match.home_team_slug` y `Match.away_team_slug`) independientemente de si la liga es local o foránea.
 * **Materialización:** el cotejo elástico ya gobernado en `procesar_casilla_con_resiliencia` (`src`, `scripts/daemons/centinela_progol.py`, `[VARIANCE-05 ratificada]`) opera por contención mutua de slugs normalizados (`club-`, `deportivo-`) sobre TODA la tabla `matches`, sin discriminar competición; la exploración JIT de competiciones foráneas queda legislada en `[ARCH-1.4.22]`.
 * **Frontera de inmunidad:** el emparejamiento JAMÁS fabrica probabilidad; sólo localiza el partido. La probabilidad proviene exclusivamente de `sovereign_distributions` o degrada al Prior Fiduciario `[LN-QBE-075]`.
@@ -968,6 +975,50 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   $$\ln(\lambda_H) = \alpha_{\text{div}} + \bar{\gamma}_{\text{home}} + \left( \frac{GF_H}{\mu_{\text{div}} \cdot JJ_H} - 1 \right) - \left( 1 - \frac{GC_A}{\mu_{\text{div}} \cdot JJ_A} \right)$$
 * **Gobernanza:** Satisface estrictamente la conservación de masa $\mu_{\text{div}} = 2.45$ y permite emitir distribuciones soberanas legítimas sin inventar datos.
 
+### ID: [LN-QBE-093] Axioma de Pureza de Sensores de Ingesta y Contratos DTO de Capa 1 (Data Nexus)
+* **Ω (Resumen):** Los sensores de ingesta (`src/ingestion/providers/`) son entidades puras de red: transforman respuestas HTTP (HTML/JSON) en contratos inmutables (DTOs Pydantic V2, `src/ingestion/schemas.py`) y JAMÁS tocan la capa de persistencia. El acceso al snapshot certificado de SQLite ante fallos de red se ejerce exclusivamente vía inyección de dependencias (un puerto/callable `fallback_loader` pasado como argumento), preservando `[LN-QBE-017]` sin acoplamiento estático interno.
+* **I (Input):** Respuesta cruda de red (`httpx` / `BeautifulSoup`) y, opcionalmente, un puerto inyectado por el llamador que resuelve el último snapshot certificado de la bóveda 3NF.
+* **P (Process) [ARCH-PILLAR]:**
+  1. Extraer y sanear la respuesta cruda del proveedor externo (cero valores inventados, `[GOVERNANCE-01]`).
+  2. Tipificar y validar el resultado contra el DTO correspondiente declarado en `src/ingestion/schemas.py`.
+  3. Ante contingencia de red, invocar el puerto inyectado `fallback_loader(league_id)`; si no fue inyectado, degradar explícitamente a lista vacía con traza de log (CERO MOCKS).
+* **O (Output):** Objetos tipados de `src/ingestion/schemas.py` (ej. `ScheduledMatchDTO`, `SeasonOverviewDTO`, `ProgolContestDTO`, `Odds1X2DTO`).
+* **Φ (Transición):** Hacia el `IngestionCoordinator` (Capa 5), responsable de la composición e inyección de los puertos de persistencia.
+* **[SHIELD]:** `tests/shield/test_shield_data_nexus_providers.py`
+
+### ID: [LN-QBE-094] Algoritmo de Desambiguación Temporal en Ventana Crítica [t_cierre ± 72h]
+* **Ω (Resumen):** Resuelve de forma determinista la asignación de competición y partido cuando un mismo par de clubes se enfrenta en múltiples torneos en fechas cercanas (ej. Cruz Azul vs. América en Liga MX vs. Concachampions).
+* **I (Input):** `team_a: str`, `team_b: str`, `t_cierre: datetime`, `candidatos: List[ScheduledMatchDTO]`.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. Definir la Ventana Crítica de Disputa:
+     $$\mathcal{W} = [t_{\text{cierre}} - 24\text{ h}, \; t_{\text{cierre}} + 72\text{ h}]$$
+  2. Filtrar el conjunto de candidatos donde ambos clubes participan:
+     $$\mathcal{M}_{\text{admisibles}} = \{ m \in \text{candidatos} \mid m.t_{\text{kickoff}} \in \mathcal{W} \}$$
+  3. Si $|\mathcal{M}_{\text{admisibles}}| == 1 \implies$ Se vincula unívocamente ese partido y su `competition_id`.
+  4. Si $|\mathcal{M}_{\text{admisibles}}| > 1 \implies$ Seleccionar el partido con menor distancia temporal absoluta:
+     $$m^* = \arg\min_{m \in \mathcal{M}} |m.t_{\text{kickoff}} - t_{\text{cierre}}|$$
+  5. Si $|\mathcal{M}_{\text{admisibles}}| == 0 \implies$ Marcar como no indexado y degradar al Prior Fiduciario `[LN-QBE-075]`.
+* **O (Output):** `DisambiguatedMatchDTO(match_id, competition_id, kickoff_utc, is_ambiguous: bool)`.
+* **Φ (Transición):** Hacia `[LN-QBE-088]` y persistencia en `slate_items.match_id`.
+* **[SHIELD]:** `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`
+
+---
+
+### ID: [LN-QBE-095] Guardas Léxicas de Identidad de Género y Categoría (Femenil, Filiales, Sub-20)
+* **Ω (Resumen):** Erradica colisiones de identidad entre clubes homónimos de diferentes divisiones o ramas deportivas mediante etiquetado canónico y derivación estricta de slugs.
+* **I (Input):** `raw_team_name: str`.
+* **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
+  1. Detección de patrones regex (case-insensitive):
+     - Femenil: `\b(femenil|fem|women|w)\b` $\implies$ `categoria = "FEMENIL"`.
+     - Filial / Reserva: `\b(b|ii|filial|promesas)\b` $\implies$ `categoria = "FILIAL"`.
+     - Formativas: `\b(sub-?20|sub-?23|u-?20|u-?23)\b` $\implies$ `categoria = "SUB20"`.
+     - Por defecto: `categoria = "VARONIL_MAYOR"`.
+  2. Generación de Slug Canónico Inmutable:
+     - El slug debe conservar el sufijo de categoría: `club-america-femenil`, `real-sociedad-b`, `chivas-sub20`.
+     - Queda estrictamente prohibido truncar el sufijo de género para evitar colisiones con el primer equipo varonil (`club-america`).
+* **O (Output):** `CategorizedEntityDTO(canonical_name: str, canonical_slug: str, category: str)`.
+* **Φ (Transición):** Hacia `[LN-QBE-012]` (Normalizador) y `[ARCH-1.5.11]` (Aprovisionador).
+* **[SHIELD]:** `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`
 
 ---
 
