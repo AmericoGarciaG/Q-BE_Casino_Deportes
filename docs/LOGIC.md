@@ -312,6 +312,25 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** Ponderaciones $w_{\text{H2H}} = 0.0$ y $w_{\text{Liga}} = 1.0$.
 
 ---
+### ID: [LN-QBE-020-C] Kernel H2H Empírico en Eje Localía (Generador C)
+
+* **Ω (Resumen):** Proyectar la evidencia de enfrentamientos directos sobre el símplex $\Delta^2$ en el **eje localía** (LOCAL / EMPATE / VISITA) del fixture evaluado, como Generador C empírico que alimenta la discrepancia epistémica $\Delta_{\text{epist}}$. **No sustituye a `[LN-QBE-020]`**: aquel opera sobre el eje FAVORITO / EMPATE / UNDERDOG y exige exactamente 5 partidos.
+* **I (Input):** `h2h_matches` (secuencia de enfrentamientos en perspectiva del fixture evaluado: `goles_local`, `goles_visita`, `dias_antiguedad`) y vida media $\tau = 180$ días.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Reutilización de la constante sellada (cero duplicación):** $\kappa = \ln(2)/\tau$ tomado de `[LN-QBE-020]` (`src/core/temporal.py: TemporalDecayEngine.KAPPA` cuando $\tau = 180$).
+  2. Ponderación exponencial continua: $w_k = \exp(-\kappa \cdot \Delta t_k)$ con $\Delta t_k = \max(0, \text{dias\_antiguedad}_k)$.
+  3. Acumulación de masa efectiva por desenlace y normalización sobre el símplex:
+     $$w_{\text{LOC}} = \sum_{k: GL_k > GV_k} w_k, \quad w_{\text{EMP}} = \sum_{k: GL_k = GV_k} w_k, \quad w_{\text{VIS}} = \sum_{k: GL_k < GV_k} w_k$$
+     $$p_{\text{local}} = \frac{w_{\text{LOC}}}{W}, \quad p_{\text{empate}} = \frac{w_{\text{EMP}}}{W}, \quad p_{\text{visita}} = \frac{w_{\text{VIS}}}{W}, \quad W = \sum_k w_k > 0$$
+  4. **Fail-Loud (Cero Mocks Sintéticos):** secuencia vacía o $W \le 0$ $\implies$ `ValueError`. La ausencia de antecedentes se gobierna por la Ley Zero-H2H `[LN-QBE-020-B]`; queda terminantemente prohibido fabricar partidos históricos.
+* **O (Output):** `H2HKernelResult` (`p_local`, `p_empate`, `p_visita`, `suma_probabilidades`, `peso_total_efectivo`) declarado en `src/models/analytics.py`.
+* **Φ (Transición):** Hacia la calibración de $\Delta_{\text{epist}}$ y la fusión híbrida de `[LN-QBE-040]`.
+* **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
+* **Trazabilidad de registro:** identificador promulgado por Decreto del Sprint 3 (enmienda D-2): el kernel decretado no podía sellarse bajo `[LN-QBE-020]` (ya materializado en `src/core/temporal.py` con Juez `abstract_test_LN_QBE_020_temporal.py`), evitando así una doble fuente de verdad sobre un nodo `[ALGO-PROTECTED]`.
+
+---
+
+
 
 ### ID: [LN-QBE-030] Métricas Sintéticas de Control y Peligro ($FCF, E_{\text{att}}$)
 
@@ -656,6 +675,31 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Token Fail-Loud de Marcador Pendiente (H4):** Si un encuentro concluyó pero la federación aún no publica los números oficiales de goles, el sistema asigna el token canónico `"MARCADOR_PENDIENTE"`, prohibiendo inventar empates `"0 - 0"`.
 
 ---
+### ID: [LN-QBE-036] Operador de Contracción Bayesiana de Forma Reciente (10 Partidos)
+
+* **Ω (Resumen):** Modelar el potencial ofensivo y defensivo combinando la evidencia reciente de alta frecuencia (últimos 10 juegos) con el ancla estructural de la temporada mediante actualización Bayesiana Normal-Normal, evitando sobrerreacciones a rachas cortas de ruido.
+* **I (Input):** Métricas 10P ($xG_{10P}, GF_{10P}, xGA_{10P}, GC_{10P}$), acumulados de temporada ($xG_{\text{macro}}, GF_{\text{macro}}$) y factor contextual de shock $Q_{\text{mod}} \in [0.90, 1.05]$.
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  0. **Guarda de Suficiencia (Fail-Loud):** si la evidencia ofensiva del par evaluado es no positiva o $\mu_{\text{liga}} \le 0$, el operador levanta `ValueError`. La suficiencia fáctica $S(\mathcal{I}_i)$ se gobierna exclusivamente en `[LN-QBE-035-B]`: el operador JAMÁS fabrica factores.
+  1. Derivación de tasas log-diferenciales recientes y macro:
+     $$A_{\text{reciente}} = \ln\left(\frac{0.65 \cdot xG_{10P} + 0.35 \cdot GF_{10P}}{\mu_{\text{liga}} / 2}\right), \quad A_{\text{macro}} = \ln\left(\frac{0.65 \cdot xG_{\text{macro}} + 0.35 \cdot GF_{\text{macro}}}{\mu_{\text{liga}} / 2}\right)$$
+     *(El mismo operador se aplica por simetría al par defensivo $xGA/GC$; el signo del factor defensivo lo legisla `[LN-QBE-035-B]` en el llamador.)*
+  2. Ponderación adaptativa por ruptura estructural:
+     $$\rho = \begin{cases}
+     0.30 & \text{si } Q_{\text{mod}} \ne 1.00 \text{ (shock verificado: prima la evidencia reciente)} \\
+     0.55 & \text{si } Q_{\text{mod}} == 1.00 \text{ (estabilidad: prima el ancla de temporada)}
+     \end{cases}$$
+  3. Contracción convexa del factor ofensivo y defensivo:
+     $$A_i^* = (1.0 - \rho) \cdot A_{\text{reciente}} + \rho \cdot A_{\text{macro}}$$
+     $$D_i^* = (1.0 - \rho) \cdot D_{\text{reciente}} + \rho \cdot D_{\text{macro}}$$
+  4. **Inyección obligatoria al Damping Hiperbólico Simétrico — `[VAULT-CORE-001]`** *(enmienda ratificada D-3: el damping NO pertenece a `[LN-QBE-040]`, que legisla la matriz Poisson 6x6)*: la compresión se delega en el canon sellado `aplicar_damping_hiperbolico(A_i^*, \sigma_{\text{liga}})` con $\kappa_{\text{damp}} = 2.5 \cdot \sigma_{\text{liga}}$ (Sección 4.12 del Tratado; materializado en `src/core/intensity_canonical_loglink.py`). **Prohibición expresa:** el símbolo $\kappa = \ln(2)/180$ de `[LN-QBE-020]` (decaimiento H2H) JAMÁS se usa como escala de damping; usar $A_{\text{amortiguado}} = \kappa_{\text{damp}} \tanh(A_i^* / \kappa_{\text{damp}})$ con $\kappa = \ln(2)/180$ colapsa todo factor a la constante $\kappa$ (corrupción silenciosa).
+* **O (Output):** `BayesianFormResult` (`a_reciente`, `a_macro`, `a_contraido`, `rho_aplicado`, `a_amortiguado`) declarado en `src/models/analytics.py`; el llamador deriva $D$ por la invocación simétrica del mismo operador.
+* **Φ (Transición):** Hacia la ecuación log-lineal de intensidades $(\lambda_H, \lambda_A)$ — `[VAULT-CORE-001]` / `[LN-QBE-040]`.
+* **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
+
+---
+
+
 
 ### ID: [LN-QBE-065] Filtro de Descarte Temprano de Ineficiencia (+EV Gate)
 

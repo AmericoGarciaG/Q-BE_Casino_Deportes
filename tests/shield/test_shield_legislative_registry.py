@@ -56,12 +56,19 @@ def test_unique_architectural_nodes_registry():
 
 
 def test_zero_hanging_variance_references():
-    """Audita que toda Ficha de Varianza citada en docs/ exista físicamente en disco."""
+    """Audita que toda Ficha de Varianza citada exista físicamente en disco.
+
+    Barrido ampliado (Decreto Sprint 3, enmienda autorizada): `docs/LOGIC.md` + `docs/ARCH.md`
+    + `tests/**/*.py`, de modo que las citas dentro de los propios Jueces queden blindadas contra
+    referencias fantasma.
+    """
+    archivos_corpus = [LOGIC_PATH, ARCH_PATH]
+    archivos_corpus.extend(sorted(Path("tests").rglob("*.py")))
+
     corpus = ""
-    if LOGIC_PATH.exists():
-        corpus += LOGIC_PATH.read_text(encoding="utf-8")
-    if ARCH_PATH.exists():
-        corpus += ARCH_PATH.read_text(encoding="utf-8")
+    for archivo in archivos_corpus:
+        if archivo.exists():
+            corpus += archivo.read_text(encoding="utf-8")
 
     # Buscar menciones a docs/DIRGEN_VARIANCE_REQUEST_*.md
     var_citations = re.findall(r'(docs/DIRGEN_VARIANCE_REQUEST_[A-Za-z0-9\._\-]+\.md)', corpus)
@@ -93,3 +100,36 @@ def test_legislated_dtos_must_be_tested_or_materialized():
 
     for dto in dtos_legislados:
         assert f"class {dto}" in schemas_code, f"🚨 DTO HUÉRFANO: {dto} está legislado pero no existe en schemas.py"
+
+
+def test_registry_covers_total_node_universe():
+    """Consolidación al 100%: todo nodo sellado en los Libros debe estar anclado en el Registro Maestro.
+
+    Barrido inverso (Decreto Sprint 3, Task 2): se extraen TODOS los encabezados de nodo publicados
+    en `docs/LOGIC.md` y `docs/ARCH.md` y se exige que cada símbolo figure en `docs/ID_REGISTRY.md`.
+    Un nodo legislado sin fila en el registro es una **ceguera de colisión** (el riesgo histórico que
+    el Paso 0 existe para eliminar): el asignador `max + 1` volvería a operar sobre una vista parcial.
+    Anclaje simbólico obligatorio (R-2): el libro dueño + el símbolo, jamás `archivo:línea` que rota.
+    """
+    registry_path = DOCS_DIR / "ID_REGISTRY.md"
+    assert registry_path.exists(), "Falta docs/ID_REGISTRY.md (Registro Maestro del Paso 0)"
+    registro = registry_path.read_text(encoding="utf-8")
+
+    nodos_logicos = re.findall(
+        r'###\s+ID:\s+\[(LN-QBE-[A-Za-z0-9_\-]+)\]', LOGIC_PATH.read_text(encoding="utf-8")
+    )
+    nodos_arquitectonicos = re.findall(
+        r'###\s+\[(ARCH-[0-9A-Za-z\.\-_]+)\]', ARCH_PATH.read_text(encoding="utf-8")
+    )
+
+    assert nodos_logicos, "docs/LOGIC.md no publica ningún nodo [LN-QBE-*]"
+    assert nodos_arquitectonicos, "docs/ARCH.md no publica ningún nodo [ARCH-*]"
+
+    universo = list(dict.fromkeys(nodos_logicos + nodos_arquitectonicos))
+    huerfanos = [nodo for nodo in universo if nodo not in registro]
+
+    assert not huerfanos, (
+        "🚨 REGISTRO INCOMPLETO (ceguera de colisión): nodos sellados sin anclaje en "
+        f"docs/ID_REGISTRY.md: {huerfanos}"
+    )
+

@@ -1226,6 +1226,16 @@ La Capa 2 encapsula la inteligencia de resolución de entidades en un paquete au
 * `src/normalization/gender_guards.py`: Implementa `[LN-QBE-095]`.
 * `src/normalization/temporal_disambiguator.py`: Implementa `[LN-QBE-094]`.
 * `src/normalization/entity_resolver.py`: Mapea jerga de quinielas (`PROGOL_GLOBAL_ALIASES`) a identidades oficiales.
+### [ARCH-1.4.26] Motor de Memoria Histórica y Kernel H2H (`src/core/sovereign/`) [ARCH-PILLAR]
+La Capa 4 aísla la matemática de memoria deportiva en dos módulos puros bajo régimen `[DIRGEN-STRICT]`:
+1. `src/core/sovereign/bayesian_form.py`: Implementa `[LN-QBE-036]`. Pureza funcional absoluta, sin dependencias de I/O ni red. El amortiguamiento se **delega** en `[VAULT-CORE-001]` (`aplicar_damping_hiperbolico`, κ_damp = 2.5·σ_liga); el κ = ln(2)/180 del decaimiento H2H queda expresamente prohibido como escala de damping.
+2. `src/core/sovereign/h2h_kernel.py`: Implementa `[LN-QBE-020-C]` — evalúa los enfrentamientos directos en el **eje localía**, aplicando el decaimiento temporal exponencial ($\kappa$-Decay $\tau = 180$ d) **reutilizado de `[LN-QBE-020]`** (`src/core/temporal.py`) sin duplicar la constante, y calcula la matriz empírica $M_{xy}^{(C)}$ sobre el símplex $\Delta^2$.
+3. **Invariante de Pureza (`[ARCH-1.4.24]` aplicado a la Capa 4):** ningún archivo de `src/core/sovereign/` puede importar `sqlalchemy`, `requests`, `playwright`, `src.storage` ni `src.ingestion` (auditoría AST en el Juez Inmutable).
+4. Actualización de `docs/ID_REGISTRY.md`: Registrar `[LN-QBE-020-C]`, `[LN-QBE-036]` y `[ARCH-1.4.26]` como sellados tras completar el sprint.
+* **Enmiendas ratificadas del Decreto Sprint 3:** D-1 (ancla legislativa real en `LOGIC.md`, tras `[LN-QBE-035-B]`), D-2 (`[LN-QBE-020-C]` en lugar de reutilizar `[LN-QBE-020]`), D-3 (damping `[VAULT-CORE-001]`), D-4 (DTOs en `src/models/analytics.py`).
+* **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
+
+
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:

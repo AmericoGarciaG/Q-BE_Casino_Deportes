@@ -50,35 +50,68 @@ def obtener_slug_club(nombre: str) -> str:
     )
     return slug
 
+# Categoría neutra legislada por `[LN-QBE-095]` (token literal; se declara aquí para evitar
+# una dependencia circular `crest_resolver -> gender_guards -> crest_resolver`).
+CATEGORIA_VARONIL_MAYOR = "VARONIL_MAYOR"
+
 # Memoria Caché In-Memory para resolución ultrarrápida (< 1ms) de escudos
 _CREST_CACHE: Dict[str, str] = {}
+
+def obtener_ruta_escudo_local(equipo_nombre: str, categoria: str = CATEGORIA_VARONIL_MAYOR) -> Optional[str]:
+    """
+    [LN-QBE-019] Nivel 1 de la escalera, categoría-consciente
+    (VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST — ALT-1 ratificada).
+
+    Para una entidad NO neutra (`FEMENIL`, `FILIAL`, `SUB20`, tokens de `[LN-QBE-095]`) se exige
+    primero el activo categorizado `/static/img/crests/{slug}-{categoria}.png`; si el activo no
+    existe en disco (o no supera el piso físico de 3 KB), degrada de forma gobernada al activo
+    plano `/static/img/crests/{slug}.png`. Devuelve `None` si ningún candidato es físicamente válido
+    (jamás fabrica archivos: la curación es competencia del pipeline HITL).
+    """
+    slug = obtener_slug_club(equipo_nombre)
+    os.makedirs(STATIC_CRESTS_DIR, exist_ok=True)
+
+    categoria_normalizada = str(categoria or "").strip().upper()
+    candidatos = []
+    if categoria_normalizada and categoria_normalizada != CATEGORIA_VARONIL_MAYOR:
+        candidatos.append(f"{slug}-{categoria_normalizada.lower()}.png")
+    candidatos.append(f"{slug}.png")
+
+    for nombre_archivo in candidatos:
+        ruta_fisica = os.path.join(STATIC_CRESTS_DIR, nombre_archivo)
+        if os.path.exists(ruta_fisica) and os.path.getsize(ruta_fisica) > 3000:
+            return f"/static/img/crests/{nombre_archivo}"
+    return None
 
 def resolver_escudo_canonico(
     equipo_nombre: str,
     fotmob_id: Optional[int] = None,
-    db: Optional[Session] = None
+    db: Optional[Session] = None,
+    categoria: str = CATEGORIA_VARONIL_MAYOR
 ) -> str:
     """
     [LN-QBE-019] Resuelve la URI de escudo bajo la escalera de precedencia legislada:
-    1. Bóveda Local (/static/img/crests/{slug}.png) con verificación física (>= 3 KB).
+    1. Bóveda Local categoría-consciente (`/static/img/crests/{slug}-{categoria}.png` para entidades
+       no neutras, con degradación gobernada a `/static/img/crests/{slug}.png`) y verificación
+       física (>= 3 KB) — ALT-1 ratificada (`VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST`).
     2. Consulta en base de datos SQLite (Team.canonical_slug y Team.name).
     3. Fallback a SVG Data URI.
     """
     if not equipo_nombre:
         return _generar_svg_fallback("QBE", "Club")
 
-    cache_key = f"{equipo_nombre}:{fotmob_id}"
+    # [GOVERNANCE-01] La categoría integra la clave de caché: sin ella, un activo varonil ya
+    # resuelto se serviría a la entidad femenil/filial homónima (envenenamiento de caché).
+    categoria_normalizada = str(categoria or CATEGORIA_VARONIL_MAYOR).strip().upper()
+    cache_key = f"{equipo_nombre}:{fotmob_id}:{categoria_normalizada}"
     if cache_key in _CREST_CACHE:
         return _CREST_CACHE[cache_key]
 
     slug = obtener_slug_club(equipo_nombre)
     os.makedirs(STATIC_CRESTS_DIR, exist_ok=True)
 
-    res_url = None
-    # Nivel 1: Verificación de archivo primario en disco
-    archivo_fisico = os.path.join(STATIC_CRESTS_DIR, f"{slug}.png")
-    if os.path.exists(archivo_fisico) and os.path.getsize(archivo_fisico) > 3000:
-        res_url = f"/static/img/crests/{slug}.png"
+    # Nivel 1: Bóveda local categoría-consciente
+    res_url = obtener_ruta_escudo_local(equipo_nombre, categoria_normalizada)
 
     if not res_url:
         # Nivel 1B: Verificación de aliases conocidos en disco

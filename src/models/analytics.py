@@ -71,3 +71,35 @@ class BreakevenThresholdsResult(BaseModel):
     denom_h2_pa: Optional[float] = None
     denom_r1: Optional[float] = None
     momio_sintetico_x2: float = Field(default=1.0, ge=1.0)
+
+
+class BayesianFormResult(BaseModel):
+    """[LN-QBE-036] Salida del Operador de Contracción Bayesiana de Forma Reciente (10 Partidos).
+
+    Régimen: `[DIRGEN-STRICT]` `[ALGO-PROTECTED]`. Factores en espacio log-espacial (E[A] = 0 por
+    construcción, coherente con `[LN-QBE-035-B]`). `a_amortiguado` aplica la compresión
+    hiperbólica sellada de `[VAULT-CORE-001]` (κ_damp = 2.5 · σ_liga); NO se reimplementa damping.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+    a_reciente: float
+    a_macro: float
+    a_contraido: float
+    rho_aplicado: float = Field(ge=0.0, le=1.0)
+    a_amortiguado: float
+
+
+class H2HKernelResult(BaseModel):
+    """[LN-QBE-020-C] Salida del Kernel H2H Empírico en Eje Localía (Generador C).
+
+    Régimen: `[DIRGEN-STRICT]` `[ALGO-PROTECTED]`. Proyección de la evidencia directa sobre el
+    símplex Δ² en el eje LOCAL / EMPATE / VISITA del fixture evaluado (el eje FAVORITO/UNDERDOG
+    permanece exclusivamente bajo `[LN-QBE-020]` / `H2HDecayResult`).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+    p_local: float = Field(ge=0.0, le=1.0)
+    p_empate: float = Field(ge=0.0, le=1.0)
+    p_visita: float = Field(ge=0.0, le=1.0)
+    suma_probabilidades: float
+    peso_total_efectivo: float = Field(ge=0.0)

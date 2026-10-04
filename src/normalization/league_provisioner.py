@@ -153,8 +153,14 @@ def provisionar_competicion_y_clubes_jit(
                 if semilla and not es_uri_remota(semilla):
                     crest_url = semilla  # Sólo rutas locales/Data-URI: anti-hotlinking.
                 if not crest_url:
+                    # [LN-QBE-095] + ALT-1 (VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST): la escalera
+                    # sellada recibe la CATEGORÍA de la entidad; para ramas no neutras exige primero
+                    # el activo categorizado y degrada de forma gobernada al activo plano.
                     crest_url = resolver_escudo_canonico(
-                        entidad.canonical_name, fotmob_id=fotmob_team_id, db=tx
+                        entidad.canonical_name,
+                        fotmob_id=fotmob_team_id,
+                        db=tx,
+                        categoria=entidad.category,
                     )
 
             fila = tx.query(Team).filter(Team.fotmob_team_id == fotmob_team_id).first()
