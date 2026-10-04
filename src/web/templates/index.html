@@ -417,7 +417,7 @@
                         <div class="cc-tasks">
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_deportivo')" title="Qué hace: Extrae la temporada completa (J1 a J17) desde FotMob y reconstruye tablas históricas. Cuándo usar: Al iniciar el sistema o tras disputarse una jornada para actualizar marcadores y clasificaciones.">🏟️ Centinela Deportivo · FotMob (J1-J17)</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_mercado')" title="Qué hace: Escanea cuotas vivas en Caliente y Betway para la jornada activa, calculando arbitrajes y deltas. Cuándo usar: Previo a operar la Mesa de Apuestas.">💰 Centinela de Mercado · Caliente + Betway</button>
-                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_progol')" title="Qué hace: Descarga el concurso oficial vigente de miloteria.mx (21 casillas). Cuándo usar: Cada semana al publicarse la nueva quiniela.">🎟️ Centinela Progol · Concurso #2352</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_progol')" title="Qué hace: Descarga el concurso oficial vigente de miloteria.mx (21 casillas). Cuándo usar: Cada semana al publicarse la nueva quiniela.">🎟️ Centinela Progol · Concurso #2353</button>
                         </div>
                     </div>
 
@@ -426,6 +426,7 @@
                         <div class="cc-tasks">
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('sincronizar_activos')" title="Qué hace: Descarga y cachea los escudos y logos oficiales de los clubes. Cuándo usar: Tras una purga o al incorporar clubes nuevos; es idempotente y no altera datos deportivos.">🖼️ Sincronizar Escudos y Logos</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')" title="Qué hace: Purga atómica de snapshots, partidos y estados en SQLite. Qué implica: Deja la base de datos en blanco (preserva ligas y equipos). Cómo se restaura: Pulsando el botón maestro 'Ejecutar Cadena de Ingesta Total'.">🧹 Purga Selectiva de Snapshots</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purga_total_db')" title="Qué hace: Purga TOTAL de la bóveda 3NF [ARCH-1.4.29] bajo una única Unit of Work: vacía las 15 tablas (ligas, equipos, partidos, snapshots, distribuciones soberanas, slates y bitácoras) preservando intacto el libro mayor de tokens llm_token_ledger. Qué implica: Deja la base virgen, sin catálogo alguno. Cómo se restaura: Pulsando el botón maestro 'Ejecutar Cadena de Ingesta Total' (Deportivo ➔ Mercado ➔ Progol).">🧨 Purga Total de la Bóveda 3NF</button>
                         </div>
                     </div>
 

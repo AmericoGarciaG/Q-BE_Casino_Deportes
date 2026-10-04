@@ -163,7 +163,11 @@
 | `[ARCH-1.4.26]` | ARCH | `docs/ARCH.md` | Motor de Memoria Histórica y Kernel H2H (`src/core/sovereign/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.27]` | ARCH | `docs/ARCH.md` | Módulo de Servicios de Composición y Orquestación (`src/services/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.28]` | ARCH | `docs/ARCH.md` | Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.29]` | ARCH | `docs/ARCH.md` | Purga Total In-Process de la Bóveda 3NF (Centro de Control) [ARCH-PILLAR] | SELLADO |
+
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
+
 | `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 

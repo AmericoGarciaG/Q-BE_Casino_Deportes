@@ -15,13 +15,19 @@ comando resultante se materializa SIEMPRE con `sys.executable` + rutas internas 
     `IngestionCoordinator`, sin subprocesos externos frágiles. La evidencia fáctica entra por
     puerto (`concurso_num`) y su ausencia es FAIL-LOUD ([GOVERNANCE-01], `[LN-QBE-096]`):
     JAMÁS se fabrica un concurso, un emparejamiento ni una probabilidad.
+
+[ARCH-1.4.29] PURGA TOTAL IN-PROCESS: la whitelist incorpora `purga_total_db`, cuyo plano de
+ejecución NO es una secuencia de scripts sino un ejecutor gobernado que corre dentro de este
+mismo intérprete bajo una ÚNICA `PersistenceGateway.write_transaction()` ([VAULT-DATA-001]).
+Su manifiesto es el conteo auditable de filas eliminadas por tabla; `llm_token_ledger` queda
+exento por valor histórico irrecuperable (costo fiduciario).
 """
 
 import os
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -41,6 +47,21 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 # sin fabricar salida alguna.
 TIMEOUT_TAREA_SEGUNDOS = 900
 
+# ── [ARCH-1.4.29] CANAL DE EJECUCIÓN Y EXENCIONES DE LA PURGA TOTAL ──────────
+# `canal = CANAL_IN_PROCESS` ⇒ la tarea NO se materializa como script: su plano de ejecución es
+# un ejecutor gobernado que corre en este mismo intérprete. El canal `subprocess` conserva la
+# doctrina histórica de [ARCH-1.4.12] (intérprete activo + rutas internas, cero shell).
+CANAL_SUBPROCESS = "subprocess"
+CANAL_IN_PROCESS = "in_process"
+
+# Identificador certificado de la purga total de la bóveda (ver `purgar_boveda_3nf`).
+TAREA_PURGA_TOTAL_DB = "purga_total_db"
+
+# [ARCH-1.4.29] Tablas EXENTAS de la purga total: el libro mayor de consumo de tokens LLM es la
+# única entidad con valor histórico irrecuperable (costo fiduciario de las llaves Gemini); su
+# borrado destruiría evidencia de gasto que ninguna re-ingesta puede reconstruir.
+TABLAS_EXENTAS_PURGA: tuple = ("llm_token_ledger",)
+
 # ── [ARCH-1.4.12] WHITELIST ESTRICTA DE SEGURIDAD ────────────────────────────
 # Cada identificador certificado mapea a una secuencia de scripts canónicos del repositorio.
 TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
@@ -53,7 +74,7 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
         "comandos": [["scripts", "daemons", "centinela_mercado.py"]],
     },
     "centinela_progol": {
-        "descripcion": "Daemon del concurso Progol #2352 (miloteria.mx)",
+        "descripcion": "Daemon del concurso Progol #2353 (miloteria.mx)",
         "comandos": [["scripts", "daemons", "centinela_progol.py"]],
     },
     "sincronizar_activos": {
@@ -84,10 +105,16 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
         "descripcion": "Reset selectivo de snapshots volátiles (preserva catálogo)",
         "comandos": [["scripts", "utilidades", "purgar_base_datos.py"]],
     },
+    TAREA_PURGA_TOTAL_DB: {
+        "descripcion": "[ARCH-1.4.29] Purga total de la bóveda 3NF (exenta: llm_token_ledger)",
+        "comandos": [],
+        "canal": CANAL_IN_PROCESS,
+    },
 }
 
 # ── [ARCH-1.4.28] MODOS DE DESPACHO Y PUENTE INTEGRADO (CAPA 5) ───────────────
-# La whitelist de [ARCH-1.4.12] permanece INTACTA (9 tareas). `TAREAS_PIPELINE_INTEGRADO`
+# La whitelist de [ARCH-1.4.12] (9 tareas) se amplía a 10 con la purga total in-process sellada
+# por [ARCH-1.4.29]; ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
 # sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
 # hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.
 MODO_DESPACHO_SUBPROCESS = "subprocess"
@@ -150,6 +177,17 @@ def ejecutar_tarea_autorizada(task_id: str) -> AdminTaskResponse:
     """
     especificacion = validar_tarea_solicitada(task_id)
     identificador = str(task_id).strip()
+
+    # [ARCH-1.4.29] FAIL-LOUD: una tarea in-process JAMÁS se degrada a un subproceso vacío. Sin
+    # comandos canónicos no hay nada que despachar, y devolver un "éxito" sin efecto sería una
+    # falsa conformidad ([GOVERNANCE-01]).
+    if not especificacion.get("comandos"):
+        raise ValueError(
+            f"La tarea '{identificador}' no publica comandos canónicos de subproceso "
+            f"[ARCH-1.4.29]. Su plano de ejecución es in-process: "
+            f"{', '.join(sorted(EJECUTORES_IN_PROCESS))}."
+        )
+
     total_comandos = len(especificacion["comandos"])
 
     bloques: List[str] = []
@@ -193,6 +231,77 @@ def ejecutar_tarea_autorizada(task_id: str) -> AdminTaskResponse:
         output="\n".join(bloques),
         duration_s=round(time.perf_counter() - t0, 3),
     )
+
+
+# ── [ARCH-1.4.29] PURGA TOTAL DE LA BÓVEDA 3NF (EJECUTOR IN-PROCESS) ─────────
+# Régimen [HÍBRIDO DUAL-TRACK]: el ORDEN de borrado no se inventa ni se transcribe a mano. Emana
+# de la topología de dependencias declarada por el propio esquema ORM
+# (`Base.metadata.sorted_tables`, inverso) para respetar las Foreign Keys de los 3FN. Una lista
+# manual de 15 tablas rotaría en silencio al agregar una entidad nueva ([GOVERNANCE-01]).
+def purgar_boveda_3nf(session: Any) -> Dict[str, int]:
+    """
+    [ARCH-1.4.29] Vaciado de la bóveda: borra TODAS las tablas del esquema ORM salvo las
+    exentas (`TABLAS_EXENTAS_PURGA`) y devuelve el conteo auditable de filas por tabla.
+
+    El llamador es DUEÑO de la transacción: esta función NO hace commit. En producción se invoca
+    SIEMPRE dentro de `PersistenceGateway.write_transaction()` ([VAULT-DATA-001]), de modo que la
+    purga sea una única Unit of Work (todo o nada): cero estados intermedios huérfanos.
+    """
+    from src.storage.database import Base
+
+    conteos: Dict[str, int] = {}
+    for tabla in reversed(Base.metadata.sorted_tables):
+        if tabla.name in TABLAS_EXENTAS_PURGA:
+            continue
+        resultado = session.execute(tabla.delete())
+        conteos[tabla.name] = int(resultado.rowcount or 0)
+    return conteos
+
+
+def ejecutar_purga_total_boveda_3nf() -> AdminTaskResponse:
+    """
+    [ARCH-1.4.29] Despacho in-process de la purga total bajo una ÚNICA Unit of Work.
+
+    Cero subprocesos: el ejecutor vive en el mismo intérprete de la Web y su salida es el
+    manifiesto auditable de filas eliminadas por tabla (evidencia fáctica, no relato).
+    """
+    identificador = TAREA_PURGA_TOTAL_DB
+    validar_tarea_solicitada(identificador)
+
+    t0 = time.perf_counter()
+
+    # Import diferido: el adaptador de persistencia se resuelve en la primera operación real.
+    from src.storage.gateway import PersistenceGateway
+
+    with PersistenceGateway().write_transaction() as tx:
+        conteos = purgar_boveda_3nf(tx)
+
+    bloques: List[str] = [
+        "$ [in-process 1/1] purgar_boveda_3nf() "
+        "→ PersistenceGateway.write_transaction() (Unit of Work única)",
+        "── manifiesto de purga total 3NF [ARCH-1.4.29] ──",
+    ]
+    for nombre_tabla in sorted(conteos):
+        bloques.append(f"   - {nombre_tabla}: {conteos[nombre_tabla]} filas eliminadas")
+    bloques.append(
+        "🔒 Tablas exentas preservadas: "
+        + ", ".join(f"{nombre}=INTACTA" for nombre in TABLAS_EXENTAS_PURGA)
+    )
+    bloques.append("── exit_code = 0 ──")
+
+    return AdminTaskResponse(
+        task_id=identificador,
+        exit_code=0,
+        output="\n".join(bloques),
+        duration_s=round(time.perf_counter() - t0, 3),
+    )
+
+
+# [ARCH-1.4.29] Ruteo de tareas certificadas cuyo plano de ejecución es in-process. Toda tarea
+# ausente de este mapa se despacha por el canal canónico de subprocesos.
+EJECUTORES_IN_PROCESS: Dict[str, Callable[[], AdminTaskResponse]] = {
+    TAREA_PURGA_TOTAL_DB: ejecutar_purga_total_boveda_3nf,
+}
 
 
 def ejecutar_tarea_integrada(
@@ -253,6 +362,8 @@ def ejecutar_tarea_administrativa(req: AdminTaskRequest) -> AdminTaskResponse:
     try:
         if modo == MODO_DESPACHO_INTEGRADO:
             return ejecutar_tarea_integrada(req.task_id, concurso_num=req.concurso_num)
+        if str(req.task_id or "").strip() in EJECUTORES_IN_PROCESS:
+            return EJECUTORES_IN_PROCESS[str(req.task_id).strip()]()
         return ejecutar_tarea_autorizada(req.task_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))

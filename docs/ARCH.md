@@ -776,6 +776,26 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 > de sus cuatro sensores se certifica por salida cruda de `pytest` y queda supeditado a la
 > autorización de la Tríada para el Paso 3).
 
+### [ARCH-1.6.21] Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR]
+* **Defecto extirpado (evidencia fáctica 2026-10-04):** el sensor de mercado filtraba `fixtures_snapshots.league_id` con el identificador de la fuente externa (`fotmob_id = 262`), pero la FK persistida es `leagues.id`. Con la bóveda reconstruida (`leagues = (id=1, 'Liga MX', fotmob_id=262)`) la lectura devolvía **vacío** y el daemon abortaba con «La bóveda 3NF no registra jornadas» pese a registrar 17 snapshots (J1–J17). El defecto era de **frontera de lectura**, jamás de datos: cero invención de jornadas.
+* **Frontera de Competición:** `FRONTERA_LIGA_MX_ID = 262` en `scripts/daemons/centinela_mercado.py`. La jornada activa y el slate del sensor se resuelven EXCLUSIVAMENTE contra Liga MX: una jornada homónima de otra liga de la bóveda (p. ej. Argentina J8) NUNCA abre la ventanilla.
+* **Traducción obligatoria a la PK interna:** todo consumo sobre `fixtures_snapshots` traduce la frontera al `leagues.id` con el criterio dual `(fotmob_id == frontera) | (id == frontera)` (`_pk_liga_de_frontera`), tolerando las dos convenciones canónicas de registro (seeder `src/storage/seeder.py`, aprovisionador JIT `src/ingestion/progol_resolver.py`). El `league_id` persistido es **FK**: no es el identificador de la fuente externa.
+* **Vista multi-liga explícita:** `cargar_fixtures_por_jornada(league_id=None)` es la única vía multi-liga; por defecto la lectura queda acotada a la frontera de competencia.
+* **Vocabulario canónico de ventanilla:** `PROGRAMADO` / `EN_CURSO` (+ alias de normalización defensiva) y la etiqueta `Fecha Lejana` ($\Delta t > 14$ días) gobiernan la apertura; ningún estado nuevo se inventa en el sensor.
+* **[SHIELD]:** `tests/shield/test_shield_market_resolution_and_purge.py` — Twin-Test hermético `[GOV-TEST-01]` (SQLite efímero en memoria inyectado en el singleton del Gateway): 3 leyes que certifican la traducción de frontera, la tolerancia a la convención `id == fotmob_id` y la intactidad de la vista multi-liga.
+
+> **Trazabilidad de registro (VARIANCE-01) — Dictamen de Cierre 2026-10-04:** el identificador
+> `[ARCH-1.6.21]` se promulga al resolver una **colisión semántica detectada en el Paso 0**: la
+> cláusula de frontera del sensor de mercado venía citada como `[ARCH-1.6.15-C]`, sufijo que el
+> Registro Maestro reserva con exclusividad a *Apertura Dinámica de Jornada en Live Board*
+> (`sync_service.py`). `[ARCH-1.6.15-C]` **no se altera** (permanece sellado en su cláusula y en sus
+> citas) y la frontera del sensor se remapea a `[ARCH-1.6.21]`, anclada a sus nodos matrices sellados
+> `[ARCH-1.6.15]` (*Resolución Dinámica de Jornada Activa en Sensores de Mercado*) y
+> `[ARCH-1.6.15-B]` (*Desacoplamiento Cronológico en Sensores de Mercado*), sin tocar una sola coma de
+> sus planos. Asignación por `max(familia 1.6.x) + 1` sobre el registro completo (último sellado:
+> `[ARCH-1.6.20]`); los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no asignados**
+> (cero reutilización). Juez Inmutable asociado: `tests/shield/test_shield_market_resolution_and_purge.py`.
+
 ### [ARCH-1.5.12] Aprovisionador JIT de Ligas y Bóveda Soberana de Activos de Clubes (`src/normalization/`) [ARCH-PILLAR]
 * **Paquete sellado:** `src/normalization/` — `__init__.py`, `gender_guards.py` (implementa `[LN-QBE-095]`), `temporal_disambiguator.py` (implementa `[LN-QBE-094]`), `entity_resolver.py` (jerga oficial → identidad), `asset_vault_service.py` y `league_provisioner.py`.
 * **Aprovisionador JIT:** `provisionar_competicion_y_clubes_jit(fotmob_league_id, league_name, country, clubes, session=None, mu_liga=None, season_id=None, season_year=None, season_name=None)` compone EXCLUSIVAMENTE APIs selladas: `registrar_liga_descubierta_si_no_existe()` (`[ARCH-1.4.21]`, *cero ligas zombis*), la convención 3NF `Competition.id = f"FOTMOB_{fotmob_league_id}"` y `macro_gamma_home = 0.15` (`[ARCH-1.5.1]` / `[ARCH-1.6.19-B]`), μ macro desde la propiedad gobernada `League.mu_liga` (`[LN-QBE-089]`) y la identidad categorizada de cada club (`[LN-QBE-095]`). El registro es **idempotente** (clave `fotmob_league_id` / `fotmob_team_id`) y **transaccional** (`write_transaction()` del Gateway, o la sesión del llamador si se provee).
@@ -1267,6 +1287,21 @@ def sincronizar_progol_pipeline_completo(
 * **Seguridad y Whitelist:** Se preserva de forma estricta la lista blanca de 9 tareas de `[ARCH-1.4.12]`.
 * **[SHIELD]:** `tests/shield/test_shield_sprint5_domain_reconnection.py`
 
+
+
+### [ARCH-1.4.29] Purga Total In-Process de la Bóveda 3NF (Centro de Control) [ARCH-PILLAR]
+* **Ubicación:** `src/web/routes/admin_tasks.py` (ejecutor `purgar_boveda_3nf`) y `src/web/templates/index.html` (botón *Activos y Mantenimiento 3NF*).
+* **Enmienda de whitelist:** la whitelist de `[ARCH-1.4.12]` pasa de **9 a 10 tareas** con el identificador `purga_total_db`. Es la única ampliación autorizada: ninguna otra tarea se incorpora.
+* **Canal de ejecución in-process (`CANAL_IN_PROCESS`):** la tarea NO se materializa como subproceso (`comandos = []`). Su plano es un ejecutor gobernado dentro del mismo intérprete de la Web; despacharla por el canal canónico de subprocesos levanta `ValueError` **FAIL-LOUD** (jamás un "éxito" sin efecto, `[GOVERNANCE-01]`).
+* **Atomicidad ([VAULT-DATA-001]):** la purga corre dentro de una ÚNICA `PersistenceGateway.write_transaction()` (Unit of Work con commit/rollback automático): cero estados intermedios huérfanos. El orden de borrado NO se transcribe a mano: emana de `reversed(Base.metadata.sorted_tables)`, inverso topológico de la propia topología ORM, de modo que las claves foráneas de los 3FN nunca se violan y toda entidad futura queda cubierta sin tocar el ejecutor.
+* **Exención fiduciaria:** `llm_token_ledger` (libro mayor de consumo de tokens LLM) queda **EXENTO** (`TABLAS_EXENTAS_PURGA`): es la única entidad con valor histórico irrecuperable (costo fiduciario de las llaves Gemini) y su borrado no es reconstruible por re-ingesta.
+* **Manifiesto auditable (O):** la salida publicada es el conteo de filas eliminadas por tabla más la constancia de las tablas exentas preservadas (`<tabla>=INTACTA`). Evidencia fáctica, no relato.
+* **[SHIELD]:** `tests/shield/test_shield_purga_total_db.py`
+
+> **Trazabilidad de registro (VARIANCE-01) — Purga Total:** el identificador `[ARCH-1.4.29]` se
+> promulga conforme al protocolo del `docs/ID_REGISTRY.md` (`max(familia) + 1` sobre el registro
+> completo) y queda anclado al libro dueño (`docs/ARCH.md`) con estatus **SELLADO**. Sin
+> reutilización: los nodos sellados de la familia `1.4.x` permanecen inmutables.
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

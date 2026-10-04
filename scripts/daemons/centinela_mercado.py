@@ -171,8 +171,48 @@ def extraer_mercado_viva(partidos_slate: List[Dict[str, Any]], operador: str = "
 # [GOVERNANCE-01] Cero jornadas quemadas en el intérprete de comandos: la jornada
 # del sensor de mercado emana de la bóveda 3NF, nunca de un valor por defecto.
 
+# [ARCH-1.6.21] VOCABULARIO CANÓNICO DE ESTADO DE PARTIDO (única fuente: la bóveda 3NF).
+# `PROGRAMADO` = ventanilla futura abierta; `EN_CURSO` = ventanilla viva. Las variantes
+# anglosajonas de sensores externos entran como ALIAS de normalización defensiva: jamás como
+# estados nuevos inventados por este daemon ([GOVERNANCE-01]).
+ESTADOS_VENTANILLA_ABIERTA: frozenset = frozenset({"PROGRAMADO", "EN_CURSO"})
+ALIAS_ESTADO_VENTANILLA_ABIERTA: frozenset = frozenset({"SCHEDULED", "IN_PLAY"})
+
+# [ARCH-1.6.15-B] Etiqueta canónica de la cartelera reprogramada fuera del horizonte de
+# ventanilla ($\Delta t > 14$ días, `docs/LOGIC.md:551`): una Fecha Lejana NO abre ventanilla.
+ETIQUETA_FECHA_LEJANA = "Fecha Lejana"
+
+# [ARCH-1.6.21] FRONTERA DE COMPETENCIA: la jornada activa del sensor de mercado se resuelve
+# EXCLUSIVAMENTE contra la Liga MX (`fotmob_id` = 262). Sin esta frontera, la primera jornada con
+# cartelera abierta podía emanar de OTRA liga de la bóveda (contaminación multi-liga), y la
+# cartelera leída para esa jornada no sería la de la competición objetivo.
+FRONTERA_LIGA_MX_ID = 262
+
+
+def _estado_abre_ventanilla(partido: Optional[Dict[str, Any]]) -> bool:
+    """[ARCH-1.6.21] ¿El estado del partido pertenece al vocabulario canónico de ventanilla?"""
+    estado = str((partido or {}).get("estado", "") or "").strip().upper()
+    return estado in ESTADOS_VENTANILLA_ABIERTA or estado in ALIAS_ESTADO_VENTANILLA_ABIERTA
+
+
+def es_cartelera_inmediata(partido: Optional[Dict[str, Any]]) -> bool:
+    """[ARCH-1.6.15-B] Partido vivo de ventanilla: estado de apertura y fecha NO lejana."""
+    if not _estado_abre_ventanilla(partido):
+        return False
+    sub_badge = str((partido or {}).get("sub_badge") or "").strip()
+    return sub_badge != ETIQUETA_FECHA_LEJANA
+
+
 def resolver_jornada_activa_dinamica(fixtures_por_jornada: Dict[int, List[Dict[str, Any]]]) -> Optional[int]:
-    """[ARCH-1.6.15-B] Resuelve la jornada con cartelera regular abierta inmediata (ignora fechas lejanas)."""
+    r"""
+    [ARCH-1.6.15-B / ARCH-1.6.21] Resuelve la jornada con cartelera regular abierta inmediata
+    (ignora fechas lejanas).
+
+    Precedencia determinista: (1) la primera jornada con $\ge 3$ partidos de ventanilla abierta
+    inmediata; (2) la primera jornada con cualquier partido de ventanilla abierta; (3) la última
+    jornada registrada. `None` sólo si la bóveda no registra jornada alguna ([GOVERNANCE-01]:
+    cero invención de jornadas).
+    """
     if not fixtures_por_jornada:
         return None
 
@@ -181,43 +221,63 @@ def resolver_jornada_activa_dinamica(fixtures_por_jornada: Dict[int, List[Dict[s
     # 1. Buscar la jornada que tenga una cartelera regular activa inmediata (no lejana)
     for jornada in jornadas:
         partidos = fixtures_por_jornada.get(jornada) or []
-        partidos_inmediatos = [
-            p for p in partidos
-            if str((p or {}).get("estado", "")) == "PROGRAMADO"
-            and (p or {}).get("sub_badge") != "Fecha Lejana"
-        ]
+        partidos_inmediatos = [p for p in partidos if es_cartelera_inmediata(p)]
         # Si tiene partidos programados en la ventana corriente, es la jornada viva de ventanilla
         if len(partidos_inmediatos) >= 3:
             return jornada
 
-    # 2. Fallback: última jornada registrada
+    # 2. Fallback: primera jornada con cartelera de ventanilla abierta
     for jornada in jornadas:
         partidos = fixtures_por_jornada.get(jornada) or []
-        if any(str((p or {}).get("estado", "")) == "PROGRAMADO" for p in partidos):
+        if any(_estado_abre_ventanilla(p) for p in partidos):
             return jornada
 
     return jornadas[-1]
 
 
-def cargar_fixtures_por_jornada(league_id: Optional[int] = None) -> Dict[int, List[Dict[str, Any]]]:
+def _pk_liga_de_frontera(session: Any, frontera_id: int) -> int:
+    """[ARCH-1.6.21] Traduce la FRONTERA de competencia (FotMob 262) a la PK interna de `leagues`.
+
+    `FixtureSnapshot.league_id` es la FK hacia `leagues.id`, mientras la frontera de competencia se
+    declara con el identificador de FotMob. Sin esta traducción la lectura devuelve vacío aunque la
+    bóveda registre la temporada entera, y el sensor de mercado aborta creyendo que no hay jornadas.
+    El criterio es el MISMO dual ya usado por `actualizar_cuotas_en_sqlite`, el tablero de mercado y
+    `src/web/routes/sovereign.py`: `(fotmob_id == frontera) | (id == frontera)`, que tolera ambas
+    convenciones canónicas de registro (seeder `src/storage/seeder.py`, JIT `src/ingestion/progol_resolver.py`).
+    """
+    fila = (
+        session.query(League.id)
+        .filter((League.fotmob_id == frontera_id) | (League.id == frontera_id))
+        .first()
+    )
+    return int(fila[0]) if fila and fila[0] is not None else int(frontera_id)
+
+
+def cargar_fixtures_por_jornada(league_id: Optional[int] = FRONTERA_LIGA_MX_ID) -> Dict[int, List[Dict[str, Any]]]:
     """
     [ARCH-1.6.4] Lector puro de la bóveda 3NF: agrupa los fixtures persistidos por
     jornada para alimentar la resolución dinámica [ARCH-1.6.15]. Cero red, cero scrape.
+
+    [ARCH-1.6.21] Por defecto acota a la FRONTERA DE COMPETENCIA (Liga MX 262); `league_id=None`
+    es la única vía para una vista multi-liga explícita. La frontera se traduce a la PK interna de
+    `leagues` antes de filtrar porque la FK persistida es `leagues.id`, no el `fotmob_id`.
     """
     gateway = PersistenceGateway()
     por_jornada: Dict[int, List[Dict[str, Any]]] = {}
 
     with gateway.read_session() as session:
+        filtro_liga = None if league_id is None else _pk_liga_de_frontera(session, int(league_id))
+
         query = session.query(FixtureSnapshot.matchday).distinct()
-        if league_id is not None:
-            query = query.filter(FixtureSnapshot.league_id == league_id)
+        if filtro_liga is not None:
+            query = query.filter(FixtureSnapshot.league_id == filtro_liga)
 
         jornadas = sorted({int(j[0]) for j in query.all() if j[0] is not None})
 
         for jornada in jornadas:
             snap_query = session.query(FixtureSnapshot).filter(FixtureSnapshot.matchday == jornada)
-            if league_id is not None:
-                snap_query = snap_query.filter(FixtureSnapshot.league_id == league_id)
+            if filtro_liga is not None:
+                snap_query = snap_query.filter(FixtureSnapshot.league_id == filtro_liga)
             snap = snap_query.order_by(FixtureSnapshot.updated_at.desc()).first()
             por_jornada[jornada] = list(snap.matches_json) if (snap and snap.matches_json) else []
 
@@ -231,7 +291,7 @@ def actualizar_cuotas_en_sqlite(jornada: int, dict_cuotas: Dict[str, List[Dict[s
     partidos_procesados = []
 
     with gateway.write_transaction() as tx:
-        league = tx.query(League).filter((League.fotmob_id == 262) | (League.id == 262)).first()
+        league = tx.query(League).filter((League.fotmob_id == FRONTERA_LIGA_MX_ID) | (League.id == FRONTERA_LIGA_MX_ID)).first()
         if not league:
             raise RuntimeError("Liga MX no encontrada en SQLite.")
 
@@ -435,10 +495,14 @@ def main():
         # [ARCH-1.6.15] Cero jornadas quemadas: el override manual (`--jornada`) tiene
         # precedencia; en su ausencia la jornada activa emana de la bóveda 3NF (la primera
         # jornada que registre partidos en estado PROGRAMADO).
+        # [ARCH-1.6.21] La lectura va acotada a la FRONTERA DE COMPETENCIA (Liga MX 262):
+        # una jornada homónima de otra liga (p. ej. Argentina J8) NUNCA puede abrir la ventanilla.
         if args.jornada is not None:
             jornada_activa = args.jornada
         else:
-            jornada_activa = resolver_jornada_activa_dinamica(cargar_fixtures_por_jornada())
+            jornada_activa = resolver_jornada_activa_dinamica(
+                cargar_fixtures_por_jornada(league_id=FRONTERA_LIGA_MX_ID)
+            )
 
         if jornada_activa is None:
             logger.error("La bóveda 3NF no registra jornadas. Corre primero centinela_deportivo.py.")
@@ -448,7 +512,20 @@ def main():
 
         gateway = PersistenceGateway()
         with gateway.read_session() as session:
-            fix_snap = session.query(FixtureSnapshot).filter(FixtureSnapshot.matchday == jornada_activa).order_by(FixtureSnapshot.updated_at.desc()).first()
+            # [ARCH-1.6.21] Slate acotado a la frontera de competencia: el snapshot más reciente
+            # DE LA LIGA MX para esa jornada (jamás el de otra liga con el mismo matchday).
+            liga_objetivo = session.query(League).filter(
+                (League.fotmob_id == FRONTERA_LIGA_MX_ID) | (League.id == FRONTERA_LIGA_MX_ID)
+            ).first()
+
+            if not liga_objetivo:
+                logger.error(f"Liga MX ({FRONTERA_LIGA_MX_ID}) no encontrada en la bóveda 3NF. Corre primero centinela_deportivo.py.")
+                return
+
+            fix_snap = session.query(FixtureSnapshot).filter(
+                FixtureSnapshot.league_id == liga_objetivo.id,
+                FixtureSnapshot.matchday == jornada_activa
+            ).order_by(FixtureSnapshot.updated_at.desc()).first()
 
         if not fix_snap or not fix_snap.matches_json:
             logger.error(f"No hay partidos en SQLite para Jornada {jornada_activa}. Corre primero centinela_deportivo.py.")

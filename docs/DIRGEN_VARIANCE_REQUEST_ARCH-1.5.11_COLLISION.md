@@ -1,8 +1,0 @@
-# 📋 FICHA DE VARIANZA: REMAPEO POR COLISIÓN DE NODO ARCH-1.5.11 (SPRINT 2)
-**ID:** `VAR-2026-ARCH-1.5.11`  
-**ESTADO:** `RATIFICADO POR DECRETO`  
-**COORDENADAS:** `docs/ARCH.md` — Nodo sellado en L1204 (`[ARCH-1.5.11] Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES)`), materializado en `src/ingestion/progol_resolver.py` (L25) y `scripts/daemons/centinela_progol.py` (L31).  
-**DESCRIPCIÓN:** El prompt arquitectónico de SPRINT 2 Capa 2 propuso `[ARCH-1.5.11]` para el *Aprovisionador JIT de Ligas y Bóveda Soberana*. El identificador ya se encontraba sellado en la familia `1.5.x` en una posición no contigua al bloque `1.5.0–1.5.10` (L343–L737), lo que reprodujo la trampa de muestreo parcial del corpus (colisión detectada en el pre-vuelo de Paso 0, 4/4 reproducciones).  
-**RESOLUCIÓN:** Por axioma de **cero reutilización** de identificadores canónicos, el nodo sellado en L1204 conserva la propiedad indisputable de `[ARCH-1.5.11]`. El *Aprovisionador JIT de Ligas y Bóveda de Activos de Clubes* se remapea formalmente a `[ARCH-1.5.12]` (primer identificador libre verificado por auditoría de unicidad: 0 coincidencias en `docs/`, `src/`, `tests/`, `scripts/`).  
-**REMAPEO DE REFERENCIAS:** 8 referencias textuales migradas a `[ARCH-1.5.12]` — `docs/LOGIC.md` (nodo `[LN-QBE-095]`, campo Φ), docstring y asertos del Juez Inmutable `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`. Ninguna referencia de `src/` ni de `scripts/` apuntaba al nodo nuevo bajo `1.5.11`.  
-**CRITERIO FIDUCIARIO:** Preservación matemática y normativa intacta; cero borrado de contenido (sólo remapeo de identificador + nota de trazabilidad inmutable).

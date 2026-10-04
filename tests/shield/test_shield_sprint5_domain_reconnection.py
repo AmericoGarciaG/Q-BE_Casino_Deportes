@@ -20,12 +20,14 @@ def test_arch_1_4_28_admin_tasks_whitelist_and_coordinator_wiring():
     """Audita que admin_tasks.py reconozca IngestionCoordinator y mantenga la whitelist."""
     from src.web.routes.admin_tasks import TAREAS_PERMITIDAS
 
-    # Verificar que la whitelist de 9 tareas sigue intacta
+    # Verificar que la whitelist de 10 tareas sigue intacta (9 de [ARCH-1.4.12] + la purga
+    # total in-process sellada por [ARCH-1.4.29]).
     assert "cadena_ingesta_total" in TAREAS_PERMITIDAS
     assert "centinela_deportivo" in TAREAS_PERMITIDAS
     assert "centinela_mercado" in TAREAS_PERMITIDAS
     assert "centinela_progol" in TAREAS_PERMITIDAS
-    assert len(TAREAS_PERMITIDAS) == 9
+    assert "purga_total_db" in TAREAS_PERMITIDAS
+    assert len(TAREAS_PERMITIDAS) == 10
 
     # Auditar AST de admin_tasks.py para confirmar cableado del coordinador
     admin_tasks_path = Path("src/web/routes/admin_tasks.py")

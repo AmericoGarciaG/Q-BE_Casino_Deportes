@@ -55,7 +55,7 @@ En componentes bajo `[DIRGEN-STRICT]`, si una prueba falla o el intérprete arro
 
 ### 🔄 BUCLE DE AUDITORÍA REFLEXIVA (DEFINITION OF DONE)
 Para cerrar cualquier tarea:
-1. **The Shield en Verde:** `pytest tests/shield/ -v` retorna `EXIT CODE 0`. Presupuesto de rendimiento armonizado (Enmienda de SLA, Decreto 2026-10-04): módulos unitarios puros en aislamiento $< 5.0\text{s}$ ($< 0.2\text{s}$ cada uno en frío); **Suite Completa de The Shield (231+ jueces síncronos, hermética): $\le 20.0\text{s}$ en frío / $\le 12.0\text{s}$ en caliente**.
+1. **The Shield en Verde:** `pytest tests/shield/ -v` retorna `EXIT CODE 0`. Presupuesto de rendimiento armonizado (Enmienda de SLA, Decreto 2026-10-04): módulos unitarios puros en aislamiento $< 5.0\text{s}$ ($< 0.2\text{s}$ cada uno en frío); **Suite Completa de The Shield (240+ jueces síncronos, hermética): $\le 25.0\text{s}$ en frío / $\le 21.0\text{s}$ en caliente** (presupuesto armonizado por Decreto del Director, 2026-10-04, tras certificar 24.13 s en frío / 20.84 s en caliente: el costo dominante es import/colección de modelos Pydantic V2 + playwright, no la ejecución de los jueces).
 2. **Cero Mocks en Producción:** Cumplimiento de `[GOVERNANCE-01]`.
 3. **Manifiesto Git Diff:** Salida limpia de `git status` y `git diff --stat`.
 
