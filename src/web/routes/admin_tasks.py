@@ -1,22 +1,35 @@
 # -*- coding: utf-8 -*-
 """
 Kybern Industrial — [ARCH-1.4.12] Centro de Control: Despacho Gobernado de Tareas Administrativas
+[ARCH-1.4.28] Adaptador de Despacho Web y Telemetría del Centro de Control.
 Controlador REST del cockpit `POST /api/admin/tasks/run`.
 
 [AISLAMIENTO DE PRODUCCIÓN]: ninguna tarea se compone con texto libre del cliente. El
 identificador solicitado se resuelve contra `TAREAS_PERMITIDAS` (whitelist estricta) y el
 comando resultante se materializa SIEMPRE con `sys.executable` + rutas internas del repositorio
 (cero evaluación de shell, cero inyección de argumentos).
+
+[ARCH-1.4.28] DOS MODOS DE DESPACHO sobre la MISMA whitelist:
+  * `subprocess` (defecto histórico): secuencia de scripts canónicos del repositorio.
+  * `integrado`: puente in-process hacia la Capa 5 (Data Nexus Bus) vía
+    `IngestionCoordinator`, sin subprocesos externos frágiles. La evidencia fáctica entra por
+    puerto (`concurso_num`) y su ausencia es FAIL-LOUD ([GOVERNANCE-01], `[LN-QBE-096]`):
+    JAMÁS se fabrica un concurso, un emparejamiento ni una probabilidad.
 """
 
 import os
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+# [ARCH-1.4.28] Capa 5 (Data Nexus Bus): el compositor orquestador es el ÚNICO motor de
+# backend del modo integrado. `ESTADO_EXITOSO` se importa de su plano canónico: cero
+# duplicación de constantes ([GOVERNANCE-01]).
+from src.services.ingestion_coordinator import ESTADO_EXITOSO, IngestionCoordinator
 
 router = APIRouter(prefix="/api/admin/tasks", tags=["Admin Control Center"])
 
@@ -73,10 +86,30 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# ── [ARCH-1.4.28] MODOS DE DESPACHO Y PUENTE INTEGRADO (CAPA 5) ───────────────
+# La whitelist de [ARCH-1.4.12] permanece INTACTA (9 tareas). `TAREAS_PIPELINE_INTEGRADO`
+# sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
+# hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.
+MODO_DESPACHO_SUBPROCESS = "subprocess"
+MODO_DESPACHO_INTEGRADO = "integrado"
+MODOS_DESPACHO: tuple = (MODO_DESPACHO_SUBPROCESS, MODO_DESPACHO_INTEGRADO)
+
+TAREAS_PIPELINE_INTEGRADO: Dict[str, str] = {
+    "cadena_ingesta_total": "PROGOL_FULL",
+}
+
 
 class AdminTaskRequest(BaseModel):
-    """[ARCH-1.4.12] Contrato de entrada del cockpit administrativo."""
+    """[ARCH-1.4.12] [ARCH-1.4.28] Contrato de entrada del cockpit administrativo."""
     task_id: str = Field(..., description="Identificador certificado de la whitelist de tareas")
+    modo: str = Field(
+        MODO_DESPACHO_SUBPROCESS,
+        description="Modo de despacho gobernado: 'subprocess' (scripts canónicos) o 'integrado' (Capa 5 in-process)",
+    )
+    concurso_num: Optional[int] = Field(
+        None,
+        description="Puerto de evidencia del modo integrado: número de concurso Progol a sincronizar",
+    )
 
 
 class AdminTaskResponse(BaseModel):
@@ -162,10 +195,64 @@ def ejecutar_tarea_autorizada(task_id: str) -> AdminTaskResponse:
     )
 
 
+def ejecutar_tarea_integrada(
+    task_id: str,
+    concurso_num: Optional[int] = None,
+) -> AdminTaskResponse:
+    """
+    [ARCH-1.4.28] [LN-QBE-097] Despacho in-process hacia la Capa 5 (Data Nexus Bus).
+
+    Instancia `IngestionCoordinator` como motor de backend y delega la composición pura
+    (Sensor ➔ Identity Brain ➔ Desambiguación JIT ➔ Motor Soberano ➔ Persistencia 3NF). El
+    compositor JAMÁS calcula: su reporte se transcribe íntegro en `output` para el cockpit.
+    Sin evidencia fáctica la Capa 5 responde FAIL-LOUD ([GOVERNANCE-01]): el despacho se
+    reporta fallido (exit_code = 1) y no se fabrica dato alguno (`[LN-QBE-096]`).
+    """
+    identificador = str(task_id or "").strip()
+    validar_tarea_solicitada(identificador)
+
+    if identificador not in TAREAS_PIPELINE_INTEGRADO:
+        raise ValueError(
+            f"La tarea '{identificador}' no publica puente in-process hacia la Capa 5. "
+            f"Tareas integradas certificadas: {', '.join(sorted(TAREAS_PIPELINE_INTEGRADO))}."
+        )
+
+    t0 = time.perf_counter()
+    reporte = IngestionCoordinator().sincronizar_progol_pipeline_completo(
+        concurso_num=concurso_num
+    )
+    exit_code_final = 0 if reporte.status == ESTADO_EXITOSO else 1
+    bloques: List[str] = [
+        f"$ [integrado 1/1] {TAREAS_PIPELINE_INTEGRADO[identificador]} → IngestionCoordinator (Capa 5)",
+        reporte.model_dump_json(indent=2),
+        f"── exit_code = {exit_code_final} ──",
+    ]
+
+    return AdminTaskResponse(
+        task_id=identificador,
+        exit_code=exit_code_final,
+        output="\n".join(bloques),
+        duration_s=round(time.perf_counter() - t0, 3),
+    )
+
+
 @router.post("/run", response_model=AdminTaskResponse)
 def ejecutar_tarea_administrativa(req: AdminTaskRequest) -> AdminTaskResponse:
-    """[ARCH-1.4.12] Despacho gobernado de tareas administrativas bajo whitelist estricta."""
+    """[ARCH-1.4.12] [ARCH-1.4.28] Despacho gobernado de tareas administrativas bajo whitelist estricta."""
+    modo = str(req.modo or MODO_DESPACHO_SUBPROCESS).strip().lower()
+
+    if modo not in MODOS_DESPACHO:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Modo de despacho '{req.modo}' fuera de la lista gobernada "
+                f"{list(MODOS_DESPACHO)}."
+            ),
+        )
+
     try:
+        if modo == MODO_DESPACHO_INTEGRADO:
+            return ejecutar_tarea_integrada(req.task_id, concurso_num=req.concurso_num)
         return ejecutar_tarea_autorizada(req.task_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))

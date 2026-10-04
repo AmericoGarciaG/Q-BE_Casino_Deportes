@@ -1235,6 +1235,38 @@ La Capa 4 aísla la matemática de memoria deportiva en dos módulos puros bajo 
 * **Enmiendas ratificadas del Decreto Sprint 3:** D-1 (ancla legislativa real en `LOGIC.md`, tras `[LN-QBE-035-B]`), D-2 (`[LN-QBE-020-C]` en lugar de reutilizar `[LN-QBE-020]`), D-3 (damping `[VAULT-CORE-001]`), D-4 (DTOs en `src/models/analytics.py`).
 * **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
 
+### [ARCH-1.4.27] Módulo de Servicios de Composición y Orquestación (`src/services/`) [ARCH-PILLAR]
+La Capa 5 (Data Nexus Bus, `[LN-QBE-096]`) se materializa en `src/services/ingestion_coordinator.py`: único punto del sistema autorizado a **componer** las capas selladas 1–4 y persistir el agregado de quiniela en la bóveda 3NF.
+* **Frontera de régimen ([HÍBRIDO DUAL-TRACK]):** el coordinador NO contiene matemática. Delega el cálculo en `generar_distribucion_soberana()` (`[VAULT-CORE-005]`), la identidad en `resolver_entidad_oficial()` (`[ARCH-1.4.25]`) y el vínculo de partido en `desambiguar_partido_por_ventana()` (`[LN-QBE-094]`). Prohibida toda duplicación de constantes, fórmulas o del Prior Fiduciario `[LN-QBE-075]`.
+* **Pureza de la Capa 5 (`[ARCH-1.4.24]` aplicado):** ningún archivo de `src/services/` puede importar `playwright`, `requests`, `httpx` ni scraper alguno (`src/ingestion/*_scraper.py`); toda evidencia fáctica entra por **puerto inyectado** (`concurso_dto_inyectado`, `concurso_loader`, `candidatos_partidos`, `datos_facticos_por_match`), conforme a la Inversión de Dependencias de `[ARCH-1.4.24]`.
+* **Contrato IPO de la puerta de orquestación:**
+
+```python
+def sincronizar_progol_pipeline_completo(
+    self,
+    concurso_num: Optional[int] = None,
+    session: Optional[Session] = None,
+    concurso_dto_inyectado: Optional[ProgolContestDTO] = None,
+    candidatos_partidos: Optional[Sequence[ScheduledMatchDTO]] = None,
+    datos_facticos_por_match: Optional[Mapping[str, Mapping[str, Any]]] = None,
+) -> CoordinatorExecutionReport:
+```
+
+  El puerto `concurso_dto_inyectado` es de rango legislativo: habilita la prueba hermética de la Capa 5 sin red y sin disco (`[GOV-TEST-01]`).
+* **Atomicidad (Invariante de la Unit of Work):** la cabecera `slates` y sus $N$ `slate_items` se escriben en una única `PersistenceGateway.write_transaction()` (`[VAULT-DATA-001]`). Una excepción intermedia $\implies$ rollback total y `status = "FAILED"` con la causa publicada en `errores`.
+* **Resolución perezosa del Gateway:** `IngestionCoordinator()` es instanciable sin argumentos y sin tocar disco; el singleton `PersistenceGateway` se resuelve en la primera operación real (import diferido del adaptador).
+* **Upsert idempotente:** cabecera por `slates.id` y casillas por la clave única `(slate_id, position)`; una re-sincronización actualiza in situ, jamás duplica.
+* **Frontera de agregado:** el coordinador persiste el **agregado de quiniela** (`slates` + `slate_items`, con el snapshot $p_1/p_X/p_2$ publicado por el motor en la casilla). Las `sovereign_distributions` son propiedad del partido y se materializan en el pipeline centrado en el `match_id`, nunca como efecto colateral de una sincronización de concurso.
+* **[SHIELD]:** `tests/shield/test_shield_ingestion_coordinator.py`
+
+### [ARCH-1.4.28] Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR]
+* **Ubicación:** `src/web/routes/markets.py` y `src/web/routes/admin_tasks.py`
+* **Responsabilidad:** Integrar el `IngestionCoordinator` como motor de backend de las tareas administrativas y la alimentación de datos de la interfaz de usuario:
+  1. `admin_tasks.py`: Incorpora `IngestionCoordinator` para ejecutar la secuencia completa de ingesta sin depender de subprocesos externos frágiles cuando se invoque en modo integrado.
+  2. `markets.py`: Consume directamente las tablas 3NF pobladas por el nuevo pipeline (`slates`, `slate_items`, `sovereign_distributions`).
+* **Seguridad y Whitelist:** Se preserva de forma estricta la lista blanca de 9 tareas de `[ARCH-1.4.12]`.
+* **[SHIELD]:** `tests/shield/test_shield_sprint5_domain_reconnection.py`
+
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

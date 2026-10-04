@@ -80,6 +80,8 @@
 | `[LN-QBE-093]` | LOGIC | `docs/LOGIC.md` | Axioma de Pureza de Sensores de Ingesta y Contratos DTO de Capa 1 (Data Nexus) | SELLADO |
 | `[LN-QBE-094]` | LOGIC | `docs/LOGIC.md` | Algoritmo de Desambiguación Temporal en Ventana Crítica [t_cierre ± 72h] | SELLADO |
 | `[LN-QBE-095]` | LOGIC | `docs/LOGIC.md` | Guardas Léxicas de Identidad de Género y Categoría (Femenil, Filiales, Sub-20) | SELLADO |
+| `[LN-QBE-096]` | LOGIC | `docs/LOGIC.md` | Coordinador Orquestador Atómico del Ciclo de Vida de Datos (Data Nexus Bus) | SELLADO |
+| `[LN-QBE-097]` | LOGIC | `docs/LOGIC.md` | Puente de Despacho Unificado entre Rutas Web y el Data Nexus Bus | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -159,6 +161,8 @@
 | `[ARCH-1.4.24]` | ARCH | `docs/ARCH.md` | Contrato Hexagonal de Proveedores de Ingesta Pura y DTOs (Capa 1) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.25]` | ARCH | `docs/ARCH.md` | Módulo de Normalización, Jerga y Desambiguación (`src/normalization/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.26]` | ARCH | `docs/ARCH.md` | Motor de Memoria Histórica y Kernel H2H (`src/core/sovereign/`) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.27]` | ARCH | `docs/ARCH.md` | Módulo de Servicios de Composición y Orquestación (`src/services/`) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.28]` | ARCH | `docs/ARCH.md` | Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |

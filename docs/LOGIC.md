@@ -1066,6 +1066,48 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-096] Coordinador Orquestador Atómico del Ciclo de Vida de Datos (Data Nexus Bus)
+* **Ω (Resumen):** Autoridad única de composición del sistema. Encadena las cuatro capas selladas (Sensor de Ingesta $\to$ Identity Brain $\to$ Motor Soberano $\to$ Persistencia 3NF) dentro de **una sola Unit of Work**, garantizando el principio *todo o nada* sobre el snapshot certificado: jamás se publica una cabecera de concurso sin sus casillas, ni una casilla con probabilidades fabricadas. El Coordinador es un **Compositor**, nunca un motor: tiene estrictamente prohibido reimplementar matemática protegida o publicar una sola constante propia.
+* **I (Input):** `operacion` y puertos inyectados — `concurso_num: Optional[int]`, `concurso_dto_inyectado: Optional[ProgolContestDTO]`, `candidatos_partidos: Optional[Sequence[ScheduledMatchDTO]]`, `datos_facticos_por_match: Optional[Mapping[str, Mapping[str, Any]]]`, `session: Optional[Session]`.
+* **P (Process) [ARCH-PILLAR] [ANTI-BUG]:**
+  1. **Adquisición de evidencia:** resolver el `ProgolContestDTO` por el puerto inyectado; en ausencia de éste, invocar el `concurso_loader` provisto. Sin evidencia fáctica $\implies$ `FAIL-LOUD` (`[GOVERNANCE-01]`): queda **terminantemente prohibido** sintetizar un concurso o rellenarlo con datos de fantasía.
+  2. **Aduana de integridad (fail-fast):** `contest_id` no vacío y `items` no vacío; casilla que no publique ambos literales (`local_raw`, `visitante_raw`) $\implies$ aborto inmediato de la operación **antes** de abrir la Unit of Work.
+  3. **Apertura de la Unit of Work:** una única `PersistenceGateway.write_transaction()` (o la `session` cedida por el llamador) que engloba la cabecera y las $N$ casillas.
+  4. **Upsert de cabecera:** `slates.id = contest_id`; `name` derivado del dato sellado (`"Progol Concurso #"` + `contest_id`, cero invención de identidad); `bolsa_estimada` y `fecha_cierre = cierre_utc` transcritos verbatim del DTO; `status = "OPEN"`; `competition_id = NULL` (el DTO sellado no publica liga: no se fabrica un identificador de competición).
+  5. **Composición por casilla** (bucle sobre las $N$ posiciones, sin atajos ni ramas muertas):
+     - Identidad categorizada: `resolver_entidad_oficial()` (`[ARCH-1.4.25]`).
+     - Vínculo temporal: `desambiguar_partido_por_ventana()` (`[LN-QBE-094]`) sobre los candidatos inyectados.
+     - Símplex: `generar_distribucion_soberana()` (`[VAULT-CORE-005]`) — **siempre invocada**, incluso con evidencia vacía.
+     - $S(I) = 0$ o ventana crítica vacía $\implies$ `match_id = NULL` y `es_prior_ignorancia = True`, con el Prior Fiduciario emitido por el **motor sellado** ($[LN-QBE-075]$): el Coordinador jamás publica una probabilidad propia.
+     - `p_local`, `p_empate`, `p_visitante` se transcriben **verbatim** de la salida del motor: cero redondeos, cero mezclas, cero rescalados.
+     - Idempotencia: la casilla se upsertea por la clave única `(slate_id, position)`; una re-sincronización actualiza in situ y jamás duplica ni destruye evidencia previa.
+  6. **Cierre atómico:** un solo `commit`. Toda excepción dentro de la Unit of Work $\implies$ **ROLLBACK TOTAL**: cero cabecera, cero casillas. El sistema escribe $0$ filas o el conjunto completo; una operación fallida se reporta con `exitosos = 0` y la causa publicada en `errores` (jamás silenciada).
+* **O (Output):** `CoordinatorExecutionReport(operacion, status, procesados, exitosos, errores, duracion_s)`. En fallo, `status = "FAILED"` y mutación nula del snapshot certificado (capital en riesgo 0.00 MXN).
+* **Φ (Transición):** Consume `[LN-QBE-093]` / `[ARCH-1.4.24]`, `[ARCH-1.4.25]`, `[VAULT-CORE-005]` y `[VAULT-DATA-001]`; publica la Capa 5 (Data Nexus Bus) y alimenta los daemons de captura y la UI.
+* **[SHIELD]:** `tests/shield/test_shield_ingestion_coordinator.py`
+
+---
+
+### ID: [LN-QBE-097] Puente de Despacho Unificado entre Rutas Web y el Data Nexus Bus
+* **Ω (Resumen):** Conecta las peticiones REST de la capa web (`/api/markets/...` y `/api/admin/tasks/...`) con el `IngestionCoordinator` (Capa 5) y los repositorios 3NF, asegurando que las decisiones de inversión y optimización combinatoria consuman la memoria histórica completa (10P, H2H y desambiguación JIT) con latencia $< 20\text{ ms}$ en consultas cacheadas.
+* **I (Input):** Peticiones JSON tipadas (`GeneratePortfolioRequest`, `AdminTaskRequest`, solicitudes de optimización Progol).
+* **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  1. **Enrutamiento Financiero Sportsbook:**
+     - `POST /api/markets/sportsbook/portfolio/generate` extrae los partidos de la jornada activa de `FixtureSnapshot.matches_json` y sus `SovereignDistribution` asociadas.
+     - Aplica el triaje determinista de 9 estrategias (`[LN-QBE-060-B]`), el ranking lexicográfico por $P_{\text{éxito}}'$ (`[LN-QBE-081]`) y el dimensionamiento monótono con Hard-Caps (`[LN-QBE-082]`).
+  2. **Enrutamiento Combinatorio Progol:**
+     - `POST /api/markets/progol/optimize` consume el concurso activo de `slates` y sus 21 `slate_items` generados por el coordinador.
+     - Extrae las primeras $M$ combinaciones que maximizan la masa $C(M)$ (`[LN-QBE-084]`) o desciende por distancia de Hamming (`[LN-QBE-086]`).
+  3. **Despacho del Centro de Control con Streaming:**
+     - `POST /api/admin/tasks/run` ejecuta las tareas de la whitelist gobernada. La tarea maestra `cadena_ingesta_total` delega en `IngestionCoordinator` y canaliza la salida estándar hacia el frontend en tiempo real.
+* **O (Output):** Payloads tipados `PortfolioExecutionPlan`, `ProgolPlanResponse` y `AdminTaskResponse`.
+* **Φ (Transición y Grafo Consumidor):**  
+  - Nodos Lógicos Sucesores: Presentación en SPA (`[DES-QBE-032]`, `[DES-QBE-048]`).  
+  - **Consumidores Activos en Producción:** Cliente reactivo `src/web/static/js/app.js` y routers FastAPI en `src/web/routes/`.
+* **[SHIELD]:** `tests/shield/test_shield_sprint5_domain_reconnection.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,
