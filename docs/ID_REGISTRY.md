@@ -216,4 +216,6 @@
    vista parcial del documento citado (trampa de muestreo documentada).
 3. **Sellado:** al pasar a verde (`EXIT CODE 0`), la fila migra de `EN FORJA` a `SELLADO` con **anclaje
    simbólico** (`docs/LOGIC.md` / `docs/ARCH.md` + símbolo), jamás `archivo:línea` (R-2). La tabla se
-   regenera de forma mecánica con `python scripts/auditoria/reconciliar_registro_legislativo.py`.
+   regenera de forma mecánica con `python scripts/auditoria/reconciliar_registro_legislativo.py --write`
+   (el modo por defecto es **sólo lectura** —la escritura exige la bandera explícita— y la
+   reconciliación **preserva el estado preexistente de cada fila**, sin degradar `LIBRE` ni `EN FORJA`).

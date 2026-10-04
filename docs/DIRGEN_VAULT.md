@@ -1745,7 +1745,7 @@ desde este módulo. Reutiliza exclusivamente literales ya sellados ($P^{(0)}=1/3
 
 **Trazabilidad de registro:** el bloque fue inyectado como `[LN-QBE-080]`/`[LN-QBE-081]`; remapeado a
 `[LN-QBE-081]`/`[LN-QBE-082]` por colisión con el nodo sellado `[LN-QBE-080] Compilador de Reportes
-Oficiales y PDF A4`. Ver `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-080_COLLISION.md`.
+Oficiales y PDF A4`. Ver `VAR-HIST-080-COLLISION`.
 
 ---
 
