@@ -4,7 +4,11 @@
 Validación de:
 - [LN-QBE-095] Guardas de Género y Categoría.
 - [LN-QBE-094] Desambiguación Temporal en Ventana Crítica [t ± 72h].
-- [ARCH-1.4.25] y [ARCH-1.5.11] Aprovisionamiento y Bóveda de Activos.
+- [ARCH-1.4.25] Módulo de Normalización, Jerga y Desambiguación (`src/normalization/`).
+- [ARCH-1.5.12] Aprovisionamiento JIT de Ligas y Bóveda Soberana de Activos.
+Nota de trazabilidad (VAR-2026-ARCH-1.5.11): el bloque fue inyectado como [ARCH-1.5.11] y
+remapeado a [ARCH-1.5.12] por colisión con el nodo sellado (PROGOL_GLOBAL_ALIASES).
+Ver docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.5.11_COLLISION.md
 """
 
 from datetime import datetime, timezone, timedelta
@@ -90,14 +94,14 @@ def test_ln_qbe_094_temporal_disambiguation_window():
 
 
 # ---------------------------------------------------------------------------
-# 3. PRUEBA DE LA BÓVEDA DE ACTIVOS Y RUTAS LOCALES ([ARCH-1.5.11])
+# 3. PRUEBA DE LA BÓVEDA DE ACTIVOS Y RUTAS LOCALES ([ARCH-1.5.12])
 # ---------------------------------------------------------------------------
-def test_arch_1_5_11_asset_vault_local_paths_and_anti_hotlinking():
+def test_arch_1_5_12_asset_vault_local_paths_and_anti_hotlinking():
     """Audita que el servicio de bóveda entregue exclusivamente URIs locales y rechace hotlinks."""
     try:
         from src.normalization.asset_vault_service import resolver_uri_activo_local
     except ImportError as e:
-        pytest.fail(f"❌ [ARCH-1.5.11] Falta el servicio de bóveda en src/normalization/asset_vault_service.py: {e}")
+        pytest.fail(f"❌ [ARCH-1.5.12] Falta el servicio de bóveda en src/normalization/asset_vault_service.py: {e}")
 
     # Verificar resolución de ruta local para clubes
     uri_club = resolver_uri_activo_local("cruz-azul", tipo="team")
@@ -110,16 +114,41 @@ def test_arch_1_5_11_asset_vault_local_paths_and_anti_hotlinking():
 
 
 # ---------------------------------------------------------------------------
-# 4. PRUEBA DE CONTRATO DEL APROVISIONADOR DE LIGAS ([ARCH-1.5.11])
+# 4. PRUEBA DE CONTRATO DEL APROVISIONADOR DE LIGAS ([ARCH-1.5.12])
 # ---------------------------------------------------------------------------
-def test_arch_1_5_11_league_provisioner_interface():
+def test_arch_1_5_12_league_provisioner_interface():
     """Audita que el aprovisionador de ligas exponga la función canónica requerida."""
     try:
         from src.normalization.league_provisioner import provisionar_competicion_y_clubes_jit
     except ImportError as e:
-        pytest.fail(f"❌ [ARCH-1.5.11] Falta el aprovisionador JIT en src/normalization/league_provisioner.py: {e}")
+        pytest.fail(f"❌ [ARCH-1.5.12] Falta el aprovisionador JIT en src/normalization/league_provisioner.py: {e}")
 
     import inspect
     sig = inspect.signature(provisionar_competicion_y_clubes_jit)
     assert "fotmob_league_id" in sig.parameters, "El aprovisionador debe recibir fotmob_league_id"
     assert "session" in sig.parameters or "gateway" in sig.parameters, "El aprovisionador debe aceptar sesión o gateway de DB"
+
+
+# ---------------------------------------------------------------------------
+# 5. PRUEBA DE LOS DTOs LEGISLADOS DE CAPA 2 (SECCIÓN 5 DEL DECRETO)
+# ---------------------------------------------------------------------------
+def test_sprint2_legislated_dtos_structure():
+    """Audita la materialización y estructura Pydantic de los DTOs legislados de Capa 2."""
+    try:
+        from src.ingestion.schemas import CategorizedEntityDTO, DisambiguatedMatchDTO
+    except ImportError as e:
+        pytest.fail(f"❌ [LN-QBE-094/095] Faltan los DTOs legislados en src/ingestion/schemas.py: {e}")
+
+    from pydantic import BaseModel
+
+    assert issubclass(DisambiguatedMatchDTO, BaseModel), "DisambiguatedMatchDTO debe ser un contrato Pydantic V2"
+    assert issubclass(CategorizedEntityDTO, BaseModel), "CategorizedEntityDTO debe ser un contrato Pydantic V2"
+
+    campos_desambiguacion = {"match_id", "competition_id", "kickoff_utc", "is_ambiguous"}
+    campos_categoria = {"canonical_name", "canonical_slug", "category"}
+
+    assert campos_desambiguacion <= set(DisambiguatedMatchDTO.model_fields), \
+        f"❌ [LN-QBE-094] DisambiguatedMatchDTO incompleto: faltan {campos_desambiguacion - set(DisambiguatedMatchDTO.model_fields)}"
+    assert campos_categoria <= set(CategorizedEntityDTO.model_fields), \
+        f"❌ [LN-QBE-095] CategorizedEntityDTO incompleto: faltan {campos_categoria - set(CategorizedEntityDTO.model_fields)}"
+

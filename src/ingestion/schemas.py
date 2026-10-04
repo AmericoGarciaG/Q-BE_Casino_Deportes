@@ -72,3 +72,34 @@ class Odds1X2DTO(BaseModel):
     V: float
     pago_anticipado: bool
     bookmaker: str
+
+
+class DisambiguatedMatchDTO(BaseModel):
+    """
+    [LN-QBE-094] Salida canónica de la desambiguación temporal en Ventana Crítica:
+    resolución unívoca de partido y competición cuando un mismo par de clubes se enfrenta
+    en múltiples torneos en fechas cercanas (`docs/LOGIC.md`, nodo [LN-QBE-094].O).
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    match_id: str
+    competition_id: Optional[int] = None
+    kickoff_utc: Optional[datetime] = None
+    is_ambiguous: bool = False
+
+
+class CategorizedEntityDTO(BaseModel):
+    """
+    [LN-QBE-095] Identidad canónica categorizada de una entidad deportiva (club, filial,
+    rama femenil o formativa). El `canonical_slug` conserva SIEMPRE el sufijo de categoría
+    (`club-america-femenil`, `real-sociedad-b`, `chivas-sub20`) para impedir colisiones con
+    el primer equipo varonil (`docs/LOGIC.md`, nodo [LN-QBE-095].O).
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    canonical_name: str
+    canonical_slug: str
+    category: str
+

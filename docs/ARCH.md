@@ -776,7 +776,28 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 > de sus cuatro sensores se certifica por salida cruda de `pytest` y queda supeditado a la
 > autorización de la Tríada para el Paso 3).
 
+### [ARCH-1.5.12] Aprovisionador JIT de Ligas y Bóveda Soberana de Activos de Clubes (`src/normalization/`) [ARCH-PILLAR]
+* **Paquete sellado:** `src/normalization/` — `__init__.py`, `gender_guards.py` (implementa `[LN-QBE-095]`), `temporal_disambiguator.py` (implementa `[LN-QBE-094]`), `entity_resolver.py` (jerga oficial → identidad), `asset_vault_service.py` y `league_provisioner.py`.
+* **Aprovisionador JIT:** `provisionar_competicion_y_clubes_jit(fotmob_league_id, league_name, country, clubes, session=None, mu_liga=None, season_id=None, season_year=None, season_name=None)` compone EXCLUSIVAMENTE APIs selladas: `registrar_liga_descubierta_si_no_existe()` (`[ARCH-1.4.21]`, *cero ligas zombis*), la convención 3NF `Competition.id = f"FOTMOB_{fotmob_league_id}"` y `macro_gamma_home = 0.15` (`[ARCH-1.5.1]` / `[ARCH-1.6.19-B]`), μ macro desde la propiedad gobernada `League.mu_liga` (`[LN-QBE-089]`) y la identidad categorizada de cada club (`[LN-QBE-095]`). El registro es **idempotente** (clave `fotmob_league_id` / `fotmob_team_id`) y **transaccional** (`write_transaction()` del Gateway, o la sesión del llamador si se provee).
+* **Cero invención de identificadores:** el `Season.id` de 3NF **nunca se fabrica**: sólo se registra cuando el llamador aporta el identificador oficial (`season_id`, derivado de metadatos fácticos).
+* **Bóveda soberana:** `resolver_uri_activo_local(slug, tipo)` entrega **exclusivamente** URIs locales (`/static/img/crests/…`, `/static/img/leagues/…`) y **levanta excepción ante cualquier URI remota** (prohibición de hotlinking). `auditar_activo_fisico(slug, tipo)` certifica existencia, tamaño ≥ 2,500 bytes y cabecera física real (PNG/SVG/JPEG), erradicando archivos fantasma (`[LN-QBE-019]`).
+* **Escalera de escudos:** cuando el activo no está ancorado en la bóveda, el club se persiste con `resolver_escudo_canonico()` (`[LN-QBE-019]`), **jamás** con una URL de terceros.
+* **[SHIELD]:** `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`
+
+> **Trazabilidad de registro (VAR-2026-ARCH-1.5.11 — Colisión resuelta por Decreto de Saneamiento):**
+> la Directiva de SPRINT 2 Capa 2 solicitó el identificador `[ARCH-1.5.11]` para este nodo; dicho
+> identificador ya se encuentra **sellado** en `docs/ARCH.md` (línea 1204, *Catálogo de Jerga y
+> Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES)*, materializado en
+> `src/ingestion/progol_resolver.py:25` y `scripts/daemons/centinela_progol.py:31`). Por axioma de
+> **cero reutilización**, el nodo se registra como `[ARCH-1.5.12]` (primer identificador libre de la
+> familia `1.5.x`, verificado por el pre-vuelo de unicidad del Paso 0) y las referencias textuales
+> del nodo `[LN-QBE-095]` y del Juez Inmutable quedan **mapeadas por trazabilidad**, sin alterar una
+> coma del contenido normativo. Expediente formal:
+> `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.5.11_COLLISION.md`. Registro maestro: `docs/ID_REGISTRY.md`.
+> Juez Inmutable asociado: `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`.
+
 ---
+
 
 ## 2. ESTRUCTURA LIMPIA DE MÓDULOS Y MAPEO DE CÓDIGO
 

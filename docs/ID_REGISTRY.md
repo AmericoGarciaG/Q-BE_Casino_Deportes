@@ -11,18 +11,19 @@
 |---|:---:|:---:|---|:---:|
 | `[LN-QBE-090]` | LOGIC | `docs/LOGIC.md:566` | Escudo Forense de Invarianzas (Shield Release Gate) | SELLADO |
 | `[LN-QBE-090-B]` | LOGIC | `docs/LOGIC.md:961` | Heurística de Vinculación y Emparejamiento en Slates | SELLADO |
-| `[LN-QBE-091]` | LOGIC | `docs/LOGIC.md:966` | Parámetros Macro de Competiciones Descubiertas JIT | SELLADO |
+| `[LN-QBE-091]` | LOGIC | `docs/LOGIC.md:973` | Parámetros Macro de Competiciones Descubiertas JIT | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
-| `[LN-QBE-093]` | LOGIC | `docs/LOGIC.md:971` | Arquitectura Hexagonal de Ingesta Pura (Cero DB) | SELLADO |
-| `[LN-QBE-094]` | LOGIC | `docs/LOGIC.md` | Algoritmo de Desambiguación Temporal [t_cierre ± 72h] | EN FORJA |
-| `[LN-QBE-095]` | LOGIC | `docs/LOGIC.md` | Guardas Léxicas de Género y Categoría (Femenil/Filial) | EN FORJA |
+| `[LN-QBE-093]` | LOGIC | `docs/LOGIC.md:978` | Axioma de Pureza de Sensores de Ingesta (Cero DB) | SELLADO |
+| `[LN-QBE-094]` | LOGIC | `docs/LOGIC.md:989` | Algoritmo de Desambiguación Temporal [t_cierre ± 72h] | SELLADO |
+| `[LN-QBE-095]` | LOGIC | `docs/LOGIC.md:1007`| Guardas Léxicas de Género y Categoría (Femenil/Filial) | SELLADO |
 | `[ARCH-1.3.4]` | ARCH | `docs/ARCH.md:95` | GeminiCognitiveGateway y Ledger Contable de Inferencia | SELLADO |
-| `[ARCH-1.3.5]` | ARCH | `docs/ARCH.md:1090` | Retiro y Deprecación Definitiva de Rutas Legacy | SELLADO |
-| `[ARCH-1.4.23]` | ARCH | `docs/ARCH.md:1172`| Sensor de Ingesta Oficial de Liga Premier FMF | SELLADO |
-| `[ARCH-1.4.24]` | ARCH | `docs/ARCH.md:1181`| Contrato Hexagonal de Proveedores de Ingesta Pura | SELLADO |
-| `[ARCH-1.4.25]` | ARCH | `docs/ARCH.md` | Módulo de Normalización, Jerga y Desambiguación | EN FORJA |
-| `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md:1204`| Aliases Globales de Jerga Quinielera en Progol | SELLADO |
-| `[ARCH-1.5.12]` | ARCH | `docs/ARCH.md` | Aprovisionador JIT de Ligas y Bóveda Soberana | EN FORJA |
+| `[ARCH-1.3.5]` | ARCH | `docs/ARCH.md:1111`| Retiro y Deprecación Definitiva de Rutas Legacy | SELLADO |
+| `[ARCH-1.4.23]` | ARCH | `docs/ARCH.md:1204`| Sensor de Ingesta Oficial de Liga Premier FMF | SELLADO |
+| `[ARCH-1.4.24]` | ARCH | `docs/ARCH.md:1213`| Contrato Hexagonal de Proveedores de Ingesta Pura | SELLADO |
+| `[ARCH-1.4.25]` | ARCH | `docs/ARCH.md:1224`| Módulo de Normalización, Jerga y Desambiguación | SELLADO |
+| `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md:1236`| Aliases Globales de Jerga Quinielera en Progol | SELLADO |
+| `[ARCH-1.5.12]` | ARCH | `docs/ARCH.md:779` | Aprovisionador JIT de Ligas y Bóveda Soberana | SELLADO |
+
 
 ---
 
@@ -34,6 +35,7 @@
 | `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.6.19-B_ENDPOINT.md` | Endpoint REST `/api/leagues?id=` → HTTP 404 | Extracción gobernada `__NEXT_DATA__` | RATIFICADO |
 | `docs/DIRGEN_VARIANCE_REQUEST_ARCH-1.5.11_COLLISION.md` | `[ARCH-1.5.11]` ocupado por PROGOL_GLOBAL_ALIASES | Remapeo a `[ARCH-1.5.12]` | RATIFICADO |
 | `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-070-073.md` | Contrato `approved_matches` para Kelly atenuado (familia 070–073) | Nodo de seguimiento declarado, abierto | ABIERTO |
+| `docs/DIRGEN_VARIANCE_REQUEST_LN-QBE-019_CATEGORY_AWARE_CREST.md` | Escalera de escudos `[LN-QBE-019]` ciega a la categoría de género (escudo varonil sobre club femenil) | ALT-1 (escalera categoría-consciente) pendiente de dictamen; ALT-2 (activo institucional neutro) | ABIERTO |
 
 ---
 

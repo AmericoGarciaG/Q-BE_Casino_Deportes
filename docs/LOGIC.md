@@ -1017,7 +1017,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - El slug debe conservar el sufijo de categoría: `club-america-femenil`, `real-sociedad-b`, `chivas-sub20`.
      - Queda estrictamente prohibido truncar el sufijo de género para evitar colisiones con el primer equipo varonil (`club-america`).
 * **O (Output):** `CategorizedEntityDTO(canonical_name: str, canonical_slug: str, category: str)`.
-* **Φ (Transición):** Hacia `[LN-QBE-012]` (Normalizador) y `[ARCH-1.5.11]` (Aprovisionador).
+* **Φ (Transición):** Hacia `[LN-QBE-012]` (Normalizador) y `[ARCH-1.5.12]` (Aprovisionador).
 * **[SHIELD]:** `tests/shield/test_shield_temporal_disambiguation_and_provisioner.py`
 
 ---
