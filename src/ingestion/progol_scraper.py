@@ -33,6 +33,27 @@ logger = logging.getLogger("ProgolScraper")
 
 URL_PROGOL_DEFAULT = "https://miloteria.mx/progol"
 
+# ── [V-07 / ARCH-1.6.6] FUENTE FÁCTICA JSON DEL OPERADOR (endpoints públicos) ──
+# El sitio migró la publicación de casillas a XHR: cuando la ventana de venta está cerrada
+# (`sorteoInfo` responde HTTP 409) el DOM puede no renderizar la tabla, aunque el concurso
+# VIGENTE sí esté publicado por el propio operador. Verificado fácticamente el 2026-10-04:
+#   GET api_igt/progol/partidos/                 -> {"progol":[14], "revancha":[7]} (concurso 2353)
+#   GET api_igt/pronosticos/proximosSorteos/     -> {"progol":{"drawNumber":2353,"bolsaAcumulada":13000000,...}}
+#   GET api_igt/pronosticos/v2/calendario/progol -> [{"startDraw":"2353","fecha":"2026-10-02 21:00:00"}]
+URL_PROGOL_API_PARTIDOS = "https://miloteria.mx/api_igt/progol/partidos/"
+URL_PROGOL_API_PROXIMOS = "https://miloteria.mx/api_igt/pronosticos/proximosSorteos/"
+URL_PROGOL_API_CALENDARIO = "https://miloteria.mx/api_igt/pronosticos/v2/calendario/progol"
+PROGOL_API_TIMEOUT_S = 15.0
+PROGOL_API_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    "Referer": "https://miloteria.mx/progol",
+}
+
 # [LN-QBE-075] Prior de Ignorancia Fiduciaria — Fuente ÚNICA de verdad (1-X-2).
 PRIOR_IGNORANCIA_FIDUCIARIA = (0.3333, 0.3333, 0.3334)
 
@@ -259,6 +280,128 @@ class ProgolMarketScraper:
         }
 
     @classmethod
+    def parse_progol_api_payload(
+        cls,
+        payload_partidos: Optional[Dict[str, Any]],
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        [V-07] Parser PURO del payload oficial JSON del operador (sin red — [GOV-TEST-01]).
+
+        Contrato de entrada (verificado fácticamente el 2026-10-04):
+            {"progol":   [{"num": 1, "local": "E.U.A.", "visitante": "MEXICO"}, ... (14)],
+             "revancha": [{"num": 1, "local": "VERACRUZ", "visitante": "OAXACA"}, ... (7)]}
+
+        `meta` (opcional, de `proximosSorteos` / `calendario`): draw_number, bolsa, fecha_cierre.
+        [GOVERNANCE-01] Cero identidades fabricadas: los nombres se preservan crudos y se
+        canonizan con el MISMO estrato de traducción del DOM (`PROGOL_JARGON_MAP` + normalizador).
+        Cualquier casilla con par local/visitante incompleto se descarta (nunca se inventa rival).
+        """
+        meta = dict(meta or {})
+        parte = payload_partidos or {}
+
+        partidos_regular: List[Dict[str, Any]] = []
+        partidos_revancha: List[Dict[str, Any]] = []
+        for tipo, clave, limite in (
+            ("REGULAR", "progol", CASILLAS_REGULAR),
+            ("REVANCHA", "revancha", CASILLAS_REVANCHA),
+        ):
+            for casilla in (parte.get(clave) or []):
+                if not isinstance(casilla, dict):
+                    continue
+                try:
+                    pos = int(casilla.get("num"))
+                except (TypeError, ValueError):
+                    continue
+                local_raw = str(casilla.get("local") or "").strip()
+                visitante_raw = str(casilla.get("visitante") or "").strip()
+                if not local_raw or not visitante_raw:
+                    continue
+                destino = partidos_regular if tipo == "REGULAR" else partidos_revancha
+                if not 1 <= pos <= limite or any(p["posicion"] == pos for p in destino):
+                    continue
+                destino.append({
+                    "posicion": pos,
+                    "local_raw": local_raw,
+                    "visitante_raw": visitante_raw,
+                    "local_canonico": _canonizar_seguro(local_raw),
+                    "visitante_canonico": _canonizar_seguro(visitante_raw),
+                    "tipo": tipo,
+                })
+
+        partidos_regular.sort(key=lambda x: x["posicion"])
+        partidos_revancha.sort(key=lambda x: x["posicion"])
+
+        draw = meta.get("draw_number")
+        concurso_num = str(draw) if draw is not None else "ACTIVO"
+        return {
+            "concurso_id": f"PROGOL-{concurso_num}",
+            "concurso_num": concurso_num,
+            "bolsa": meta.get("bolsa") or "Bolsa por Definir",
+            "fecha_cierre": meta.get("fecha_cierre") or "Por Definir",
+            "partidos_regular": partidos_regular,
+            "partidos_revancha": partidos_revancha,
+        }
+
+    @classmethod
+    def _extraer_concurso_api(cls) -> Optional[Dict[str, Any]]:
+        """
+        [V-07] Fuente fáctica JSON del operador (XHR público del propio sitio).
+
+        Degradación explícita (SONDEO-03): cualquier fallo de red, HTTP no-200 o payload sin
+        casillas devuelve `None`; JAMÁS se propaga una excepción al bucle de ingesta.
+        La verificación TLS se desactiva porque el sandbox interpone una cadena corporativa
+        (mismo criterio que `--ignore-certificate-errors` en el carril Playwright).
+        """
+        import httpx
+
+        try:
+            with httpx.Client(
+                timeout=PROGOL_API_TIMEOUT_S,
+                headers=PROGOL_API_HEADERS,
+                follow_redirects=True,
+                verify=False,
+            ) as client:
+                resp = client.get(URL_PROGOL_API_PARTIDOS)
+                if resp.status_code != 200:
+                    logger.info("ℹ️ [V-07] API fáctica de casillas HTTP %s: sin respaldo disponible.", resp.status_code)
+                    return None
+                payload_partidos = resp.json()
+
+                meta: Dict[str, Any] = {}
+                try:
+                    proximo = (client.get(URL_PROGOL_API_PROXIMOS).json() or {}).get("progol") or {}
+                    meta["draw_number"] = proximo.get("drawNumber")
+                    bolsa = proximo.get("bolsaAcumulada")
+                    if bolsa is not None:
+                        meta["bolsa"] = f"${float(bolsa):,.2f}"
+                except Exception as e:
+                    logger.info("ℹ️ [V-07] Metadatos del sorteo no disponibles (%s).", type(e).__name__)
+
+                try:
+                    for c in (client.get(URL_PROGOL_API_CALENDARIO).json() or []):
+                        if str(c.get("startDraw")) == str(meta.get("draw_number")):
+                            meta["fecha_cierre"] = c.get("fecha")
+                            break
+                except Exception as e:
+                    logger.info("ℹ️ [V-07] Calendario Progol no disponible (%s).", type(e).__name__)
+        except Exception as e:
+            logger.warning("⚠️ [V-07] API fáctica de Progol inaccesible (%s: %s).", type(e).__name__, e)
+            return None
+
+        payload = cls.parse_progol_api_payload(payload_partidos, meta)
+        if not payload["partidos_regular"] and not payload["partidos_revancha"]:
+            return None
+        logger.info(
+            "✅ [V-07] Concurso %s desde la API fáctica del operador: %d Regular + %d Revancha (bolsa=%s).",
+            payload["concurso_id"],
+            len(payload["partidos_regular"]),
+            len(payload["partidos_revancha"]),
+            payload["bolsa"],
+        )
+        return payload
+
+    @classmethod
     def extraer_concurso_activo(cls, url: Optional[str] = None) -> Dict[str, Any]:
         """Navega a miloteria.mx con Playwright Stealth y retorna el payload estructurado."""
         target_url = url or URL_PROGOL_DEFAULT
@@ -267,7 +410,8 @@ class ProgolMarketScraper:
             from playwright.sync_api import sync_playwright
         except ImportError:
             logger.error("⚠️ Playwright no está instalado. Instala con: pip install playwright && playwright install chromium")
-            return cls.parse_progol_text("")
+            # [V-07] Sin carril DOM se intenta la fuente fáctica JSON del propio operador.
+            return cls._extraer_concurso_api() or cls.parse_progol_text("")
 
         body_text = ""
         try:
@@ -302,9 +446,19 @@ class ProgolMarketScraper:
                     browser.close()
         except Exception as e:
             logger.error("🚨 Ingesta Progol fallida (%s): %s. Se devuelve payload degradado.", type(e).__name__, e)
-            return cls.parse_progol_text("")
+            # [V-07] Caída del carril DOM: respaldo en la fuente fáctica JSON del operador.
+            return cls._extraer_concurso_api() or cls.parse_progol_text("")
 
         payload = cls.parse_progol_text(body_text)
+        if not payload["partidos_regular"] and not payload["partidos_revancha"]:
+            # [V-07] El DOM no publicó casillas (ventana de venta cerrada / tabla no renderizada):
+            # el concurso VIGENTE sigue publicado por el operador vía XHR JSON. Se consulta esa
+            # fuente fáctica ANTES de declarar la vaciedad del concurso (cero invención de datos).
+            logger.info("ℹ️ [V-07] DOM sin casillas: consultando la fuente fáctica JSON del operador…")
+            payload_api = cls._extraer_concurso_api()
+            if payload_api is not None:
+                return payload_api
+
         logger.info(
             "✅ [LN-QBE-075] Concurso %s ingestado: %d Regular + %d Revancha (bolsa=%s).",
             payload["concurso_id"],

@@ -9,10 +9,11 @@ import json
 import shutil
 import hashlib
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Set
 import httpx
 from sqlalchemy.orm import Session
 from src.storage.models import League, Team
+from src.ingestion.normalizer import canonicalize_team_name
 
 # ─── Directorios soberanos ────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -22,116 +23,176 @@ CRESTS_DIR.mkdir(parents=True, exist_ok=True)
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 # ─── Catálogo Canónico Oficial FMF / Liga MX (Fuente de la Verdad) ───────────
+# [VARIANZA-09 / ALT-9-B + ALT-9-C RATIFICADAS — DICTAMEN DEL DIRECTOR 2026-10-04]
+# Cada entrada declara el SLUG CANÓNICO ratificado (ALT-8-C, catálogo `TEAMS_LIGA_MX`) y el
+# identificador FÁCTICO de FotMob. Los slugs legados se conservan como `aliases` para el espejeo
+# físico de escudos (Anti-Archivos Fantasma [ARCH-1.5.4]). Con los slugs legados,
+# `sellar_catalogo_en_db` no hallaba par en la bóveda y fabricaba 10 clubes con
+# `fotmob_team_id = 10000 + idx` ([GOVERNANCE-01]): defecto de idempotencia erradicado de raíz.
+# `Mazatlán FC` no tiene par fáctico en el catálogo ratificado ⇒ `fotmob_id = None` y su
+# inserción queda VETADA por ALT-9-A (cero alta sintética).
 PROSPECCION_LIGA_MX: List[Dict[str, Any]] = [
     {
-        "name": "Club América", "short": "América", "slug": "america",
+        "name": "Club América", "short": "América", "slug": "club-america",
+        "fotmob_id": 6576,
         "stadium": "Ciudad de los Deportes", "city": "Ciudad de México",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/1/1.png",
-        "aliases": ["club-america", "aguilas", "america"],
+        "aliases": ["america", "aguilas"],
     },
     {
-        "name": "Atlas FC", "short": "Atlas", "slug": "atlas",
+        "name": "Atlas FC", "short": "Atlas", "slug": "atlas-fc",
+        "fotmob_id": 6577,
         "stadium": "Jalisco", "city": "Guadalajara",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/10445/10445.png",
-        "aliases": ["atlas-fc", "zorros", "rojinegros"],
+        "aliases": ["atlas", "zorros", "rojinegros"],
     },
     {
         "name": "Club Tijuana", "short": "Tijuana", "slug": "club-tijuana",
+        "fotmob_id": 162418,
         "stadium": "Caliente", "city": "Tijuana",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/5/5.png",
         "aliases": ["tijuana", "xolos"],
     },
     {
         "name": "Cruz Azul", "short": "Cruz Azul", "slug": "cruz-azul",
+        "fotmob_id": 6578,
         "stadium": "Ciudad de los Deportes", "city": "Ciudad de México",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/6/6.png",
         "aliases": ["cruzazul", "la-maquina", "cementeros"],
     },
     {
-        "name": "Chivas Guadalajara", "short": "Chivas", "slug": "guadalajara",
+        "name": "Chivas Guadalajara", "short": "Chivas", "slug": "chivas-guadalajara",
+        "fotmob_id": 7807,
         "stadium": "Akron", "city": "Zapopan",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/7/7.png",
-        "aliases": ["chivas-guadalajara", "chivas", "guadalajara"],
+        "aliases": ["guadalajara", "chivas"],
     },
     {
-        "name": "Club León", "short": "León", "slug": "leon",
+        "name": "Club León", "short": "León", "slug": "club-leon",
+        "fotmob_id": 1841,
         "stadium": "León", "city": "León",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/9/9.png",
-        "aliases": ["club-leon", "la-fiera", "panzas-verdes"],
+        "aliases": ["leon", "la-fiera", "panzas-verdes"],
     },
     {
-        "name": "Club Pachuca", "short": "Pachuca", "slug": "pachuca",
+        "name": "Club Pachuca", "short": "Pachuca", "slug": "club-pachuca",
+        "fotmob_id": 7848,
         "stadium": "Hidalgo", "city": "Pachuca",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11/11.png",
-        "aliases": ["club-pachuca", "tuzos"],
+        "aliases": ["pachuca", "tuzos"],
     },
     {
-        "name": "Club Puebla", "short": "Puebla", "slug": "puebla",
+        "name": "Club Puebla", "short": "Puebla", "slug": "club-puebla",
+        "fotmob_id": 7847,
         "stadium": "Cuauhtémoc", "city": "Puebla",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/12/12.png",
-        "aliases": ["club-puebla", "la-franja", "camoteros"],
+        "aliases": ["puebla", "la-franja", "camoteros"],
     },
     {
-        "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "monterrey",
+        "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "rayados-de-monterrey",
+        "fotmob_id": 7849,
         "stadium": "BBVA", "city": "Guadalupe",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/14/14.png",
-        "aliases": ["rayados-de-monterrey", "rayados", "monterrey"],
+        "aliases": ["monterrey", "rayados"],
     },
     {
         "name": "Santos Laguna", "short": "Santos", "slug": "santos-laguna",
+        "fotmob_id": 7857,
         "stadium": "Corona", "city": "Torreón",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/15/15.png",
         "aliases": ["santos", "guerreros", "laguneros"],
     },
     {
         "name": "Tigres UANL", "short": "Tigres", "slug": "tigres-uanl",
+        "fotmob_id": 8561,
         "stadium": "Universitario", "city": "San Nicolás de los Garza",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/16/16.png",
         "aliases": ["tigres", "felinos", "uanl"],
     },
     {
-        "name": "Deportivo Toluca", "short": "Toluca", "slug": "toluca",
+        "name": "Deportivo Toluca", "short": "Toluca", "slug": "deportivo-toluca",
+        "fotmob_id": 6618,
         "stadium": "Nemesio Díez", "city": "Toluca",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/17/17.png",
-        "aliases": ["deportivo-toluca", "diablos-rojos", "toluca"],
+        "aliases": ["toluca", "diablos-rojos"],
     },
     {
         "name": "Pumas UNAM", "short": "Pumas", "slug": "pumas-unam",
+        "fotmob_id": 1946,
         "stadium": "Olímpico Universitario", "city": "Ciudad de México",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/18/18.png",
         "aliases": ["pumas", "unam", "univ-nacional", "universitarios"],
     },
     {
         "name": "Necaxa", "short": "Necaxa", "slug": "necaxa",
+        "fotmob_id": 1842,
         "stadium": "Victoria", "city": "Aguascalientes",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/29/29.png",
         "aliases": ["rayos-necaxa", "rayos"],
     },
     {
-        "name": "Querétaro FC", "short": "Querétaro", "slug": "queretaro",
+        "name": "Querétaro FC", "short": "Querétaro", "slug": "queretaro-fc",
+        "fotmob_id": 1943,
         "stadium": "Corregidora", "city": "Querétaro",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/13668/13668.png",
-        "aliases": ["queretaro-fc", "gallos-blancos", "qro-fc"],
+        "aliases": ["queretaro", "gallos-blancos", "qro-fc"],
     },
     {
         "name": "Atlético San Luis", "short": "San Luis", "slug": "atletico-san-luis",
+        "fotmob_id": 6358,
         "stadium": "Alfonso Lastras", "city": "San Luis Potosí",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11220/11220.png",
         "aliases": ["san-luis", "atleti-san-luis", "potosinos"],
     },
     {
         "name": "Mazatlán FC", "short": "Mazatlán", "slug": "mazatlan",
+        "fotmob_id": None,
         "stadium": "El Encanto", "city": "Mazatlán",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/12043/12043.png",
         "aliases": ["mazatlan-fc", "canoneros"],
     },
     {
         "name": "FC Juárez", "short": "Juárez", "slug": "fc-juarez",
+        "fotmob_id": 649424,
         "stadium": "Benito Juárez", "city": "Ciudad Juárez",
         "crest_url": "https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/11790/11790.png",
         "aliases": ["juarez", "bravos"],
     },
 ]
+
+# ─── Claves de Identidad y Veto de Fabricación [VARIANZA-09 / ALT-9-A] ────────
+
+def _slug_de_identidad(nombre: str) -> str:
+    """Deriva el slug canónico de un nombre de club (paridad `seeder` / `sync_service`)."""
+    return (
+        canonicalize_team_name(nombre or "").lower()
+        .replace(" ", "-").replace(".", "")
+        .replace("á", "a").replace("é", "e").replace("í", "i")
+        .replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    )
+
+
+def _claves_de_identidad(entrada: Dict[str, Any]) -> Set[str]:
+    """
+    [VARIANZA-09 / ALT-9-A RATIFICADA] Claves de reconciliación de una entrada de curación
+    frente a la tabla `teams`: el slug declarado (canónico o legado), todos sus `aliases` y el
+    slug derivado del nombre canónico. CERO fabricación: sólo habilita la búsqueda de un par
+    fáctico ya existente en la bóveda.
+    """
+    claves: Set[str] = set()
+    for valor in (entrada.get("canonical_slug"), entrada.get("slug")):
+        if valor:
+            claves.add(str(valor).strip().lower())
+    for alias in (entrada.get("aliases") or []):
+        if alias:
+            claves.add(str(alias).strip().lower().replace(" ", "-"))
+    if entrada.get("name"):
+        slug_nombre = _slug_de_identidad(str(entrada["name"]))
+        if slug_nombre:
+            claves.add(slug_nombre)
+    claves.discard("")
+    return claves
+
 
 # ─── Funciones de Curación IPO ────────────────────────────────────────────────
 
@@ -144,6 +205,10 @@ def ejecutar_prospeccion_liga(league_id: int) -> Dict[str, Any]:
             "name": c["name"],
             "short_name": c["short"],
             "canonical_slug": c["slug"],
+            # [VARIANZA-09 / ALT-9-C RATIFICADA] Identidad fáctica propagada al staging HITL: el
+            # contrato `TeamCatalogItemIn.fotmob_id` (ya declarado en el router) transporta la
+            # evidencia oficial de FotMob hasta el sellado. Cero identificadores fabricados.
+            "fotmob_id": c.get("fotmob_id"),
             "stadium": c["stadium"],
             "city": c["city"],
             "crest_candidate_url": c["crest_url"],
@@ -180,6 +245,12 @@ def sellar_catalogo_en_db(
     [Commit Inmutable HITL + Multi-Slug Mirroring]
     Descarga los escudos oficiales a disco con verificación de integridad y realiza
     el espejeo físico obligatorio a todos sus aliases reconocidos [ARCH-1.5.4].
+
+    [VARIANZA-09 / ALT-9-A RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Reconciliación
+    IDEMPOTENTE por clave de identidad (slug canónico | aliases | slug del nombre canónico)
+    y por el `fotmob_id` fáctico, con VETO de fabricación ([GOVERNANCE-01] / [ALT-5-A]): si la
+    entrada no halla par fáctico comprobable en la bóveda se veta; JAMÁS se inserta identidad
+    inventada (`fotmob_team_id = 10000 + idx`).
     """
     league = db.query(League).filter(
         (League.fotmob_id == league_id) | (League.id == league_id)
@@ -188,16 +259,19 @@ def sellar_catalogo_en_db(
         raise ValueError(f"Liga con id={league_id} no encontrada en la base de datos.")
 
     committed = 0
+    reconciliados = 0
+    vetados: List[str] = []
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Referer": "https://ligamx.net/"
     }
 
     with httpx.Client(timeout=15.0, headers=headers, follow_redirects=True) as client:
-        for idx, t in enumerate(approved_teams):
+        for t in approved_teams:
             slug = t.get("canonical_slug") or t.get("slug")
             if not slug:
                 continue
+            committed += 1
             crest_url = t.get("crest_candidate_url") or t.get("crest_url", "")
             local_filename = f"{slug}.png"
             local_path = CRESTS_DIR / local_filename
@@ -221,29 +295,68 @@ def sellar_catalogo_en_db(
                         alias_path = CRESTS_DIR / f"{alias_clean}.png"
                         shutil.copyfile(local_path, alias_path)
 
-            # 3. Upsert inmutable en SQLite
+            # 3. [VARIANZA-09 / ALT-9-A RATIFICADA] Reconciliación idempotente con clave de
+            #    identidad DUAL y VETO de fabricación. Defecto extirpado: la línea previa
+            #    (`Team.canonical_slug == slug`) reconciliaba sólo por slug EXACTO, de modo que
+            #    los slugs legados del catálogo de prospección no hallaban par en la bóveda y se
+            #    insertaban clubes con `fotmob_team_id = 10000 + idx` (10 tuplas residuales por
+            #    corrida ⇒ ruptura de la idempotencia de The Shield) [GOVERNANCE-01].
             final_crest_url = f"/static/img/crests/{local_filename}"
-            team_db = db.query(Team).filter(Team.canonical_slug == slug).first()
-            if not team_db:
-                team_db = Team(
-                    league_id=league.id,
-                    fotmob_team_id=10000 + idx,
-                    name=t["name"],
-                    short_name=t.get("short_name", t["name"][:10]),
-                    canonical_slug=slug,
-                    crest_url=final_crest_url,
-                )
-                db.add(team_db)
-            else:
-                team_db.name = t["name"]
-                team_db.short_name = t.get("short_name", team_db.short_name)
-                team_db.crest_url = final_crest_url
+            claves_identidad = _claves_de_identidad(t)
+            fotmob_id_factual = t.get("fotmob_id")
 
-            committed += 1
+            # (a) Par fáctico dentro de la competición: slug canónico o cualquiera de sus aliases.
+            team_db = db.query(Team).filter(
+                Team.league_id == league.id,
+                Team.canonical_slug.in_(sorted(claves_identidad)),
+            ).first()
+
+            # (b) Respaldo por identidad oficial de FotMob (única en la bóveda).
+            if not team_db and fotmob_id_factual:
+                team_db = db.query(Team).filter(
+                    Team.fotmob_team_id == int(fotmob_id_factual)
+                ).first()
+
+            if not team_db:
+                # VETO DE FABRICACIÓN: sin evidencia fáctica comprobable NO se inserta identidad
+                # sintética. El único escritor autorizado de `teams` con identidad fáctica es la
+                # Fase 4 de `centinela_deportivo.py` ([ALT-5-A RATIFICADA]).
+                vetados.append(slug)
+                continue
+
+            # Actualización IN SITU (jamás INSERT): identidad fáctica y metadatos HITL.
+            team_db.league_id = league.id
+            team_db.name = t["name"]
+            team_db.short_name = t.get("short_name", team_db.short_name)
+            if fotmob_id_factual:
+                team_db.fotmob_team_id = int(fotmob_id_factual)
+            if team_db.canonical_slug == slug:
+                # El espejo local sólo se declara sobre el slug canónico: nunca se reescribe el
+                # `crest_url` canónico con un nombre legado (hallazgo 12.3.4 de VARIANZA-09).
+                team_db.crest_url = final_crest_url
+            reconciliados += 1
 
     db.commit()
-    print(f"✅ [CURATION INDUSTRIAL] Catálogo sellado: {committed} clubes en league_id={league_id}.")
-    return {"status": "SEALED", "league_id": league_id, "teams_committed": committed}
+    # [VARIANZA-09 / 12.3.3] Contador honesto: `teams_committed` reporta ENTRADAS PROCESADAS
+    # (contrato del Juez 022 preservado) y el desglose real (reconciliadas / vetadas) se declara
+    # aparte. El contador previo anunciaba «18 clubes» mientras insertaba 10 filas sintéticas.
+    print(
+        f"✅ [CURATION INDUSTRIAL] Catálogo sellado: {committed} entradas procesadas, "
+        f"{reconciliados} clubes reconciliados in situ (cero altas sintéticas) "
+        f"en league_id={league_id}."
+    )
+    if vetados:
+        print(
+            f"🛡️ [CURATION] {len(vetados)} entrada(s) VETADA(S) por ausencia de par fáctico: "
+            f"{sorted(set(vetados))} ([GOVERNANCE-01])."
+        )
+    return {
+        "status": "SEALED",
+        "league_id": league_id,
+        "teams_committed": committed,
+        "teams_reconciled": reconciliados,
+        "teams_vetoed": sorted(set(vetados)),
+    }
 
 
 # ─── Subsistema Incremental de Logos de Ligas ──────────────────────────────────

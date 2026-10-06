@@ -80,7 +80,14 @@ def extraer_tabla_general_ligamx() -> List[Dict[str, Any]]:
                             standings.append({
                                 "pos": pos,
                                 "equipo": team_name,
-                                "fotmob_id": 10000 + pos,
+                                # [VARIANZA-09 / 12.7 RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04]
+                                # Erradicada la fabricación de identidad `10000 + pos`
+                                # ([GOVERNANCE-01]). ligamx.net (FMF) no publica el identificador de
+                                # FotMob y [LN-QBE-093] prohíbe a `providers/` importar el catálogo
+                                # ratificado desde `src.storage` ⇒ se declara AUSENCIA FÁCTICA
+                                # (None) en lugar de inventar identidad. Ningún consumidor lee este
+                                # campo ni se persiste en la tabla `teams` desde esta ruta.
+                                "fotmob_id": None,
                                 "escudo_url": _local_crest_url(team_name),
                                 "pj": pj,
                                 "pg": pg,

@@ -10,13 +10,18 @@ from src.storage.models import League, Team, StandingSnapshot
 from src.storage.crest_resolver import STATIC_CRESTS_DIR, obtener_slug_club
 from src.ingestion.normalizer import canonicalize_team_name
 
-# Escudos primarios que DEBEN existir con bytes reales (> 3 KB) para que la app funcione
+# Escudos primarios que DEBEN existir con bytes reales (> 3 KB) para que la app funcione.
+# [ALT-8-C RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Nombres alineados a los SLUGS
+# CANÓNICOS de la identidad fáctica FotMob (`TEAMS_LIGA_MX`). Con los slugs legados la
+# verificación daba falso positivo permanente (archivos inexistentes) y disparaba
+# `sellar_catalogo_en_db` en cada arranque, que fabricaba clubes con `fotmob_team_id = 10000 + idx`
+# ([GOVERNANCE-01] / VARIANZA-08-D): 10 tuplas residuales en `teams` y ruptura de LN-QBE-019.
 _ESCUDOS_CLAVE = [
-    "america.png", "guadalajara.png", "cruz-azul.png", "toluca.png",
-    "pachuca.png", "tigres-uanl.png", "monterrey.png", "pumas-unam.png",
-    "leon.png", "santos-laguna.png", "atlas.png", "atletico-san-luis.png",
-    "necaxa.png", "fc-juarez.png", "queretaro.png",
-    "club-tijuana.png", "puebla.png", "atlante.png"
+    "club-america.png", "chivas-guadalajara.png", "cruz-azul.png", "deportivo-toluca.png",
+    "club-pachuca.png", "tigres-uanl.png", "rayados-de-monterrey.png", "pumas-unam.png",
+    "club-leon.png", "santos-laguna.png", "atlas-fc.png", "atletico-san-luis.png",
+    "necaxa.png", "fc-juarez.png", "queretaro-fc.png",
+    "club-tijuana.png", "club-puebla.png", "atlante.png"
 ]
 
 def asegurar_boveda_escudos_base():
@@ -40,26 +45,38 @@ def asegurar_boveda_escudos_base():
         finally:
             db.close()
 
+# [ALT-8-C RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Catálogo de identidad FÁCTICA de los
+# 18 clubes de la Liga MX. Fuente: respuesta oficial de FotMob capturada por
+# `scripts/daemons/centinela_deportivo.py` (Fase 4). Sustituye al catálogo legado
+# (7966…7981 / 8430 / 10014 / 638520), cuyos identificadores YA NO corresponden a la identidad
+# publicada hoy por la fuente (p. ej. Club Tijuana: legado 10224 vs fáctico 162418) y
+# provocaban residuos duplicados en cada arranque. [GOVERNANCE-01] Cero identificadores fabricados.
 TEAMS_LIGA_MX = [
-    {"fotmob_id": 7966, "name": "Club América", "short": "América", "slug": "america"},
-    {"fotmob_id": 7967, "name": "Deportivo Toluca", "short": "Toluca", "slug": "toluca"},
-    {"fotmob_id": 10224, "name": "Club Tijuana", "short": "Tijuana", "slug": "club-tijuana"},
-    {"fotmob_id": 7969, "name": "Atlas FC", "short": "Atlas", "slug": "atlas"},
-    {"fotmob_id": 7970, "name": "Chivas Guadalajara", "short": "Chivas", "slug": "guadalajara"},
-    {"fotmob_id": 7971, "name": "Querétaro FC", "short": "Querétaro", "slug": "queretaro"},
-    {"fotmob_id": 7972, "name": "Club León", "short": "León", "slug": "leon"},
-    {"fotmob_id": 7973, "name": "Club Puebla", "short": "Puebla", "slug": "puebla"},
-    {"fotmob_id": 7974, "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "monterrey"},
-    {"fotmob_id": 7975, "name": "Cruz Azul", "short": "Cruz Azul", "slug": "cruz-azul"},
-    {"fotmob_id": 7976, "name": "Pumas UNAM", "short": "Pumas", "slug": "pumas-unam"},
-    {"fotmob_id": 7977, "name": "Necaxa", "short": "Necaxa", "slug": "necaxa"},
-    {"fotmob_id": 8430, "name": "Atlético San Luis", "short": "San Luis", "slug": "atletico-san-luis"},
-    {"fotmob_id": 10014, "name": "Atlante", "short": "Atlante", "slug": "atlante"},
-    {"fotmob_id": 7979, "name": "Club Pachuca", "short": "Pachuca", "slug": "pachuca"},
-    {"fotmob_id": 7980, "name": "Tigres UANL", "short": "Tigres", "slug": "tigres-uanl"},
-    {"fotmob_id": 7981, "name": "Santos Laguna", "short": "Santos", "slug": "santos-laguna"},
-    {"fotmob_id": 638520, "name": "FC Juárez", "short": "Juárez", "slug": "fc-juarez"},
+    {"fotmob_id": 1841, "name": "Club León", "short": "León", "slug": "club-leon"},
+    {"fotmob_id": 1842, "name": "Necaxa", "short": "Necaxa", "slug": "necaxa"},
+    {"fotmob_id": 1942, "name": "Atlante", "short": "Atlante", "slug": "atlante"},
+    {"fotmob_id": 1943, "name": "Querétaro FC", "short": "Querétaro", "slug": "queretaro-fc"},
+    {"fotmob_id": 1946, "name": "Pumas UNAM", "short": "Pumas", "slug": "pumas-unam"},
+    {"fotmob_id": 6358, "name": "Atlético San Luis", "short": "San Luis", "slug": "atletico-san-luis"},
+    {"fotmob_id": 6576, "name": "Club América", "short": "América", "slug": "club-america"},
+    {"fotmob_id": 6577, "name": "Atlas FC", "short": "Atlas", "slug": "atlas-fc"},
+    {"fotmob_id": 6578, "name": "Cruz Azul", "short": "Cruz Azul", "slug": "cruz-azul"},
+    {"fotmob_id": 6618, "name": "Deportivo Toluca", "short": "Toluca", "slug": "deportivo-toluca"},
+    {"fotmob_id": 7807, "name": "Chivas Guadalajara", "short": "Chivas", "slug": "chivas-guadalajara"},
+    {"fotmob_id": 7847, "name": "Club Puebla", "short": "Puebla", "slug": "club-puebla"},
+    {"fotmob_id": 7848, "name": "Club Pachuca", "short": "Pachuca", "slug": "club-pachuca"},
+    {"fotmob_id": 7849, "name": "Rayados de Monterrey", "short": "Monterrey", "slug": "rayados-de-monterrey"},
+    {"fotmob_id": 7857, "name": "Santos Laguna", "short": "Santos", "slug": "santos-laguna"},
+    {"fotmob_id": 8561, "name": "Tigres UANL", "short": "Tigres", "slug": "tigres-uanl"},
+    {"fotmob_id": 162418, "name": "Club Tijuana", "short": "Tijuana", "slug": "club-tijuana"},
+    {"fotmob_id": 649424, "name": "FC Juárez", "short": "Juárez", "slug": "fc-juarez"},
 ]
+
+# [VARIANZA-09 / 12.7 RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Proyección de identidad
+# fáctica `nombre canónico → fotmob_id` derivada del catálogo ratificado (ALT-8-C). Sustituye la
+# fabricación `10000 + pos` del snapshot de arranque ([GOVERNANCE-01]): el identificador de club
+# NUNCA se inventa, se toma de la evidencia oficial de FotMob.
+_FOTMOB_ID_POR_NOMBRE = {t["name"]: t["fotmob_id"] for t in TEAMS_LIGA_MX}
 
 # Snapshot certificado de Tabla General oficial tras concluir la Jornada 7 [PARIDAD FÁCTICA FMF]
 TABLA_OFICIAL_J7_CONCLUIDA = [
@@ -99,25 +116,31 @@ def seed_initial_data(db):
         db.commit()
         db.refresh(liga)
 
-    # 1. Asegurar catálogo de exactamente 18 clubes en tabla teams
-    valid_slugs = {t["slug"] for t in TEAMS_LIGA_MX}
-    db.query(Team).filter(Team.league_id == liga.id, ~Team.canonical_slug.in_(valid_slugs)).delete(synchronize_session=False)
-    db.commit()
-
+    # 1. [ALT-8-B RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Upsert IDEMPOTENTE del catálogo
+    # fáctico de clubes (ALT-8-C). PROHIBIDO el borrado destructivo
+    # (`~Team.canonical_slug.in_(...)`): amputaba las filas sembradas por la ingesta viva
+    # (`centinela_deportivo.py`, Fase 4) y dejaba 27 filas (9 fácticas + 18 legadas) en cada
+    # arranque del servidor (`src/web/app.py:34`) y en las suites compuestas de The Shield.
+    # Clave de reconciliación DUAL: `canonical_slug` OR `fotmob_team_id` ⇒ si el club ya existe
+    # sólo se actualizan metadatos; si la bóveda es virgen, se da de alta con su identidad
+    # fáctica. Idempotente: con los 18 clubes ya presentes no genera tuplas residuales.
     for t in TEAMS_LIGA_MX:
-        team_rec = db.query(Team).filter(Team.fotmob_team_id == t["fotmob_id"]).first()
         crest = f"/static/img/crests/{t['slug']}.png"
+        team_rec = db.query(Team).filter(
+            (Team.canonical_slug == t["slug"]) | (Team.fotmob_team_id == t["fotmob_id"])
+        ).first()
         if not team_rec:
-            team_obj = Team(
+            db.add(Team(
                 league_id=liga.id,
                 fotmob_team_id=t["fotmob_id"],
                 name=t["name"],
                 short_name=t["short"],
                 canonical_slug=t["slug"],
                 crest_url=crest
-            )
-            db.add(team_obj)
+            ))
         else:
+            team_rec.league_id = liga.id
+            team_rec.fotmob_team_id = t["fotmob_id"]
             team_rec.name = t["name"]
             team_rec.short_name = t["short"]
             team_rec.canonical_slug = t["slug"]
@@ -132,7 +155,10 @@ def seed_initial_data(db):
         standings_iniciales.append({
             "pos": row["pos"],
             "equipo": eq,
-            "fotmob_id": 10000 + row["pos"],
+            # [VARIANZA-09 / 12.7 RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Erradicada la
+            # fabricación `10000 + pos` ([GOVERNANCE-01]): la identidad se proyecta desde el
+            # catálogo fáctico ratificado (ALT-8-C) por nombre canónico. Cero IDs inventados.
+            "fotmob_id": _FOTMOB_ID_POR_NOMBRE.get(eq),
             "escudo_url": f"/static/img/crests/{slug}.png",
             "proximo_escudo_url": None,
             "pj": row["pj"],
