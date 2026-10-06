@@ -887,7 +887,11 @@ function renderizarResultadosPortafolio(data) {
 
             // [UX-MANDATE] Semántica precisa de cobertura por familia de estrategia (GOVERNANCE §8)
             let coberturaHtml = `<span style="color:#94A3B8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
-            if (cod.startsWith("QBE-D1")) {
+            // [LN-QBE-083-B] [ARCH-1.4.16-B] Tramo 4: las familias DIRECTAS (QBE-D1 y QBE-D2) carecen de
+            // pierna de cobertura en tablas ⇒ comparten el rótulo único de riesgo directo. El literal
+            // genérico "Recuperas $X MXN ($0.00 pérdida)" queda erradicado para ellas: es fiduciariamente
+            // falso al no existir recuperación alguna ([GOVERNANCE-01]).
+            if (cod.startsWith("QBE-D1") || cod.startsWith("QBE-D2")) {
                 coberturaHtml = `<span style="color:#f87171; font-weight:600;">Sin cobertura (Riesgo Directo: -$${inv.toFixed(2)})</span>`;
             } else if (cod === "QBE-R2") {
                 coberturaHtml = `<span style="color:#00E676; font-weight:600;">Ambos boletos ganan (+${roi.toFixed(1)}% ROI)</span>`;
@@ -895,9 +899,17 @@ function renderizarResultadosPortafolio(data) {
                 coberturaHtml = `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
             }
 
+            // [ARCH-1.4.16-B] Tramo 3: el horario fáctico del encuentro se publica como línea secundaria
+            // dentro de la columna PARTIDO (`horario_evento` es contrato sellado por [ARCH-1.4.16] y lo
+            // emite src/web/routes/markets.py). Sin horario declarado no se inventa placeholder:
+            // la fila se emite sin línea secundaria ([GOVERNANCE-01]).
+            const horarioHtml = ord.horario_evento
+                ? `<small style="display:block; font-weight:400; color:var(--text-muted); font-size:7.6pt;">⏰ ${ord.horario_evento}</small>`
+                : "";
+
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td style="font-weight:700; color:#fff;">${ord.partido}</td>
+                <td style="font-weight:700; color:#fff;">${ord.partido}${horarioHtml}</td>
                 <td style="text-align:center;"><span class="badge-status-live" style="background:${pal.bg}; color:${pal.fg}; border-color:${pal.borde};">${cod}</span></td>
                 <td style="text-align:right; font-weight:700;">$${inv.toFixed(2)}</td>
                 <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>

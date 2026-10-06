@@ -1128,6 +1128,13 @@ class PortfolioExecutionPlan(BaseModel):
 * En el payload emitido por el generador de cartera, **todo boleto individual (`boleto_1_seguro` y `boleto_2_ganancia`) debe portar obligatoriamente la propiedad `operador: str` con el slug de la casa correspondiente**, incluso en modalidad mono-operador (`operador: "caliente"` o `"novibet"`).
 * Queda terminantemente prohibido que `operador` sea `None` o vacío, impidiendo la degradación al texto plano "VENTANILLA".
 
+### [ARCH-1.4.16-B] Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR]
+* **Alcance acotado (Dictamen VARIANZA-10 §1.2):** legislación exclusivamente de **presentación** sobre `src/web/static/js/app.js`. El Tramo 1 ($P'$ contraído en el contrato de orden) y el horario en el contrato de orden ya están sellados (`[DES-QBE-060]`, `[DES-QBE-061]`, `[DES-QBE-062]`, `[ARCH-1.4.16]`) y **no se re-legislan** aquí.
+* **Horario fáctico (Tramo 3):** cada fila de `cuerpo-resumen-asignacion` debe renderizar, dentro de la columna `PARTIDO`, el campo `horario_evento` de la orden —contrato sellado por `[ARCH-1.4.16]` y emitido por `src/web/routes/markets.py`— como línea secundaria `⏰ {horario_evento}`. Si el campo es vacío o ausente, la fila se emite **sin** la línea secundaria: cero placeholders inventados (`[GOVERNANCE-01]`).
+* **Rótulo de cobertura (Tramo 4):** la celda de cobertura de la misma tabla comparte el contrato semántico de `[LN-QBE-083-B]` (rótulo único para `QBE-D1` / `QBE-D2`).
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
+
+
 ### [ARCH-1.3.5] Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR]
 * El endpoint `POST /api/portfolio/generate` en `src/web/routes/portfolio.py` queda oficialmente **deprecado y desconectado**. El archivo conserva exclusivamente el servicio de tesis `/api/portfolio/match-thesis`. Toda generación de cartera es gobernada por `src/web/routes/markets.py`.
 

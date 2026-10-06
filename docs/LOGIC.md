@@ -696,6 +696,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** `BayesianFormResult` (`a_reciente`, `a_macro`, `a_contraido`, `rho_aplicado`, `a_amortiguado`) declarado en `src/models/analytics.py`; el llamador deriva $D$ por la invocación simétrica del mismo operador.
 * **Φ (Transición):** Hacia la ecuación log-lineal de intensidades $(\lambda_H, \lambda_A)$ — `[VAULT-CORE-001]` / `[LN-QBE-040]`.
 * **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
+* **Declaración de Limitación Fáctica del Payload (ALT-5-A — Dictamen VARIANZA-10 §1.3):** La fuente de liga verificada (FotMob) publica **agregados estacionales por club** (tabla de temporada con `xg` / `xgConceded`) y **no** publica series de $xG$ por partido. En consecuencia: (i) queda prohibido etiquetar como $10P$ cualquier agregado de temporada completa (`[GOVERNANCE-01]`); (ii) las derivaciones $xG/xGA$ del sensor (`scripts/daemons/centinela_deportivo.py`, transcripción canónica de `docs/DIRGEN_VAULT.md:1091-1093` e insumo obligatorio de $att\_h\_rate = 0.65 \cdot xG + 0.35 \cdot GF$) permanecen **congeladas**: sustituirlas por la tabla xG real exige Enmienda al Vault y re-certificación numérica; (iii) el streaming de forma 10P de alta frecuencia y las consultas granulares de H2H —kernel `src/core/sovereign/h2h_kernel.py` sin fuente de datos cableada— quedan formalmente catalogados como **capacidades de Fase 6**.
 
 ---
 
@@ -950,6 +951,14 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   4. **Salida de Emergencia (Rompe-Quinielas):** Regla de CashOut defensivo si el rival anota primero ($0-1$) y el juego se empata en el 2T ($1-1$), asegurando el rescate del $100\%$ de la inversión ($B_i$).
 * **Φ (Transición):** Hacia `[ARCH-1.4.19]` (monotonía fiduciaria post-piso de ventanilla), `[DES-QBE-061]` (formato dual de cuotas) y `[DES-QBE-062]` (tetralogía de escenarios), materializados en `src/web/static/js/app.js`.
 * **[SHIELD]:** `tests/shield/test_shield_ticket_ux_and_cashout_refinement.py`
+
+### ID: [LN-QBE-083-B] Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas
+* **Ω (Resumen):** Extiende la semántica de liquidación de `[LN-QBE-083]` a la capa de presentación: toda posición cuya familia estratégica carezca de pierna de cobertura en tablas (`QBE-D1` y `QBE-D2`) debe declarar el **riesgo directo real** de su exposición, quedando prohibido exhibir cualquier mensaje de recuperación de capital.
+* **I (Input):** `codigo` de la familia estratégica (`estrategia_seleccionada.codigo`) e `inversion_partido_A_i` (exposición bruta de la orden) del payload de cartera.
+* **P (Process) [UX-MANDATE]:** Para `codigo ∈ {QBE-D1, QBE-D2}` el rótulo canónico es exactamente `"Sin cobertura (Riesgo Directo: -$" + B_i.toFixed(2) + ")"`, con severidad visual de alerta (`#f87171`). **Prohibición expresa:** el literal genérico `Recuperas $X MXN ($0.00 pérdida)` —que describe recuperación íntegra vía pierna de cobertura en tablas— queda **erradicado** para toda familia directa, por ser fiduciariamente falso en ausencia de dicha pierna.
+* **O (Output):** Celda de cobertura del `cuerpo-resumen-asignacion` (`src/web/static/js/app.js`).
+* **Φ (Transición):** Hacia `[ARCH-1.4.16-B]` (horario fáctico en el Resumen de Asignación) y `[DES-QBE-060]` (anatomía de boletos).
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
 
 
 ---

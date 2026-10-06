@@ -49,7 +49,13 @@ def test_ln_qbe_097_markets_routes_registration():
     from src.web.app import create_app
     app = create_app()
 
-    routes = [route.path for route in app.routes]
+    # [VAR-10-A / Ficha de Varianza aprobada — Dictamen VARIANZA-10 §1.1] Introspección por
+    # CONTRATO PÚBLICO (OpenAPI). FastAPI >= 0.141 (Starlette 1.6.0) sustituyó el volcado de
+    # APIRoute en `app.routes` por el proxy opaco `fastapi.routing._IncludedRouter` (sin `.path`
+    # y sin sub-rutas públicas): el mecanismo previo quedó derogado por deriva de dependencia
+    # (requirements.txt:4 `fastapi>=0.111.0`, cota inferior sin pin), no por defecto del contrato.
+    # Se audita lo PUBLICADO/DESPACHABLE (`app.openapi()["paths"]`): API estable y version-agnóstica.
+    routes = set(app.openapi().get("paths", {}).keys())
     
     # Endpoints obligatorios de mercado y centro de control
     assert "/api/markets/sportsbook/portfolio/generate" in routes

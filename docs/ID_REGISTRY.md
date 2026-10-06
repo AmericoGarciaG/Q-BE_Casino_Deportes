@@ -170,6 +170,9 @@
 
 | `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
+| `[ARCH-1.4.16-B]` | ARCH | `docs/ARCH.md` | Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-083-B]` | LOGIC | `docs/LOGIC.md` | Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas | SELLADO |
+
 
 ---
 
@@ -183,6 +186,7 @@
 | `VAR-2026-LN-QBE-070-073` | Contrato `approved_matches` para Kelly atenuado (familia 070–073) | Nodo de seguimiento declarado, abierto | ABIERTO |
 | `VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST` | Escalera de escudos `[LN-QBE-019]` ciega a la categoría de género (escudo varonil sobre club femenil) | ALT-1 ratificada (escalera categoría-consciente + cache-key blindada D-5) y **EJECUTADA** en Sprint 3 | RESUELTO |
 | `VAR-2026-NOVIBET-FASE1-PASO2` | Literales canónicos de la ingesta Novibet.mx (`Puebla`/`Toluca`/`Pachuca` vs contrato sellado `[LN-QBE-012]`) | ALT-1: contrato canónico intacto; se calibran los literales esperados del Juez | RATIFICADO HISTÓRICO |
+| `VAR-10-A/B/E` | Deriva FastAPI 0.141.1 (_IncludedRouter) + 3/5 tramos pre-sellados + límite estacional FotMob | ALT-1 (OpenAPI), alcance acotado a Tramos 3–4, congelación ALT-5-A | RESUELTO |
 
 ---
 
