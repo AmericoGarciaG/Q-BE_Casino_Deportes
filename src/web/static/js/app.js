@@ -979,8 +979,13 @@ function renderizarResultadosPortafolio(data) {
             `;
 
             if (b1Monto > 0) {
+                // [INVARIANTE VIII-11] Tras la Resolución Definitiva de VARIANZA-H2, la pierna de
+                // recuperación (`boleto_1_seguro`) es SIEMPRE el Empate en toda la Familia H
+                // (H1/H2). El renglón exhibe el capital recuperado CERTIFICADO POR EL MOTOR
+                // (`inv`, con V=0 garantizado por `calcular_dutching_v0`), sin re-derivaciones
+                // del cliente ([GOVERNANCE-01] paridad estricta backend↔pantalla).
                 escenariosHtml += `
-                    <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${retornoTablas} MXN ($0.00 pérdida de capital).</div>
+                    <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${inv.toFixed(2)} MXN ($0.00 pérdida de capital).</div>
                 `;
             }
 

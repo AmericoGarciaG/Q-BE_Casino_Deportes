@@ -13,7 +13,7 @@ import itertools
 from typing import List, Dict, Any, Optional
 from src.core.catalog import STRATEGY_CATALOG
 from src.core.contracts.portfolio_math import (
-    calcular_kelly_atenuado, aplicar_hard_caps_constitucionales,
+    calcular_dutching_v0, calcular_kelly_atenuado, aplicar_hard_caps_constitucionales,
     contraer_distribucion_fiduciaria, calcular_probabilidad_exito_estrategia,
     ordenar_cartera_por_certeza_lexicografica, asignar_capital_monotono_cartera
 )
@@ -64,8 +64,11 @@ def _casa_de_la_pierna(m: Dict[str, Any], momio_pierna: float,
     """[DES-QBE-053 / ARCH-1.5.10] Casa patrocinadora que publica el momio de UNA pierna.
 
     Atribución fáctica por IDENTIDAD del momio: cada boleto viaja con la casa que realmente
-    publica la cuota que ese boleto transporta (`H2`: boleto 1 -> o_fav, boleto 2 -> o_emp;
-    `H1`: boleto 1 -> o_emp, boleto 2 -> o_fav; `R1`/`R2`: boleto 2 -> o_und). Cero heurística
+    publica la cuota que ese boleto transporta (Familia H —`H1`, `H2`—: seguro en tablas ->
+    boleto 1 -> o_emp, ataque al favorito -> boleto 2 -> o_fav; `R1`/`R2`: boleto 2 -> o_und).
+    [INVARIANTE VIII-11] La Resolución Definitiva de VARIANZA-H2 derogó la inversión histórica
+    de H2 (que enviaba o_fav al boleto 1): la simetría H1/H2 hace que el seguro V=0 sea el
+    Empate en TODA la Familia H. Cero heurística
     de nombres y cero invención: si el payload no declara casas (modalidad mono-operador
     heredada) devuelve `None` y la ventanilla exhibe su rótulo genérico de degradación.
     Función de ROTULADO: no interviene en ninguna magnitud de capital, Kelly o Hard-Caps.
@@ -92,10 +95,12 @@ def _p_c_pierna_pct(seleccion: str, fav_name: Optional[str], und_name: Optional[
     """[DES-QBE-060] P' contraído (%) del desenlace que transporta UNA pierna.
 
     Resolución por IDENTIDAD de la etiqueta (mismo principio doctrinal que
-    `_casa_de_la_pierna`): los campos `boleto_1_seguro` / `boleto_2_ganancia` NO describen de
-    forma estable el rol de la pierna (en la familia H2 el "seguro" transporta a Gana-Favorito
-    y la "ganancia" al Empate), por lo que el rótulo fiduciario se ancla al desenlace
-    REALMENTE exhibido en la selección de la pierna. Función de ROTULADO: no interviene en
+    `_casa_de_la_pierna`): el rótulo fiduciario se ancla al desenlace REALMENTE exhibido en la
+    selección de la pierna, jamás al nombre del contenedor. Tras la Resolución Definitiva de
+    VARIANZA-H2 [INVARIANTE VIII-11] la Familia H quedó SIMÉTRICA (`boleto_1_seguro` = Empate /
+    recuperación V=0; `boleto_2_ganancia` = Gana Favorito), pero la resolución por identidad se
+    conserva como blindaje estructural: si un contenedor volviera a cruzarse, el rótulo NO lo
+    hereda. Función de ROTULADO: no interviene en
     ninguna magnitud de capital, Kelly o Hard-Caps. Devuelve `None` ante una etiqueta no
     reconocible, para que la ventanilla degrade a '—' antes que inventar una cifra
     ([GOVERNANCE-01] cero cifras inventadas).
@@ -439,13 +444,33 @@ class PortfolioEngine:
                 inv_partido = 10.00
 
             if "H2" in code:
-                b1_sel = f"Gana {fav_name}{suffix_pa}"
-                b1_momio = o_fav
-                b1_monto = round(inv_partido / b1_momio, 2)
-                b2_sel = "Empate" + (" + PA" if "+" in code else "")
-                b2_momio = o_emp
-                b2_monto = round(inv_partido - b1_monto, 2)
-                out_min85 = f"${round(b2_monto * b2_momio * 0.85, 2)} MXN (Asegurar ~85% del premio al minuto 85' si hay empate)"
+                # ══════════════════════════════════════════════════════════════════════════════
+                # [INVARIANTE VIII-11] / [LN-QBE-083] SIMETRÍA CANÓNICA H1/H2 — RESOLUCIÓN
+                # DEFINITIVA DE VARIANZA-H2 (Director Humano, 2026-10). Queda DEROGADO el Diseño B
+                # del commit génesis `0f4b340` ("Empate de Valor con Seguro Fav"), que invertía las
+                # piernas: el seguro V=0 se anclaba al FAVORITO y el ataque al EMPATE.
+                # Doctrina vigente (Diseño A): TODA la Familia H monetiza el +EV del FAVORITO
+                # (α_V > 0: en H2 el favorito es el visitante) y recupera el 100% del capital en
+                # TABLAS (V=0). Anclaje ENDÓGENO (no requiere doctrina externa):
+                #   (a) [LN-QBE-083] legisla para `H1` y `H2` por igual: "1. Ganancia Principal:
+                #       Victoria ordinaria del favorito" y "Retorno Bruto = B_prio·O_fav + B_i ⟹
+                #       ROI_doble = (1 − 1/O_emp)·O_fav".
+                #   (b) Contrato de presentación (`app.js` L969-970): el BOLETO 1 exhibido (GANANCIA
+                #       / ataque) es `boleto_2_ganancia` y el BOLETO 2 (SEGURO) es `boleto_1_seguro`.
+                #   (c) Invarianza 1 del Auditor Independiente (`1_auditar_cartera_shield.py`): para
+                #       H1/H2/R1, `boleto_1_seguro.monto × momio ≈ A_i`.
+                #   (d) Pase de monotonía fiduciaria (`_reimponer_monotonia_fiduciaria`): re-deriva
+                #       `B_seg = A_i / O_seguro` sobre `boleto_1_seguro` para toda la Familia H.
+                # La asignación de importes se delega VERBATIM a la ley sellada
+                # `[VAULT-CORE-070-DUTCHING]` (`calcular_dutching_v0`): b_seg = B_i / O_emp.
+                b_prio, b_seg, _, _ = calcular_dutching_v0(inv_partido, o_fav, o_emp)
+                b1_sel = "Empate"
+                b1_momio = o_emp
+                b1_monto = b_seg
+                b2_sel = f"Gana {fav_name}{suffix_pa}"
+                b2_momio = o_fav
+                b2_monto = b_prio
+                out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas o cobro anticipado por ventaja de 2 goles."
                 tablas_amt = inv_partido
             elif "H1" in code:
                 b1_sel = "Empate"
@@ -491,7 +516,9 @@ class PortfolioEngine:
             if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]):
                 if 0.0 < b1_monto < PISO_MINIMO_BOLETO:
                     b1_monto = PISO_MINIMO_BOLETO
-                    odd_seguro = m["odd_emp"] if any(f in code for f in ["H1", "H1+", "R1"]) else m["odd_fav"]
+                    # [INVARIANTE VIII-11] Toda la Familia H (H1/H2) ancla el seguro de tablas al
+                    # momio del EMPATE: la pierna 1 transporta SIEMPRE el desenlace de recuperación.
+                    odd_seguro = m["odd_emp"] if any(f in code for f in ["H1", "H1+", "H2", "H2+", "R1"]) else m["odd_fav"]
                     inv_partido = round(b1_monto * odd_seguro, 2)
                     b2_monto = round(inv_partido - b1_monto, 2)
                 elif 0.0 < b2_monto < PISO_MINIMO_BOLETO:

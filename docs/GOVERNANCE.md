@@ -303,7 +303,7 @@ Queda **terminantemente prohibido** inventar, abreviar o alterar los nombres ofi
 2. `QBE-D1+` ➔ **Favorito Directo Potenciado**
 3. `QBE-H1` ➔ **Favorito con Seguro en Empate**
 4. `QBE-H1+` ➔ **Favorito Potenciado con Seguro**
-5. `QBE-H2` ➔ **Empate de Valor con Seguro Fav**
+5. `QBE-H2` ➔ **Favorito Visitante con Cobertura en Tablas (V=0)**
 6. `QBE-H2+` ➔ **Freeroll Doble Impacto (Joya)**
 7. `QBE-R1` ➔ **Valor en No-Favorito con Seguro**
 8. `QBE-R2` ➔ **Doble Oportunidad Sintética X2**

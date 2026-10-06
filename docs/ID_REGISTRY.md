@@ -187,6 +187,8 @@
 | `VAR-2026-LN-QBE-019-CATEGORY-AWARE-CREST` | Escalera de escudos `[LN-QBE-019]` ciega a la categoría de género (escudo varonil sobre club femenil) | ALT-1 ratificada (escalera categoría-consciente + cache-key blindada D-5) y **EJECUTADA** en Sprint 3 | RESUELTO |
 | `VAR-2026-NOVIBET-FASE1-PASO2` | Literales canónicos de la ingesta Novibet.mx (`Puebla`/`Toluca`/`Pachuca` vs contrato sellado `[LN-QBE-012]`) | ALT-1: contrato canónico intacto; se calibran los literales esperados del Juez | RATIFICADO HISTÓRICO |
 | `VAR-10-A/B/E` | Deriva FastAPI 0.141.1 (_IncludedRouter) + 3/5 tramos pre-sellados + límite estacional FotMob | ALT-1 (OpenAPI), alcance acotado a Tramos 3–4, congelación ALT-5-A | RESUELTO |
+| `VAR-H2-SIMETRIA-CANONICA` | Inversión histórica de piernas en `QBE-H2` (commit génesis `0f4b340`): ataque en el Empate y seguro en el Favorito | Reconciliación con el Tratado Vol. II §2.10 y con el nodo sellado `[LN-QBE-083]` (Ataque en Favorito Visitante, Seguro en Empate $V=0$), ley `[VAULT-CORE-070-DUTCHING]` conectada y Juez `[INVARIANTE VIII-11]` en The Shield | RESUELTO |
+| `VAR-H2-UMBRAL` | Mandato de admisión $\Delta_{\text{epist}} \le 0.08$ para `QBE-H2` vs. frontera global vigente $\Delta_{\text{epist}} \le 0.12$ | Umbral sellado intacto; armonización pendiente de dictamen | ABIERTO |
 
 ---
 

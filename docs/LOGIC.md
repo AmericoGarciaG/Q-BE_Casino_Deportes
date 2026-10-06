@@ -431,6 +431,14 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   2. Si $p_{\text{fav}} \ge 0.65 \land \Delta_{\text{epist}} \le 0.04 \land \alpha_{\text{fav}} > 0.05 \implies$ **`QBE-D1`** (Local) o **`QBE-D2`** (Visita).
   3. Si cumple las Cuatro Leyes del Underdog ($\alpha_{\text{dog}} \ge +0.20 \land O_{\text{dog}} \ge 3.50 \land \Delta_{\text{epist}} \le 0.05 \land Q_{\text{mod}} \ge 0.98) \implies$ **`QBE-R1`** (Dog Local) o **`QBE-R2`** (Dog Visita).
   4. Si $0.40 \le p_{\text{fav}} < 0.65 \land O_{\text{Empate}} > \theta^* \land \alpha_H > 0 \implies$ **`QBE-H1`** (Local) o **`QBE-H2`** (Visita) con seguro $V=0$.
+     - **Invariante VIII-11 — Simetría Canónica de Cobertura H1/H2** *(Resolución Definitiva de `VARIANZA-H2`, Director Humano, 2026-10; ficha de cierre `VAR-H2-SIMETRIA-CANONICA`)*: la cobertura de tablas es **ÚNICA** para toda la Familia H. `QBE-H2` NO monetiza la cuota del Empate: monetiza la superioridad del **favorito visitante** ($\alpha_V > 0$) y se cubre en tablas. Queda derogado el Diseño B del commit génesis `0f4b340`.
+       - **Ataque: Gana Favorito Visitante** ($O_V$) — boleto 2 (`boleto_2_ganancia`), pierna que transporta el $+EV$.
+       - **Seguro: Empate** ($O_X$) — boleto 1 (`boleto_1_seguro`), reintegro del $100\%$ del capital ($V=0$) conforme a `[VAULT-CORE-070-DUTCHING]` ($b_{seg} = A_i / O_X$).
+       - **Condición de admisión:** $0.40 \le p_2 < 0.65 \land \Delta_{\text{epist}} \le 0.08 \land O_X > \theta_2^* \land \alpha_2 > 0$, con $\theta_2^* = O_V / (O_V - 1.0)$ y $\alpha_2 = p_2 O_V - 1.0$.
+       - **Asignación de importes:** `calcular_dutching_v0(b_total, o_fav, o_emp)` (`portfolio_math.py`), idéntica para `H1` y `H2` (ley del Vault conectada; fin de la ley huérfana V-1).
+       - **Anclaje endógeno del Doble Cobro:** `[LN-QBE-083]` — *Ganancia Principal = Victoria ordinaria del favorito* y *Retorno Bruto* $= B_{\text{prio}} O_{\text{fav}} + B_i$ — ya legislaba el Diseño A para `H1` **y** `H2`; la inversión histórica de piernas fue una violación de este nodo, no una doctrina alternativa.
+       - **Nota de vigencia (umbral):** el mandato de admisión $\Delta_{\text{epist}} \le 0.08$ pertenece a la Resolución `VARIANZA-H2`; la frontera de cuarentena hoy vigente en la cascada sellada `[VAULT-CORE-070-TRIAJE]` es global ($\Delta_{\text{epist}} \le 0.12$). La armonización del umbral queda registrada como varianza **ABIERTA** (`VAR-H2-UMBRAL`) y no se alteró sin dictamen expreso.
+       - **[SHIELD]:** `tests/shield/test_shield_invariante_viii_11_simetria_h1_h2.py`
   5. Si $O_{\text{Empate}} \le \theta^*$ (empate caro) $\land \alpha_{\text{DNB}} > 0.05 \implies$ **`QBE-C1`** (Draw No Bet / AH 0.0).
   6. Si $\max(\alpha_{1X2}) \le 0 \land \alpha_{\text{Totales}} > 0.06 \implies$ **`QBE-C2`** (Derivado Totales en $M_{xy}^*$).
   7. Por defecto ante ausencia de valor $\implies$ **`QBE-00`** (Abstención).

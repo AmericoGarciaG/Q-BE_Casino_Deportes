@@ -308,6 +308,8 @@ Cada partido almacenarás en `matches_json`:
   - `calcular_ranking_friccion(partidos) -> list`
   - `calcular_kelly_atenuado(p, O, delta_epist, gamma=0.25) -> float`
   - `aplicar_hard_caps_constitucionales(inversiones, bankroll) -> list`
+* **Gobierno de la asignación de capital de la Familia H (Invariante VIII-11) [VAULT-CORE-070-DUTCHING]:** `calcular_dutching_v0` gobierna la asignación de capital de la Familia H — `QBE-H1` y `QBE-H2` comparten la MISMA estructura de cobertura (ataque al favorito + seguro $V=0$ en el Empate), con $b_{seg} = A_i / O_{\text{Empate}}$ y $b_{prio} = A_i - b_{seg}$. Resolución Definitiva de la varianza `VAR-H2-SIMETRIA-CANONICA` (ficha de cierre en `docs/ID_REGISTRY.md`): la ley sellada del Vault deja de ser ley huérfana (V-1) y se invoca desde `PortfolioEngine.build_plan()`; queda prohibido re-derivar el seguro del boleto 1 contra el momio del favorito.
+* **[SHIELD]:** `tests/shield/test_shield_invariante_viii_11_simetria_h1_h2.py`
 
 ### [ARCH-1.4.10] Despacho Financiero 3NF en markets.py [ARCH-PILLAR]
 * **Endpoint:** `POST /api/markets/sportsbook/portfolio/generate`

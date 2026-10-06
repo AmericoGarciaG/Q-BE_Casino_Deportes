@@ -121,7 +121,7 @@ def auditar_ultimo_portafolio():
         b = o.get("boletos", {})
         b1 = b.get("boleto_1_seguro", {})
         b2 = b.get("boleto_2_ganancia", {})
-        b1_txt = f"Empate (${b1.get('monto_mxn',0):.2f} @ {b1.get('momio',1):.2f})" if b1 and b1.get("monto_mxn",0)>0 else "Directo (Sin Cobertura)"
+        b1_txt = f"{b1.get('seleccion','Seguro')} (${b1.get('monto_mxn',0):.2f} @ {b1.get('momio',1):.2f})" if b1 and b1.get("monto_mxn",0)>0 else "Directo (Sin Cobertura)"
         b2_txt = f"{b2.get('seleccion','Directo')} (${b2.get('monto_mxn',0):.2f} @ {b2.get('momio',1):.2f})" if b2 else "—"
         lines.append(f"| **{o.get('partido')}** | `{o.get('estrategia_seleccionada',{}).get('codigo')}` | {b1_txt} | {b2_txt} | **${b.get('inversion_partido_A_i',0):.2f} MXN** |")
     

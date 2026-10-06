@@ -64,23 +64,23 @@ STRATEGY_CATALOG: Dict[str, StrategyDefinition] = {
     ),
     "QBE-H2": StrategyDefinition(
         codigo="QBE-H2",
-        nombre_oficial="Empate de Valor con Seguro Fav",
-        descripcion_ejecutiva="Búsqueda de ganancia en la cuota alta del Empate, con recuperación del 100% de la inversión (Tablas) si gana el Favorito",
+        nombre_oficial="Favorito Visitante con Cobertura en Tablas (V=0)",
+        descripcion_ejecutiva="Monetiza la superioridad del favorito foráneo protegiendo el 100% de la inversión ante la fricción territorial del empate en cancha ajena.",
         familia="H",
         requiere_triple_candado_factico=False,
-        formula_ev="EV = [P_Emp * ROI_Neto] - Psi_Ruina",
-        rol_boleto_1="Seguro en Favorito (Recuperación)",
-        rol_boleto_2="Ganancia en Empate"
+        formula_ev="EV = [P_Visita * ROI_Neto] - Psi_Ruina",
+        rol_boleto_1="Seguro en Empate (Recuperación V=0)",
+        rol_boleto_2="Ganancia en Favorito Visitante (+PA)"
     ),
     "QBE-H2+": StrategyDefinition(
         codigo="QBE-H2+",
         nombre_oficial="Freeroll Doble Impacto (Joya)",
-        descripcion_ejecutiva="Búsqueda de ganancia en el Empate con Seguro en Favorito (Doble cobro si Fav saca 2 goles y empatan)",
+        descripcion_ejecutiva="Búsqueda de ganancia en el Favorito Visitante con Seguro en Empate (Doble cobro si el favorito foráneo saca 2 goles y el juego concluye empatado)",
         familia="H",
         requiere_triple_candado_factico=False,
         formula_ev="EV = [(Phi_Lead2 * P_Emp) * (ROI_Neto + 1.0)] + [(P_Emp * (1 - Phi_Lead2)) * ROI_Neto] - Psi_Ruina",
-        rol_boleto_1="Seguro en Favorito + Pago Anticipado",
-        rol_boleto_2="Ganancia en Empate + Pago Anticipado"
+        rol_boleto_1="Seguro en Empate (Recuperación V=0) + Pago Anticipado",
+        rol_boleto_2="Ganancia en Favorito Visitante + Pago Anticipado"
     ),
     "QBE-R1": StrategyDefinition(
         codigo="QBE-R1",
