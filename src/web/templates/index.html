@@ -357,46 +357,103 @@
                 </button>
             </div>
 
-            <!-- RADAR FACTUAL DE 3 FACTORES Y TOP MARCADORES (REEMPLAZO DE GEMINI) -->
+            <!-- COMPARADOR GRÁFICO DE BARRAS DUALES Y TOP MARCADORES (REEMPLAZO DE GEMINI) -->
             <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 20px;">
 
-                <!-- TARJETA 1: RADAR DE 3 FACTORES DETERMINANTES -->
+                <!-- TARJETA 1: COMPARADOR GRÁFICO DE BARRAS DUALES (HEAD-TO-HEAD) -->
                 <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 14px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="color: #f8fafc; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">🎯 3 Factores Determinantes de Pronóstico</span>
-                        <span style="color: #38bdf8; font-size: 0.72rem; font-weight: 600;">Síntesis Factual en O(1)</span>
-                    </div>
-
-                    <!-- Barra 1: Poder Ofensivo xG -->
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
-                            <span style="color: #94a3b8;">Fuerza Ofensiva neta (xG Diferencial):</span>
-                            <span id="rad-fac-ofensiva" style="color: #38bdf8; font-weight: 600;">--</span>
+                    <!-- Encabezado con Leyenda Apilada (Local arriba / Visitante abajo) -->
+                    <div style="margin-bottom: 12px; border-bottom: 1px solid #1e293b; padding-bottom: 8px;">
+                        <div style="color: #f8fafc; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                            📊 Balance Gráfico de Fuerzas
                         </div>
-                        <div style="height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden;">
-                            <div id="rad-bar-ofensiva" style="width: 50%; height: 100%; background: #38bdf8; border-radius: 3px;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Barra 2: Solidez Defensiva -->
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
-                            <span style="color: #94a3b8;">Solidez Defensiva Relativa:</span>
-                            <span id="rad-fac-defensa" style="color: #00e676; font-weight: 600;">--</span>
-                        </div>
-                        <div style="height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden;">
-                            <div id="rad-bar-defensa" style="width: 50%; height: 100%; background: #00e676; border-radius: 3px;"></div>
+                        <div style="display: flex; flex-direction: column; gap: 3px; font-size: 0.74rem; font-weight: 700;">
+                            <span style="color: #38bdf8; display: inline-flex; align-items: center; gap: 6px;">
+                                <span style="width: 8px; height: 8px; background: #38bdf8; border-radius: 2px; display: inline-block;"></span>
+                                <span id="rad-legend-local">Local</span>
+                            </span>
+                            <span style="color: #00e676; display: inline-flex; align-items: center; gap: 6px;">
+                                <span style="width: 8px; height: 8px; background: #00e676; border-radius: 2px; display: inline-block;"></span>
+                                <span id="rad-legend-visita">Visitante</span>
+                            </span>
                         </div>
                     </div>
 
-                    <!-- Barra 3: Factor Localía -->
-                    <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
-                            <span style="color: #94a3b8;">Impacto de Localía / Territorio:</span>
-                            <span id="rad-fac-localia" style="color: #0284C7; font-weight: 600;">--</span>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- MÉTRICA 1: Peligro Ofensivo (xG de partido soberano) -->
+                        <div>
+                            <div style="color: #e2e8f0; font-size: 0.72rem; font-weight: 700; margin-bottom: 4px;">
+                                🎯 Peligro Ofensivo (xG de Partido)
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-xg-loc" style="width: 50%; height: 100%; background: #38bdf8; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-xg-loc" style="color: #38bdf8; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-xg-vis" style="width: 50%; height: 100%; background: #00e676; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-xg-vis" style="color: #00e676; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
                         </div>
-                        <div style="height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden;">
-                            <div id="rad-bar-localia" style="width: 50%; height: 100%; background: #0284C7; border-radius: 3px;"></div>
+
+                        <!-- MÉTRICA 2: Producción en Temporada (GF por partido soberano) -->
+                        <div>
+                            <div style="color: #e2e8f0; font-size: 0.72rem; font-weight: 700; margin-bottom: 4px;">
+                                🏹 Producción en Temporada (GF / Partido)
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-sot-loc" style="width: 50%; height: 100%; background: #38bdf8; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-sot-loc" style="color: #38bdf8; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-sot-vis" style="width: 50%; height: 100%; background: #00e676; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-sot-vis" style="color: #00e676; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                        </div>
+
+                        <!-- MÉTRICA 3: Solidez Defensiva (GC por partido; menos es mejor, barra inversa) -->
+                        <div>
+                            <div style="color: #e2e8f0; font-size: 0.72rem; font-weight: 700; margin-bottom: 4px;">
+                                🛡️ Solidez Defensiva (Goles Concedidos GC / PJ)
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-def-loc" style="width: 50%; height: 100%; background: #38bdf8; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-def-loc" style="color: #38bdf8; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-def-vis" style="width: 50%; height: 100%; background: #00e676; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-def-vis" style="color: #00e676; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                        </div>
+
+                        <!-- MÉTRICA 4: Ritmo Competitivo (Puntos por partido soberano) -->
+                        <div>
+                            <div style="color: #e2e8f0; font-size: 0.72rem; font-weight: 700; margin-bottom: 4px;">
+                                📈 Ritmo Competitivo (Puntos por Partido PTS/PJ)
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-pos-loc" style="width: 50%; height: 100%; background: #38bdf8; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-pos-loc" style="color: #38bdf8; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                                    <div id="rad-bar-pos-vis" style="width: 50%; height: 100%; background: #00e676; transition: width 0.3s;"></div>
+                                </div>
+                                <span id="rad-val-pos-vis" style="color: #00e676; font-size: 0.72rem; font-weight: 700; min-width: 95px; text-align: right; font-family: monospace;">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -462,27 +519,29 @@
                 </div>
             </div>
 
-            <!-- TABLA DE DESEMPEÑO Y CONTROL DE CANCHA (10P) -->
+            <!-- TABLA INFERIOR: RADIOGRAFÍA ESTRUCTURAL Y FORMA RECIENTE -->
             <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 14px;">
-                <div style="color: #f8fafc; font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; text-transform: uppercase;">
-                    📊 Desempeño y Control de Cancha (Últimos 10 Partidos)
+                <div style="color: #f8fafc; font-size: 0.82rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    📋 Radiografía Estructural y Forma Reciente
                 </div>
-                <table class="fintech-table" style="width: 100%; font-size: 0.78rem;">
-                    <thead>
-                        <tr style="color: #94a3b8; font-size: 0.7rem;">
-                            <th style="text-align: left;">EQUIPO</th>
-                            <th style="text-align: center;">PUESTO</th>
-                            <th style="text-align: center;">PTS</th>
-                            <th style="text-align: center;">GF / GC</th>
-                            <th style="text-align: center;">PTS/PJ</th>
-                            <th style="text-align: center;">SOT</th>
-                            <th style="text-align: center;">SOTA</th>
-                            <th style="text-align: center;">POSESIÓN</th>
-                            <th style="text-align: center;">Q_MOD</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rad-cuerpo-equipos"></tbody>
-                </table>
+                <div style="overflow-x: auto;">
+                    <table class="fintech-table" style="width: 100%; font-size: 0.78rem; border-collapse: collapse;">
+                        <thead>
+                            <tr style="color: #94a3b8; font-size: 0.7rem; background: #1e293b; text-transform: uppercase;">
+                                <th style="text-align: left; padding: 8px 12px;">EQUIPO</th>
+                                <th style="text-align: center; padding: 8px 8px;">PUESTO</th>
+                                <th style="text-align: center; padding: 8px 8px;">PTS</th>
+                                <th style="text-align: center; padding: 8px 8px;">RÉCORD (G-E-P)</th>
+                                <th style="text-align: center; padding: 8px 10px;" title="Diferencia de goles de la temporada (GF:GC) de la tabla de posiciones del Live Board.">DIF GOLES</th>
+                                <th style="text-align: center; padding: 8px 12px;" title="Últimos 5 resultados de liga del club (G = victoria, E = empate, P = derrota).">FORMA RECIENTE (5P)</th>
+                                <th style="text-align: center; padding: 8px 8px;" title="Puntos esperados acumulados del Live Board (métrica del proveedor; sin evidencia el rótulo degrada a '--').">xPTS OPTA</th>
+                                <th style="text-align: center; padding: 8px 8px;" title="Diferencia entre los xG y xGA acumulados del Live Board (métrica del proveedor; sin evidencia el rótulo degrada a '--').">DIF xG</th>
+                                <th style="text-align: center; padding: 8px 8px;" title="Modulador de riesgo del motor Q-BE (Q_MOD); si el partido no lo porta, el rótulo degrada a '--'.">Q_MOD</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rad-cuerpo-equipos"></tbody>
+                    </table>
+                </div>
             </div>
 
         </div>

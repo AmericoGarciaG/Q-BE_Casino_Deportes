@@ -466,9 +466,11 @@ function _renderFixtureCard(container, f, deshabilitada) {
         `;
     } else {
         // PROGRAMADO (JORNADA ACTIVA J10)
-        const pL = f.p_local ? (f.p_local * 100).toFixed(0) + "%" : "—";
-        const pE = f.p_empate ? (f.p_empate * 100).toFixed(0) + "%" : "—";
-        const pV = f.p_visitante ? (f.p_visitante * 100).toFixed(0) + "%" : "—";
+        // [LN-QBE-098] Paridad de precisión con la Radiografía Forense y la tarjeta de boleto:
+        // la distribución soberana se exhibe con UN decimal, idéntica en las tres pantallas.
+        const pL = f.p_local ? (f.p_local * 100).toFixed(1) + "%" : "—";
+        const pE = f.p_empate ? (f.p_empate * 100).toFixed(1) + "%" : "—";
+        const pV = f.p_visitante ? (f.p_visitante * 100).toFixed(1) + "%" : "—";
 
         const wL = f.p_local ? (f.p_local * 100).toFixed(1) : 33.3;
         const wE = f.p_empate ? (f.p_empate * 100).toFixed(1) : 33.3;
@@ -1148,52 +1150,208 @@ function _calcularPoissonP(lambda, k) {
     return (Math.pow(lambda, k) * Math.exp(-lambda)) / fact;
 }
 
-/** [DES-QBE-063] Radar Factual de 3 Factores y Top-4 de marcadores Poisson.
- *  Reemplaza la prosa generativa de Gemini por una síntesis local en O(1). */
+/** [DES-QBE-063-ext] Divide la etiqueta soberana en contendientes canónicos.
+ *  El payload del portafolio rotula con " vs. " (engine.py) y el Live Board con " vs ";
+ *  se admiten ambos separadores para no degradar la leyenda del comparador. */
+function _dividirContendientes(p) {
+    const bruto = String(p.partido || p.partido_nombre || "Local vs Visita").replace(/\s+/g, " ").trim();
+    const partes = bruto.split(/\s+vs\.?\s+/i);
+    const localNom = String(partes[0] || p.local || "Local").trim();
+    const visitaNom = String(partes[1] || p.visitante || "Visita").trim();
+    return [localNom, visitaNom];
+}
+
+/** [DES-QBE-063-ext] Lectura honesta de un hecho de la tabla 10P: devuelve null si el
+ *  payload soberano no porta el dato (cero cifras fabricadas en pantalla). */
+function _hecho10P(fila, clave) {
+    const v = fila ? fila[clave] : null;
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+/** [DES-QBE-063-ext] Extrae los goles concedidos (2º término) de "GF/GC" o "GF:GC",
+ *  como los emite el motor (`engine.py`: "9/9"). Sin evidencia devuelve null. */
+function _golesConcedidos(gfGc) {
+    const m = String(gfGc === null || gfGc === undefined ? "" : gfGc).match(/(\d+)\s*[:/]\s*(\d+)/);
+    return m ? Number(m[2]) : null;
+}
+
+/** [DES-QBE-063-ext-min] GF por partido de procedencia soberana: 1er término del hecho
+ *  "goles_pro" del motor ("1.29 / 1.00" → 1.29) y, en su defecto, el cociente estricto
+ *  gf/pj de la fila homóloga de posiciones. Sin evidencia devuelve null [GOVERNANCE-01]. */
+function _gfPorPartido(fila10P, nombre) {
+    const crudo = fila10P ? fila10P.goles_pro : null;
+    const m = String(crudo === null || crudo === undefined ? "" : crudo).match(/^(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)/);
+    if (m) return Number(m[1]);
+    const st = _filaStandings(nombre);
+    const gf = _hecho10P(st, "gf");
+    const pj = _hecho10P(st, "pj");
+    return (gf !== null && pj) ? gf / pj : null;
+}
+
+/** [DES-QBE-063-ext-min] Partidos jugados: hecho 10P si viaja con el partido; si no, la fila
+ *  homóloga de posiciones por normalización estricta de nombre. Sin match devuelve null. */
+function _juegosJugados(fila10P, nombre) {
+    const pj = _hecho10P(fila10P, "pj");
+    return pj !== null ? pj : _hecho10P(_filaStandings(nombre), "pj");
+}
+
+/** [DES-QBE-063-ext-min] Homologación de nombres de club: minúsculas, sin acentos y sin los
+ *  prefijos societarios que el proveedor intercala ("Club", "Deportivo", "FC"). */
+function _normalizarClub(nombre) {
+    return String(nombre || "")
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/\b(club|deportivo|fc)\b/g, "")
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .replace(/\s+/g, " ").trim();
+}
+
+/** [DES-QBE-063-ext-min] Fila de posiciones del equipo: 1ª pasada por igualdad estricta
+ *  normalizada y 2ª pasada por homología elástica de contención bidireccional
+ *  ("Tigres" ⇄ "Tigres UANL"). Con cero candidatos o con más de uno devuelve null:
+ *  JAMÁS se adivina la fila por posición ni se resuelve una ambigüedad con el primero
+ *  de la tabla ([GOVERNANCE-01]). */
+function _filaStandings(nombre) {
+    const tabla = (typeof currentLiveBoard !== "undefined" && currentLiveBoard && Array.isArray(currentLiveBoard.standings))
+        ? currentLiveBoard.standings : null;
+    if (!tabla) return null;
+    const objetivo = _normalizarClub(nombre);
+    if (!objetivo) return null;
+    const exactas = tabla.filter(t => _normalizarClub(t.equipo) === objetivo);
+    if (exactas.length === 1) return exactas[0];
+    if (exactas.length > 1) return null;
+    const elasticas = tabla.filter(t => {
+        const cand = _normalizarClub(t.equipo);
+        return cand !== "" && (cand.includes(objetivo) || objetivo.includes(cand));
+    });
+    return elasticas.length === 1 ? elasticas[0] : null;
+}
+
+/** [DES-QBE-063-ext-min] Hecho numérico explícito de una fila soberana: si la clave no
+ *  viaja o no es finita, devuelve null (cero cifras fabricadas) [GOVERNANCE-01]. */
+function _hechoNumerico(fila, clave) {
+    if (!fila) return null;
+    const v = fila[clave];
+    if (v === null || v === undefined || v === "") return null;
+    return Number.isFinite(Number(v)) ? Number(v) : null;
+}
+
+/** [DES-QBE-063-ext-min] Cociente soberano estricto: sin numerador definido y denominador
+ *  finito y positivo devuelve null; nunca un 0 ni un valor de relleno [GOVERNANCE-01]. */
+function _porPartido(numerador, partidos) {
+    if (numerador === null || numerador === undefined) return null;
+    const n = Number(numerador);
+    const d = Number(partidos);
+    if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) return null;
+    return n / d;
+}
+
+/** [DES-QBE-063-ext-min] Pliega el diferencial relativo en la etiqueta del contendiente
+ *  favorecido cuando el mayor es el mejor: "1.95 xG (+0.85)". */
+function _plegarVentaja(idValLocal, idValVisita, vLocal, vVisita) {
+    if (vLocal === null || vVisita === null || vLocal === vVisita) return;
+    const el = document.getElementById(vLocal > vVisita ? idValLocal : idValVisita);
+    if (el) el.textContent += ` (+${Math.abs(vLocal - vVisita).toFixed(2)})`;
+}
+
+/** [DES-QBE-063-ext-min] Pliega el diferencial relativo cuando el menor es el mejor
+ *  (goles concedidos): el contendiente más sólido porta "(-0.20)". */
+function _plegarDeficit(idValLocal, idValVisita, vLocal, vVisita) {
+    if (vLocal === null || vVisita === null || vLocal === vVisita) return;
+    const el = document.getElementById(vLocal < vVisita ? idValLocal : idValVisita);
+    if (el) el.textContent += ` (-${Math.abs(vLocal - vVisita).toFixed(2)})`;
+}
+
+/** [DES-QBE-063-ext-min] Pinta una barra del comparador dual. Si el hecho soberano no
+ *  existe, deja la barra neutra (50%) y el rótulo "--" con la causa honesta en el tooltip
+ *  [GOVERNANCE-01]. `invertido` escala al revés (menos es mejor: goles concedidos). */
+function _pintarBarraComparador(idBarra, idValor, valor, tope, sufijo, decimales, invertido) {
+    const barEl = document.getElementById(idBarra);
+    const valEl = document.getElementById(idValor);
+    if (valor === null || valor === undefined || !Number.isFinite(Number(valor))) {
+        if (barEl) barEl.style.width = "50%";
+        if (valEl) {
+            valEl.textContent = "--";
+            valEl.title = "Sin evidencia 10P";
+        }
+        return null;
+    }
+    const v = Number(valor);
+    const pct = invertido ? Math.max(15, 100 - (v / tope) * 70) : Math.min(100, Math.max(0, (v / tope) * 100));
+    if (barEl) barEl.style.width = pct + "%";
+    if (valEl) {
+        valEl.textContent = v.toFixed(decimales) + sufijo;
+        valEl.title = "";
+    }
+    return v;
+}
+
+/** [DES-QBE-063-ext-min] Comparador Gráfico de Barras Duales (Head-to-Head) minimalista:
+ *  4 métricas de procedencia estrictamente soberana, leyenda apilada de contendientes y
+ *  diferencial relativo plegado en la etiqueta del líder ("1.95 xG (+0.85)"). Cero prosa
+ *  generativa y cero cifras fabricadas: sin evidencia el rótulo degrada a "--" [GOVERNANCE-01]. */
 function _hidratarRadarYMarcadores(p) {
     const lamH = Number(p.lambda_local ?? p.lambda_home ?? p.xg_local ?? 1.5);
     const lamA = Number(p.mu_visita ?? p.lambda_away ?? p.xg_visita ?? 1.1);
-    // Nombres de los contendientes para humanizar las etiquetas del radar.
-    const localNom = (String(p.partido || "Local vs Visita").split(" vs ")[0] || "Local").trim();
-    const visitaNom = (String(p.partido || "Local vs Visita").split(" vs ")[1] || "Visita").trim();
+    const [localNom, visitaNom] = _dividirContendientes(p);
 
-    // 1. Peligro Ofensivo Esperado: diferencial de goles esperados (λ_H − λ_A).
-    const diffXg = lamH - lamA;
-    const facOfEl = document.getElementById("rad-fac-ofensiva");
-    const barOfEl = document.getElementById("rad-bar-ofensiva");
-    if (facOfEl && barOfEl) {
-        const liderNom = diffXg >= 0 ? localNom : visitaNom;
-        facOfEl.textContent = `${liderNom} genera +${Math.abs(diffXg).toFixed(2)} goles esperados de peligro`;
-        barOfEl.style.width = `${Math.min(100, Math.max(10, 50 + diffXg * 25))}%`;
-    }
+    // Leyenda apilada: identidad única de contendientes (cero nombres repetidos en los renglones).
+    const legLoc = document.getElementById("rad-legend-local");
+    const legVis = document.getElementById("rad-legend-visita");
+    if (legLoc) legLoc.textContent = localNom;
+    if (legVis) legVis.textContent = visitaNom;
 
-    // 2. Vulnerabilidad del Rival / Contención: anclada al SoTA promedio de la tabla 10P
-    //    (menor exposición ⇒ mayor contención). Sin 10P, degrada al diferencial implícito en λ.
+    // Fuente única de verdad: la tabla 10P viaja con el partido dentro del payload soberano.
     const t10 = Array.isArray(p.tabla_10p) ? p.tabla_10p : [];
-    let solidezEdge = (t10.length >= 2 && t10[0].sota !== undefined && t10[1].sota !== undefined)
-        ? Number(t10[1].sota) - Number(t10[0].sota)
-        : (lamA - lamH);
-    const facDefEl = document.getElementById("rad-fac-defensa");
-    const barDefEl = document.getElementById("rad-bar-defensa");
-    if (facDefEl && barDefEl) {
-        const etiqueta = solidezEdge >= 0
-            ? `${visitaNom} concede más tiros a puerta`
-            : `${localNom} muestra mayor exposición`;
-        facDefEl.textContent = `${etiqueta} (${solidezEdge >= 0 ? "+" : ""}${solidezEdge.toFixed(2)} ΔSoTA)`;
-        barDefEl.style.width = `${Math.min(95, Math.max(10, 50 + solidezEdge * 6))}%`;
-    }
+    const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const locSt = t10.find(t => norm(t.equipo) === norm(localNom)) || t10[0] || {};
+    const visSt = t10.find(t => norm(t.equipo) === norm(visitaNom)) || t10[1] || {};
 
-    // 3. Factor Estadio / Territorio: log-boost territorial ln(λ_H / λ_A).
-    const facLocEl = document.getElementById("rad-fac-localia");
-    const barLocEl = document.getElementById("rad-bar-localia");
-    if (facLocEl && barLocEl && lamA > 0) {
-        const logBoost = Math.log(lamH / lamA);
-        const boostPct = Math.round(Math.abs(logBoost) * 100);
-        facLocEl.textContent = `La localía en casa de ${localNom} inclina el juego (+${boostPct}% impulso)`;
-        barLocEl.style.width = `${Math.min(95, Math.max(10, 50 + logBoost * 40))}%`;
-    }
+    // 1. Peligro Ofensivo: λ_H vs λ_A soberanos del motor (escala de barra 2.5 goles).
+    const maxXg = Math.max(2.5, lamH, lamA);
+    const xgH = _pintarBarraComparador("rad-bar-xg-loc", "rad-val-xg-loc", lamH, maxXg, " xG", 2);
+    const xgA = _pintarBarraComparador("rad-bar-xg-vis", "rad-val-xg-vis", lamA, maxXg, " xG", 2);
+    _plegarVentaja("rad-val-xg-loc", "rad-val-xg-vis", xgH, xgA);
 
-    // 4. Top-4 marcadores más probables a partir de la rejilla Poisson 0..3.
+    // 2. Producción en Temporada: GF por partido soberano ("goles_pro" del motor o gf/pj estricto).
+    const proH = _gfPorPartido(locSt, localNom);
+    const proA = _gfPorPartido(visSt, visitaNom);
+    const maxPro = Math.max(3.0, proH ?? 0, proA ?? 0);
+    const proVH = _pintarBarraComparador("rad-bar-sot-loc", "rad-val-sot-loc", proH, maxPro, " GF/PJ", 2);
+    const proVA = _pintarBarraComparador("rad-bar-sot-vis", "rad-val-sot-vis", proA, maxPro, " GF/PJ", 2);
+    _plegarVentaja("rad-val-sot-loc", "rad-val-sot-vis", proVH, proVA);
+
+    // 3. Solidez Defensiva: goles concedidos por partido. Hecho soberano 10P ("gf_gc") y, si
+    // el partido no lo porta (ruta del Live Board), remate en la fila homóloga de posiciones
+    // ("gc" / "pj"). Menos concedidos = barra más larga (inversa). Sin fila homóloga: "--"
+    // con barra neutra, jamás un relleno ([GOVERNANCE-01]).
+    const stLoc = _filaStandings(localNom);
+    const stVis = _filaStandings(visitaNom);
+    const gcH = _golesConcedidos(locSt ? locSt.gf_gc : null);
+    const gcA = _golesConcedidos(visSt ? visSt.gf_gc : null);
+    const pjH = _juegosJugados(locSt, localNom);
+    const pjA = _juegosJugados(visSt, visitaNom);
+    const defH = _porPartido(gcH !== null ? gcH : _hechoNumerico(stLoc, "gc"), pjH);
+    const defA = _porPartido(gcA !== null ? gcA : _hechoNumerico(stVis, "gc"), pjA);
+    const maxDef = Math.max(2.5, defH ?? 0, defA ?? 0);
+    const defVH = _pintarBarraComparador("rad-bar-def-loc", "rad-val-def-loc", defH, maxDef, " GC/PJ", 2, true);
+    const defVA = _pintarBarraComparador("rad-bar-def-vis", "rad-val-def-vis", defA, maxDef, " GC/PJ", 2, true);
+    _plegarDeficit("rad-val-def-loc", "rad-val-def-vis", defVH, defVA);
+
+    // 4. Ritmo Competitivo: puntos por partido. Hecho soberano 10P ("pts_pj") y, si el partido
+    // no lo porta, la aritmética soberana puntos/pj de su fila homóloga de posiciones.
+    // Escala de barra 3.0 pts = techo teórico del torneo.
+    const ritmoH = _hecho10P(locSt, "pts_pj");
+    const ritmoA = _hecho10P(visSt, "pts_pj");
+    const ptsPjH = ritmoH !== null ? ritmoH : _porPartido(_hechoNumerico(stLoc, "puntos"), pjH);
+    const ptsPjA = ritmoA !== null ? ritmoA : _porPartido(_hechoNumerico(stVis, "puntos"), pjA);
+    const posVH = _pintarBarraComparador("rad-bar-pos-loc", "rad-val-pos-loc", ptsPjH, 3.0, " pts/PJ", 2);
+    const posVA = _pintarBarraComparador("rad-bar-pos-vis", "rad-val-pos-vis", ptsPjA, 3.0, " pts/PJ", 2);
+    _plegarVentaja("rad-val-pos-loc", "rad-val-pos-vis", posVH, posVA);
+
+    // 5. Top-4 marcadores más probables a partir de la rejilla Poisson 0..3.
     const scores = [];
     for (let x = 0; x <= 3; x++) {
         for (let y = 0; y <= 3; y++) {
@@ -1245,6 +1403,10 @@ function _hidratarTablasRadiografia(p) {
     const consensoSeq = consenso ? [consenso.p_L_mercado, consenso.p_E_mercado, consenso.p_V_mercado] : [];
     const fmtPct = (v) => (v === null || v === undefined || isNaN(Number(v))) ? "—" : `${Number(v).toFixed(1)}%`;
 
+    // Suma de la MISMA probabilidad comercial exhibida en la tabla (fuente única de
+    // probabilidades): alimenta el margen implícito del pie sin mezclar casas.
+    let sumaProbCasinoReal = 0;
+
     const tbodyPron = document.getElementById("rad-cuerpo-pronostico");
     if (tbodyPron && filas.length) {
         tbodyPron.innerHTML = filas.map((pv, i) => {
@@ -1254,25 +1416,14 @@ function _hidratarTablasRadiografia(p) {
             const colorRes = esAtaque ? COLOR_ATAQUE : (esEmpate ? COLOR_COBERTURA : COLOR_NEUTRO);
 
             // P' fiduciaria CERTIFICADA por el motor, tomada de la pierna correspondiente.
-            let pPrima = null, operador = null;
-            if (rol === "ataque") { pPrima = legAtaque.prob_qbe; operador = legAtaque.operador; }
-            else if (rol === "cobertura") { pPrima = legCobertura.prob_qbe; operador = legCobertura.operador; }
-            else { pPrima = opNoJugada.prob_qbe; operador = opNoJugada.operador; }
+            let pPrima = null;
+            if (rol === "ataque") pPrima = legAtaque.prob_qbe;
+            else if (rol === "cobertura") pPrima = legCobertura.prob_qbe;
+            else pPrima = opNoJugada.prob_qbe;
             if (pPrima === null || pPrima === undefined) pPrima = pv.prob_real;
 
-            // [DES-QBE-063] Columna CASINO SELECCIONADO: operador ESPECÍFICO de CADA pierna.
-            // Se descarta el rótulo residual de la modalidad cross-market ('mejor_combinacion'):
-            // sólo se exhibe una casa real que publica cuota de ESTE desenlace, jamás el
-            // selector global. Sin operador asignado ⇒ '—' (cero cifras inventadas).
-            const slugOp = (operador && String(operador).toLowerCase() !== "mejor_combinacion")
-                ? String(operador).toLowerCase()
-                : null;
-            const nombreCap = slugOp ? slugOp.charAt(0).toUpperCase() + slugOp.slice(1) : null;
-            const casinoTxt = slugOp
-                ? ((esAtaque || esEmpate)
-                    ? `<span style="color: ${colorRes}; font-weight: 700;">⭐ ${nombreCap}</span>`
-                    : `<span style="color: #64748b;">${nombreCap}</span>`)
-                : "—";
+            // [DES-QBE-063] Columna CASINO SELECCIONADO: se resuelve MÁS ABAJO, sobre la cuota
+            // REAL de la casa que paga ESTE desenlace (fuente única de probabilidades).
 
             // P̂ deportiva soberana (física de goles) certificada por el motor.
             const pDeportiva = pv.prob_real;
@@ -1281,13 +1432,61 @@ function _hidratarTablasRadiografia(p) {
             const cRaw = consensoSeq[i];
             const pConsenso = (cRaw === null || cRaw === undefined) ? null : Number(cRaw) * 100.0;
 
-            // Ventaja matemática neta sobre la casa: α = p·O − 1.0 ([LN-QBE-098]).
-            const momio = Number(pv.momio);
-            const alpha = (Number(pv.prob_real) > 0 && momio > 1.0)
-                ? (Number(pv.prob_real) / 100.0) * momio - 1.0
+            // [DES-QBE-063] CUOTA REAL que la casa asignada ofrece a ESTE desenlace: se erradica
+            // el momio residual del snapshot cuando la orden viajó con otro operador. PROB.
+            // CASINO, CASINO SELECCIONADO y VENTAJA (+EV) nacen de la MISMA cuota, de modo que
+            // la tabla coincide al 100.0% con la tarjeta del boleto. Si la pierna no porta cuota
+            // (V = $0.00) se degrada al momio fáctico del fixture y, sin operador asignado, al
+            // operador vigente del selector (cero cifras inventadas).
+            let momioReal = null;
+            let operadorReal = null;
+
+            if (rol === "ataque" && legAtaque.momio) {
+                momioReal = Number(legAtaque.momio);
+                operadorReal = legAtaque.operador;
+            } else if (rol === "cobertura" && legCobertura.momio) {
+                momioReal = Number(legCobertura.momio);
+                operadorReal = legCobertura.operador;
+            } else if (rol === "none" && opNoJugada.momio) {
+                momioReal = Number(opNoJugada.momio);
+                operadorReal = opNoJugada.operador;
+            } else {
+                momioReal = Number(pv.momio);
+            }
+
+            // [ARCH-1.4.16] Herencia unívoca de operador: la pierna que no rotula casa
+            // (opcion_no_jugada) hereda la del despacho vigente, jamás una casa ajena a la
+            // cuota exhibida. Cero '—' mientras exista un operador gobernante declarado.
+            if (!operadorReal) operadorReal = p.operador || currentCasinoOperador;
+
+            // Probabilidad implícita COMERCIAL de ESA casa (comparación pura, sin cuota decimal).
+            const probCasinoReal = (momioReal && momioReal > 1.0) ? (100.0 / momioReal) : null;
+            if (probCasinoReal !== null) sumaProbCasinoReal += probCasinoReal;
+
+            // [DES-QBE-063] Columna CASINO SELECCIONADO: operador ESPECÍFICO de CADA pierna.
+            // Se descarta el rótulo residual de la modalidad cross-market ('mejor_combinacion'):
+            // sólo se exhibe una casa real que publica cuota de ESTE desenlace, jamás el
+            // selector global. Sin operador asignado ⇒ '—' (cero cifras inventadas). En la
+            // práctica toda pierna sin rótulo hereda `currentCasinoOperador`, así que el '—'
+            // sólo sobrevive en un desenlace huérfano de cuota y de operador gobernante.
+            const slugOp = (operadorReal && String(operadorReal).toLowerCase() !== "mejor_combinacion")
+                ? String(operadorReal).toLowerCase()
                 : null;
-            const alphaColor = (alpha !== null && alpha > 0) ? COLOR_ATAQUE : "#EF4444";
-            const alphaTxt = (alpha === null) ? "—" : `${alpha >= 0 ? "+" : ""}${(alpha * 100).toFixed(2)}%`;
+            const nombreCap = slugOp ? slugOp.charAt(0).toUpperCase() + slugOp.slice(1) : null;
+            // [DES-QBE-063-ext-min] Cero estrellas en la columna CASINO SELECCIONADO: el
+            // operador se rotula en el color de su boleto (verde ataque / azul cobertura).
+            const casinoTxt = slugOp
+                ? `<span style="color: ${colorRes}; font-weight: 700;">${nombreCap}</span>`
+                : "—";
+
+            // Ventaja matemática neta sobre ESA casa: α = p̂·O − 1.0 ([LN-QBE-098]).
+            // Se exhibe con UN decimal, idéntica a la métrica `ev_neto_roi_porcentaje`
+            // de la tarjeta del boleto (paridad literal de cifras en pantalla).
+            const alphaReal = (pDeportiva > 0 && momioReal > 1.0)
+                ? ((pDeportiva / 100.0) * momioReal) - 1.0
+                : null;
+            const alphaColor = (alphaReal !== null && alphaReal > 0) ? COLOR_ATAQUE : "#EF4444";
+            const alphaTxt = (alphaReal === null) ? "—" : `${alphaReal >= 0 ? "+" : ""}${(alphaReal * 100).toFixed(1)}%`;
 
             return `
                 <tr style="border-top: 1px solid #1e293b;">
@@ -1295,7 +1494,7 @@ function _hidratarTablasRadiografia(p) {
                     <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: ${colorRes};">${fmtPct(pPrima)}</td>
                     <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #cbd5e1;">${fmtPct(pDeportiva)}</td>
                     <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #cbd5e1;">${fmtPct(pConsenso)}</td>
-                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #94a3b8;">${fmtPct(pv.prob_casino)}</td>
+                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #94a3b8;">${fmtPct(probCasinoReal)}</td>
                     <td style="padding: 9px 10px; text-align: center; color: #e2e8f0; font-weight: 600;">${casinoTxt}</td>
                     <td style="padding: 9px 14px; text-align: right; font-weight: 800; color: ${alphaColor};">${alphaTxt}</td>
                 </tr>
@@ -1306,7 +1505,7 @@ function _hidratarTablasRadiografia(p) {
     // Margen comercial implícito del operador (Σ probabilidades implícitas − 100%).
     const footerCom = document.getElementById("rad-footer-comisiones");
     if (footerCom && filas.length) {
-        const suma = filas.reduce((acc, pv) => acc + (Number(pv.prob_casino) || 0), 0);
+        const suma = sumaProbCasinoReal;
         footerCom.textContent = (suma > 0)
             ? `Margen comercial implícito del operador: ${(suma - 100).toFixed(1)}% · Comparación pura de probabilidades (sin cuota decimal).`
             : "";
@@ -1322,22 +1521,61 @@ function _hidratarTablasRadiografia(p) {
     if (kTot) kTot.textContent = (p.xg_total !== undefined && p.xg_total !== null) ? Number(p.xg_total).toFixed(2) : "--";
     if (kPa) kPa.textContent = (p.phi_lead2_pct !== undefined && p.phi_lead2_pct !== null) ? `${Number(p.phi_lead2_pct).toFixed(1)}%` : "--";
 
-    // Tabla de desempeño y control de cancha (10P).
+    // [DES-QBE-063-ext-min] Radiografía Estructural y Forma Reciente: dos filas (Local azul /
+    // Visitante verde) leídas de la fila homóloga de posiciones del Live Board. Toda celda sin
+    // hecho soberano degrada a "--" (cero ceros, récords ni xG inventados) [GOVERNANCE-01].
     const tbodyEq = document.getElementById("rad-cuerpo-equipos");
-    if (tbodyEq && p.tabla_10p) {
-        tbodyEq.innerHTML = p.tabla_10p.map(row => `
-            <tr style="border-top: 1px solid #1e293b;">
-                <td style="padding: 7px 14px; font-weight: 700; color: #f8fafc;">${row.equipo}</td>
-                <td style="padding: 7px 10px; text-align: center;">#${row.puesto}</td>
-                <td style="padding: 7px 10px; text-align: center; font-weight: 700; color: #00E676;">${row.pts}</td>
-                <td style="padding: 7px 10px; text-align: center;">${row.gf_gc}</td>
-                <td style="padding: 7px 10px; text-align: center;">${(row.pts_pj ?? 0).toFixed(2)}</td>
-                <td style="padding: 7px 10px; text-align: center;">${(row.sot ?? 0).toFixed(1)}</td>
-                <td style="padding: 7px 10px; text-align: center;">${(row.sota ?? 0).toFixed(1)}</td>
-                <td style="padding: 7px 10px; text-align: center;">${(row.posesion ?? 0).toFixed(1)}%</td>
-                <td style="padding: 7px 10px; text-align: center; font-weight: 700; color: #38BDF8;">${(row.qmod ?? 0).toFixed(2)}</td>
-            </tr>
-        `).join("");
+    if (tbodyEq) {
+        const SIN_HECHO = "--";
+        const [localTab, visitaTab] = _dividirContendientes(p);
+        const t10Tabla = Array.isArray(p.tabla_10p) ? p.tabla_10p : [];
+        const qmodDe = (nombre) => {
+            const f10 = t10Tabla.find(t => _normalizarClub(t.equipo) === _normalizarClub(nombre));
+            return f10 ? _hechoNumerico(f10, "qmod") : null;
+        };
+        const celda = (texto, color, negrita) => (texto === null || texto === undefined)
+            ? `<td style="padding: 8px 8px; text-align: center; color: #64748b;">${SIN_HECHO}</td>`
+            : `<td style="padding: 8px 8px; text-align: center; color: ${color || "#cbd5e1"}; font-weight: ${negrita ? 700 : 500};">${texto}</td>`;
+        const formaDots = (forma) => {
+            const arr = Array.isArray(forma) ? forma : [];
+            if (arr.length === 0) return SIN_HECHO;
+            return arr.map(f => {
+                const c = (f === "G" || f === "W") ? "#10b981" : (f === "E" || f === "D") ? "#94a3b8" : "#ef4444";
+                return `<span title="${f}" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${c}; margin:0 2px;"></span>`;
+            }).join("");
+        };
+        const filaEstructural = (nombre, fila, color, marca) => {
+            const pos = _hechoNumerico(fila, "pos");
+            const pts = _hechoNumerico(fila, "puntos");
+            const pg = _hechoNumerico(fila, "pg");
+            const pe = _hechoNumerico(fila, "pe");
+            const pp = _hechoNumerico(fila, "pp");
+            const dif = _hechoNumerico(fila, "dif");
+            const gf = _hechoNumerico(fila, "gf");
+            const gc = _hechoNumerico(fila, "gc");
+            const xg = _hechoNumerico(fila, "xg");
+            const xga = _hechoNumerico(fila, "xga");
+            const xpts = _hechoNumerico(fila, "xpts");
+            const qmod = qmodDe(nombre);
+            const record = (pg !== null && pe !== null && pp !== null) ? `${pg}G · ${pe}E · ${pp}P` : null;
+            const difGoles = (dif === null) ? null : `${dif > 0 ? "+" : ""}${dif} (${gf ?? SIN_HECHO}:${gc ?? SIN_HECHO})`;
+            const difXg = (xg === null || xga === null) ? null : `${(xg - xga) > 0 ? "+" : ""}${(xg - xga).toFixed(1)} xG`;
+            return `
+                <tr style="border-top: 1px solid #1e293b;">
+                    <td style="padding: 8px 12px; font-weight: 700; color: ${color};">${marca} ${nombre}</td>
+                    ${celda(pos === null ? null : `#${pos}`, color, true)}
+                    ${celda(pts, color, true)}
+                    ${celda(record)}
+                    ${celda(difGoles)}
+                    <td style="padding: 8px 12px; text-align: center; white-space: nowrap;">${formaDots(fila ? fila.forma : null)}</td>
+                    ${celda(xpts === null ? null : `${xpts.toFixed(1)} pts`)}
+                    ${celda(difXg)}
+                    ${celda(qmod === null ? null : qmod.toFixed(2), "#38bdf8", true)}
+                </tr>
+            `;
+        };
+        tbodyEq.innerHTML = filaEstructural(localTab, _filaStandings(localTab), "#38bdf8", "🔵")
+            + filaEstructural(visitaTab, _filaStandings(visitaTab), "#00e676", "🟢");
     }
 }
 
