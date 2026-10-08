@@ -1025,3 +1025,33 @@ table.fintech-table {
     letter-spacing: 0.02em;
 }
 
+/* [LN-QBE-098 / DES-QBE-063] Modal de Radiografía Forense (REBORN) — DBBD-FUNGIBLE.
+   index.html no carga Bootstrap: el overlay y el botón de cierre se materializan
+   con el tema oscuro Q-BE (mismo precedente que #grupo-selector-gamma). */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    overflow-y: auto;
+    padding: 20px;
+    background: rgba(11, 19, 43, 0.95);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    margin: 0 auto;
+}
+
+#modal-radiografia-forense .btn-outline-secondary {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    font-weight: 700;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+#modal-radiografia-forense .btn-outline-secondary:hover {
+    border-color: #38BDF8;
+    color: #f8fafc;
+}
+

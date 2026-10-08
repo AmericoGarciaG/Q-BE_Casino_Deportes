@@ -1322,6 +1322,16 @@ def sincronizar_progol_pipeline_completo(
   4. Subordina el triaje `triaje_determinista_9_estrategias(payload, cuotas, gamma=0.67)` a la morfología de Capa 0: `gamma` viaja desde `PortfolioParameters.gamma_threshold` (default `0.67`) y se propaga a `clasificar_morfologia_simplex` para resolver `HEGEMONIA_*`/`ASIMETRIA_*` (Directiva de Integración Capa 0→Capa 1, 2026-10-07).
 * **[SHIELD]:** `tests/shield/test_shield_simplex_morphology_and_gamma_slider.py`
 
+### [ARCH-1.4.31] Suspensión de Inferencia LLM en Inspección y Contrato de Radiografía Forense [ARCH-PILLAR]
+* **Ubicación:** `src/web/static/js/app.js` y `src/web/templates/index.html`.
+* **Responsabilidad:** 
+  1. Suprime el endpoint `/api/portfolio/match-thesis` en la interacción del usuario: el frontend resuelve la hidratación de forma instantánea en memoria sin dependencias de red externa.
+  2. Expone en el modal:
+     - El badge oficial de la estrategia (`rad-estrategia-badge`).
+     - El botón de cierre con el texto simple `Cerrar`.
+     - El cálculo local del Top-4 de marcadores más probables a partir de $\lambda_H$ y $\lambda_A$.
+* **[SHIELD]:** `tests/shield/test_shield_radiografia_forense_reborn.py`
+
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:

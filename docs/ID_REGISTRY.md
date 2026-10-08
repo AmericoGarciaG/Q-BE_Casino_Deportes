@@ -174,6 +174,9 @@
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 | `[ARCH-1.4.16-B]` | ARCH | `docs/ARCH.md` | Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-083-B]` | LOGIC | `docs/LOGIC.md` | Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas | SELLADO |
+| `[LN-QBE-098]` | LOGIC | `docs/LOGIC.md` | Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR] | EN FORJA |
+| `[ARCH-1.4.31]` | ARCH | `docs/ARCH.md` | Suspensión de Inferencia LLM en Inspección y Contrato de Radiografía Forense [ARCH-PILLAR] | EN FORJA |
+| `[DES-QBE-063]` | DESIGN | `docs/DESIGN.md` | Diseño de la Radiografía Forense: Radar de 3 Factores y Comparador de 6 Columnas [ARCH-PILLAR] | EN FORJA |
 
 
 ---

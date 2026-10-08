@@ -1027,6 +1027,12 @@ function renderizarResultadosPortafolio(data) {
                 </div>
             `;
 
+            // [DES-QBE-069] Acciones de tarjeta: compra congelada en el Ledger + copia de ticket.
+            const yaComprado = _verificarBoletoComprado(ord.id_partido);
+            const btnComprarHtml = yaComprado
+                ? `<button class="btn btn-sm" style="background:#1e293b; color:#00E676; border:1px solid #00E676; padding:6px 14px; border-radius:4px; font-size:7.8pt; font-weight:800; cursor:default;" disabled>✔ Boleto Registrado</button>`
+                : `<button id="btn-comprar-${ord.id_partido}" onclick="comprarBoleto('${ord.id_partido}')" style="background:linear-gradient(135deg, #00E676 0%, #059669 100%); border:none; color:#0b1120; padding:6px 16px; border-radius:4px; font-size:8pt; font-weight:800; cursor:pointer; box-shadow:0 0 10px rgba(0,230,118,0.3);">🎟️ Comprar Boleto</button>`;
+
             const card = document.createElement("div");
             card.className = "card";
             card.style.cssText = "background:#1C2541; border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:16px;";
@@ -1084,11 +1090,17 @@ function renderizarResultadosPortafolio(data) {
                     ${opcionNoJugadaHtml}
                 </div>
 
-                <!-- Botón hacia Radiografía Forense -->
-                <div style="text-align:right;">
-                    <button onclick="abrirRadiografiaForense('${ord.id_partido}')" style="background:transparent; border:1px solid #38BDF8; color:#38BDF8; padding:6px 14px; border-radius:4px; font-size:7.8pt; font-weight:700; cursor:pointer;">
-                        🔬 Ver Análisis Cuantitativo y Tesis →
+                <!-- [DES-QBE-069] Barra de dos extremos: Análisis (izq.) · Copiar + Comprar (der.) -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06);">
+                    <button onclick="abrirRadiografiaForense('${ord.id_partido}')" style="background:transparent; border:1px solid #38BDF8; color:#38BDF8; padding:6px 14px; border-radius:4px; font-size:7.8pt; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                        🔬 Ver Análisis Cuantitativo
                     </button>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button onclick="copiarTicketPortapapeles('${ord.id_partido}')" style="background:rgba(255,255,255,0.04); border:1px solid #334155; color:#94A3B8; padding:6px 12px; border-radius:4px; font-size:7.8pt; cursor:pointer;" title="Copiar resumen para WhatsApp o terminal">
+                            📋 Copiar Ticket
+                        </button>
+                        ${btnComprarHtml}
+                    </div>
                 </div>
             `;
             contSplit.appendChild(card);
@@ -1125,50 +1137,205 @@ function renderizarResultadosPortafolio(data) {
     }
 }
 
-// ─── Modal de Radiografía Forense (Imagen 4) ─────────────────────────────────
+// ─── Modal de Radiografía Forense REBORN [LN-QBE-098 / ARCH-1.4.31 / DES-QBE-063] ──
+// Cero red y cero LLM: toda la hidratación es determinista en O(1) sobre el payload
+// soberano ya presente en memoria ([GOVERNANCE-01] paridad backend↔pantalla).
+
+/** Densidad Poisson P(X=k) = λ^k · e^(-λ) / k!. Cálculo local determinista. */
+function _calcularPoissonP(lambda, k) {
+    let fact = 1;
+    for (let i = 2; i <= k; i++) fact *= i;
+    return (Math.pow(lambda, k) * Math.exp(-lambda)) / fact;
+}
+
+/** [DES-QBE-063] Radar Factual de 3 Factores y Top-4 de marcadores Poisson.
+ *  Reemplaza la prosa generativa de Gemini por una síntesis local en O(1). */
+function _hidratarRadarYMarcadores(p) {
+    const lamH = Number(p.lambda_local ?? p.lambda_home ?? p.xg_local ?? 1.5);
+    const lamA = Number(p.mu_visita ?? p.lambda_away ?? p.xg_visita ?? 1.1);
+    // Nombres de los contendientes para humanizar las etiquetas del radar.
+    const localNom = (String(p.partido || "Local vs Visita").split(" vs ")[0] || "Local").trim();
+    const visitaNom = (String(p.partido || "Local vs Visita").split(" vs ")[1] || "Visita").trim();
+
+    // 1. Peligro Ofensivo Esperado: diferencial de goles esperados (λ_H − λ_A).
+    const diffXg = lamH - lamA;
+    const facOfEl = document.getElementById("rad-fac-ofensiva");
+    const barOfEl = document.getElementById("rad-bar-ofensiva");
+    if (facOfEl && barOfEl) {
+        const liderNom = diffXg >= 0 ? localNom : visitaNom;
+        facOfEl.textContent = `${liderNom} genera +${Math.abs(diffXg).toFixed(2)} goles esperados de peligro`;
+        barOfEl.style.width = `${Math.min(100, Math.max(10, 50 + diffXg * 25))}%`;
+    }
+
+    // 2. Vulnerabilidad del Rival / Contención: anclada al SoTA promedio de la tabla 10P
+    //    (menor exposición ⇒ mayor contención). Sin 10P, degrada al diferencial implícito en λ.
+    const t10 = Array.isArray(p.tabla_10p) ? p.tabla_10p : [];
+    let solidezEdge = (t10.length >= 2 && t10[0].sota !== undefined && t10[1].sota !== undefined)
+        ? Number(t10[1].sota) - Number(t10[0].sota)
+        : (lamA - lamH);
+    const facDefEl = document.getElementById("rad-fac-defensa");
+    const barDefEl = document.getElementById("rad-bar-defensa");
+    if (facDefEl && barDefEl) {
+        const etiqueta = solidezEdge >= 0
+            ? `${visitaNom} concede más tiros a puerta`
+            : `${localNom} muestra mayor exposición`;
+        facDefEl.textContent = `${etiqueta} (${solidezEdge >= 0 ? "+" : ""}${solidezEdge.toFixed(2)} ΔSoTA)`;
+        barDefEl.style.width = `${Math.min(95, Math.max(10, 50 + solidezEdge * 6))}%`;
+    }
+
+    // 3. Factor Estadio / Territorio: log-boost territorial ln(λ_H / λ_A).
+    const facLocEl = document.getElementById("rad-fac-localia");
+    const barLocEl = document.getElementById("rad-bar-localia");
+    if (facLocEl && barLocEl && lamA > 0) {
+        const logBoost = Math.log(lamH / lamA);
+        const boostPct = Math.round(Math.abs(logBoost) * 100);
+        facLocEl.textContent = `La localía en casa de ${localNom} inclina el juego (+${boostPct}% impulso)`;
+        barLocEl.style.width = `${Math.min(95, Math.max(10, 50 + logBoost * 40))}%`;
+    }
+
+    // 4. Top-4 marcadores más probables a partir de la rejilla Poisson 0..3.
+    const scores = [];
+    for (let x = 0; x <= 3; x++) {
+        for (let y = 0; y <= 3; y++) {
+            scores.push({ marcador: `${x} - ${y}`, prob: _calcularPoissonP(lamH, x) * _calcularPoissonP(lamA, y) });
+        }
+    }
+    scores.sort((a, b) => b.prob - a.prob);
+    const topContainer = document.getElementById("rad-top-marcadores");
+    if (topContainer) {
+        topContainer.innerHTML = scores.slice(0, 4).map(s => `
+            <div style="background: #1e293b; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <strong style="color: #f8fafc; font-size: 0.85rem;">${s.marcador}</strong>
+                <span style="color: #38bdf8; font-size: 0.78rem; font-weight: 600;">${(s.prob * 100).toFixed(1)}%</span>
+            </div>
+        `).join("");
+    }
+}
+
+/** [LN-QBE-098] Comparador de 6 columnas de probabilidad (cero momios).
+ *  Colorimetría de boletos: Verde #00E676 = Ataque (Boleto 1), Azul #38BDF8 = Cobertura (Boleto 2). */
 function _hidratarTablasRadiografia(p) {
-    // Pronóstico vs Mercado
+    const COLOR_ATAQUE = "#00E676";
+    const COLOR_COBERTURA = "#38BDF8";
+    const COLOR_NEUTRO = "#94A3B8";
+    const ord = p.orden || (Array.isArray(p.ordenes) ? p.ordenes[0] : null);
+
+    // P' certificado (prob_qbe) por pierna + operador asignado, desde la orden soberana.
+    const boletos = (ord && ord.boletos) || {};
+    const legAtaque = boletos.boleto_2_ganancia || {};
+    const legCobertura = boletos.boleto_1_seguro || {};
+    const opNoJugada = (ord && ord.opcion_no_jugada) || {};
+
+    const filas = Array.isArray(p.probabilidades_3vias) ? p.probabilidades_3vias : [];
+
+    // Favorito: por bandera, por nombre o por máxima probabilidad deportiva.
+    let idxFav = null;
+    if (p.is_fav_local === true) idxFav = 0;
+    else if (p.is_fav_local === false) idxFav = filas.length - 1;
+    else {
+        let best = -1;
+        filas.forEach((pv, i) => {
+            if (/empate/i.test(String(pv.resultado || ""))) return;
+            const pr = Number(pv.prob_real) || 0;
+            if (pr > best) { best = pr; idxFav = i; }
+        });
+    }
+
+    const consenso = p.consenso_mercado || null;
+    const consensoSeq = consenso ? [consenso.p_L_mercado, consenso.p_E_mercado, consenso.p_V_mercado] : [];
+    const fmtPct = (v) => (v === null || v === undefined || isNaN(Number(v))) ? "—" : `${Number(v).toFixed(1)}%`;
+
     const tbodyPron = document.getElementById("rad-cuerpo-pronostico");
-    if (tbodyPron && p.probabilidades_3vias) {
-        tbodyPron.innerHTML = p.probabilidades_3vias.map(pv => {
-            const edgeVal = pv.edge || 0;
-            const edgeColor = edgeVal > 0 ? '#00E676' : '#ef4444';
-            // [LN-QBE-011]: Momio Justo Teórico Q-BE = 100 / Prob_Real
-            const momioJustoQBE = (pv.prob_real && pv.prob_real > 0) ? (100.0 / pv.prob_real).toFixed(2) : '—';
+    if (tbodyPron && filas.length) {
+        tbodyPron.innerHTML = filas.map((pv, i) => {
+            const esEmpate = /empate/i.test(String(pv.resultado || ""));
+            const esAtaque = (!esEmpate && idxFav === i);
+            const rol = esEmpate ? "cobertura" : (esAtaque ? "ataque" : "none");
+            const colorRes = esAtaque ? COLOR_ATAQUE : (esEmpate ? COLOR_COBERTURA : COLOR_NEUTRO);
+
+            // P' fiduciaria CERTIFICADA por el motor, tomada de la pierna correspondiente.
+            let pPrima = null, operador = null;
+            if (rol === "ataque") { pPrima = legAtaque.prob_qbe; operador = legAtaque.operador; }
+            else if (rol === "cobertura") { pPrima = legCobertura.prob_qbe; operador = legCobertura.operador; }
+            else { pPrima = opNoJugada.prob_qbe; operador = opNoJugada.operador; }
+            if (pPrima === null || pPrima === undefined) pPrima = pv.prob_real;
+
+            // [DES-QBE-063] Columna CASINO SELECCIONADO: operador ESPECÍFICO de CADA pierna.
+            // Se descarta el rótulo residual de la modalidad cross-market ('mejor_combinacion'):
+            // sólo se exhibe una casa real que publica cuota de ESTE desenlace, jamás el
+            // selector global. Sin operador asignado ⇒ '—' (cero cifras inventadas).
+            const slugOp = (operador && String(operador).toLowerCase() !== "mejor_combinacion")
+                ? String(operador).toLowerCase()
+                : null;
+            const nombreCap = slugOp ? slugOp.charAt(0).toUpperCase() + slugOp.slice(1) : null;
+            const casinoTxt = slugOp
+                ? ((esAtaque || esEmpate)
+                    ? `<span style="color: ${colorRes}; font-weight: 700;">⭐ ${nombreCap}</span>`
+                    : `<span style="color: #64748b;">${nombreCap}</span>`)
+                : "—";
+
+            // P̂ deportiva soberana (física de goles) certificada por el motor.
+            const pDeportiva = pv.prob_real;
+
+            // Consenso de mercado des-marginado (vig-free) si el fixture lo expone.
+            const cRaw = consensoSeq[i];
+            const pConsenso = (cRaw === null || cRaw === undefined) ? null : Number(cRaw) * 100.0;
+
+            // Ventaja matemática neta sobre la casa: α = p·O − 1.0 ([LN-QBE-098]).
+            const momio = Number(pv.momio);
+            const alpha = (Number(pv.prob_real) > 0 && momio > 1.0)
+                ? (Number(pv.prob_real) / 100.0) * momio - 1.0
+                : null;
+            const alphaColor = (alpha !== null && alpha > 0) ? COLOR_ATAQUE : "#EF4444";
+            const alphaTxt = (alpha === null) ? "—" : `${alpha >= 0 ? "+" : ""}${(alpha * 100).toFixed(2)}%`;
 
             return `
-                <tr>
-                    <td style="font-weight:700; color:#fff;">${pv.resultado}</td>
-                    <td style="text-align:center; color:#38BDF8; font-weight:800;">@${momioJustoQBE}</td>
-                    <td style="text-align:center; font-weight:700;">${pv.prob_real?.toFixed(1)}%</td>
-                    <td style="text-align:center; color:#cbd5e1;">@${pv.momio?.toFixed(2)}</td>
-                    <td style="text-align:center;">${pv.prob_casino?.toFixed(1)}%</td>
-                    <td style="text-align:right; font-weight:800; color:${edgeColor};">${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(2)}%</td>
+                <tr style="border-top: 1px solid #1e293b;">
+                    <td style="padding: 9px 14px; font-weight: 700; color: ${colorRes};">${pv.resultado}</td>
+                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: ${colorRes};">${fmtPct(pPrima)}</td>
+                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #cbd5e1;">${fmtPct(pDeportiva)}</td>
+                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #cbd5e1;">${fmtPct(pConsenso)}</td>
+                    <td style="padding: 9px 10px; text-align: center; font-family: monospace; color: #94a3b8;">${fmtPct(pv.prob_casino)}</td>
+                    <td style="padding: 9px 10px; text-align: center; color: #e2e8f0; font-weight: 600;">${casinoTxt}</td>
+                    <td style="padding: 9px 14px; text-align: right; font-weight: 800; color: ${alphaColor};">${alphaTxt}</td>
                 </tr>
             `;
         }).join("");
     }
 
-    // Poisson Boxes
-    document.getElementById("rad-xg-local").textContent = (p.lambda_local || 0).toFixed(2);
-    document.getElementById("rad-xg-visita").textContent = (p.mu_visita || 0).toFixed(2);
-    document.getElementById("rad-xg-total").textContent = (p.xg_total || 0).toFixed(2);
-    document.getElementById("rad-phi-lead2").textContent = `${(p.phi_lead2_pct || 0).toFixed(1)}%`;
+    // Margen comercial implícito del operador (Σ probabilidades implícitas − 100%).
+    const footerCom = document.getElementById("rad-footer-comisiones");
+    if (footerCom && filas.length) {
+        const suma = filas.reduce((acc, pv) => acc + (Number(pv.prob_casino) || 0), 0);
+        footerCom.textContent = (suma > 0)
+            ? `Margen comercial implícito del operador: ${(suma - 100).toFixed(1)}% · Comparación pura de probabilidades (sin cuota decimal).`
+            : "";
+    }
 
-    // 10P Stats
-    const tbody10p = document.getElementById("rad-cuerpo-10p");
-    if (tbody10p && p.tabla_10p) {
-        tbody10p.innerHTML = p.tabla_10p.map(row => `
-            <tr>
-                <td style="font-weight:700; color:#fff;">${row.equipo}</td>
-                <td style="text-align:center;">#${row.puesto}</td>
-                <td style="text-align:center; font-weight:700; color:#00E676;">${row.pts}</td>
-                <td style="text-align:center;">${row.gf_gc}</td>
-                <td style="text-align:center;">${row.pts_pj?.toFixed(2)}</td>
-                <td style="text-align:center;">${row.sot?.toFixed(1)}</td>
-                <td style="text-align:center;">${row.sota?.toFixed(1)}</td>
-                <td style="text-align:center;">${row.posesion?.toFixed(1)}%</td>
-                <td style="text-align:center; font-weight:700; color:#38BDF8;">${row.qmod?.toFixed(2)}</td>
+    // KPI Tiles: intensidades de gol y pago anticipado.
+    const kLambda = document.getElementById("rad-kpi-lambda");
+    const kMu = document.getElementById("rad-kpi-mu");
+    const kTot = document.getElementById("rad-kpi-totales");
+    const kPa = document.getElementById("rad-kpi-pa");
+    if (kLambda) kLambda.textContent = (p.lambda_local !== undefined && p.lambda_local !== null) ? Number(p.lambda_local).toFixed(2) : "--";
+    if (kMu) kMu.textContent = (p.mu_visita !== undefined && p.mu_visita !== null) ? Number(p.mu_visita).toFixed(2) : "--";
+    if (kTot) kTot.textContent = (p.xg_total !== undefined && p.xg_total !== null) ? Number(p.xg_total).toFixed(2) : "--";
+    if (kPa) kPa.textContent = (p.phi_lead2_pct !== undefined && p.phi_lead2_pct !== null) ? `${Number(p.phi_lead2_pct).toFixed(1)}%` : "--";
+
+    // Tabla de desempeño y control de cancha (10P).
+    const tbodyEq = document.getElementById("rad-cuerpo-equipos");
+    if (tbodyEq && p.tabla_10p) {
+        tbodyEq.innerHTML = p.tabla_10p.map(row => `
+            <tr style="border-top: 1px solid #1e293b;">
+                <td style="padding: 7px 14px; font-weight: 700; color: #f8fafc;">${row.equipo}</td>
+                <td style="padding: 7px 10px; text-align: center;">#${row.puesto}</td>
+                <td style="padding: 7px 10px; text-align: center; font-weight: 700; color: #00E676;">${row.pts}</td>
+                <td style="padding: 7px 10px; text-align: center;">${row.gf_gc}</td>
+                <td style="padding: 7px 10px; text-align: center;">${(row.pts_pj ?? 0).toFixed(2)}</td>
+                <td style="padding: 7px 10px; text-align: center;">${(row.sot ?? 0).toFixed(1)}</td>
+                <td style="padding: 7px 10px; text-align: center;">${(row.sota ?? 0).toFixed(1)}</td>
+                <td style="padding: 7px 10px; text-align: center;">${(row.posesion ?? 0).toFixed(1)}%</td>
+                <td style="padding: 7px 10px; text-align: center; font-weight: 700; color: #38BDF8;">${(row.qmod ?? 0).toFixed(2)}</td>
             </tr>
         `).join("");
     }
@@ -1183,54 +1350,39 @@ async function abrirRadiografiaForense(matchId) {
         if (!fixture) return;
         p = _adaptarFixtureARadiografia(fixture);
     }
+    // Orden soberana asociada (P' fiduciaria por pierna y operador) — clave canónica 3NF
+    // `ordenes_ejecucion_partidos` con fallback declarado a `ordenes` ([DES-QBE-045]).
+    const allOrders = currentPortfolioData?.ordenes_ejecucion_partidos
+        || currentPortfolioData?.ordenes
+        || [];
+    p.orden = allOrders.find(x => x.id_partido === matchId) || p.orden || null;
 
     document.getElementById("modal-radiografia-forense").style.display = "block";
-    document.getElementById("rad-estrategia-badge").textContent = p.strategy_code || "QBE";
-    document.getElementById("rad-titulo-partido").textContent = p.partido || p.partido_nombre;
 
-    // Hidratar Pronóstico vs Mercado, Poisson y 10P (Instantáneo)
+    // [DES-QBE-063] Cabecera: píldora de estrategia REAL (familia canónica QBE-H/D/R/C)
+    // resuelta desde la orden soberana; jamás el residuo genérico 'QBE-00' por omisión.
+    const badgeEl = document.getElementById("rad-estrategia-badge");
+    if (badgeEl) {
+        const ordBadge = p.orden || {};
+        const stratCode = (ordBadge.estrategia_seleccionada && ordBadge.estrategia_seleccionada.codigo)
+            || ordBadge.estrategia_codigo
+            || p.estrategia_codigo
+            || p.strategy_code
+            || "QBE-00";
+        const pal = _paletaEstrategia(stratCode);
+        badgeEl.textContent = stratCode;
+        badgeEl.style.color = pal.fg;
+        badgeEl.style.borderColor = pal.borde;
+        badgeEl.style.background = pal.bg;
+    }
+    const tituloEl = document.getElementById("rad-titulo-partido");
+    if (tituloEl) tituloEl.textContent = p.partido || p.partido_nombre || "Partido";
+    const horarioEl = document.getElementById("rad-horario");
+    if (horarioEl) horarioEl.textContent = String(p.horario || "").replace(/\n/g, " ");
+
+    // [LN-QBE-098] Hidratación 100% local y determinista: Gemini permanece en reposo total (cero red).
+    _hidratarRadarYMarcadores(p);
     _hidratarTablasRadiografia(p);
-
-    const tesisContainer = document.getElementById("rad-tesis-html");
-
-    // Si ya fue generada previamente, renderizarla de inmediato
-    if (p.tesis_didactica && p.tesis_didactica.length > 50 && p.tesis_didactica !== "PENDIENTE") {
-        tesisContainer.innerHTML = p.tesis_didactica;
-        return;
-    }
-
-    // Si no, mostrar spinner elegante y llamar al endpoint on-demand
-    tesisContainer.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px; color: #38BDF8; padding: 12px 0;">
-            <span class="badge-pulse"></span>
-            <span style="font-size: 8.5pt; font-weight: 600;">⚡ Generando Tesis Cuantitativa con IA (Gemini 3.6 Flash)...</span>
-        </div>
-    `;
-
-    try {
-        const resp = await fetch("/api/portfolio/match-thesis", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                partido_id: matchId,
-                partido_data: p
-            })
-        });
-        if (!resp.ok) throw new Error("Error en generador narrativo");
-        const data = await resp.json();
-
-        p.tesis_didactica = data.tesis_html;
-        tesisContainer.innerHTML = data.tesis_html;
-    } catch (err) {
-        console.error("Fallo lazy loading tesis:", err);
-        // Fallback local instantáneo
-        tesisContainer.innerHTML = `
-            <div>• <strong>Momento y Tabla:</strong> Disparidad fáctica en puntos y rendimiento de ambos clubes.</div>
-            <div style='margin-top:6px;'>• <strong>Dominio de Cancha:</strong> Superioridad en métricas de xG Opta y control de posesión.</div>
-            <div style='margin-top:6px;'>• <strong>Historial y Bajas:</strong> Antecedentes ponderados sin bajas críticas reportadas.</div>
-            <div style='margin-top:6px;'>• <strong>Estrategia y Protección:</strong> Cobertura cuantitativa con preservación de capital garantizada.</div>
-        `;
-    }
 }
 
 function cerrarRadiografiaForense() {
@@ -1238,6 +1390,134 @@ function cerrarRadiografiaForense() {
 }
 window.abrirRadiografiaForense = abrirRadiografiaForense;
 window.cerrarRadiografiaForense = cerrarRadiografiaForense;
+
+// ─── [DES-QBE-069] SISTEMA DE CONGELAMIENTO "COMPRAR BOLETO" (LEDGER INMUTABLE) ──
+// El estado del boleto se congela al momento de la compra para auditoría post-partido:
+// cuotas, importes y proyecciones quedan inmutables en localStorage. Cero red y cero
+// LLM ([GOVERNANCE-01]): la UI sólo persiste el contrato ya hidratado por el motor.
+
+/** ¿El boleto de este partido ya fue congelado en el Ledger local? */
+function _verificarBoletoComprado(matchId) {
+    try {
+        const ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
+        return ledger.some(t => t.id_partido === matchId);
+    } catch (e) {
+        return false;
+    }
+}
+
+/** [MEJORA 1] Refresca el contador de boletos comprados en la barra superior. */
+function _actualizarContadorBoletosComprados() {
+    let ledger = [];
+    try {
+        ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
+    } catch (e) {
+        ledger = [];
+    }
+    const count = ledger.length;
+    const totalComprometido = ledger.reduce((acc, t) => acc + (Number(t.inversion_total_mxn) || 0), 0);
+    const badge = document.getElementById("badge-boletos-comprados");
+    if (badge) {
+        badge.textContent = `🎟️ Comprados: ${count} ($${totalComprometido.toFixed(2)} MXN)`;
+    }
+}
+
+/** [CONGELAMIENTO] Almacena el estado INMUTABLE del boleto en el momento de la compra. */
+function comprarBoleto(matchId) {
+    const allOrders = currentPortfolioData?.ordenes_ejecucion_partidos
+        || currentPortfolioData?.ordenes
+        || [];
+    const ord = allOrders.find(x => x.id_partido === matchId);
+    if (!ord) return;
+
+    const b1 = ord.boletos?.boleto_1_seguro || {};
+    const b2 = ord.boletos?.boleto_2_ganancia || {};
+
+    const ticketCongelado = {
+        id_partido: ord.id_partido,
+        partido: ord.partido,
+        horario_evento: ord.horario_evento,
+        estrategia: ord.estrategia_seleccionada?.codigo || ord.estrategia_codigo,
+        inversion_total_mxn: ord.boletos?.inversion_partido_A_i || 0,
+        pierna_ataque: {
+            seleccion: b2.seleccion,
+            monto_mxn: b2.monto_mxn,
+            momio_congelado: b2.momio,
+            operador: b2.operador,
+            prob_p_prime: b2.prob_qbe
+        },
+        pierna_seguro: {
+            seleccion: b1.seleccion,
+            monto_mxn: b1.monto_mxn,
+            momio_congelado: b1.momio,
+            operador: b1.operador,
+            prob_p_prime: b1.prob_qbe
+        },
+        proyecciones: ord.proyecciones,
+        timestamp_compra_utc: new Date().toISOString(),
+        estado_auditoria: "PENDIENTE_RESULTADO"
+    };
+
+    let ledger = [];
+    try {
+        ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
+    } catch (e) {
+        ledger = [];
+    }
+    ledger = ledger.filter(t => t.id_partido !== matchId);
+    ledger.push(ticketCongelado);
+    localStorage.setItem("qbe_boletos_comprados", JSON.stringify(ledger));
+
+    // Feedback visual inmediato en el botón de compra de la tarjeta.
+    const btn = document.getElementById(`btn-comprar-${matchId}`);
+    if (btn) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#00E676";
+        btn.style.border = "1px solid #00E676";
+        btn.style.boxShadow = "none";
+        btn.style.cursor = "default";
+        btn.innerHTML = "✔ Boleto Registrado";
+        btn.disabled = true;
+    }
+
+    _actualizarContadorBoletosComprados();
+    alert(`🎟️ Boleto congelado exitosamente para ${ord.partido}.\nLas cuotas e importes se han registrado para auditoría post-partido.`);
+}
+
+/** [MEJORA 2] Copia al portapapeles el ticket en formato limpio para ventanilla / WhatsApp. */
+function copiarTicketPortapapeles(matchId) {
+    const allOrders = currentPortfolioData?.ordenes_ejecucion_partidos
+        || currentPortfolioData?.ordenes
+        || [];
+    const ord = allOrders.find(x => x.id_partido === matchId);
+    if (!ord) return;
+
+    const b1 = ord.boletos?.boleto_1_seguro || {};
+    const b2 = ord.boletos?.boleto_2_ganancia || {};
+    const inv = ord.boletos?.inversion_partido_A_i || 0;
+
+    let texto = `🏛️ TICKET Q-BE · ${ord.partido}\n`;
+    texto += `⏰ ${ord.horario_evento} | Inversión: $${Number(inv).toFixed(2)} MXN\n`;
+    texto += `• Boleto 1 (Ataque): ${b2.seleccion} @${b2.momio} (${String(b2.operador || "").toUpperCase()}) ➔ $${Number(b2.monto_mxn || 0).toFixed(2)} MXN\n`;
+    if (Number(b1.monto_mxn || 0) > 0) {
+        texto += `• Boleto 2 (Seguro): ${b1.seleccion} @${b1.momio} (${String(b1.operador || "").toUpperCase()}) ➔ $${Number(b1.monto_mxn || 0).toFixed(2)} MXN (Tablas V=0)\n`;
+    }
+    texto += `🎯 Ganancia Neta: +$${Number(ord.proyecciones?.ganancia_neta_principal_mxn || 0).toFixed(2)} MXN`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto)
+            .then(() => alert("📋 Ticket copiado al portapapeles."))
+            .catch(() => prompt("Copie manualmente el ticket:", texto));
+    } else {
+        prompt("Copie manualmente el ticket:", texto);
+    }
+}
+
+window.comprarBoleto = comprarBoleto;
+window.copiarTicketPortapapeles = copiarTicketPortapapeles;
+
+// El contador de boletos comprados se hidrata al cargar la SPA.
+document.addEventListener("DOMContentLoaded", _actualizarContadorBoletosComprados);
 
 // ─── Funciones del Panel de Curación Agéntica HITL [ARCH-1.5.2] ─────────────
 async function abrirModalCurador(leagueId = 262) {
@@ -1730,6 +2010,15 @@ function _adaptarFixtureARadiografia(f) {
     if (lambdaLocal !== null && lambdaVisita !== null) p.xg_total = lambdaLocal + lambdaVisita;
     const phiLead2 = num(f.phi_lead2_home);
     if (phiLead2 !== null) p.phi_lead2_pct = phiLead2 * 100.0;
+
+    // [LN-QBE-098] Passthrough soberano para el comparador de 6 columnas del modal:
+    // favorito, consenso des-marginado y localía, ya presentes en el Live Board.
+    p.fav_name = f.fav_name || null;
+    p.horario = f.horario || null;
+    if (typeof f.is_fav_local === "boolean") p.is_fav_local = f.is_fav_local;
+    if (f.consenso_mercado) p.consenso_mercado = f.consenso_mercado;
+    if (f.estrategia_codigo) p.estrategia_codigo = f.estrategia_codigo;
+    if (f.strategy_code) p.strategy_code = f.strategy_code;
 
     return p;
 }

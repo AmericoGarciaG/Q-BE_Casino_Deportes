@@ -591,6 +591,14 @@
   4. `• Salida de Emergencia: Si el rival anota primero, ejecutar CashOut al empatar en el 2T en cuanto ofrezca Tablas ($B.BB MXN) para recuperar el 100% del capital.`
 * Debajo de este bloque se ubica la línea divisoria continua y la `• Opción No Jugada`.
 
+### [DES-QBE-063] Diseño de la Radiografía Forense: Radar de 3 Factores y Comparador de 6 Columnas [ARCH-PILLAR]
+* **Cabecera:** Píldora de estrategia dinámica con paleta canónica (`_paletaEstrategia`) y botón simple `Cerrar`.
+* **Radar de 3 Factores (Reemplazo de Tesis):** Tres barras horizontales de progreso dark fintech:
+  1. `Diferencial Ofensivo xG`: Comparativa de producción de peligro.
+  2. `Solidez Defensiva`: Eficiencia de contención.
+  3. `Ventaja Territorial / Localía`: Impacto del factor cancha ($\bar{\gamma}_{\text{home}}$).
+* **Tabla Comparativa de Probabilidades:** Eliminación de toda cuota decimal (@); tipografía monospaciada para porcentajes y resaltado esmeralda/azul para boletos activos.
+
 
 ---
 

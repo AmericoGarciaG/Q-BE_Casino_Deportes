@@ -1151,6 +1151,26 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-098] Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR]
+* **Ω (Resumen):** Transforma la ventana de inspección de partido en un tablero visual instantáneo en $O(1)$, poniendo en reposo total las llamadas generativas a Gemini. Sustituye la prosa estocástica por el Radar Factual de 3 Factores (Ofensiva xG, Solidez Defensiva y Localía), el Top-4 de marcadores Poisson ($M_{xy}^*$) y la comparación de probabilidades puras contra el casino seleccionado.
+* **I (Input):** `id_partido: str`, distribución soberana $\hat{P}_i$, fiduciaria $P'_i$, consenso sin vig $\vec{q}_{\text{mkt}}$, cuota comercial de ventanilla $O_k$ y operador asignado.
+* **P (Process) [ALGO-PROTECTED]:**
+  1. **Reposo de Inferencia LLM:** Queda formalmente prohibido disparar peticiones a `/api/portfolio/match-thesis` o instanciar `GeminiCognitiveGateway` al abrir el modal. La narrativa de IA se reemplaza por el Radar Factual de 3 Factores.
+  2. **Micro-Matriz Top-4 de Marcadores Poisson:** Extrae de $M_{xy}^*$ los 4 estados con mayor densidad de masa probabilística, ordenados descendentemente.
+  3. **Comparador de Probabilidades de 6 Columnas (Cero Momios):**
+     - Columna 1 (`RESULTADO`): Destaca en **Verde (`#00E676`)** el desenlace de Ataque (Boleto 1) y en **Azul (`#38BDF8`)** el de Cobertura (Boleto 2).
+     - Columna 2 (`P' FIDUCIARIA`): Probabilidad fiduciaria contraída con colorimetría de boleto.
+     - Columna 3 (`P̂ DEPORTIVA`): Probabilidad soberana pura de física de goles.
+     - Columna 4 (`CONSENSO MERCADO`): Probabilidad promedio des-marginada (Vig-Free).
+     - Columna 5 (`PROB. CASINO`): Probabilidad implícita comercial con comisión ($1/O_k$) del operador asignado.
+     - Columna 6 (`CASINO SELECCIONADO`): Nombre/logo y distintivo de la casa óptima.
+     - Columna 7 (`VENTAJA (+EV)`): Ventaja matemática neta sobre la casa ($\alpha = p \cdot O - 1.0$).
+* **O (Output):** Estructura visual renderizada en el DOM del modal `#modal-radiografia-forense`.
+* **Φ (Transición):** Hacia `[DES-QBE-063]`.
+* **[SHIELD]:** `tests/shield/test_shield_radiografia_forense_reborn.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,
