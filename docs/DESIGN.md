@@ -591,13 +591,26 @@
   4. `• Salida de Emergencia: Si el rival anota primero, ejecutar CashOut al empatar en el 2T en cuanto ofrezca Tablas ($B.BB MXN) para recuperar el 100% del capital.`
 * Debajo de este bloque se ubica la línea divisoria continua y la `• Opción No Jugada`.
 
-### [DES-QBE-063] Diseño de la Radiografía Forense: Radar de 3 Factores y Comparador de 6 Columnas [ARCH-PILLAR]
+### [DES-QBE-063] Diseño de la Radiografía Forense: Barras Duales Apiladas, Radiografía Estructural y Cero Estrellas [ARCH-PILLAR]
 * **Cabecera:** Píldora de estrategia dinámica con paleta canónica (`_paletaEstrategia`) y botón simple `Cerrar`.
-* **Radar de 3 Factores (Reemplazo de Tesis):** Tres barras horizontales de progreso dark fintech:
-  1. `Diferencial Ofensivo xG`: Comparativa de producción de peligro.
-  2. `Solidez Defensiva`: Eficiencia de contención.
-  3. `Ventaja Territorial / Localía`: Impacto del factor cancha ($\bar{\gamma}_{\text{home}}$).
-* **Tabla Comparativa de Probabilidades:** Eliminación de toda cuota decimal (@); tipografía monospaciada para porcentajes y resaltado esmeralda/azul para boletos activos.
+* **Comparador Gráfico de Barras Duales (Minimalista):**
+  - **Leyenda Apilada en Cabecera:** Local en Azul Cian (`#38BDF8`) arriba, Visitante en Verde Esmeralda (`#00E676`) abajo, emulando la disposición vertical de las barras.
+  - **Supresión de Redundancias:** Prohibido repetir los nombres de los clubes en cada renglón de métrica.
+  - **Diferencia Relativa Plegada:** La ventaja del ganador se indica exclusivamente entre paréntesis junto a la barra mayor (ej. `1.95 xG (+0.85)`). Cero textos descriptivos repetidos a la derecha.
+  - **Las 4 Métricas Fácticas:** Conectadas a `currentLiveBoard.standings` (Peligro Ofensivo xG de Partido, Producción en Temporada GF/PJ, Solidez Defensiva GC/PJ y Ritmo Competitivo PTS/PJ). Si faltan datos en un partido, degrada limpiamente a `--` (prohibido inventar números).
+* **Tabla de Probabilidades (6 Columnas):**
+  - Cero momios decimales (@).
+  - Resaltado en Verde (`#00E676`) para Ataque y Azul (`#38BDF8`) para Cobertura.
+  - Columna *Casino Seleccionado*: Muestra el nombre limpio en color sin emojis de estrella (`⭐`).
+* **Tabla Inferior — Radiografía Estructural y Forma Reciente:**
+  - Sustituye a la tabla de desempeño vacía por una estructura de 2 filas leyendo directamente de `currentLiveBoard.standings`.
+  - Columnas: `EQUIPO | PUESTO | PTS | RÉCORD (G-E-P) | DIF GOLES | FORMA RECIENTE (5P) | xPTS OPTA | DIF xG | Q_MOD`.
+  - Los 5 resultados recientes se representan con círculos de color (`🟢` victoria, `⚪` empate, `🔴` derrota).
+  - El valor líder en cada columna se ilumina en Verde Esmeralda (`#00E676`). Cero estrellas.
+* **Contenedor de Acciones de Tarjeta:**
+  - Extremo Izquierdo: Botón `🔬 Ver Análisis Cuantitativo`.
+  - Extremo Derecho: Botón `📋 Copiar Ticket` y botón destacado `🎟️ Comprar Boleto` (congelamiento de cuotas y cambio de estado a `✔ Boleto Registrado`).
+  - Barra de Control: Badge dinámico `#badge-boletos-comprados` (`🎟️ Comprados: N ($XX.XX MXN)`).
 
 
 ---

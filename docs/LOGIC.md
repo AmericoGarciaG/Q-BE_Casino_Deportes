@@ -1171,6 +1171,19 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-099] Registro Fiduciario de Congelamiento de Boletos (Paper Trading & Audit Ledger) [ARCH-PILLAR]
+* **Ω (Resumen):** Persiste el boleto aprobado por el usuario como un hecho fiduciario inmutable, capturando las cuotas comerciales del momento exacto de la compra y alimentando el badge de control de gasto. Cero recálculo retroactivo.
+* **I (Input):** `id_partido: str`, `desenlace: str`, `mercado: str`, `cuota_congelada: float`, `monto: float`, `operador: str`, `timestamp: datetime`.
+* **P (Process) [ALGO-PROTECTED]:**
+  1. **Aduana de Idempotencia:** Si el boleto ya existe para (`id_partido`, `desenlace`, `mercado`), se rechaza el duplicado sin mutar el ledger.
+  2. **Congelamiento de Cuota:** La cuota persistida es la de ventanilla ofertada al usuario en el instante de la compra; prohibido recomputarla contra el consenso del mercado posterior.
+  3. **Sellado de Trazabilidad:** El registro se escribe con su marca temporal y estado `✔ Boleto Registrado`, quedando auditable contra el histórico de la orden.
+* **O (Output):** Fila del ledger fiduciario + agregado de cartera para el badge `#badge-boletos-comprados` (`🎟️ Comprados: N ($XX.XX MXN)`).
+* **Φ (Transición):** Hacia `[ARCH-1.4.32]` (contenedor de acciones de tarjeta y congelamiento) y `[LN-QBE-083-B]` (rótulo de cobertura).
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,

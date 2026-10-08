@@ -254,9 +254,11 @@ def get_sportsbook_matches(
             pa = bool(momios.get("pago_anticipado", True))
 
             dist_db = session.query(SovereignDistribution).filter(SovereignDistribution.match_id == mid).first()
-            p_l = dist_db.p_local if dist_db else 0.564
-            p_e = dist_db.p_empate if dist_db else 0.258
-            p_v = dist_db.p_visitante if dist_db else 0.178
+            # [LN-QBE-007-J] Prior fiduciario soberano sellado (Ω Resumen: 0.45 / 0.28 / 0.27).
+            # Saneamiento O-11: erradicadas las semillas huérfanas 0.564 / 0.258 / 0.178.
+            p_l = dist_db.p_local if dist_db else 0.4500
+            p_e = dist_db.p_empate if dist_db else 0.2800
+            p_v = dist_db.p_visitante if dist_db else 0.2700
 
             prob_impl_l = 1.0 / momio_l if momio_l > 0 else 0.0
             prob_impl_e = 1.0 / momio_e if momio_e > 0 else 0.0

@@ -1316,7 +1316,7 @@ def sincronizar_progol_pipeline_completo(
 ### [ARCH-1.4.30] Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR]
 * **Ubicación:** `src/core/simplex_morphology.py` y extensión en `src/models/web_schemas.py`.
 * **Responsabilidad:** 
-  1. Provee la función pura `clasificar_morfologia_simplex(p_prime: Tuple[float, float, float], gamma: float = 0.65) -> MorphologyClassification` ejecutada en tiempo $O(1)$.
+  1. Provee la función pura `clasificar_morfologia_simplex(p_prime: Tuple[float, float, float], gamma: float = 0.67) -> MorphologyClassification` ejecutada en tiempo $O(1)$.
   2. Extiende el DTO `GeneratePortfolioRequest` y `PortfolioParameters` para admitir `gamma_slider: float = Field(0.67, ge=0.67, le=0.75)`.
   3. En la interfaz `index.html` (Mesa de Apuestas), renderiza el selector interactivo tri-estado de **Masa $\Gamma$ [67% | 70% | 75%]** junto al slider de Certeza.
   4. Subordina el triaje `triaje_determinista_9_estrategias(payload, cuotas, gamma=0.67)` a la morfología de Capa 0: `gamma` viaja desde `PortfolioParameters.gamma_threshold` (default `0.67`) y se propaga a `clasificar_morfologia_simplex` para resolver `HEGEMONIA_*`/`ASIMETRIA_*` (Directiva de Integración Capa 0→Capa 1, 2026-10-07).
@@ -1331,6 +1331,15 @@ def sincronizar_progol_pipeline_completo(
      - El botón de cierre con el texto simple `Cerrar`.
      - El cálculo local del Top-4 de marcadores más probables a partir de $\lambda_H$ y $\lambda_A$.
 * **[SHIELD]:** `tests/shield/test_shield_radiografia_forense_reborn.py`
+
+### [ARCH-1.4.32] Contenedor de Acciones de Tarjeta y Congelamiento de Cuotas [ARCH-PILLAR]
+* **Ubicación:** `src/web/templates/index.html` (contenedor de acciones del modal de Radiografía) + `src/web/static/js/app.js` (escritura del ledger fiduciario).
+* **Responsabilidad:** Concentrar en un único contenedor las tres acciones de tarjeta del usuario y sellar la cuota al momento de la compra:
+  1. **Extremo Izquierdo:** `🔬 Ver Análisis Cuantitativo` — abre la vista analítica cuantitativa sin disparar inferencia LLM (`[ARCH-1.4.31]`).
+  2. **Extremo Derecho:** `📋 Copiar Ticket` y `🎟️ Comprar Boleto` — la compra congela la cuota comercial del instante y conmuta el estado a `✔ Boleto Registrado` (`[LN-QBE-099]`).
+  3. **Barra de Control:** Badge dinámico `#badge-boletos-comprados` con el agregado de cartera (`🎟️ Comprados: N ($XX.XX MXN)`).
+* **Invariante de Procedencia:** Sin hecho soberano no hay cifra: cero cuotas fabricadas y cero placeholders de relleno (`[GOVERNANCE-01]`).
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

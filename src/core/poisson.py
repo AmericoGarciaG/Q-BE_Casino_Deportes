@@ -17,6 +17,17 @@ from src.models.analytics import (
 )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# CONSTANTES CANÓNICAS DE LA PONDERACIÓN H2H↔LIGA
+# [LN-QBE-020] / [LN-QBE-020-B] (Ley Zero-H2H) / [LN-QBE-040]
+# Promulgadas en docs/CONSTANTS.md §1 por Dictamen Arquitectónico V-01 (Opción B), 2026-10-08.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+KAPPA_H2H = 0.00385098            # días⁻¹ — τ_H2H = 180.0 d ⇒ ln(2)/180 (CONSTANTS.md §1)
+W_H2H_AMP = 0.50                  # Amplitud máxima del peso H2H en la mezcla Poisson
+W_H2H_PISO = 0.15                 # Piso de influencia H2H cuando existe antecedente real
+SENTINELA_ZERO_H2H_DIAS = 9000.0  # Centinela contractual de ausencia, emitido por temporal.py
+
+
 class PoissonBivariateEngine:
     @classmethod
     def compute_modulations(
@@ -49,12 +60,14 @@ class PoissonBivariateEngine:
         v_xga = xga_vis_prom if xga_vis_prom is not None else vis_xga
 
         # 1. Ponderación adaptativa H2H vs Liga — [LN-QBE-020-B] Ley Zero-H2H
-        if h2h.antiguedad_promedio_dias >= 9000.0:
+        if h2h.antiguedad_promedio_dias >= SENTINELA_ZERO_H2H_DIAS:
             # Sin antecedentes H2H reales: 100% métricas de liga
             w_h2h = 0.0
             w_liga = 1.0
         else:
-            w_h2h = max(0.15, 0.50 * math.exp(-h2h.antiguedad_promedio_dias / 300.0))
+            # [LN-QBE-020] Decaimiento con la vida media sellada (180 d), preservando la
+            # amplitud y el piso promulgados en CONSTANTS.md §1 (Dictamen V-01, Opción B).
+            w_h2h = max(W_H2H_PISO, W_H2H_AMP * math.exp(-KAPPA_H2H * h2h.antiguedad_promedio_dias))
             w_liga = 1.0 - w_h2h
 
         # 2. Modulador de tabla

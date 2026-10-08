@@ -126,8 +126,10 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
         p_und = p2 if familia == "ASIMETRIA_LOCAL" else p1
         o_fav = oL if familia == "ASIMETRIA_LOCAL" else oV
         p_dnb = p_fav / (p_fav + p_und) if (p_fav + p_und) > 0 else 0.0
-        o_dnb = cuotas.get("DNB", o_fav * 0.75)
-        if (p_dnb * o_dnb - 1.0) > 0.05:
+        # [GOVERNANCE-01] Cero cuotas sintéticas: sin precio DNB fáctico no hay mutación QBE-C1.
+        # Saneamiento O-01 (Censo de Huérfanos): erradicada la fabricación `o_fav * 0.75`.
+        o_dnb = float(cuotas.get("DNB", 0.0) or 0.0)
+        if o_dnb > 1.0 and (p_dnb * o_dnb - 1.0) > 0.05:
             return {"codigo": "QBE-C1", "nombre": "Cobertura DNB", "alpha": (p_dnb * o_dnb - 1.0), "pa": False}
 
     # 5. Totales / Bajas

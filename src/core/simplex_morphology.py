@@ -22,7 +22,7 @@ class MorphologyClassification(BaseModel):
 
 def clasificar_morfologia_simplex(
     p_prime: Tuple[float, float, float],
-    gamma: float = 0.65
+    gamma: float = 0.67
 ) -> MorphologyClassification:
     """
     [LN-QBE-059] Partición canónica y exhaustiva de Δ² en 8 familias morfológicas

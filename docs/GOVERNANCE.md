@@ -260,7 +260,7 @@ Toda suite de pruebas debe segmentarse en dos niveles operativos estrictamente s
 1. **Nivel 1: The Shield Core (`tests/shield/`):**  
    - **SLA de Velocidad (Enmienda de SLA Armonizado — Decreto 2026-10-04):** el presupuesto se segrega por naturaleza de la ejecución:
      * **Módulos unitarios puros en aislamiento** (matemática pura y contratos sin E/S): $< 5.0\text{s}$ acumulados; $< 0.2\text{s}$ por módulo ejecutado en frío (las pruebas de matemática pura deben responder en $< 5\text{ ms}$).
-     * **Suite Completa de The Shield (231+ jueces síncronos, hermética y sin dependencias externas):** $\le 20.0\text{s}$ en frío / $\le 12.0\text{s}$ en caliente.
+     * **Suite Completa de The Shield (270+ jueces síncronos, hermética y sin dependencias externas):** $\le 25.0\text{s}$ en frío / $\le 21.0\text{s}$ en caliente.
    - **Prohibición de Paralelización Externa:** Queda proscrito incorporar dependencias pesadas de ejecución (ej. `pytest-xdist`) para alcanzar el SLA; la hermeticidad y la simplicidad de la suite prevalecen sobre la reducción artificial del tiempo de pared.
    - **Frecuencia:** Se ejecuta de forma obligatoria en cada commit local, antes de cada push y en el pre-vuelo de cada refactorización.
 2. **Nivel 2: Integración y Verificación E2E (`tests/e2e/`):**  

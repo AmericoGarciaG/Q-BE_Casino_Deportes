@@ -14,6 +14,8 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $\tau_{\text{H2H}}$ | Vida Media Temporal H2H | `180.0` | Días | `[LN-QBE-020]` | Ventana de enfrentamientos directos | No usar como ventana de forma reciente |
 | $\kappa_{\text{decay}}$ | Constante de Decaimiento H2H | $\frac{\ln(2)}{180.0} \approx 0.00385098$ | $\text{días}^{-1}$ | `[LN-QBE-020]` | Exponente del kernel $e^{-\kappa \Delta t}$ | **PROHIBIDO** usar como escala de damping |
 | $N_{\text{H2H}}^{\max}$ | Muestra Máxima H2H | `5` | Partidos | `[LN-QBE-020]` | Enfrentamientos directos evaluados | No exceder sin calibración de varianza |
+| $w_{\text{H2H}}^{\text{amp}}$ | Amplitud Máxima del Peso H2H en la Modulación Poisson | `0.5000` ($50.0\%$) | Adimensional | `[LN-QBE-040]` | Factor de mezcla $w_{\text{H2H}} = \max\!\left(w^{\text{piso}},\; w^{\text{amp}} \cdot e^{-\kappa_{\text{decay}} \Delta t}\right)$ en `src/core/poisson.py` | **PROHIBIDO** usar como peso de confianza en UI, como escala de damping ni como umbral de descarte |
+| $w_{\text{H2H}}^{\text{piso}}$ | Piso de Influencia H2H con Antecedente Presente | `0.1500` ($15.0\%$) | Adimensional | `[LN-QBE-040]` | Cota inferior de la mezcla cuando existe antecedente H2H real (la ausencia total se rige por la Ley Zero-H2H `[LN-QBE-020-B]`) | **PROHIBIDO** usar como umbral de viabilidad, de descarte o de morfología Γ |
 
 ---
 

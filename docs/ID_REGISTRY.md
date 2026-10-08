@@ -35,7 +35,7 @@
 | `[LN-QBE-035]` | LOGIC | `docs/LOGIC.md` | Fórmulas de Derivación Opta y Tokens de Marcador | SELLADO |
 | `[LN-QBE-040]` | LOGIC | `docs/LOGIC.md` | Matriz Poisson Bivariada (6x6) con Calibración Opta xG | SELLADO |
 | `[LN-QBE-050]` | LOGIC | `docs/LOGIC.md` | Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$) | SELLADO |
-| `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | EN FORJA |
+| `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-060]` | LOGIC | `docs/LOGIC.md` | Evaluador Determinista del Catálogo y Triple Candado Fáctico | SELLADO |
 | `[LN-QBE-060-B]` | LOGIC | `docs/LOGIC.md` | Partición Exhaustiva de las 9 Estrategias Canónicas y Cascada de Triaje | SELLADO |
 | `[LN-QBE-060-R-AWAKEN]` | LOGIC | `docs/LOGIC.md` | Las Cuatro Leyes de Hierro del Underdog (Familia R) | SELLADO |
@@ -165,7 +165,7 @@
 | `[ARCH-1.4.27]` | ARCH | `docs/ARCH.md` | Módulo de Servicios de Composición y Orquestación (`src/services/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.28]` | ARCH | `docs/ARCH.md` | Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.29]` | ARCH | `docs/ARCH.md` | Purga Total In-Process de la Bóveda 3NF (Centro de Control) [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.30]` | ARCH | `docs/ARCH.md` | Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR] | EN FORJA |
+| `[ARCH-1.4.30]` | ARCH | `docs/ARCH.md` | Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR] | SELLADO |
 
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
@@ -174,9 +174,11 @@
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 | `[ARCH-1.4.16-B]` | ARCH | `docs/ARCH.md` | Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-083-B]` | LOGIC | `docs/LOGIC.md` | Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas | SELLADO |
-| `[LN-QBE-098]` | LOGIC | `docs/LOGIC.md` | Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR] | EN FORJA |
-| `[ARCH-1.4.31]` | ARCH | `docs/ARCH.md` | Suspensión de Inferencia LLM en Inspección y Contrato de Radiografía Forense [ARCH-PILLAR] | EN FORJA |
-| `[DES-QBE-063]` | DESIGN | `docs/DESIGN.md` | Diseño de la Radiografía Forense: Radar de 3 Factores y Comparador de 6 Columnas [ARCH-PILLAR] | EN FORJA |
+| `[LN-QBE-098]` | LOGIC | `docs/LOGIC.md` | Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.31]` | ARCH | `docs/ARCH.md` | Suspensión de Inferencia LLM en Inspección y Contrato de Radiografía Forense [ARCH-PILLAR] | SELLADO |
+| `[DES-QBE-063]` | DESIGN | `docs/DESIGN.md` | Diseño de la Radiografía Forense: Barras Duales Apiladas, Radiografía Estructural y Cero Estrellas [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-099]` | LOGIC  | `docs/LOGIC.md` | Registro Fiduciario de Congelamiento de Boletos (Paper Trading) | SELLADO |
+| `[ARCH-1.4.32]`| ARCH   | `docs/ARCH.md`  | Contenedor de Acciones de Tarjeta y Congelamiento de Cuotas     | SELLADO |
 
 
 ---
@@ -200,7 +202,7 @@
 > **Trazabilidad de registro (GAP-FILL RATIFICADO) — [LN-QBE-059]:** inserción de hueco topológico
 > entre `[LN-QBE-050]` y `[LN-QBE-060]`, ratificada por Dirección por cohesión semántica de
 > `docs/LOGIC.md`: `[LN-QBE-059] Partición Canónica de Δ² (Hueco Topológico Ratificado por Dirección)`.
-> Estado fiduciario: **EN FORJA**.
+> Estado fiduciario: **SELLADO**.
 
 ---
 
