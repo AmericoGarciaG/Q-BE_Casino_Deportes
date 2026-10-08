@@ -35,6 +35,7 @@
 | `[LN-QBE-035]` | LOGIC | `docs/LOGIC.md` | Fórmulas de Derivación Opta y Tokens de Marcador | SELLADO |
 | `[LN-QBE-040]` | LOGIC | `docs/LOGIC.md` | Matriz Poisson Bivariada (6x6) con Calibración Opta xG | SELLADO |
 | `[LN-QBE-050]` | LOGIC | `docs/LOGIC.md` | Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$) | SELLADO |
+| `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | EN FORJA |
 | `[LN-QBE-060]` | LOGIC | `docs/LOGIC.md` | Evaluador Determinista del Catálogo y Triple Candado Fáctico | SELLADO |
 | `[LN-QBE-060-B]` | LOGIC | `docs/LOGIC.md` | Partición Exhaustiva de las 9 Estrategias Canónicas y Cascada de Triaje | SELLADO |
 | `[LN-QBE-060-R-AWAKEN]` | LOGIC | `docs/LOGIC.md` | Las Cuatro Leyes de Hierro del Underdog (Familia R) | SELLADO |
@@ -164,6 +165,7 @@
 | `[ARCH-1.4.27]` | ARCH | `docs/ARCH.md` | Módulo de Servicios de Composición y Orquestación (`src/services/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.28]` | ARCH | `docs/ARCH.md` | Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.29]` | ARCH | `docs/ARCH.md` | Purga Total In-Process de la Bóveda 3NF (Centro de Control) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.30]` | ARCH | `docs/ARCH.md` | Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR] | EN FORJA |
 
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
@@ -189,6 +191,13 @@
 | `VAR-10-A/B/E` | Deriva FastAPI 0.141.1 (_IncludedRouter) + 3/5 tramos pre-sellados + límite estacional FotMob | ALT-1 (OpenAPI), alcance acotado a Tramos 3–4, congelación ALT-5-A | RESUELTO |
 | `VAR-H2-SIMETRIA-CANONICA` | Inversión histórica de piernas en `QBE-H2` (commit génesis `0f4b340`): ataque en el Empate y seguro en el Favorito | Reconciliación con el Tratado Vol. II §2.10 y con el nodo sellado `[LN-QBE-083]` (Ataque en Favorito Visitante, Seguro en Empate $V=0$), ley `[VAULT-CORE-070-DUTCHING]` conectada y Juez `[INVARIANTE VIII-11]` en The Shield | RESUELTO |
 | `VAR-H2-UMBRAL` | Mandato de admisión $\Delta_{\text{epist}} \le 0.08$ para `QBE-H2` vs. frontera global vigente $\Delta_{\text{epist}} \le 0.12$ | Umbral sellado intacto; armonización pendiente de dictamen | ABIERTO |
+
+---
+
+> **Trazabilidad de registro (GAP-FILL RATIFICADO) — [LN-QBE-059]:** inserción de hueco topológico
+> entre `[LN-QBE-050]` y `[LN-QBE-060]`, ratificada por Dirección por cohesión semántica de
+> `docs/LOGIC.md`: `[LN-QBE-059] Partición Canónica de Δ² (Hueco Topológico Ratificado por Dirección)`.
+> Estado fiduciario: **EN FORJA**.
 
 ---
 

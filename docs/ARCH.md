@@ -298,13 +298,13 @@ Cada partido almacenarás en `matches_json`:
 ### [ARCH-1.4.9] Módulo de Contratos Matemáticos Inmutables (portfolio_math.py) [ARCH-PILLAR]
 * **Ubicación:** `src/core/contracts/portfolio_math.py`
 * **Régimen:** `[DIRGEN-STRICT]` (Plano canónico en `docs/DIRGEN_VAULT.md`).
-* **Responsabilidad:** Biblioteca matemática funcional pura, sin I/O, sin Pydantic y sin dependencias de base de datos.
+* **Responsabilidad:** Biblioteca matemática funcional pura, sin I/O y sin dependencias de base de datos. Las funciones de cálculo (`calcular_alpha_edge`, `dutching`, Kelly atenuado, ranking, hard-caps) permanecen **puras** (cero Pydantic en sus rutas algorítmicas); el módulo aloja además, como **contrato DTO tipado de entrada** para la ejecución de cartera, la clase `PortfolioParameters` (`[ARCH-1.4.30]`), anexada al final del archivo mediante *import diferido* con el único fin de preservar intactos los anclajes de línea del plano canónico (`docs/DIRGEN_VAULT.md`). *(Armonización `VAR-11` / ALT-1, Director Humano, 2026-10-07.)*
 * **Funciones requeridas:**
   - `calcular_alpha_edge(p, O) -> float`
   - `calcular_umbral_theta_estrella(o_fav) -> float`
   - `calcular_dutching_v0(b_total, o_fav, o_emp) -> Tuple[float, float, float, float]`
   - `escalar_a_piso_ventanilla(b_seg, o_emp, piso=2.0) -> Tuple[float, float, float]`
-  - `triaje_determinista_9_estrategias(payload_soberano, cuotas) -> dict`
+  - `triaje_determinista_9_estrategias(payload_soberano, cuotas, gamma=0.67) -> dict`
   - `calcular_ranking_friccion(partidos) -> list`
   - `calcular_kelly_atenuado(p, O, delta_epist, gamma=0.25) -> float`
   - `aplicar_hard_caps_constitucionales(inversiones, bankroll) -> list`
@@ -1311,6 +1311,16 @@ def sincronizar_progol_pipeline_completo(
 > promulga conforme al protocolo del `docs/ID_REGISTRY.md` (`max(familia) + 1` sobre el registro
 > completo) y queda anclado al libro dueño (`docs/ARCH.md`) con estatus **SELLADO**. Sin
 > reutilización: los nodos sellados de la familia `1.4.x` permanecen inmutables.
+
+
+### [ARCH-1.4.30] Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR]
+* **Ubicación:** `src/core/simplex_morphology.py` y extensión en `src/models/web_schemas.py`.
+* **Responsabilidad:** 
+  1. Provee la función pura `clasificar_morfologia_simplex(p_prime: Tuple[float, float, float], gamma: float = 0.65) -> MorphologyClassification` ejecutada en tiempo $O(1)$.
+  2. Extiende el DTO `GeneratePortfolioRequest` y `PortfolioParameters` para admitir `gamma_slider: float = Field(0.67, ge=0.67, le=0.75)`.
+  3. En la interfaz `index.html` (Mesa de Apuestas), renderiza el selector interactivo tri-estado de **Masa $\Gamma$ [67% | 70% | 75%]** junto al slider de Certeza.
+  4. Subordina el triaje `triaje_determinista_9_estrategias(payload, cuotas, gamma=0.67)` a la morfología de Capa 0: `gamma` viaja desde `PortfolioParameters.gamma_threshold` (default `0.67`) y se propaga a `clasificar_morfologia_simplex` para resolver `HEGEMONIA_*`/`ASIMETRIA_*` (Directiva de Integración Capa 0→Capa 1, 2026-10-07).
+* **[SHIELD]:** `tests/shield/test_shield_simplex_morphology_and_gamma_slider.py`
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

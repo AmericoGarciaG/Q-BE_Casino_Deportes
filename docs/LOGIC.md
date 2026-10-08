@@ -383,6 +383,32 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-059] Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR]
+* **Ω (Resumen):** Segmenta exhaustiva y deterministamente el espacio fiduciario Δ² en ocho familias morfológicas disjuntas a partir de variedades de cobertura bivariada, gobernadas por el parámetro interactivo de concentración de masa Γ ∈ {0.67, 0.70, 0.75}.
+* **I (Input):** `distribucion_contraida: Tuple[float, float, float]` ($P'$) y `gamma_threshold: float` ($\Gamma \in \{0.67, 0.70, 0.75\}$, default 0.67).
+* **P (Process) [ALGO-PROTECTED]:**
+  1. **Aduana de Dominancia Univariada:**
+     - Si $p_1' \ge \Gamma \implies$ Familia `HEGEMONIA_LOCAL` ($\mathcal{M}_{\text{DOM-L}}$).
+     - Si $p_2' \ge \Gamma \implies$ Familia `HEGEMONIA_VISITANTE` ($\mathcal{M}_{\text{DOM-V}}$).
+  2. **Aduana de Variedad de Cobertura Bivariada:**
+     - Si $p_1' + p_X' \ge \Gamma$ (implica $p_2' \le 1 - \Gamma$):
+       * Si $p_1' \ge p_X' \implies$ Familia `ASIMETRIA_LOCAL` ($\mathcal{M}_{\text{ASIM-L}}$).
+       * Si $p_X' > p_1' \implies$ Familia `ASIMETRIA_EMPATE_LOCAL` ($\mathcal{M}_{\text{ASIM-X(L)}}$).
+     - Si $p_2' + p_X' \ge \Gamma$ (implica $p_1' \le 1 - \Gamma$):
+       * Si $p_2' \ge p_X' \implies$ Familia `ASIMETRIA_VISITANTE` ($\mathcal{M}_{\text{ASIM-V}}$).
+       * Si $p_X' > p_2' \implies$ Familia `ASIMETRIA_EMPATE_VISITANTE` ($\mathcal{M}_{\text{ASIM-X(V)}}$).
+     - Si $p_1' + p_2' \ge \Gamma$ (implica $p_X' \le 1 - \Gamma$) $\implies$ Familia `BIPOLARIDAD_TERRITORIAL` ($\mathcal{M}_{\text{BIPOLAR}}$).
+     - **Regla de Prioridad de Banda Máxima [VAULT-CORE-059]:** En caso de solapamiento donde múltiples bandas bivariadas alcancen $\Gamma$, prevalece estrictamente aquella de **mayor masa combinada** (*max-band*); ante empate exacto de masas, el orden canónico de precedencia es $(1X) > (2X) > (12)$. Maximizar la masa del par cubierto es idéntico a **minimizar el riesgo residual desprotegido** ($1 - \max(s)$). (Enmienda legislativa por resolución vinculante `VAR-11` / ALT-1, Director Humano, 2026-10-07.)
+  3. **Aduana de Entropía:**
+     - Si $\max(p_1' + p_X', \; p_2' + p_X', \; p_1' + p_2') < \Gamma \implies$ Familia `PARIDAD_CIEGA` ($\mathcal{M}_{\text{PARIDAD-0}}$).
+     - **Teorema de Frontera de Entropía [VAULT-CORE-059]:** Puesto que $s_{1X} + s_{2X} + s_{12} = 2(p_1' + p_X' + p_2') = 2.0$, se cumple siempre $\max(s_{1X}, s_{2X}, s_{12}) \ge 2/3 \approx 0.6667$. Puesto que la terna canónica $\Gamma \in \{0.67, 0.70, 0.75\}$ satisface $\Gamma > 2/3$ en los tres modos del selector, la familia `PARIDAD_CIEGA` es alcanzable de forma canónica en $\Gamma = 0.67$, $\Gamma = 0.70$ y $\Gamma = 0.75$; el umbral quemado $0.65$ queda erradicado. (Enmienda legislativa `VAR-11` + Directiva de Integración Capa 0→Capa 1, 2026-10-07.)
+* **O (Output):** `MorphologyClassification(familia: str, desenlace_ataque: str, desenlace_seguro: Optional[str], riesgo_residual: float)`.
+* **Φ (Transición):** Hacia `[LN-QBE-060-B]` (Triaje Determinista).
+* **[SHIELD]:** `tests/shield/test_shield_simplex_morphology_and_gamma_slider.py`
+
+---
+
+
 ### ID: [LN-QBE-060] Evaluador Determinista del Catálogo y Triple Candado Fáctico
 
 * **Ω (Resumen):** Evaluar el cumplimiento booleano de las 9 estrategias eliminando umbrales fijos y aplicando el Triple Candado Fáctico para la Familia R.
@@ -428,13 +454,13 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
   Árbol de decisión determinista en cascada de 7 pasos:
   1. Si $S(\mathcal{I}_i) = 0 \lor \Delta_{\text{epist}} > 0.12 \implies$ **`QBE-00`** (Cuarentena / Capital = $\$0.00$).
-  2. Si $p_{\text{fav}} \ge 0.65 \land \Delta_{\text{epist}} \le 0.04 \land \alpha_{\text{fav}} > 0.05 \implies$ **`QBE-D1`** (Local) o **`QBE-D2`** (Visita).
+  2. Si la morfología de Capa 0 resuelve `HEGEMONIA_LOCAL` o `HEGEMONIA_VISITANTE` bajo el umbral $\Gamma$ recibido $\land \Delta_{\text{epist}} \le 0.04 \land \alpha_{\text{fav}} > 0.05 \implies$ **`QBE-D1`** (Local) o **`QBE-D2`** (Visita). Si $p_{\text{fav}}' < \Gamma$, el partido no puede ser Directa y es transferido a Asimetría Híbrida (ver Paso 4).
   3. Si cumple las Cuatro Leyes del Underdog ($\alpha_{\text{dog}} \ge +0.20 \land O_{\text{dog}} \ge 3.50 \land \Delta_{\text{epist}} \le 0.05 \land Q_{\text{mod}} \ge 0.98) \implies$ **`QBE-R1`** (Dog Local) o **`QBE-R2`** (Dog Visita).
-  4. Si $0.40 \le p_{\text{fav}} < 0.65 \land O_{\text{Empate}} > \theta^* \land \alpha_H > 0 \implies$ **`QBE-H1`** (Local) o **`QBE-H2`** (Visita) con seguro $V=0$.
+  4. Si la morfología de Capa 0 resuelve `ASIMETRIA_LOCAL` o `ASIMETRIA_VISITANTE` bajo el umbral $\Gamma$ recibido $\land O_{\text{Empate}} > \theta^* \land \alpha_H > 0 \implies$ **`QBE-H1`** (Local) o **`QBE-H2`** (Visita) con seguro $V=0$.
      - **Invariante VIII-11 — Simetría Canónica de Cobertura H1/H2** *(Resolución Definitiva de `VARIANZA-H2`, Director Humano, 2026-10; ficha de cierre `VAR-H2-SIMETRIA-CANONICA`)*: la cobertura de tablas es **ÚNICA** para toda la Familia H. `QBE-H2` NO monetiza la cuota del Empate: monetiza la superioridad del **favorito visitante** ($\alpha_V > 0$) y se cubre en tablas. Queda derogado el Diseño B del commit génesis `0f4b340`.
        - **Ataque: Gana Favorito Visitante** ($O_V$) — boleto 2 (`boleto_2_ganancia`), pierna que transporta el $+EV$.
        - **Seguro: Empate** ($O_X$) — boleto 1 (`boleto_1_seguro`), reintegro del $100\%$ del capital ($V=0$) conforme a `[VAULT-CORE-070-DUTCHING]` ($b_{seg} = A_i / O_X$).
-       - **Condición de admisión:** $0.40 \le p_2 < 0.65 \land \Delta_{\text{epist}} \le 0.08 \land O_X > \theta_2^* \land \alpha_2 > 0$, con $\theta_2^* = O_V / (O_V - 1.0)$ y $\alpha_2 = p_2 O_V - 1.0$.
+       - **Condición de admisión:** morfología de Capa 0 `ASIMETRIA_VISITANTE` (umbral $\Gamma$) $\land \Delta_{\text{epist}} \le 0.08 \land O_X > \theta_2^* \land \alpha_2 > 0$, con $\theta_2^* = O_V / (O_V - 1.0)$ y $\alpha_2 = p_2 O_V - 1.0$.
        - **Asignación de importes:** `calcular_dutching_v0(b_total, o_fav, o_emp)` (`portfolio_math.py`), idéntica para `H1` y `H2` (ley del Vault conectada; fin de la ley huérfana V-1).
        - **Anclaje endógeno del Doble Cobro:** `[LN-QBE-083]` — *Ganancia Principal = Victoria ordinaria del favorito* y *Retorno Bruto* $= B_{\text{prio}} O_{\text{fav}} + B_i$ — ya legislaba el Diseño A para `H1` **y** `H2`; la inversión histórica de piernas fue una violación de este nodo, no una doctrina alternativa.
        - **Nota de vigencia (umbral):** el mandato de admisión $\Delta_{\text{epist}} \le 0.08$ pertenece a la Resolución `VARIANZA-H2`; la frontera de cuarentena hoy vigente en la cascada sellada `[VAULT-CORE-070-TRIAJE]` es global ($\Delta_{\text{epist}} \le 0.12$). La armonización del umbral queda registrada como varianza **ABIERTA** (`VAR-H2-UMBRAL`) y no se alteró sin dictamen expreso.

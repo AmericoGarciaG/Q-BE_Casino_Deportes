@@ -1442,15 +1442,16 @@ def american_to_decimal(val_str: str) -> float:
 ## [VAULT-CORE-070-TRIAJE] Cascada Determinista de las 9 Estrategias (`portfolio_math.py`)
 **Estado:** `[CANON CRISTALIZADO / SELLADO]`  
 **Régimen:** `[DIRGEN-STRICT]`  
-**Firma:** SHA256-VAULT-CORE-STRATEGIES-9-CASCADE  
+**Firma:** SHA256-VAULT-CORE-STRATEGIES-9-CASCADE-GAMMA-DYNAMIC  
+**Nota de trazabilidad (Directiva de Integración Capa 0→Capa 1, 2026-10-07):** La cascada se subordina a `clasificar_morfologia_simplex` (Capa 0) y recibe $\Gamma$ dinámicamente vía `triaje_determinista_9_estrategias(payload, cuotas, gamma=0.67)`; el umbral quemado $0.65$ queda erradicado del motor y el default de `PortfolioParameters.gamma_threshold` se sella en $0.67$.
 
 ```python
-def triaje_determinista_9_estrategias(payload: dict, cuotas: dict) -> dict:
-    """[LN-QBE-060-B] Clasificación en cascada pura de las 9 estrategias."""
-    # 1. Cuarentena
+def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float = 0.67) -> dict:
+    """[LN-QBE-060-B] Triaje determinista subordinado a la morfología Capa 0."""
+    from src.core.simplex_morphology import clasificar_morfologia_simplex
     if not payload.get("es_operable", True) or payload.get("delta_epist", 0.0) > 0.12:
         return {"codigo": "QBE-00", "nombre": "Cuarentena Fiduciaria", "alpha": 0.0, "pa": False}
-    # 2. Directas Régimen I
+
     p1, pX, p2 = payload["p_local"], payload["p_empate"], payload["p_visitante"]
     oL, oX, oV = cuotas.get("L", 0.0), cuotas.get("E", 0.0), cuotas.get("V", 0.0)
     delta_epist = payload.get("delta_epist", 0.0)
@@ -1459,33 +1460,48 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict) -> dict:
     aL = p1 * oL - 1.0 if oL > 1.0 else -1.0
     aV = p2 * oV - 1.0 if oV > 1.0 else -1.0
 
-    if p1 >= 0.65 and delta_epist <= 0.04 and aL > 0.05:
+    # -- CAPA 0: CLASIFICACION MORFOLOGICA CON EL PARAMETRO GAMMA DINAMICO --
+    morf = clasificar_morfologia_simplex((p1, pX, p2), gamma=gamma)
+    familia = morf.familia
+
+    # 1. Directas Régimen I (Subordinadas a Hegemonía en Capa 0)
+    if familia == "HEGEMONIA_LOCAL" and delta_epist <= 0.04 and aL > 0.05:
         return {"codigo": "QBE-D1", "nombre": "Directa Local", "alpha": aL, "pa": pa}
-    if p2 >= 0.65 and delta_epist <= 0.04 and aV > 0.05:
+    if familia == "HEGEMONIA_VISITANTE" and delta_epist <= 0.04 and aV > 0.05:
         return {"codigo": "QBE-D2", "nombre": "Directa Visita", "alpha": aV, "pa": pa}
-    # 3. Underdogs Familia R
+
+    # 2. Underdogs Familia R (4 Leyes de Hierro)
     if p1 >= 0.20 and oL >= 3.50 and aL >= 0.20 and delta_epist <= 0.05:
         return {"codigo": "QBE-R1", "nombre": "Reversa Local Underdog", "alpha": aL, "pa": pa}
     if p2 >= 0.20 and oV >= 3.50 and aV >= 0.20 and delta_epist <= 0.05:
         return {"codigo": "QBE-R2", "nombre": "Reversa Visita Underdog", "alpha": aV, "pa": pa}
-    # 4. Híbridas Dutching V=0
+
+    # 3. Híbridas Dutching V=0 (Subordinadas a Asimetría en Capa 0)
     theta_1 = oL / (oL - 1.0) if oL > 1.0 else 99.0
     theta_2 = oV / (oV - 1.0) if oV > 1.0 else 99.0
-    if 0.40 <= p1 < 0.65 and oX > theta_1 and aL > 0:
+
+    if familia == "ASIMETRIA_LOCAL" and oX > theta_1 and aL > 0:
         return {"codigo": "QBE-H1", "nombre": "Híbrida Local + Empate V=0", "alpha": aL, "pa": pa}
-    if 0.40 <= p2 < 0.65 and oX > theta_2 and aV > 0:
+    if familia == "ASIMETRIA_VISITANTE" and oX > theta_2 and aV > 0:
         return {"codigo": "QBE-H2", "nombre": "Híbrida Visita + Empate V=0", "alpha": aV, "pa": pa}
-    # 5. DNB
-    p_dnb_l = p1 / (p1 + p2) if (p1 + p2) > 0 else 0.0
-    o_dnb_l = cuotas.get("DNB_L", oL * 0.75)
-    if (p_dnb_l * o_dnb_l - 1.0) > 0.05:
-        return {"codigo": "QBE-C1", "nombre": "Cobertura DNB", "alpha": (p_dnb_l * o_dnb_l - 1.0), "pa": False}
-    # 6. Totales
+
+    # 4. Mutación DNB si el empate fue caníbal en Asimetrías
+    if familia in ("ASIMETRIA_LOCAL", "ASIMETRIA_VISITANTE"):
+        p_fav = p1 if familia == "ASIMETRIA_LOCAL" else p2
+        p_und = p2 if familia == "ASIMETRIA_LOCAL" else p1
+        o_fav = oL if familia == "ASIMETRIA_LOCAL" else oV
+        p_dnb = p_fav / (p_fav + p_und) if (p_fav + p_und) > 0 else 0.0
+        o_dnb = cuotas.get("DNB", o_fav * 0.75)
+        if (p_dnb * o_dnb - 1.0) > 0.05:
+            return {"codigo": "QBE-C1", "nombre": "Cobertura DNB", "alpha": (p_dnb * o_dnb - 1.0), "pa": False}
+
+    # 5. Totales / Bajas
     p_under = payload.get("p_under_25", 0.0)
     o_under = cuotas.get("Under_25", 0.0)
     if o_under > 1.0 and (p_under * o_under - 1.0) > 0.06:
         return {"codigo": "QBE-C2", "nombre": "Cobertura Derivada Totales", "alpha": (p_under * o_under - 1.0), "pa": False}
-    # 7. Descarte
+
+    # 6. Paridad Ciega o Sin Valor
     return {"codigo": "QBE-00", "nombre": "Cuarentena / Sin Valor", "alpha": 0.0, "pa": False}
 ```
 

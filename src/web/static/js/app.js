@@ -672,6 +672,9 @@ async function ejecutarDespachoPortafolio() {
     const certaintySlider = document.getElementById('slider-risk-certainty');
     const certeza = certaintySlider ? parseFloat(certaintySlider.value) / 100.0 : 0.80;
 
+    // [ARCH-1.4.30] Masa Γ de Capa 0 seleccionada en la barra de configuración (67% | 70% | 75%).
+    const gammaSeleccionada = parseFloat(document.querySelector('input[name="opcion_gamma"]:checked')?.value || "0.67");
+
     const leagueId = (currentLiveBoard && currentLiveBoard.league_id) ? currentLiveBoard.league_id : 262;
 
     mostrarHUDProcesamiento();
@@ -693,7 +696,8 @@ async function ejecutarDespachoPortafolio() {
                 selected_match_ids: [],
                 bankroll: bankroll,
                 target_certeza: certeza,
-                operador: operador
+                operador: operador,
+                gamma_slider: gammaSeleccionada
             })
         });
 

@@ -125,6 +125,8 @@ class GeneratePortfolioRequest(BaseModel):
     selected_match_ids: List[str] = Field(default_factory=list)
     bankroll: float = Field(default=200.0, ge=10.0)
     mode: str = Field(default="BANKROLL", pattern="^(BANKROLL|VAQUITA)$")
+    # [ARCH-1.4.30] Parámetro interactivo de concentración de masa Γ (Capa 0).
+    gamma_slider: Optional[float] = Field(0.67, ge=0.67, le=0.75, description="Umbral de concentración de masa Capa 0")
 
 
 class IngestionExtractRequest(BaseModel):

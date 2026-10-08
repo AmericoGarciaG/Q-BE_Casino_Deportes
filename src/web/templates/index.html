@@ -165,6 +165,20 @@
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Certeza:</label>
                         <input type="range" id="slider-risk-certainty" min="70" max="90" value="80" style="width: 75px; accent-color: #38BDF8;" oninput="document.getElementById('certainty-val').textContent = this.value + '%'">
                         <span id="certainty-val" style="font-size: 8.5pt; color: #38BDF8; font-weight: 700;">80%</span>
+                        <!-- [ARCH-1.4.30] Selector Interactivo tri-estado de Masa Γ (Capa 0: 67% | 70% | 75%) -->
+                        <div class="d-inline-flex align-items-center" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 8px;">
+                            <span class="text-muted small" style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Masa Γ:</span>
+                            <div class="btn-group btn-group-sm" role="group" id="grupo-selector-gamma">
+                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_67" value="0.67" checked autocomplete="off">
+                                <label class="btn btn-outline-info px-2 py-0" for="gamma_67" style="font-size: 0.78rem;">67%</label>
+
+                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_70" value="0.70" autocomplete="off">
+                                <label class="btn btn-outline-info px-2 py-0" for="gamma_70" style="font-size: 0.78rem;">70%</label>
+
+                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_75" value="0.75" autocomplete="off">
+                                <label class="btn btn-outline-info px-2 py-0" for="gamma_75" style="font-size: 0.78rem;">75%</label>
+                            </div>
+                        </div>
                         <button id="btn-calcular-cartera" class="btn-primary" onclick="ejecutarDespachoPortafolio()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;"> ⚡ Calcular Cartera </button>
                         <button id="export-pdf-btn" class="btn-primary" style="background: rgba(56,189,248,0.15); border: 1px solid #38BDF8; color: #38BDF8; padding: 7px 16px; font-size: 8.5pt; font-weight: 700; margin-left: 4px;">📄 Exportar PDF A4</button>
                     </div>

@@ -45,6 +45,10 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $\tau_{\text{disp}}$ | Tolerancia Crítica Discrepancia | `0.12` | Probabilidad | `[LN-QBE-070-B]` | Límite de desacuerdo inter-modelos | Discrepancia $> 0.12 \implies$ Cuarentena |
 | $\varepsilon_{\text{friccion}}$ | Amortiguador de Singularidad | `0.01` | Adimensional | `[LN-QBE-073-B]` | Denominador en Score de Fricción | Evita división por cero |
 | $\gamma_{\text{Kelly}}$ | Fracción Atenuada de Kelly | `0.25` (Cuarto de Kelly) | Escalar | `[LN-QBE-070-B]` | Supresión de colas de varianza | Prohibido usar Kelly Completo ($1.0$) |
+| $\Gamma_{\text{base}}$ | Umbral Maestro de Masa Base | `0.6700` ($67.0\%$) | Probabilidad | `[LN-QBE-059]` | Corte canónico que supera $2/3 \approx 0.6667$ | No descender por debajo de 2/3 |
+| $\Gamma_{\text{mid}}$ | Umbral Maestro Exigente | `0.7000` ($70.0\%$) | Probabilidad | `[LN-QBE-059]` | Modo estricto de concentración | Exclusivo del selector UI |
+| $\Gamma_{\text{high}}$| Umbral Maestro Conservador | `0.7500` ($75.0\%$) | Probabilidad | `[LN-QBE-059]` | Modo ultra-prudente (baja varianza) | Exclusivo del selector UI |
+
 
 ---
 

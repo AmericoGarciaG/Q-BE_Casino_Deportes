@@ -140,6 +140,8 @@ class SportsbookPortfolioRequest(BaseModel):
     bankroll: float = Field(default=200.0, ge=10.0)
     target_certeza: float = Field(default=0.80, ge=0.0, le=1.0)
     operador: Optional[str] = Field(default="caliente")
+    # [ARCH-1.4.30] Parámetro interactivo de concentración de masa Γ (Capa 0), tri-estado UI.
+    gamma_slider: float = Field(default=0.67, ge=0.67, le=0.75)
 
 
 class ProgolOptimizeRequest(BaseModel):
@@ -367,7 +369,8 @@ def generate_sportsbook_portfolio_endpoint(
         triaje_determinista_9_estrategias,
         calcular_ranking_friccion,
         aplicar_hard_caps_constitucionales,
-        resolver_mejor_combinacion_cuotas
+        resolver_mejor_combinacion_cuotas,
+        PortfolioParameters,
     )
     from src.core.portfolio import PortfolioEngine
     from src.core.risk_dial_modulator import modular_cartera_por_slider_certeza
@@ -378,6 +381,15 @@ def generate_sportsbook_portfolio_endpoint(
     # capital post-despacho (cero mutacion de magnitudes certificadas).
 
     gateway = PersistenceGateway()
+
+    # [ARCH-1.4.30] Contrato gobernante del dimensionamiento de cartera: el bankroll, el Slider
+    # de Certeza y el parámetro interactivo de masa Γ (Capa 0) viajan por el DTO canónico
+    # `PortfolioParameters`. Cero aritmética nueva: el DTO solo transporta magnitudes certificadas.
+    parametros_cartera = PortfolioParameters(
+        total_bankroll=req.bankroll,
+        certainty_slider=req.target_certeza,
+        gamma_threshold=req.gamma_slider,
+    )
 
     with gateway.read_session() as session:
         league = session.query(League).filter((League.fotmob_id == req.league_id) | (League.id == req.league_id)).first()
@@ -554,7 +566,9 @@ def generate_sportsbook_portfolio_endpoint(
             cuotas_match = {"L": o_l, "E": o_e, "V": o_v, "pa": pa}
 
             # 1. Triaje determinista de las 9 estrategias
-            triaje = triaje_determinista_9_estrategias(payload_match, cuotas_match)
+            triaje = triaje_determinista_9_estrategias(
+                payload_match, cuotas_match, gamma=parametros_cartera.gamma_threshold
+            )
             if triaje["codigo"] == "QBE-00":
                 # [LN-QBE-078] Desglose cuantitativo transparente del veto fiduciario.
                 p_fav_veto = p_l if p_l >= p_v else p_v
@@ -619,7 +633,7 @@ def generate_sportsbook_portfolio_endpoint(
 
         # 3. Construccion del Plan via PortfolioEngine
         plan = PortfolioEngine.build_plan(
-            candidatos_ordenados, bankroll=req.bankroll, mode="BANKROLL", total_jornada=total_jornada)
+            candidatos_ordenados, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL", total_jornada=total_jornada)
         data = plan.model_dump()
 
         # 4. Modulacion con Slider de Certeza [LN-QBE-073] — ALT-1 RATIFICADO (VAR FASE5_PASO3)
@@ -629,7 +643,7 @@ def generate_sportsbook_portfolio_endpoint(
         #        canonico: `3^K`, la cascada de reveses, `control_portafolio` y `trinidad_resiliencia`
         #        vuelven a describir la cartera EFECTIVAMENTE entregada (resuelve V-3).
         #    Cero matematica nueva: el puente solo transporta capital y probabilidad certificadas.
-        if req.target_certeza and req.target_certeza != 0.80:
+        if parametros_cartera.certainty_slider and parametros_cartera.certainty_slider != 0.80:
             por_id = {c["id_partido"]: c for c in candidatos_ordenados}
             ordenes_planas = [
                 _orden_a_contrato_slider(o.model_dump(), por_id[o.id_partido])
@@ -637,7 +651,7 @@ def generate_sportsbook_portfolio_endpoint(
                 if o.id_partido in por_id
             ]
             supervivientes = modular_cartera_por_slider_certeza(
-                ordenes_planas, target_certeza_pct=req.target_certeza * 100.0
+                ordenes_planas, target_certeza_pct=parametros_cartera.certainty_slider * 100.0
             )
 
             candidatos_finales: List[Dict[str, Any]] = []
@@ -664,7 +678,7 @@ def generate_sportsbook_portfolio_endpoint(
                 or codigos_finales != codigos_previos
             ):
                 plan = PortfolioEngine.build_plan(
-                    candidatos_finales, bankroll=req.bankroll, mode="BANKROLL", total_jornada=total_jornada)
+                    candidatos_finales, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL", total_jornada=total_jornada)
                 data = plan.model_dump()
 
         # Alias de compatibilidad para The Shield
@@ -678,6 +692,9 @@ def generate_sportsbook_portfolio_endpoint(
         data["control_portafolio"]["total_partidos_escaneados"] = total_jornada
         # [ARCH-1.4.15] Disponibilidad fáctica por operador para el selector de casinos.
         data["operadores_disponibles"] = operadores_capturados
+
+        # [ARCH-1.4.30] Trazabilidad del parámetro interactivo de masa Γ (Capa 0) entregado por la UI.
+        data["parametros_cartera"] = parametros_cartera.model_dump()
 
         # [ARCH-1.4.16] Atribución explícita de slug en mono-casino para renderizar logo
         operador_boleto = op_sel if op_sel in ("caliente", "novibet", "betway") else "caliente"

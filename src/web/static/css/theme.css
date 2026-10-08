@@ -744,6 +744,49 @@ table.fintech-table {
     color: #38BDF8;
 }
 
+/* [ARCH-1.4.30] Selector tri-estado de Masa Γ (Capa 0: 65% | 70% | 75%)
+   Control segmentado nativo de la Mesa de Apuestas. Los radios conservan el contrato
+   .btn-check (ocultos); el estado seleccionado se pinta sobre la etiqueta contigua.
+   Adaptación de presentación [DBBD-FUNGIBLE]: index.html no carga Bootstrap, por lo
+   que el grupo btn-group/btn-outline-info se materializa con el tema oscuro Q-BE. */
+#grupo-selector-gamma {
+    display: inline-flex;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+#grupo-selector-gamma .btn-check {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#grupo-selector-gamma label {
+    background: #1E293B;
+    color: #94A3B8;
+    padding: 3px 10px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    border-right: 1px solid #334155;
+    transition: all 0.2s ease;
+}
+
+#grupo-selector-gamma label:last-of-type {
+    border-right: none;
+}
+
+#grupo-selector-gamma label:hover {
+    background: #243247;
+    color: #F8FAFC;
+}
+
+#grupo-selector-gamma .btn-check:checked + label {
+    background: rgba(2, 132, 199, 0.25);
+    color: #38BDF8;
+}
+
 /* [DES-QBE-040] Geometría de Estado Oculto (Modo Enfoque Centrado) */
 .split-view-container.standings-hidden #sovereign-standings-container,
 .split-view-container.standings-hidden .standings-panel,
