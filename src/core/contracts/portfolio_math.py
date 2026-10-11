@@ -243,6 +243,12 @@ def resolver_mejor_combinacion_cuotas(
     }
 
 
+# [LN-QBE-071].1 + [LN-QBE-076] Posiciones BIVARIADAS con pierna de cobertura en tablas.
+# Familias R incluidas por mandato de la Enmienda Universal: R1 lleva seguro de Empate
+# ([LN-QBE-071].1) y R2 escala AMBOS boletos al piso ([LN-QBE-071].3).
+FAMILIAS_CON_COBERTURA: Tuple[str, ...] = ("QBE-H1", "QBE-H2", "QBE-R1", "QBE-R2")
+
+
 def aplicar_hard_caps_con_respeto_a_piso(
     ordenes: List[Dict[str, Any]],
     bankroll: float,
@@ -250,12 +256,27 @@ def aplicar_hard_caps_con_respeto_a_piso(
     cap_cartera_pct: float = 0.25,
     piso_min_boleto: float = 2.00
 ) -> List[Dict[str, Any]]:
-    """[LN-QBE-070-E] Prorratea el capital respetando el piso de $2.00 MXN en el seguro."""
+    """[LN-QBE-070-E] Prorratea el capital respetando el piso de ventanilla ($2.00 MXN).
+
+    Doctrina sellada (docs/LOGIC.md [LN-QBE-070-E].2 y .3):
+      1. escala = (0.25·Bankroll) / ΣB_i.
+      2. PISO NATURAL: la inversión de toda orden de cobertura no puede quedar por debajo de
+         piso · odd_emp (el seguro B_i/odd_emp debe alcanzar la ventanilla) ni de 2 · piso
+         (dos piernas admisibles de $2.00, [LN-QBE-071].3 lo deriva para R2 con k = piso/min(B1,B2)).
+      3. PRORRATEO CON HOLGURA: el déficit de la escala se rescata con el SUPERÁVIT del libro; las
+         órdenes por encima de su propio piso ceden excedente y jamás cruzan su piso. Σ B_i es un
+         invariante de la transferencia: el tope del 25.0% no se infla jamás.
+      4. Si el superávit no alcanza (libro sin holgura), el tope —ley monetaria— prevalece y se
+         aplica el clamping fiduciario (B_seg = piso, residual al boleto de ataque) declarando la
+         insuficiencia de forma transparente (`piso_ventanilla_natural_insatisfecho` /
+         `piso_bivariado_insatisfecho`): cero silencios fiduciarios ([GOVERNANCE-01]).
+    """
     if bankroll <= 0.0 or not ordenes:
         return ordenes
 
     cap_max_partido = round(bankroll * cap_partido_pct, 2)
     cap_max_cartera = round(bankroll * cap_cartera_pct, 2)
+    piso_bivariado = round(2.0 * piso_min_boleto, 2)
 
     # 1. Aplicar tope individual
     for ord_item in ordenes:
@@ -268,20 +289,124 @@ def aplicar_hard_caps_con_respeto_a_piso(
     # 2. Prorrateo global si excede el 25% del bankroll
     if total_inv > cap_max_cartera and total_inv > 0.0:
         factor_escala = cap_max_cartera / total_inv
-        for ord_item in ordenes:
+        piso_natural: Dict[int, float] = {}
+        for indice, ord_item in enumerate(ordenes):
             inv_inicial = float(ord_item.get("inversion_total", 0.0))
             nueva_inv = round(inv_inicial * factor_escala, 2)
-
-            # Si es orden con seguro en tablas (H1/H2), proteger el piso de $2.00
-            o_emp = float(ord_item.get("odd_emp", 3.30))
-            seguro_teorico = nueva_inv / o_emp if o_emp > 1.0 else 0.0
-
-            if seguro_teorico < piso_min_boleto and ord_item.get("strategy_code") in ("QBE-H1", "QBE-H2"):
-                # Fijar el seguro en el piso mínimo y ajustar la inversión
-                b_seg = piso_min_boleto
-                nueva_inv = max(nueva_inv, round(b_seg * o_emp, 2))
-
             ord_item["inversion_total"] = nueva_inv
+
+            codigo = str(ord_item.get("strategy_code", "")).upper().strip()
+            if codigo in FAMILIAS_CON_COBERTURA and nueva_inv > 0.0:
+                o_emp = float(ord_item.get("odd_emp", 3.30))
+                # Piso NATURAL ([LN-QBE-070-E].2): inversión mínima para que el seguro
+                # (B_i / odd_emp) alcance la ventanilla, con dos piernas admisibles como suelo.
+                piso_natural[indice] = max(round(piso_min_boleto * o_emp, 2), piso_bivariado)
+
+        # 3. RESCATE DEL PISO NATURAL (prorrateo con holgura): el déficit de las órdenes
+        #    comprimidas se financia con el SUPERÁVIT de las que quedaron por encima de su
+        #    propio piso, jamás cruzando éste. Σ B_i es invariante de la transferencia: el
+        #    tope de cartera no se infla y el seguro de ventanilla no colapsa.
+        for indice, piso in sorted(piso_natural.items(), key=lambda par: -par[1]):
+            falta = round(piso - float(ordenes[indice]["inversion_total"]), 2)
+            if falta <= 0.0:
+                continue
+            donantes = sorted(
+                [j for j, piso_j in piso_natural.items()
+                 if j != indice and float(ordenes[j]["inversion_total"]) - piso_j > 0.0],
+                key=lambda j: float(ordenes[j]["inversion_total"]) - piso_natural[j],
+                reverse=True,
+            )
+            for j in donantes:
+                if falta <= 0.0:
+                    break
+                holgura = round(float(ordenes[j]["inversion_total"]) - piso_natural[j], 2)
+                cesion = min(holgura, falta)
+                if cesion <= 0.0:
+                    continue
+                ordenes[j]["inversion_total"] = round(
+                    float(ordenes[j]["inversion_total"]) - cesion, 2
+                )
+                ordenes[indice]["inversion_total"] = round(
+                    float(ordenes[indice]["inversion_total"]) + cesion, 2
+                )
+                falta = round(falta - cesion, 2)
+
+        # 4. CLAMPING FIDUCIARIO: si tras el rescate el seguro comprimido sigue bajo el piso (libro
+        #    sin superávit: el tope —ley monetaria— prevalece), se fija B_seg = piso y el residual
+        #    queda en el boleto de ataque, declarándose con transparencia total ([GOVERNANCE-01]).
+        #    La suma de ambas piernas reproduce la inversión prorrateada: cero inflación.
+        for indice, ord_item in enumerate(ordenes):
+            if indice not in piso_natural:
+                continue
+            inv = float(ord_item["inversion_total"])
+            o_emp = float(ord_item.get("odd_emp", 3.30))
+            seguro_teorico = round(inv / o_emp, 2) if o_emp > 1.0 else 0.0
+            if seguro_teorico < piso_min_boleto or inv < piso_bivariado:
+                b_seg = float(piso_min_boleto)
+                b_prio = round(max(0.0, inv - b_seg), 2)
+                ord_item["boleto_seguro"] = b_seg
+                ord_item["boleto_ataque"] = b_prio
+                ord_item["piso_ventanilla_aplicado"] = True
+                if seguro_teorico < piso_min_boleto:
+                    # El seguro natural no alcanzó la ventanilla: rescate parcial declarado.
+                    ord_item["piso_ventanilla_natural_insatisfecho"] = True
+                if round(inv, 2) < piso_bivariado or b_prio < piso_min_boleto:
+                    # Ni dos piernas admisibles caben en el tope: la promesa bivariada se declara.
+                    ord_item["piso_bivariado_insatisfecho"] = True
+
+        # 5. Garantía analítica del tope: el centavo de exceso por redondeo se recorta primero de
+        #    la holgura de las órdenes por encima de su piso natural, luego de las órdenes sin
+        #    cobertura y sólo en último término del boleto de ataque (declarándolo). El 25.0% es
+        #    inviolable; el recorte nunca cruza el piso natural si hay alternativa.
+        exceso = round(sum(float(o.get("inversion_total", 0.0)) for o in ordenes) - cap_max_cartera, 2)
+        if exceso > 0.0:
+            candidatos = sorted(
+                [i for i in piso_natural
+                 if float(ordenes[i]["inversion_total"]) - piso_natural[i] > 0.0],
+                key=lambda i: float(ordenes[i]["inversion_total"]) - piso_natural[i],
+                reverse=True,
+            )
+            for i in candidatos:
+                if exceso <= 0.0:
+                    break
+                holgura = round(float(ordenes[i]["inversion_total"]) - piso_natural[i], 2)
+                recorte = min(holgura, exceso)
+                if recorte <= 0.0:
+                    continue
+                ordenes[i]["inversion_total"] = round(
+                    float(ordenes[i]["inversion_total"]) - recorte, 2
+                )
+                exceso = round(exceso - recorte, 2)
+            for i, ord_item in enumerate(ordenes):
+                if exceso <= 0.0:
+                    break
+                if i in piso_natural:
+                    continue
+                recorte = min(float(ord_item.get("inversion_total", 0.0)), exceso)
+                if recorte <= 0.0:
+                    continue
+                ord_item["inversion_total"] = round(
+                    float(ord_item.get("inversion_total", 0.0)) - recorte, 2
+                )
+                exceso = round(exceso - recorte, 2)
+            for ord_item in ordenes:
+                if exceso <= 0.0:
+                    break
+                if "boleto_ataque" not in ord_item:
+                    continue
+                recorte = min(
+                    round(float(ord_item["boleto_ataque"]) - piso_min_boleto, 2),
+                    exceso,
+                )
+                if recorte <= 0.0:
+                    continue
+                ord_item["boleto_ataque"] = round(float(ord_item["boleto_ataque"]) - recorte, 2)
+                ord_item["inversion_total"] = round(
+                    float(ord_item["boleto_seguro"]) + float(ord_item["boleto_ataque"]), 2
+                )
+                exceso = round(exceso - recorte, 2)
+                if float(ord_item["boleto_ataque"]) < piso_min_boleto:
+                    ord_item["piso_bivariado_insatisfecho"] = True
 
     return ordenes
 

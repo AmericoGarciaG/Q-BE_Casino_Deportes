@@ -78,7 +78,7 @@ class BayesianFormResult(BaseModel):
 
     Régimen: `[DIRGEN-STRICT]` `[ALGO-PROTECTED]`. Factores en espacio log-espacial (E[A] = 0 por
     construcción, coherente con `[LN-QBE-035-B]`). `a_amortiguado` aplica la compresión
-    hiperbólica sellada de `[VAULT-CORE-001]` (κ_damp = 2.5 · σ_liga); NO se reimplementa damping.
+    hiperbólica sellada de `[VAULT-CORE-001]` (κ_net = 0.2500 absoluto); NO se reimplementa damping.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")

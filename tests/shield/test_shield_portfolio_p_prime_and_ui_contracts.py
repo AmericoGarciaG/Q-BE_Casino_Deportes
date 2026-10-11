@@ -5,6 +5,10 @@ Audita:
 - [LN-QBE-083-B] Rótulo único de ausencia de cobertura en familias DIRECTAS (QBE-D1 / QBE-D2).
 - [ARCH-1.4.16-B] Horario fáctico (`horario_evento`) en el Resumen de Asignación.
 - [DES-QBE-060] P' contraído por pierna (`prob_qbe`) y Bloque de Transparencia 360° preservados.
+- [V-1 / VAR-2026-LIVE-AUDIT-J11] Vinculación del P' en el modal POR IDENTIDAD de pierna (jamás
+  por rol posicional de la fila).
+- [V-4 / VAR-2026-LIVE-AUDIT-J11] Rótulo de Doble Cobro de la Familia R2 condicionado a la
+  bandera booleana del Pago Anticipado ([DES-QBE-062]).
 - [GOV-TEST-01] Hermeticidad: cero red, cero DB, cero mocks en producción (lectura de fuente
   + DTOs Pydantic evaluados en memoria).
 
@@ -50,19 +54,64 @@ def _bloque_cobertura_resumen_asignacion() -> str:
     return code[inicio:fin]
 
 
+# El grupo de condición excluye llaves (`[^{}]*?`): el cotejo NUNCA cruza el cuerpo de una rama,
+# de modo que cada hallazgo queda anclado a su propia condición (extracción biunívoca, sin fugas).
 _PATRON_RAMA = re.compile(
-    r'(?:if|else\s+if)\s*\((.*?)\)\s*\{\s*coberturaHtml\s*=\s*`([^`]*)`;', re.DOTALL
+    r'(?:if|else\s+if)\s*\(([^{}]*?)\)\s*\{\s*coberturaHtml\s*=\s*`([^`]*)`;', re.DOTALL
+)
+
+# [V-4] Rama CONDICIONAL gobernada por bandera: `coberturaHtml = BANDERA ? `...` : `...`;`
+# El grupo de condición excluye llaves (`[^{}]*?`) para que el cotejo NUNCA cruce el cuerpo de
+# una rama previa: cada hallazgo queda anclado a su propia rama (extracción biunívoca).
+_PATRON_RAMA_PA = re.compile(
+    r'(?:if|else\s+if)\s*\(([^{}]*?)\)\s*\{\s*coberturaHtml\s*=\s*([A-Za-z_$][\w$]*)\s*'
+    r'\?\s*`([^`]*)`\s*:\s*`([^`]*)`;', re.DOTALL
+)
+
+# [DES-QBE-062] El Pago Anticipado se gobierna por bandera booleana, jamás por proxies.
+_PATRON_BANDERA_PA = re.compile(
+    r'const\s+([A-Za-z_$][\w$]*)\s*=\s*\(ord\.pa_activo\s*===\s*true\)\s*\|\|\s*'
+    r'Boolean\(ord\.estrategia_seleccionada\?\.linea_promocional\);'
 )
 
 
 def _ramas_de_cobertura() -> list:
-    """Devuelve la cadena real `[(condición_js, plantilla_html), ...]` publicada por el frontend."""
-    ramas = _PATRON_RAMA.findall(_bloque_cobertura_resumen_asignacion())
+    """Cadena real de rótulos publicada por el frontend, en orden de evaluación.
+
+    Cada rama se devuelve como un dict `{"condicion", "plantilla", "bandera",
+    "plantilla_pa", "plantilla_sin_pa"}`: las ramas incondicionales portan `plantilla`; la rama
+    condicional de la Familia R2 ([V-4]) porta la bandera booleana que la gobierna y sus dos
+    plantillas (con y sin Pago Anticipado).
+    """
+    bloque = _bloque_cobertura_resumen_asignacion()
+    hallazgos = []
+    for coincidencia in _PATRON_RAMA.finditer(bloque):
+        hallazgos.append((coincidencia.start(), {
+            "condicion": coincidencia.group(1), "plantilla": coincidencia.group(2),
+            "bandera": None, "plantilla_pa": None, "plantilla_sin_pa": None,
+        }))
+    for coincidencia in _PATRON_RAMA_PA.finditer(bloque):
+        hallazgos.append((coincidencia.start(), {
+            "condicion": coincidencia.group(1), "plantilla": None,
+            "bandera": coincidencia.group(2),
+            "plantilla_pa": coincidencia.group(3), "plantilla_sin_pa": coincidencia.group(4),
+        }))
+    ramas = [rama for _, rama in sorted(hallazgos, key=lambda par: par[0])]
     assert len(ramas) == 3, (
         "La cadena de rótulos de cobertura cambió de forma: se esperaban 3 ramas "
         f"(familias directas / R2 / cobertura en tablas) y se hallaron {len(ramas)}."
     )
     return ramas
+
+
+def _bandera_pa_del_frontend() -> str:
+    """Identificador de la bandera booleana del Pago Anticipado que gobierna el rótulo de R2."""
+    coincidencia = _PATRON_BANDERA_PA.search(_fuente(APP_JS))
+    assert coincidencia, (
+        "🚨 [V-4] El rótulo de Doble Cobro no está gobernado por la bandera booleana "
+        "`ord.pa_activo === true` ([DES-QBE-062])."
+    )
+    return coincidencia.group(1)
 
 
 _PATRON_POR_DEFECTO = re.compile(r'let coberturaHtml = `([^`]*)`;')
@@ -97,12 +146,20 @@ def _texto_plano(html: str) -> str:
     return re.sub(r"<[^>]+>", "", html).strip()
 
 
-def _rotulo_de_cobertura(codigo: str, inv: float = 12.0, tablas: float = 0.0, roi: float = 18.0) -> str:
-    """Rótulo EXACTO que la pantalla exhibiría para `codigo` (evalúa la cadena real del frontend)."""
+def _rotulo_de_cobertura(codigo: str, inv: float = 12.0, tablas: float = 0.0, roi: float = 18.0,
+                         pa_activo: bool = True) -> str:
+    """Rótulo EXACTO que la pantalla exhibiría para `codigo` (evalúa la cadena real del frontend).
+
+    `pa_activo` transporta el estado de la bandera booleana del Pago Anticipado ([DES-QBE-062]);
+    sólo la rama condicional de la Familia R2 ([V-4]) lo consume.
+    """
     etiqueta = None
-    for condicion, plantilla in _ramas_de_cobertura():
-        if _evalua_condicion(condicion, codigo):
-            etiqueta = plantilla
+    for rama in _ramas_de_cobertura():
+        if _evalua_condicion(rama["condicion"], codigo):
+            if rama["plantilla"] is not None:
+                etiqueta = rama["plantilla"]
+            else:
+                etiqueta = rama["plantilla_pa"] if pa_activo else rama["plantilla_sin_pa"]
             break
     if etiqueta is None:
         # Familia sin rama propia: el frontend conserva el rótulo por defecto (QBE-C1 / C2 / 00).
@@ -132,7 +189,10 @@ def test_ln_qbe_083_b_familias_directas_declaran_riesgo_directo():
 
 def test_ln_qbe_083_b_cero_ortografias_divergentes_en_el_resumen():
     """Las 9 familias canónicas resuelven a un vocabulario cerrado de rótulos (sin tercera ortografía)."""
-    rotulos = {codigo: _rotulo_de_cobertura(codigo, inv=10.0, tablas=10.0) for codigo in CODIGOS_CANONICOS}
+    rotulos = {
+        codigo: _rotulo_de_cobertura(codigo, inv=10.0, tablas=10.0, pa_activo=False)
+        for codigo in CODIGOS_CANONICOS
+    }
 
     assert set(rotulos) == set(CODIGOS_CANONICOS), "La cadena debe clasificar los 9 códigos canónicos"
     assert len(set(rotulos.values())) <= 3, (
@@ -141,7 +201,12 @@ def test_ln_qbe_083_b_cero_ortografias_divergentes_en_el_resumen():
     assert rotulos["QBE-D1"] == rotulos["QBE-D2"] == "Sin cobertura (Riesgo Directo: -$10.00)", (
         "Las dos familias directas deben compartir el rótulo unificado ([LN-QBE-083-B])"
     )
-    assert rotulos["QBE-R2"] == "Ambos boletos ganan (+18.0% ROI)"
+    # [V-4] La Familia R2 sólo declara Doble Cobro con la bandera del Pago Anticipado activa.
+    assert rotulos["QBE-R2"] == "Recuperas $10.00 MXN ($0.00 pérdida)", (
+        "Sin Pago Anticipado, R2 exhibe la recuperación real en tablas ([LN-QBE-083-B])"
+    )
+    assert _rotulo_de_cobertura("QBE-R2", inv=10.0, tablas=10.0, pa_activo=True) == \
+        "Ambos boletos ganan (+18.0% ROI)"
 
 
 def test_ln_qbe_083_b_familias_con_cobertura_conservan_rotulo_de_recuperacion():
@@ -293,6 +358,75 @@ def test_nodos_b_publicados_y_anclados_en_el_registro_maestro():
     registro = _fuente(REGISTRY_MD)
     assert "[LN-QBE-083-B]" in registro and "[ARCH-1.4.16-B]" in registro, (
         "🚨 Ceguera de colisión: nodo sellado sin fila en docs/ID_REGISTRY.md"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 6. [V-4 / VAR-2026-LIVE-AUDIT-J11] RÓTULO DE DOBLE COBRO CONDICIONADO AL PA
+# ---------------------------------------------------------------------------
+def test_v4_rotulo_de_doble_cobro_condicionado_a_la_bandera_pa():
+    """R2 sólo promete 'Ambos boletos ganan' con la bandera booleana del Pago Anticipado activa."""
+    rama_r2 = [
+        rama for rama in _ramas_de_cobertura() if _evalua_condicion(rama["condicion"], "QBE-R2")
+    ]
+    assert len(rama_r2) == 1, "🚨 La Familia R2 debe poseer exactamente una rama de rótulo"
+    rama = rama_r2[0]
+
+    assert rama["plantilla"] is None, (
+        "🚨 [V-4] El rótulo de R2 debe ser CONDICIONAL a la bandera del Pago Anticipado"
+    )
+    assert rama["bandera"] == _bandera_pa_del_frontend(), (
+        "🚨 La condición del rótulo debe consumir la bandera booleana declarada ([DES-QBE-062])"
+    )
+    assert "Ambos boletos ganan" in rama["plantilla_pa"], (
+        "🚨 La rama con Pago Anticipado debe conservar el rótulo sellado de Doble Cobro"
+    )
+    assert "Ambos boletos ganan" not in rama["plantilla_sin_pa"], (
+        "🚨 [GOVERNANCE-01] Sin PA, R2 no puede cobrar ambos boletos: rótulo fiduciariamente falso"
+    )
+    assert _rotulo_de_cobertura("QBE-R2", inv=16.0, tablas=16.0, roi=18.0, pa_activo=True) == \
+        "Ambos boletos ganan (+18.0% ROI)"
+    assert _rotulo_de_cobertura("QBE-R2", inv=16.0, tablas=16.0, roi=18.0, pa_activo=False) == \
+        "Recuperas $16.00 MXN ($0.00 pérdida)"
+    # Las ramas incondicionales NO pueden depender de la bandera (anti-deriva silenciosa).
+    for rama_plana in _ramas_de_cobertura():
+        if _evalua_condicion(rama_plana["condicion"], "QBE-H2"):
+            assert rama_plana["plantilla"] is not None, (
+                "🚨 La rama de cobertura en tablas debe permanecer incondicional"
+            )
+
+
+# ---------------------------------------------------------------------------
+# 7. [V-1 / VAR-2026-LIVE-AUDIT-J11] VINCULACIÓN DEL P' POR IDENTIDAD DE PIERNA
+# ---------------------------------------------------------------------------
+def test_v1_modal_vincula_p_prima_por_identidad_de_pierna():
+    """El comparador resuelve la pierna por la etiqueta `seleccion`, jamás por rol posicional."""
+    code = _fuente(APP_JS)
+
+    assert "const _resolverPiernaDeFila = (resultado) =>" in code, (
+        "🚨 [V-1] El modal no declara el resolutor de pierna POR IDENTIDAD de etiqueta"
+    )
+    assert "const _normSeleccion = (s) => String(s || \"\")" in code, (
+        "🚨 [V-1] Falta el normalizador de etiquetas (debe erradicar el sufijo ` + PA`)"
+    )
+    assert r'.replace(/\s*\+\s*PA\s*/gi, "")' in code, (
+        "🚨 [V-1] El normalizador debe erradicar el sufijo del Pago Anticipado antes de comparar"
+    )
+    assert "for (const leg of [legCobertura, legAtaque, opNoJugada])" in code, (
+        "🚨 [V-1] El resolutor debe cotejar las TRES piernas certificadas de la orden"
+    )
+    assert "const legFila = _resolverPiernaDeFila(pv.resultado);" in code, (
+        "🚨 [V-1] La fila del comparador debe resolver su pierna por la identidad de `resultado`"
+    )
+    assert "let pPrima = legFila ? legFila.prob_qbe : null;" in code, (
+        "🚨 [V-1] El P' exhibido debe emanar de la pierna IDENTIFICADA, no del rol posicional"
+    )
+    assert "const legCuota = legFila" in code, (
+        "🚨 [V-1] La cuota/operador exhibidos deben emanar de la misma pierna que el P'"
+    )
+    # El rol posicional queda EXCLUSIVAMENTE como degradación declarada.
+    assert "Sin etiqueta certificada: degrada al rol posicional (cero invención)." in code, (
+        "🚨 [V-1] La degradación posicional debe estar declarada explícitamente en la fuente"
     )
 
 

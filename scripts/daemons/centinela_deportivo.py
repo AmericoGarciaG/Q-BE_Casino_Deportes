@@ -234,8 +234,40 @@ def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: in
         "minuto_juego": minuto,
         "disponible_para_seleccion": disponible,
         "es_operable": operable,
-        "momios": None
+        "momios": None,
+        # [ARCH-1.6.13-C] Identidad dura del club (slug canónico): insumo del bono aditivo de
+        # intimidación de plaza Δγ_plaza y de la fusión de splits de sede ([LN-QBE-038]).
+        "home_team_slug": loc_slug,
+        "away_team_slug": vis_slug
     }
+
+
+# ===========================================================================
+# [ARCH-1.6.13-C] EXTRACCIÓN DE TABLAS DESAGREGADAS POR SEDE (SPLITS FOTMOB)
+# ===========================================================================
+def _desglosar_marcador_sede(tm: Dict[str, Any]) -> Dict[str, int]:
+    """[ARCH-1.6.13-C] Desglose fáctico de una fila de `table.home` / `table.away` (FotMob).
+
+    Campos oficiales de la respuesta: `played` (PJ) y `scoresStr` ("GF-GC"). Cero
+    fabricación: si la fuente no publica el marcador agregado, el bloque se declara vacío
+    y la fusión ponderada degrada limpiamente a w_sede = 0.0 (ruta Nivel 1 `[LN-QBE-035-B]`).
+    """
+    scores = str(tm.get("scoresStr") or "").split("-")
+    if len(scores) != 2 or not scores[0].strip().isdigit() or not scores[1].strip().isdigit():
+        return {}
+    return {"pj": int(tm.get("played") or 0), "gf": int(scores[0].strip()), "gc": int(scores[1].strip())}
+
+
+def _indexar_splits_de_sede(tablas_dict: Dict[str, Any], clave: str) -> Dict[str, Dict[str, int]]:
+    """[ARCH-1.6.13-C] Indexa los arrays legislados `table.home` / `table.away` por `fotmob_team_id`."""
+    indice: Dict[str, Dict[str, int]] = {}
+    for tm in (tablas_dict.get(clave) or []):
+        if not isinstance(tm, dict) or tm.get("id") is None:
+            continue
+        bloque = _desglosar_marcador_sede(tm)
+        if bloque:
+            indice[str(tm["id"])] = bloque
+    return indice
 
 
 def reconstruir_tabla_acumulada(partidos_hasta_fecha: List[Dict[str, Any]], clubes: List[str]) -> List[Dict[str, Any]]:
@@ -359,7 +391,12 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
     page_props = raw_json.get("props", {}).get("pageProps", {})
     table_list = page_props.get("table") or page_props.get("overview", {}).get("table") or []
     table_obj = table_list[0] if isinstance(table_list, list) and len(table_list) > 0 else {}
-    teams_all = table_obj.get("data", {}).get("table", {}).get("all", [])
+    tablas_dict = table_obj.get("data", {}).get("table", {}) or {}
+    teams_all = tablas_dict.get("all", [])
+    # [ARCH-1.6.13-C] Arrays desagregados por sede (gf/gc/pj de local y de visita), indexados
+    # por `fotmob_team_id` para fusionarlos con la tabla general del mismo club.
+    splits_local_por_id = _indexar_splits_de_sede(tablas_dict, "home")
+    splits_visita_por_id = _indexar_splits_de_sede(tablas_dict, "away")
     team_form = table_obj.get("teamForm", {})
     next_opp = table_obj.get("nextOpponent", {})
     res_map = {"W": "G", "D": "E", "L": "P"}
@@ -391,6 +428,10 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
         local_escudo_rival = f"/static/img/crests/{obtener_slug_club(rival_limpio)}.png"
         pts_pj = round(pts / pj, 2) if pj > 0 else 0.0
 
+        # [ARCH-1.6.13-C] Splits de sede del club: `table.home` (sede local) y `table.away` (visita).
+        sede_local = splits_local_por_id.get(t_id, {})
+        sede_visita = splits_visita_por_id.get(t_id, {})
+
         standings_raw.append({
             "pos": idx_t,
             "equipo": t_name,
@@ -408,7 +449,13 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
             "xg": round(gf * 1.05 + 1.2, 1),
             "xga": round(gc * 0.95 + 0.8, 1),
             "xpts": round(pg * 2.8 + pe * 0.9, 1),
-            "proximo_rival": rival_limpio
+            "proximo_rival": rival_limpio,
+            # [ARCH-1.6.13-C] Desglose fáctico por sede (gf/gc/pj de local y de visita) más los
+            # bloques normalizados que consume la fusión ponderada de `[LN-QBE-038]` (w_sede = 0.50).
+            "gf_local": sede_local.get("gf", 0), "gc_local": sede_local.get("gc", 0), "pj_local": sede_local.get("pj", 0),
+            "gf_visita": sede_visita.get("gf", 0), "gc_visita": sede_visita.get("gc", 0), "pj_visita": sede_visita.get("pj", 0),
+            "home_split_stats": sede_local,
+            "away_split_stats": sede_visita
         })
 
     all_matches = page_props.get("fixtures", {}).get("allMatches", [])
@@ -443,6 +490,70 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
 # ===========================================================================
 # FASE 4: PERSISTENCIA 3NF Y DERIVACIÓN SOBERANA
 # ===========================================================================
+# ===========================================================================
+# [ARCH-1.6.13-C] MEMORIA H2H FÁCTICA EN SQLITE (ÚLTIMOS 5 ENFRENTAMIENTOS)
+# ===========================================================================
+def _precargar_historial_consumado_sqlite(tx, league_id: int) -> List[Dict[str, Any]]:
+    """[ARCH-1.6.13-C] Precarga los marcadores oficiales consumados sellados en SQLite.
+
+    Fuente única de verdad: los `FixtureSnapshot.matches_json` de la competición activa
+    (marcadores oficiales FotMob Opta persistidos por este mismo daemon). Cero tuplas
+    históricas quemadas en el código (`[GOVERNANCE-01]`).
+    """
+    historial: List[Dict[str, Any]] = []
+    for snap in tx.query(FixtureSnapshot).filter(FixtureSnapshot.league_id == league_id).all():
+        for fx in (snap.matches_json or []):
+            if not isinstance(fx, dict) or fx.get("estado") != "FINALIZADO":
+                continue
+            partes = str(fx.get("marcador_actual") or "").split("-")
+            if len(partes) != 2 or not partes[0].strip().isdigit() or not partes[1].strip().isdigit():
+                continue
+            try:
+                fecha_partido = datetime.fromisoformat(str(fx.get("fecha_dt")))
+            except (TypeError, ValueError):
+                continue
+            historial.append({
+                "local": fx.get("local"),
+                "visitante": fx.get("visitante"),
+                "goles_local": int(partes[0].strip()),
+                "goles_visita": int(partes[1].strip()),
+                "fecha": fecha_partido,
+            })
+    return historial
+
+
+def _h2h_desde_historial(
+    historial: List[Dict[str, Any]],
+    club_local: str,
+    club_visita: str,
+    fecha_referencia: datetime,
+    limite: int = 5,
+) -> List[Dict[str, Any]]:
+    """[ARCH-1.6.13-C] Los `limite` enfrentamientos directos más recientes entre ambos clubes.
+
+    Sin corte artificial de 180 días (Des-acotamiento Temporal): se extraen exactamente los
+    más recientes, con `dias_antiguedad` fáctica, y la ponderación profunda τ_deep = 540 días
+    se aplica aguas abajo en el kernel `[LN-QBE-020-C]`. La evidencia se publica en la
+    perspectiva del club local del fixture evaluado (`goles_local` = goles de ese club).
+    Sin duelos concluidos entre la pareja ⇒ lista vacía (Ley Zero-H2H `[LN-QBE-020-B]`).
+    """
+    duelos: Dict[Tuple[str, str, str], Dict[str, int]] = {}
+    for h in historial:
+        directo_local = h["local"] == club_local and h["visitante"] == club_visita
+        directo_visita = h["local"] == club_visita and h["visitante"] == club_local
+        if not (directo_local or directo_visita):
+            continue
+        goles_local = h["goles_local"] if directo_local else h["goles_visita"]
+        goles_visita = h["goles_visita"] if directo_local else h["goles_local"]
+        clave = (str(h["local"] or ""), str(h["visitante"] or ""), h["fecha"].strftime("%Y-%m-%d"))
+        duelos[clave] = {
+            "goles_local": int(goles_local),
+            "goles_visita": int(goles_visita),
+            "dias_antiguedad": max(0, int((fecha_referencia - h["fecha"]).days)),
+        }
+    return sorted(duelos.values(), key=lambda d: d["dias_antiguedad"])[:limite]
+
+
 def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FOTMOB_ID, mu_liga: Optional[float] = None) -> None:
     gateway = PersistenceGateway()
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -503,15 +614,35 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
         standings_map = {s["equipo"]: s for s in datos["standings_viva"]}
         from src.core.sovereign_pipeline import generar_distribucion_soberana
 
+        # [ARCH-1.6.13-C] Memoria H2H fáctica: precarga única de los marcadores oficiales
+        # consumados en SQLite; cada fixture recibe sus últimos 5 enfrentamientos directos.
+        historial_consumado = _precargar_historial_consumado_sqlite(tx, league.id)
+
         for r in range(10, 18):
             fixtures_r = datos["fixtures_por_jornada"].get(r, [])
             for f in fixtures_r:
                 h_st = standings_map.get(f["local"], {})
                 a_st = standings_map.get(f["visitante"], {})
                 try:
+                    fecha_ref = datetime.fromisoformat(str(f.get("fecha_dt")))
+                except (TypeError, ValueError):
+                    fecha_ref = ahora
+                try:
+                    # [ARCH-1.6.13-C] PROHIBIDO invocar el motor con `h2h_matches = None`:
+                    # la evidencia emana siempre de SQLite (lista fáctica, vacía si no hay duelos).
+                    raw_match_data = {
+                        "home_team_stats": h_st,
+                        "away_team_stats": a_st,
+                        "home_split_stats": h_st.get("home_split_stats") or {},
+                        "away_split_stats": a_st.get("away_split_stats") or {},
+                        "home_team_slug": f.get("home_team_slug") or obtener_slug_club(f["local"]),
+                        "h2h_matches": _h2h_desde_historial(
+                            historial_consumado, f["local"], f["visitante"], fecha_ref
+                        ),
+                    }
                     dist_out = generar_distribucion_soberana(
                         match_id=f["id_partido"],
-                        raw_match_data={"home_team_stats": h_st, "away_team_stats": a_st},
+                        raw_match_data=raw_match_data,
                         mu_liga=mu_efectivo,
                         gamma_home_base=0.15
                     )

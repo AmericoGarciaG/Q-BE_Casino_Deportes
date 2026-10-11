@@ -33,8 +33,17 @@ ARCH_PATH = PROJECT_ROOT / "docs" / "ARCH.md"
 REGISTRY_PATH = PROJECT_ROOT / "docs" / "ID_REGISTRY.md"
 
 # Reservas explícitas del Director que no publican encabezado propio en los Libros.
+# [VAR-2026-LIVE-AUDIT-J11 / V-3, ratificada por Dictamen]: `[LN-QBE-071-B]` y `[LN-QBE-040-B]`
+# son enmiendas SELLADAS cuyo cuerpo normativo vigente es la cláusula `.3` de `[LN-QBE-071]`
+# (piso bivariado $4.00 y cobertura universal H1/H2/R1/R2) y el techo anti-resonancia de
+# `[LN-QBE-040]`/`[LN-QBE-039]`. Se declaran aquí porque la salvaguarda anti-destrucción de
+# `--write` reconstruye la tabla desde los Libros: sin esta reserva, el sello del Director se
+# perdería en la siguiente reconciliación (borrado silencioso). Promoverlas a encabezado propio
+# exige texto normativo del Director.
 RESERVADOS = {
     "LN-QBE-092": ("LOGIC", "*(Reservado - Conciliación de Mercados Derivados)*", "LIBRE"),
+    "LN-QBE-071-B": ("LOGIC", "Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R", "SELLADO"),
+    "LN-QBE-040-B": ("LOGIC", "Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia)", "SELLADO"),
 }
 
 PATRON_LOGICO = re.compile(r'^###\s+ID:\s+\[(LN-QBE-[A-Za-z0-9_\-]+)\]\s*(.*)$')

@@ -176,13 +176,22 @@ def calcular_alpha_ligadura(mu_liga: float = 2.65, gamma_home: float = 0.15) -> 
     return math.log(mu_val) - math.log(1.0 + math.exp(gamma_val))
 
 
-def aplicar_damping_hiperbolico(factor_crudo: float, sigma_liga: float = 1.0, kappa_mult: float = 2.5) -> float:
+KAPPA_NET = 0.2500  # [VAULT-CORE-001] Compresión hiperbólica PURA (absoluta, adimensional)
+
+
+def aplicar_damping_hiperbolico(factor_crudo: float, sigma_liga: float = 1.0,
+                                kappa_mult: Optional[float] = None,
+                                kappa_net: float = KAPPA_NET) -> float:
+    """[Sección 4.12 / VAULT-CORE-001] Compresión Hiperbólica PURA de factores log-diferenciales:
+    A = κ_net · tanh(A_crudo / κ_net), con κ_net = 0.2500 ABSOLUTO (Libro de Constantes §2).
+
+    Preserva E[A] = 0 por imparidad estricta y acota asintóticamente |A| < κ_net.
+    Los parámetros históricos `sigma_liga` / `kappa_mult` (κ = 2.5·σ_liga) quedan DEROGADOS
+    por [VAULT-CORE-001]: se conservan en la firma —sin intervenir en el cómputo— para no
+    romper llamadas selladas (`src/core/sovereign/bayesian_form.py` invoca por palabra clave
+    `sigma_liga=`). Cero margen creativo: κ_net es constante legislada, no calibrada aquí.
     """
-    [Sección 4.12] Compresión Hiperbólica Simétrica:
-    A = kappa * tanh(A_crudo / kappa), donde kappa = 2.5 * sigma_liga.
-    Preserva estrictamente la media cero E[A] = 0 y acota divergencias asintóticas.
-    """
-    kappa = float(kappa_mult * sigma_liga)
+    kappa = float(kappa_net)
     if kappa <= 0.0:
         return 0.0
     return kappa * math.tanh(float(factor_crudo) / kappa)

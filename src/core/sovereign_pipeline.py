@@ -24,7 +24,43 @@ from src.core.andre_early_payout import calcular_probabilidad_pago_anticipado
 
 # Capa 4 — Sovereign Memory ([ARCH-1.4.26]): módulos puros, sin I/O ni dependencias de src.storage.
 from src.core.sovereign.bayesian_form import contraer_factores_forma_bayesiana
-from src.core.sovereign.h2h_kernel import calcular_matriz_h2h_empirica
+from src.core.sovereign.h2h_kernel import calcular_matriz_h2h_empirica, TAU_H2H_DEEP
+
+# [LN-QBE-039] & [ARCH-1.4.33] Contenedor de Factores Latentes Tridimensionales (GSL-3D):
+# módulo funcional puro que purga la colinealidad de los splits de sede frente a la señal
+# directora Opta y sella los factores bajo presupuesto cerrado de norma (tanh).
+from src.core.sovereign.orthogonal_factor_engine import resolver_factores_latentes_gsl3d
+
+# [LN-QBE-038] Peso de la fusión ponderada de sede (promedio general ↔ rendimiento en sede).
+# Sellado en el nodo legislativo: w_sede = 0.50. Sin splits publicados ⇒ se degrada a 0.0.
+W_SEDE = 0.50
+
+
+def _splits_de_sede_publicados(home_split: Any, away_split: Any) -> bool:
+    """[LN-QBE-038] Suficiencia mínima de los splits de sede: ambos bloques con PJ >= 3.
+
+    Cualquier carencia (bloque ausente, no diccionario o muestra insuficiente) degrada
+    limpiamente a la ruta de Nivel 1 sellada `[LN-QBE-035-B]` con w_sede = 0.0 sin inventar
+    registros de sede.
+    """
+    if not isinstance(home_split, dict) or not isinstance(away_split, dict):
+        return False
+    try:
+        return int(home_split.get("pj", 0) or 0) >= 3 and int(away_split.get("pj", 0) or 0) >= 3
+    except (TypeError, ValueError):
+        return False
+
+
+def _tasa_por_sede(bloque: Dict[str, Any], clave: str, tasa_general: float, pj_general: int) -> float:
+    """[LN-QBE-038] Tasa por partido de un bloque de sede (GF o GC).
+
+    Respaldo inerte: si la fuente no publica la clave, se reconstruye el total general
+    equivalente (tasa_general × PJ_general) para no alterar el promedio. Nunca se fabrica
+    un valor fuera del registro fáctico.
+    """
+    pj_sede = max(1, int(bloque.get("pj", pj_general) or 0))
+    respaldo = float(tasa_general) * max(1, int(pj_general))
+    return float(bloque.get(clave, respaldo)) / pj_sede
 
 
 class StochasticAuditTrace(BaseModel):
@@ -123,7 +159,7 @@ def _factores_forma_bayesiana(raw_match_data: Dict[str, Any], mu_liga: float) ->
 
     Se consume `a_contraido` (A*) — el factor log-diferencial CONTRAÍDO, pre-amortiguamiento. El
     damping hiperbólico canónico NO se aplica aquí: permanece delegado aguas abajo en
-    `estimar_intensidades_loglineal` ([VAULT-CORE-001], κ_damp = 2.5·σ_liga), exactamente como en la
+    `estimar_intensidades_loglineal` ([VAULT-CORE-001], κ_net = 0.2500 absoluto), exactamente como en la
     ruta base [LN-QBE-035-B]. Amortiguar dos veces comprimiría dos veces el mismo factor y rompería
     la comparabilidad entre ambas rutas (evidencia en `BayesianFormResult.a_amortiguado`, disponible
     para auditoría).
@@ -207,6 +243,36 @@ def derivar_factores_estructurales(raw_match_data: Dict[str, Any], mu_liga: floa
     def_h_rate = (0.65 * xga_h_per_game) + (0.35 * gc_h_per_game)
     D_home = -math.log(max(0.2, def_h_rate) / mu_base_equipo)
 
+    # 5. [LN-QBE-039] & [ARCH-1.4.33] Contenedor de Factores Latentes Tridimensionales (GSL-3D)
+    #    [ALGO-PROTECTED] Sustituye la suma lineal ingenua de la fusión de sede por el Residuo
+    #    Ortogonal Log-Diferencial de Sede (v_sede_perp = ln(tasa_sede / tasa_gen) − gamma_base)
+    #    y la síntesis acotada A* = tanh(A_gen + v_sede_perp), con |A*| <= 1.0 y |D*| <= 1.0.
+    #    Sin splits publicados (PJ < 3) ⇒ ruta de Nivel 1 `[LN-QBE-035-B]` intacta.
+    home_split = raw_match_data.get("home_split_stats")
+    away_split = raw_match_data.get("away_split_stats")
+    if _splits_de_sede_publicados(home_split, away_split):
+        # Señales brutas por partido del anfitrión (generales y de sede) que alimentan el residual.
+        gf_h_gen = float(h.get("gf", 10)) / pj_h
+        gc_h_gen = float(h.get("gc", 10)) / pj_h
+
+        gf_h_sede = _tasa_por_sede(home_split, "gf", gf_h_gen, pj_h)
+        gc_h_sede = _tasa_por_sede(home_split, "gc", gc_h_gen, pj_h)
+
+        gsl_local = resolver_factores_latentes_gsl3d(
+            A_gen=A_home, D_gen=D_home,
+            gf_gen=gf_h_gen, gc_gen=gc_h_gen,
+            gf_sede=gf_h_sede, gc_sede=gc_h_sede,
+            gamma_base=0.15, es_local=True
+        )
+
+        # ALT-I ([LN-QBE-039] — AXIOMA DE ASIMETRÍA DE SEDE, Decreto VAR-2026-GSL3D-1D-DEGENERACY):
+        # el residuo ortogonal de sede v_sede_perp se extrae y aplica EXCLUSIVAMENTE al club
+        # anfitrión (local). El visitante conserva su evaluación estructural basal [LN-QBE-035-B]
+        # (Nivel 1) intacta, impidiendo que su fragilidad foránea infle artificialmente λ_H vía
+        # D_away*. Sin splits publicados (PJ < 3) la ruta de Nivel 1 permanece intacta.
+        A_home, D_home = gsl_local.A_star, gsl_local.D_star
+        D_away, A_away = D_away, A_away  # Conserva Nivel 1 estructural
+
     # [SPRINT 3 / H-16] Capa 4 — Capa 4 ([LN-QBE-036]): si el registro fáctico publica `form_10p`,
     # el operador bayesiano sellado SUSTITUYE de forma gobernada la mezcla analítica base; si no,
     # se conserva la ruta sellada [LN-QBE-035-B] sin una sola variación.
@@ -231,6 +297,7 @@ def derivar_factores_con_procedencia(
 def derivar_discrepancia_epistemica(
     distribucion_parametrica: Dict[str, float],
     h2h_matches: Optional[Any] = None,
+    tau_dias: float = TAU_H2H_DEEP,
 ) -> Tuple[float, Dict[str, float]]:
     """
     [LN-QBE-020-C] Δ_epist — discrepancia entre el consenso Poisson paramétrico y el Kernel H2H empírico.
@@ -244,13 +311,17 @@ def derivar_discrepancia_epistemica(
     Ley Zero-H2H ([LN-QBE-020-B]): sin enfrentamientos directos ⇒ w_H2H = 0.0, w_Liga = 1.0 y
     Δ_epist = 0.0. El kernel NO se invoca con evidencia vacía (jamás se fabrican partidos sintéticos).
 
+    [ARCH-1.6.13-C] La ventana de memoria es la multianual sellada τ_deep = 540 días: la secuencia
+    completa se pondera sin corte artificial por antigüedad (los partidos de 500 a 750 días
+    conservan peso efectivo material, impidiendo el colapso falso a Δ_epist = 0.0).
+
     Devuelve (Δ_epist, evidencia_del_Generador_C) para la traza forense.
     """
     partidos = list(h2h_matches or [])
     if not partidos:
         return 0.0, {"peso_h2h": 0.0, "peso_liga": 1.0}
 
-    kernel = calcular_matriz_h2h_empirica(partidos)
+    kernel = calcular_matriz_h2h_empirica(partidos, tau_dias=tau_dias)
     delta_epist = 0.5 * (
         abs(float(distribucion_parametrica["p_local"]) - kernel.p_local)
         + abs(float(distribucion_parametrica["p_empate"]) - kernel.p_empate)
@@ -303,13 +374,16 @@ def generar_distribucion_soberana(
     (A_h, D_a, A_a, D_h), origen_factores = derivar_factores_con_procedencia(raw_match_data, mu_liga)
 
     # 3. Estimación de Intensidades con Ligadura de alpha y Damping tanh
+    #    [LN-QBE-038] `home_team_slug` habilita el bono sellado de intimidación de plaza:
+    #    la ligadura α se recalibra en caliente sobre la localía efectiva (conservación de masa).
     lh, la = estimar_intensidades_loglineal(
         A_home=A_h, D_away=D_a,
         A_away=A_a, D_home=D_h,
         mu_liga=mu_liga, gamma_home_base=gamma_home_base,
         delta_alt_metros=delta_alt_metros,
         delta_descanso_dias=delta_descanso_dias,
-        q_mod_h=q_mod_h, q_mod_a=q_mod_a
+        q_mod_h=q_mod_h, q_mod_a=q_mod_a,
+        home_team_slug=raw_match_data.get("home_team_slug")
     )
 
     # 4. Construcción de la Matriz Conjunta Dixon-Coles 2D
@@ -328,6 +402,7 @@ def generar_distribucion_soberana(
     delta_epist, kernel_h2h = derivar_discrepancia_epistemica(
         {"p_local": p1, "p_empate": pX, "p_visitante": p2},
         raw_match_data.get("h2h_matches"),
+        tau_dias=TAU_H2H_DEEP,
     )
 
     # 8. Consolidación de Traza Forense

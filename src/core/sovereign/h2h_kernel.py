@@ -5,8 +5,13 @@
 Régimen: [DIRGEN-STRICT] — [ALGO-PROTECTED]; legislado en `docs/LOGIC.md` ([LN-QBE-020-C]).
 
 Relación con el canon sellado (composición, cero duplicación):
-* La constante de decaimiento κ = ln(2)/180 días⁻¹ se REUTILIZA desde `[LN-QBE-020]`
+* La constante de decaimiento corta κ = ln(2)/180 días⁻¹ se REUTILIZA desde `[LN-QBE-020]`
   (`src/core/temporal.py: TemporalDecayEngine.KAPPA`), único origen de verdad del decaimiento.
+* `[ARCH-1.6.13-C]` (docs/ARCH.md) + `docs/CONSTANTS.md` §1: la ventana de memoria del kernel
+  es la VIDA MEDIA MULTIANUAL sellada τ_deep = 540 días (κ_deep = ln(2)/540 ≈ 0.00128338 días⁻¹).
+  Se erradica todo corte rígido de 180 días: la secuencia completa se pondera y los partidos de
+  500 a 750 días conservan peso efectivo material (35%–55%), impidiendo el colapso falso de la
+  discrepancia a Δ_epist = 0.0. La ventana corta sigue disponible vía `tau_dias=180.0`.
 * Este nodo NO reimplementa `[LN-QBE-020]`: aquel proyecta la evidencia sobre el eje
   FAVORITO/EMPATE/UNDERDOG (`H2HDecayResult`) y exige 5 partidos; éste proyecta sobre el eje
   LOCAL/EMPATE/VISITA del fixture evaluado (`H2HKernelResult`).
@@ -22,8 +27,13 @@ from typing import Any, List, Sequence, Tuple
 from src.core.temporal import TemporalDecayEngine
 from src.models.analytics import H2HKernelResult
 
-# Vida media sellada por `[LN-QBE-020]` (τ = 180 días).
+# Vida media sellada por `[LN-QBE-020]` (τ = 180 días) — ventana corta reutilizable.
 TAU_HALF_LIFE_DEFAULT = TemporalDecayEngine.TAU_HALF_LIFE_DAYS
+
+# [ARCH-1.6.13-C] / `docs/CONSTANTS.md` §1 — Vida Media Multianual H2H (τ_deep = 540 días).
+# Constante sellada por el nodo [LN-QBE-020]; ventana longitudinal interanual (~1.5 años).
+TAU_H2H_DEEP = 540.0
+KAPPA_H2H_DEEP = math.log(2.0) / TAU_H2H_DEEP  # ≈ 0.00128338 días⁻¹
 
 
 def _campo(partido: Any, nombre: str) -> Any:
@@ -34,24 +44,28 @@ def _campo(partido: Any, nombre: str) -> Any:
 
 
 def _kappa_para_tau(tau_dias: float) -> float:
-    """κ-Decay (`[LN-QBE-020]`): κ = ln(2)/τ. Reutiliza la constante sellada si τ == 180.0."""
+    """κ-Decay (`[LN-QBE-020]`): κ = ln(2)/τ. Reutiliza la constante sellada si τ ∈ {180, 540}."""
     tau = float(tau_dias)
     if tau <= 0.0:
         raise ValueError(f"[LN-QBE-020-C] Vida media τ inválida: {tau_dias}. Debe ser > 0.")
     if tau == TemporalDecayEngine.TAU_HALF_LIFE_DAYS:
         return TemporalDecayEngine.KAPPA
+    if tau == TAU_H2H_DEEP:
+        return KAPPA_H2H_DEEP
     return math.log(2.0) / tau
 
 
 def calcular_matriz_h2h_empirica(
     h2h_matches: Sequence[Any],
-    tau_dias: float = TAU_HALF_LIFE_DEFAULT,
+    tau_dias: float = TAU_H2H_DEEP,
 ) -> H2HKernelResult:
     """[LN-QBE-020-C] Matriz empírica H2H en el símplex Δ² (LOCAL / EMPATE / VISITA).
 
-    Ponderación exponencial continua w_k = exp(-κ · Δt_k) con κ = ln(2)/τ (`[LN-QBE-020]`),
-    normalizada sobre la masa efectiva observada. Los goles se leen en la perspectiva del
-    fixture evaluado: `goles_local` = goles del club local actual en ese enfrentamiento.
+    Ponderación exponencial continua w_k = exp(-κ_deep · Δt_k) con κ_deep = ln(2)/τ_deep
+    (`[ARCH-1.6.13-C]`: τ_deep = 540 días), normalizada sobre la masa efectiva observada.
+    TODO el enfrentamiento presente en la secuencia se procesa: no existe corte por antigüedad
+    (los partidos de 500 a 750 días conservan peso efectivo material). Los goles se leen en la
+    perspectiva del fixture evaluado: `goles_local` = goles del club local actual en ese partido.
 
     Levanta `ValueError` ante ausencia total de evidencia (fail-loud, cero fabricación).
     """

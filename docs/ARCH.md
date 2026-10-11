@@ -357,6 +357,25 @@ Cada partido almacenarás en `matches_json`:
   2. `gateway.write_transaction()`: Contexto de escritura atómica para demonios e ingesta. Si ocurre una sola excepción dentro del bloque, se ejecuta `ROLLBACK` total y la base de datos queda intacta.
 * **Validación de Integridad en el Arranque:** En la inicialización, el gateway ejecuta `PRAGMA quick_check;`. Si reporta anomalías físicas, aborta con `RuntimeError` impidiendo operar sobre datos corruptos.
 
+### [ARCH-1.5.0-B] Aislamiento de Persistencia del Canal Gateway en The Shield [ARCH-PILLAR] [GOVERNANCE-01]
+
+* **Alcance Declarado (Canal Único Aislado):** El aislamiento se predica exclusivamente del canal transaccional `PersistenceGateway` (`src/storage/gateway.py`), por ser el único motor que ejecuta escrituras, Unit of Work, DDL de prueba y purgas dentro del arnés `tests/shield/`. El motor paralelo `src/storage/database.py` (`engine`, `SessionLocal`, `get_db`) queda **expresamente fuera de este nodo** y se registra como deuda técnica en `[ARCH-1.5.0-B-Δ1]`: legislar un "aislamiento hermético total" sin intervenir ese motor constituiría una falsificación documental.
+* **Axioma de Inocuidad del Arnés:** La suite de The Shield tiene prohibido mutar el archivo operativo `data/qbe_database.db` a través del Gateway. Queda terminantemente prohibido que cualquier juez, fixture o utilidad de prueba ejecute `create_all`, `drop_all`, `INSERT`, `UPDATE`, `DELETE` o purgas sobre la bóveda viva por mediación del Gateway.
+* **Mecanismo de Cuádruple Cerrojo en `tests/shield/conftest.py`:**
+  1. **Nivel 1 (Configuración Temprana):** La fixture de sesión fija `os.environ["DATABASE_URL"]` hacia una URL SQLite efímera generada por sesión en disco temporal (`tmp_path_factory.mktemp("qbe_shield_db")`) y **sobrescribe además `src.config.settings.DATABASE_URL`**, porque `settings` es un singleton Pydantic congelado en el import de `src/config.py` y no relee el entorno. Sin esta segunda asignación el cerrojo sería nominal (falso verde).
+  2. **Nivel 2 (Reseteo del Singleton):** Si `PersistenceGateway._instance` ya existe, se ejecuta `engine.dispose()` y se fija `_instance = None`; la instancia reconstruida lee la URL efímera. Acto seguido se ejecuta `Base.metadata.create_all(bind=gateway.engine)` sobre el entorno estéril (operación idempotente).
+  3. **Nivel 3 (Clonado Online de Evidencia Fáctica):** La bóveda efímera se inicializa con un **snapshot seguro** de `data/qbe_database.db` mediante la API nativa de respaldo de SQLite (`sqlite3.Connection.backup`), operable en modo WAL con el servidor local encendido y con acceso exclusivamente de lectura (`mode=ro`). Este clon entrega a los jueces de inspección (`test_shield_full_season_ingest`, entre otros) su evidencia histórica real sin exponer la bóveda viva, y garantiza que toda purga de prueba impacte únicamente el archivo temporal descartable.
+  4. **Nivel 4 (Centinela Fail-Loud):** Si tras el reseteo la URL resuelta del motor contiene `data/qbe_database.db`, la fixture aborta con `RuntimeError`, imposibilitando la ejecución de la suite sobre datos reales. La degradación silenciosa hacia la bóveda viva es inadmisible bajo el Mandato de Fallo Ruidoso (`[GOVERNANCE-01]`).
+* **Certificación de No-Mutación:** La inocuidad sobre la bóveda viva se certifica por telemetría de archivo (`Length` y `LastWriteTime` de `data/qbe_database.db`) medida antes y después de la corrida completa, dado que el archivo está excluido en `.gitignore` y `git status` no puede dar fe de su integridad.
+* **[SHIELD]:** `tests/shield/test_shield_persistence_isolation.py`
+
+### [ARCH-1.5.0-B-Δ1] Deuda Técnica: Unificación de Motores de Persistencia y Retiro de database.py [DEUDA]
+
+* **Hecho Registrado (Split-Brain de Persistencia):** Conviven dos motores SQLAlchemy sobre la misma bóveda: `PersistenceGateway` (canal gobernado por `[ARCH-1.5.0]`) y `src/storage/database.py` (`engine` / `SessionLocal` / `get_db`), consumido por las rutas REST (`src/web/routes/*`), `sync_service.py`, `repository.py` y `seeder.py`. El aislamiento de `[ARCH-1.5.0-B]` cubre el primero; el segundo permanece ligado a `data/qbe_database.db`.
+* **Excepción Declarada:** Los jueces que inspeccionan por `get_db` / `SessionLocal` (`test_LN_QBE_003`, `test_LN_QBE_017`, `test_LN_QBE_019`, `test_LN_QBE_026` y las suites que sirven la capa web) operan por excepción declarada contra la bóveda viva.
+* **Hito de Liquidación (H-2):** Retiro de `src/storage/database.py` y unificación total del acceso a datos en el Gateway, extendiendo el aislamiento al 100% de la superficie de persistencia. Queda agendado como hito independiente y **exige su propio ciclo Paso 1 → Paso 2 → Paso 3** con Juez Inmutable y certificación de estado rojo.
+* **Prohibición Expresa:** Mientras esta deuda permanezca abierta, queda prohibido publicar, citar o legislar el aislamiento de The Shield bajo los calificativos "hermético total" o "integral".
+
 ### [ARCH-1.5.1] Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT]
 
 La persistencia abandona el almacenamiento ciego en listas JSON y se estructura en entidades relacionales de **Tercera Forma Normal (3NF)**. Cada tabla se detalla a continuación con sus columnas exactas, claves primarias y foráneas:
@@ -689,6 +708,12 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 ### [ARCH-1.6.13-B] Unicidad Estricta de Encuentros Reprogramados [ARCH-PILLAR]
 * **Regla de No Duplicación:** Queda estrictamente prohibido inyectar partidos reprogramados en jornadas arbitrarias mediante condiciones fijas (`if r == 8: ...`).
 * Un partido reprogramado pertenece exclusivamente a su jornada de origen o se consolida en una sola bandeja de pendientes; jamás debe coexistir duplicado en los snapshots de dos jornadas distintas (ej. aparecer en J7 y J8 simultáneamente).
+
+### [ARCH-1.6.13-C] Extracción de Tablas Desagregadas por Sede e Inyección H2H en Centinela Deportivo [ARCH-PILLAR]
+* **Extracción de Splits de FotMob:** `centinela_deportivo.py` debe extraer de `__NEXT_DATA__` no solo `table.all`, sino también los arrays `table.home` y `table.away`, registrando para cada club `gf_local, gc_local, pj_local` y `gf_visita, gc_visita, pj_visita`.
+* **Inyección Obligatoria de H2H en el Daemon:** Al persistir fixtures de jornadas activas y futuras, `centinela_deportivo.py` tiene estrictamente prohibido invocar `generar_distribucion_soberana` con `h2h_matches = None`. Debe consultar en SQLite los últimos 5 enfrentamientos directos oficiales entre ambos clubes (Liga MX, Liguilla, Concacaf) y transferirlos en `raw_match_data["h2h_matches"]`.
+* **Des-acotamiento Temporal:** Se erradica la exclusión de partidos con antigüedad $> 180$ días. Se extraen exactamente los 5 partidos más recientes sin importar los días transcurridos, ponderados con $\tau_{\text{H2H, deep}} = 540\text{ días}$.
+* **[SHIELD]:** `tests/shield/test_shield_venue_splits_and_h2h_deep.py`
 
 ### [ARCH-1.6.15] Resolución Dinámica de Jornada Activa en Sensores de Mercado [ARCH-PILLAR]
 * **Problema:** Un valor quemado por defecto (`--jornada 10`) provoca que al concluir los partidos de una fecha, el sensor escanee una jornada finalizada cuyas cuotas han sido retiradas por los casinos (0/9 encontrados).
@@ -1257,7 +1282,7 @@ La Capa 2 encapsula la inteligencia de resolución de entidades en un paquete au
 * `src/normalization/entity_resolver.py`: Mapea jerga de quinielas (`PROGOL_GLOBAL_ALIASES`) a identidades oficiales.
 ### [ARCH-1.4.26] Motor de Memoria Histórica y Kernel H2H (`src/core/sovereign/`) [ARCH-PILLAR]
 La Capa 4 aísla la matemática de memoria deportiva en dos módulos puros bajo régimen `[DIRGEN-STRICT]`:
-1. `src/core/sovereign/bayesian_form.py`: Implementa `[LN-QBE-036]`. Pureza funcional absoluta, sin dependencias de I/O ni red. El amortiguamiento se **delega** en `[VAULT-CORE-001]` (`aplicar_damping_hiperbolico`, κ_damp = 2.5·σ_liga); el κ = ln(2)/180 del decaimiento H2H queda expresamente prohibido como escala de damping.
+1. `src/core/sovereign/bayesian_form.py`: Implementa `[LN-QBE-036]`. Pureza funcional absoluta, sin dependencias de I/O ni red. El amortiguamiento se **delega** en `[VAULT-CORE-001]` (`aplicar_damping_hiperbolico`, κ_net = 0.2500 absoluto; escalera κ = 2.5·σ_liga derogada por `VAR-2026-LIVE-AUDIT-J11`/V-2); el κ = ln(2)/180 del decaimiento H2H queda expresamente prohibido como escala de damping.
 2. `src/core/sovereign/h2h_kernel.py`: Implementa `[LN-QBE-020-C]` — evalúa los enfrentamientos directos en el **eje localía**, aplicando el decaimiento temporal exponencial ($\kappa$-Decay $\tau = 180$ d) **reutilizado de `[LN-QBE-020]`** (`src/core/temporal.py`) sin duplicar la constante, y calcula la matriz empírica $M_{xy}^{(C)}$ sobre el símplex $\Delta^2$.
 3. **Invariante de Pureza (`[ARCH-1.4.24]` aplicado a la Capa 4):** ningún archivo de `src/core/sovereign/` puede importar `sqlalchemy`, `requests`, `playwright`, `src.storage` ni `src.ingestion` (auditoría AST en el Juez Inmutable).
 4. Actualización de `docs/ID_REGISTRY.md`: Registrar `[LN-QBE-020-C]`, `[LN-QBE-036]` y `[ARCH-1.4.26]` como sellados tras completar el sprint.
@@ -1340,6 +1365,13 @@ def sincronizar_progol_pipeline_completo(
   3. **Barra de Control:** Badge dinámico `#badge-boletos-comprados` con el agregado de cartera (`🎟️ Comprados: N ($XX.XX MXN)`).
 * **Invariante de Procedencia:** Sin hecho soberano no hay cifra: cero cuotas fabricadas y cero placeholders de relleno (`[GOVERNANCE-01]`).
 * **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
+
+
+### [ARCH-1.4.33] Contenedor de Factores Latentes Tridimensionales y Motor GSL-3D [ARCH-PILLAR]
+* **Ubicación Canónica:** `src/core/sovereign/orthogonal_factor_engine.py`.
+* **Responsabilidad:** Módulo funcional puro en $O(m)$ (donde $m \le 44$). Recibe vectores de señales observables crudas y sus homólogos en sede, ejecuta el algoritmo de Gram-Schmidt para purgar colinealidad respecto a la señal directora Opta, y emite los tres factores latentes invariantes $\mathcal{A}^*, \mathcal{D}^*, \mathcal{C}^*$.
+* **Axioma de Contención de Escala:** Toda adición o suspensión de variables en el catálogo de 44 se ejecuta exclusivamente dentro de este contenedor. La ecuación log-lineal de intensidades solo interactúa con los 3 factores latentes sellados, blindando al servidor contra amplificaciones exponenciales.
+* **[SHIELD]:** `tests/shield/test_shield_gsl3d_orthogonal_engine.py`
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

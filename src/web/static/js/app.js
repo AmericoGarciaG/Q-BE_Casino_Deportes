@@ -893,6 +893,11 @@ function renderizarResultadosPortafolio(data) {
 
             // [UX-MANDATE] Semántica precisa de cobertura por familia de estrategia (GOVERNANCE §8)
             let coberturaHtml = `<span style="color:#94A3B8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
+            // [V-4 / DES-QBE-062] El rótulo de Doble Cobro de la Familia R2 se gobierna por la
+            // BANDERA BOOLEANA `pa_activo` (jamás por proxies de proyección heredados). Sin Pago
+            // Anticipado la Doble Oportunidad Sintética cubre desenlaces MUTUAMENTE EXCLUYENTES:
+            // exhibir "Ambos boletos ganan" sería fiduciariamente falso ([GOVERNANCE-01]).
+            const paActivoFila = (ord.pa_activo === true) || Boolean(ord.estrategia_seleccionada?.linea_promocional);
             // [LN-QBE-083-B] [ARCH-1.4.16-B] Tramo 4: las familias DIRECTAS (QBE-D1 y QBE-D2) carecen de
             // pierna de cobertura en tablas ⇒ comparten el rótulo único de riesgo directo. El literal
             // genérico "Recuperas $X MXN ($0.00 pérdida)" queda erradicado para ellas: es fiduciariamente
@@ -900,7 +905,9 @@ function renderizarResultadosPortafolio(data) {
             if (cod.startsWith("QBE-D1") || cod.startsWith("QBE-D2")) {
                 coberturaHtml = `<span style="color:#f87171; font-weight:600;">Sin cobertura (Riesgo Directo: -$${inv.toFixed(2)})</span>`;
             } else if (cod === "QBE-R2") {
-                coberturaHtml = `<span style="color:#00E676; font-weight:600;">Ambos boletos ganan (+${roi.toFixed(1)}% ROI)</span>`;
+                coberturaHtml = paActivoFila
+                    ? `<span style="color:#00E676; font-weight:600;">Ambos boletos ganan (+${roi.toFixed(1)}% ROI)</span>`
+                    : `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
             } else if (cod.startsWith("QBE-H1") || cod.startsWith("QBE-H2") || cod.startsWith("QBE-R1")) {
                 coberturaHtml = `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
             }
@@ -1386,6 +1393,31 @@ function _hidratarTablasRadiografia(p) {
 
     const filas = Array.isArray(p.probabilidades_3vias) ? p.probabilidades_3vias : [];
 
+    // ═══ [V-1 / VAR-2026-LIVE-AUDIT-J11] VINCULACIÓN POR IDENTIDAD DE PIERNA ═══
+    // Defecto auditado: el P' certificado se asignaba por ROL POSICIONAL (la fila del favorito
+    // reclamaba `boleto_2_ganancia` y la fila del Empate `boleto_1_seguro`). Tras la inversión
+    // histórica de piernas en QBE-H2 (`VAR-H2-SIMETRIA-CANONICA`, commit génesis 0f4b340:
+    // ataque en el Empate y seguro en el Favorito) el rol posicional ROTULABA EL P' DE LA
+    // PIERNA EQUIVOCADA. La resolución es ahora por IDENTIDAD de la etiqueta `seleccion` de
+    // cada pierna: espejo exacto del resolutor soberano del motor (`src/core/portfolio.py`),
+    // fuente única de verdad. La posición en la tabla sólo sobrevive como degradación.
+    const _normSeleccion = (s) => String(s || "")
+        .toUpperCase()
+        .replace(/\s*\+\s*PA\s*/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const _resolverPiernaDeFila = (resultado) => {
+        const fila = String(resultado || "").trim().toUpperCase();
+        const esFilaEmpate = /EMPATE/.test(fila);
+        for (const leg of [legCobertura, legAtaque, opNoJugada]) {
+            const sel = _normSeleccion(leg && leg.seleccion);
+            if (!sel) continue;
+            if (esFilaEmpate && /EMPATE/.test(sel)) return leg;
+            if (!esFilaEmpate && sel === `GANA ${fila}`) return leg;
+        }
+        return null;  // Sin etiqueta certificada: degrada al rol posicional (cero invención).
+    };
+
     // Favorito: por bandera, por nombre o por máxima probabilidad deportiva.
     let idxFav = null;
     if (p.is_fav_local === true) idxFav = 0;
@@ -1412,14 +1444,26 @@ function _hidratarTablasRadiografia(p) {
         tbodyPron.innerHTML = filas.map((pv, i) => {
             const esEmpate = /empate/i.test(String(pv.resultado || ""));
             const esAtaque = (!esEmpate && idxFav === i);
-            const rol = esEmpate ? "cobertura" : (esAtaque ? "ataque" : "none");
-            const colorRes = esAtaque ? COLOR_ATAQUE : (esEmpate ? COLOR_COBERTURA : COLOR_NEUTRO);
 
-            // P' fiduciaria CERTIFICADA por el motor, tomada de la pierna correspondiente.
-            let pPrima = null;
-            if (rol === "ataque") pPrima = legAtaque.prob_qbe;
-            else if (rol === "cobertura") pPrima = legCobertura.prob_qbe;
-            else pPrima = opNoJugada.prob_qbe;
+            // [V-1] La pierna se resuelve POR IDENTIDAD de su etiqueta; el rol posicional sólo
+            // sobrevive como degradación cuando la orden no porta etiquetas certificadas.
+            const legFila = _resolverPiernaDeFila(pv.resultado);
+            const rol = (legFila === legAtaque) ? "ataque"
+                : (legFila === legCobertura) ? "cobertura"
+                : (legFila === opNoJugada) ? "none"
+                : (esEmpate ? "cobertura" : (esAtaque ? "ataque" : "none"));
+            const colorRes = (rol === "ataque") ? COLOR_ATAQUE
+                : (rol === "cobertura") ? COLOR_COBERTURA
+                : COLOR_NEUTRO;
+
+            // P' fiduciaria CERTIFICADA por el motor, tomada de la pierna que ESTE desenlace
+            // transporta realmente (identidad de etiqueta, jamás posición en la tabla).
+            let pPrima = legFila ? legFila.prob_qbe : null;
+            if (pPrima === null || pPrima === undefined) {
+                if (rol === "ataque") pPrima = legAtaque.prob_qbe;
+                else if (rol === "cobertura") pPrima = legCobertura.prob_qbe;
+                else pPrima = opNoJugada.prob_qbe;
+            }
             if (pPrima === null || pPrima === undefined) pPrima = pv.prob_real;
 
             // [DES-QBE-063] Columna CASINO SELECCIONADO: se resuelve MÁS ABAJO, sobre la cuota
@@ -1441,15 +1485,13 @@ function _hidratarTablasRadiografia(p) {
             let momioReal = null;
             let operadorReal = null;
 
-            if (rol === "ataque" && legAtaque.momio) {
-                momioReal = Number(legAtaque.momio);
-                operadorReal = legAtaque.operador;
-            } else if (rol === "cobertura" && legCobertura.momio) {
-                momioReal = Number(legCobertura.momio);
-                operadorReal = legCobertura.operador;
-            } else if (rol === "none" && opNoJugada.momio) {
-                momioReal = Number(opNoJugada.momio);
-                operadorReal = opNoJugada.operador;
+            // [V-1] Paridad estricta con la tarjeta del boleto: la cuota y el operador emanan de
+            // la MISMA pierna identificada por etiqueta que gobierna el P' (fuente única).
+            const legCuota = legFila
+                || ((rol === "ataque") ? legAtaque : (rol === "cobertura") ? legCobertura : opNoJugada);
+            if (legCuota && legCuota.momio) {
+                momioReal = Number(legCuota.momio);
+                operadorReal = legCuota.operador;
             } else {
                 momioReal = Number(pv.momio);
             }

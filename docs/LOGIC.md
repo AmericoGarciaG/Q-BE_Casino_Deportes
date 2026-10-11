@@ -726,7 +726,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   3. Contracción convexa del factor ofensivo y defensivo:
      $$A_i^* = (1.0 - \rho) \cdot A_{\text{reciente}} + \rho \cdot A_{\text{macro}}$$
      $$D_i^* = (1.0 - \rho) \cdot D_{\text{reciente}} + \rho \cdot D_{\text{macro}}$$
-  4. **Inyección obligatoria al Damping Hiperbólico Simétrico — `[VAULT-CORE-001]`** *(enmienda ratificada D-3: el damping NO pertenece a `[LN-QBE-040]`, que legisla la matriz Poisson 6x6)*: la compresión se delega en el canon sellado `aplicar_damping_hiperbolico(A_i^*, \sigma_{\text{liga}})` con $\kappa_{\text{damp}} = 2.5 \cdot \sigma_{\text{liga}}$ (Sección 4.12 del Tratado; materializado en `src/core/intensity_canonical_loglink.py`). **Prohibición expresa:** el símbolo $\kappa = \ln(2)/180$ de `[LN-QBE-020]` (decaimiento H2H) JAMÁS se usa como escala de damping; usar $A_{\text{amortiguado}} = \kappa_{\text{damp}} \tanh(A_i^* / \kappa_{\text{damp}})$ con $\kappa = \ln(2)/180$ colapsa todo factor a la constante $\kappa$ (corrupción silenciosa).
+  4. **Inyección obligatoria al Damping Hiperbólico Simétrico — `[VAULT-CORE-001]`** *(enmienda ratificada D-3: el damping NO pertenece a `[LN-QBE-040]`, que legisla la matriz Poisson 6x6)*: la compresión se delega en el canon sellado `aplicar_damping_hiperbolico(A_i^*, \kappa_{\text{net}})` con $\kappa_{\text{net}} = 0.2500$ ABSOLUTO (constante `KAPPA_NET`; Sección 4.12 del Tratado, materializado en `src/core/intensity_canonical_loglink.py`). La escalera $\kappa = 2.5 \cdot \sigma_{\text{liga}}$ queda **DEROGADA** por `VAR-2026-LIVE-AUDIT-J11`/V-2: $\sigma_{\text{liga}}$ permanece en la firma como vestigio de compatibilidad de llamadas selladas y NO interviene en el cómputo. **Prohibición expresa:** el símbolo $\kappa = \ln(2)/180$ de `[LN-QBE-020]` (decaimiento H2H) JAMÁS se usa como escala de damping; usar $A_{\text{amortiguado}} = \kappa_{\text{net}} \tanh(A_i^* / \kappa_{\text{net}})$ con $\kappa = \ln(2)/180$ colapsa todo factor a la constante $\kappa$ (corrupción silenciosa).
 * **O (Output):** `BayesianFormResult` (`a_reciente`, `a_macro`, `a_contraido`, `rho_aplicado`, `a_amortiguado`) declarado en `src/models/analytics.py`; el llamador deriva $D$ por la invocación simétrica del mismo operador.
 * **Φ (Transición):** Hacia la ecuación log-lineal de intensidades $(\lambda_H, \lambda_A)$ — `[VAULT-CORE-001]` / `[LN-QBE-040]`.
 * **[SHIELD]:** `tests/shield/test_shield_bayesian_form_and_h2h.py`
@@ -811,6 +811,58 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** Clasificación de casillas: `BASE_SIMPLE`, `DOBLE_COBERTURA_SESGO`, `TRIPLE_ESTRATÉGICO`.
 
 ---
+
+### ID: [LN-QBE-038] Modelo de Desempeño Específico de Sede (Home/Away Splits) y Fortaleza de Plaza
+
+* **Ω (Resumen):** Desacoplar el rendimiento de local y de visitante del promedio general de temporada. Combina de forma balanceada la producción ofensiva y defensiva específica de sede con el récord general e incorpora el factor aditivo de intimidación de plaza $\Delta\gamma_{\text{plaza}}$ a la ventaja base de localía $\bar{\gamma}_{\text{base}} = 0.15$.
+* **I (Input):** `home_team_stats` (general), `away_team_stats` (general), `home_split_stats` (sede local), `away_split_stats` (sede visita), `home_team_slug: str`, `mu_liga: float = 2.65`.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Fusión Ponderada de Sede ($w_{\text{sede}} = 0.50$):**
+     $$\text{att\_h\_rate} = (1.0 - w_{\text{sede}}) \cdot \left(\frac{GF_{H,\text{gen}}}{PJ_{H,\text{gen}}}\right) + w_{\text{sede}} \cdot \left(\frac{GF_{H,\text{local}}}{PJ_{H,\text{local}}}\right)$$
+     $$\text{def\_h\_rate} = (1.0 - w_{\text{sede}}) \cdot \left(\frac{GC_{H,\text{gen}}}{PJ_{H,\text{gen}}}\right) + w_{\text{sede}} \cdot \left(\frac{GC_{H,\text{local}}}{PJ_{H,\text{local}}}\right)$$
+     $$\text{att\_a\_rate} = (1.0 - w_{\text{sede}}) \cdot \left(\frac{GF_{A,\text{gen}}}{PJ_{A,\text{gen}}}\right) + w_{\text{sede}} \cdot \left(\frac{GF_{A,\text{visita}}}{PJ_{A,\text{visita}}}\right)$$
+     $$\text{def\_a\_rate} = (1.0 - w_{\text{sede}}) \cdot \left(\frac{GC_{A,\text{gen}}}{PJ_{A,\text{gen}}}\right) + w_{\text{sede}} \cdot \left(\frac{GC_{A,\text{visita}}}{PJ_{A,\text{visita}}}\right)$$
+     *(Si no existen datos específicos de sede, degrada suavemente a $w_{\text{sede}} = 0.0$ sin inventar registros).*
+  2. **Catálogo Canónico de Intimidación de Plaza ($\Delta\gamma_{\text{plaza}}$):**
+     $$\gamma_{\text{home}} = \bar{\gamma}_{\text{base}} + \Delta\gamma_{\text{plaza}}(\text{home\_slug})$$
+     donde $\Delta\gamma_{\text{plaza}} \in [0.00, 0.10]$ según el catálogo sellado en `docs/CONSTANTS.md` (ej. `tigres-uanl` / El Volcán $\implies +0.07$).
+  3. **Recalibración de la Ligadura Estructural ($\alpha$):**
+     $$\alpha = \ln(\mu_{\text{liga}}) - \ln(1.0 + e^{\gamma_{\text{home}}})$$
+     garantizando analíticamente la conservación de masa global de goles.
+* **O (Output):** `FactoresSedeResult(A_home, D_away, A_away, D_home, gamma_home, alpha)`.
+* **Φ (Transición):** Hacia `[VAULT-CORE-001]` (`estimar_intensidades_loglineal`) y `[LN-QBE-040]`.
+* **[SHIELD]:** `tests/shield/test_shield_venue_splits_and_h2h_deep.py`
+
+---
+### ID: [LN-QBE-039] Motor de Ortogonalización Residual y Factores Latentes Tridimensionales (GSL-3D)
+
+* **Ω (Resumen):** Marco matemático de contención y gobernanza universal para las 44 variables del catálogo. Descompone la evidencia en tres espacios de Hilbert cerrados e independientes ($\mathbb{H}_{\text{att}}, \mathbb{H}_{\text{def}}, \mathbb{H}_{\text{ctx}}$), aplica la proyección de Gram-Schmidt para aislar únicamente el residuo ortogonal $v_k^\perp$ de las señales secundarias frente a la señal directora, e impone un presupuesto de norma/varianza cerrado ($\|\mathcal{A}^*\| \le 1.0, \|\mathcal{D}^*\| \le 1.0, \|\mathcal{C}^*\| \le 0.25$), erradicando la doble contabilización y la resonancia exponencial destructiva.
+* **I (Input):** Conjunto de señales observables $\mathcal{X}$, clasificadas por dimensión funcional:
+  - $\mathbb{H}_{\text{att}}$ (Ofensiva): Señal directora primaria $u_1$ ($xG$ Opta por 90') y secundarias (GF en sede, tiros, goles acumulados).
+  - $\mathbb{H}_{\text{def}}$ (Defensiva): Señal directora primaria $u_1$ ($xGA$ Opta por 90') y secundarias (GC en sede, tiros concedidos, goles recibidos).
+  - $\mathbb{H}_{\text{ctx}}$ (Contextual): Ventaja macro incondicional $\bar{\gamma}_{\text{base}} = 0.15$, bono de plaza $\Delta\gamma_{\text{plaza}}$, altitud y descanso.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Aislamiento Dimensional Estricto:** Toda variable pertenece a exactamente uno de los tres espacios de Hilbert. Queda prohibida la contaminación cruzada (cero señales defensivas en el vector de ataque).
+  2. **Extracción Residual de Gram-Schmidt por Dimensión:**  
+     Para cada variable secundaria $X_k$ en el espacio $\mathbb{H}$, su entrada está condicionada a su residuo ortogonal respecto al subespacio ya cubierto $U_{k-1} = \text{span}(u_1, \dots, u_{k-1})$:
+     $$v_k^\perp = X_k - \sum_{j=1}^{k-1} \frac{\langle X_k, u_j \rangle}{\langle u_j, u_j \rangle} u_j = X_k - \text{Proj}_{U_{k-1}}(X_k)$$
+     $$u_k = \frac{v_k^\perp}{\|v_k^\perp\|} \quad \text{si } \|v_k^\perp\| > \varepsilon_{\text{ort}}, \quad \text{de lo contrario } 0$$
+     *Teorema de No-Redundancia:* Por construcción, $\langle u_j, v_k^\perp \rangle = 0 \quad \forall j < k$.
+  3. **Absorción Fiduciaria del Desempeño de Sede (El Des-Solapamiento):**  
+     La producción en sede $X_{\text{sede}}$ (ej. goles en casa) solo inyecta su residuo $v_{\text{sede}}^\perp$ no explicado por la calidad general de plantilla ($u_1 = xG$):
+     - Si un club modesto tiene un récord extraordinario en casa (caso Tigres), su calidad general $u_1$ es media, por lo que $v_{\text{sede}}^\perp$ es alto y positivo, otorgando la fuerza legítima de la plaza.
+     - Si un superlíder ya tiene una calidad general superlativa (caso América), su rendimiento en casa ya está prácticamente al 100% explicado por $u_1$ ($X_{\text{sede}} \approx u_1$), por lo que $v_{\text{sede}}^\perp \approx 0$, anulando el doble cobro y evitando que el factor se dispare.
+  4. **Presupuesto Cerrado de Escala y Varianza Unitaria:**  
+     El factor latente final de cada dimensión se sintetiza mediante:
+     $$\mathcal{A}^* = \tanh\left( \sum_{j=1}^{m_{\text{att}}} w_j u_j \right), \quad \mathcal{D}^* = \tanh\left( \sum_{j=1}^{m_{\text{def}}} w_j u_j \right)$$
+     sujeto a $\sum |w_j| \le 1.0000$.  
+     La norma está acotada estrictamente en $\|\mathcal{A}^*\| \le 1.0$ y $\|\mathcal{D}^*\| \le 1.0$, garantizando que la adición de nuevas variables jamás expanda la escala de goles de la liga.
+* **O (Output):** `FactoresGSL3D(A_star, D_star, C_star, residuos_auditables)`.
+* **Φ (Transición):** Hacia `[VAULT-CORE-001]` (`estimar_intensidades_loglineal`) y `[LN-QBE-040]`.
+* **[SHIELD]:** `tests/shield/test_shield_gsl3d_orthogonal_engine.py`
+
+---
+
 
 ### ID: [LN-QBE-073] Algoritmo del Slider Dinámico de Certeza (Risk Dial)
 

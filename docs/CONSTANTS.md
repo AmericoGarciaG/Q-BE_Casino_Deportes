@@ -16,6 +16,8 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $N_{\text{H2H}}^{\max}$ | Muestra Máxima H2H | `5` | Partidos | `[LN-QBE-020]` | Enfrentamientos directos evaluados | No exceder sin calibración de varianza |
 | $w_{\text{H2H}}^{\text{amp}}$ | Amplitud Máxima del Peso H2H en la Modulación Poisson | `0.5000` ($50.0\%$) | Adimensional | `[LN-QBE-040]` | Factor de mezcla $w_{\text{H2H}} = \max\!\left(w^{\text{piso}},\; w^{\text{amp}} \cdot e^{-\kappa_{\text{decay}} \Delta t}\right)$ en `src/core/poisson.py` | **PROHIBIDO** usar como peso de confianza en UI, como escala de damping ni como umbral de descarte |
 | $w_{\text{H2H}}^{\text{piso}}$ | Piso de Influencia H2H con Antecedente Presente | `0.1500` ($15.0\%$) | Adimensional | `[LN-QBE-040]` | Cota inferior de la mezcla cuando existe antecedente H2H real (la ausencia total se rige por la Ley Zero-H2H `[LN-QBE-020-B]`) | **PROHIBIDO** usar como umbral de viabilidad, de descarte o de morfología Γ |
+| $\tau_{\text{H2H, deep}}$ | Vida Media Multianual H2H | `540.0` | Días | `[LN-QBE-020]` | Ventana longitudinal interanual (~1.5 años) | Prohibido usar como ventana de forma reciente |
+| $\kappa_{\text{H2H, deep}}$ | Constante de Decaimiento H2H Multianual | $\frac{\ln(2)}{540.0} \approx 0.00128338$ | $\text{días}^{-1}$ | `[LN-QBE-020]` | Exponente $e^{-\kappa \Delta t}$ para 5 partidos históricos | Prohibido confundir con $\kappa_{\text{decay}}$ corta |
 
 ---
 
@@ -25,10 +27,27 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 |:---:|---|---|:---:|:---:|---|---|
 | $\mu_{\text{liga}}$ | Media Goles Liga MX | `2.65` (Liga MX) / `2.60` (Gral) | Goles / 90' | `[LN-QBE-089]` | Parámetro macro de liga | No usar como expectativa individual |
 | $\bar{\gamma}_{\text{home}}$ | Ventaja Media Incondicional | `0.15` | Log-Ratio | `[VAULT-CORE-001]` | Intercepto base en ecuación de ligadura | No alterar sin análisis de 3 temporadas |
-| $\kappa_{\text{damp}}$ | Techo de Compresión $\tanh$ | $2.50 \cdot \sigma_{\text{liga}} = 2.50$ | Adimensional | `[VAULT-CORE-001]` | Damping hiperbólico de factores $A, D$ | **PROHIBIDO** confundir con $\kappa_{\text{decay}}$ |
+| $\kappa_{\text{net}}$ | Techo de Compresión $\tanh$ (ABSOLUTO) | $0.2500$ | Adimensional | `[VAULT-CORE-001]` | Damping hiperbólico de factores $A, D$; $\sigma_{\text{liga}}$ **vestigial** en firma (escalera $2.5\cdot\sigma$ derogada, `VAR-2026-LIVE-AUDIT-J11`/V-2) | **PROHIBIDO** confundir con $\kappa_{\text{decay}}$ |
 | $\sigma_{\text{liga}}$ | Dispersión Base de Factores | `1.00` | Desv. Estándar | `[VAULT-CORE-001]` | Escala de factores centrados en cero | Inmutable por diseño |
 | $\text{peso}_{xG}$ | Ponderación Señal Calidad | `0.65` | Fracción | `[LN-QBE-035-B]` | Mezcla Opta $xG / GF$ | La suma con $\text{peso}_{GF}$ debe ser $1.0$ |
 | $\text{peso}_{GF}$ | Ponderación Señal Volumen | `0.35` | Fracción | `[LN-QBE-035-B]` | Mezcla Opta $xG / GF$ | La suma con $\text{peso}_{xG}$ debe ser $1.0$ |
+| $w_{\text{sede}}$ | Ponderación de Rendimiento en Sede | `0.5000` ($50.0\%$) | Fracción | `[LN-QBE-038]` | Mezcla entre promedio general y split local/visita | Inmutable por diseño |
+| $\Delta\gamma_{\text{plaza}}^{\text{max}}$ | Techo de Intimidación de Plaza | `0.1000` | Log-Ratio | `[LN-QBE-038]` | Bono máximo admisible por localía extrema | No exceder sin prueba de 5 torneos |
+
+### Catálogo Canónico de Fortaleza de Plaza ($\Delta\gamma_{\text{plaza}}$)
+* `tigres-uanl` (Estadio Universitario / "El Volcán"): `+0.0700`
+* `deportivo-toluca` (Estadio Nemesio Diez / "La Bombonera"): `+0.0600`
+* `pumas-unam` (Estadio Olímpico Universitario / "CU"): `+0.0500`
+* `club-america` / `chivas-guadalajara` / `rayados-de-monterrey`: `+0.0400`
+* Plazas estándar / neutrales: `0.0000`
+
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
+|:---:|---|---|:---:|:---:|---|---|
+| $\varepsilon_{\text{ort}}$ | Tolerancia de Singularidad Ortogonal | `1e-5` ($0.00001$) | Adimensional | `[LN-QBE-039]` | Umbral de norma para descartar variables colineales | Prohibido usar como cota bancaria |
+| $\|\mathcal{A}^*\|_{\max}$ | Techo de Norma de Potencial Ofensivo | `1.0000` | Desv. Estándar | `[LN-QBE-039]` | Límite superior del espacio latente $\mathbb{H}_{\text{att}}$ | Inviolable (Anti-Resonancia) |
+| $\|\mathcal{D}^*\|_{\max}$ | Techo de Norma de Resistencia Defensiva | `1.0000` | Desv. Estándar | `[LN-QBE-039]` | Límite superior del espacio latente $\mathbb{H}_{\text{def}}$ | Inviolable (Anti-Resonancia) |
+| $\|\mathcal{C}^*\|_{\max}$ | Techo de Norma de Contexto y Plaza | `0.2500` | Log-Ratio | `[LN-QBE-039]` | Límite superior del espacio latente $\mathbb{H}_{\text{ctx}}$ | Inviolable (Anti-Resonancia) |
+
 
 ## 3. DOMINIO DE CONTRACCIÓN BAYESIANA DE FORMA (10 PARTIDOS)
 
@@ -81,7 +100,7 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 
 | Símbolo A | Símbolo B | Relación Legislada | Nodo Rector |
 |---|---|---|:---:|
-| $\kappa_{\text{decay}}$ (`ln2/180`, días⁻¹) | $\kappa_{\text{damp}}$ (`2.50·σ`, adimensional) | **Jamás son intercambiables**: uno decae evidencia histórica H2H, el otro comprime factores log-diferenciales | `[LN-QBE-020]` / `[VAULT-CORE-001]` |
+| $\kappa_{\text{decay}}$ (`ln2/180`, días⁻¹) | $\kappa_{\text{net}}$ (`0.2500`, adimensional) | **Jamás son intercambiables**: uno decae evidencia histórica H2H, el otro comprime factores log-diferenciales | `[LN-QBE-020]` / `[VAULT-CORE-001]` |
 | $\rho_{\text{estable}}$ (`0.55`) | $\rho_{\text{shock}}$ (`0.30`) | El ancla macro sólo se relaja con **shock verificado** ($Q_{\text{mod}} \ne 1.0$) | `[LN-QBE-036]` |
 | $\text{Cap}_{\text{partido}}$ (`0.08`) | $\text{Cap}_{\text{cartera}}$ (`0.25`) | El cap individual no puede superar el 32% del cap de cartera (relación $0.08/0.25$) | `[LN-QBE-070-B]` |
 | $\tau_{\text{disp}}$ (`0.12`) | $\text{Tol}_{\text{tablas}}$ (`0.08` MXN) | Uno mide desacuerdo epistémico en probabilidad; el otro indemnidad bancaria en pesos | `[LN-QBE-070-B]` / `[LN-QBE-070]` |
@@ -100,8 +119,8 @@ Maestra de Consolidación y Materialización. Los valores numéricos, unidades y
   ($\text{Tol} = \$0.08$ MXN con $|B_{\text{seg}} \cdot O_{\text{emp}} - B_i| \le 0.08$) queda intacto.
 * **Fuentes de verificación en código (anclaje simbólico, cero archivo:línea):**
   $\tau_{\text{H2H}}$ / $\kappa_{\text{decay}}$ → `src/core/temporal.py` (`TemporalDecayEngine`);
-  $\kappa_{\text{damp}}$ / $\sigma_{\text{liga}}$ → `src/core/intensity_canonical_loglink.py`
-  (`aplicar_damping_hiperbolico`); $\rho_{\text{estable}}$ / $\rho_{\text{shock}}$ /
+  $\kappa_{\text{net}}$ ($\sigma_{\text{liga}}$ vestigial) → `src/core/intensity_canonical_loglink.py`
+  (`KAPPA_NET`, `aplicar_damping_hiperbolico`); $\rho_{\text{estable}}$ / $\rho_{\text{shock}}$ /
   $\text{peso}_{xG}$ / $\text{peso}_{GF}$ → `src/core/sovereign/bayesian_form.py`.
 * **Cierre de la Capa 4:** los símbolos $\kappa_{\text{decay}}$, $\rho_{\text{estable}}$,
   $\rho_{\text{shock}}$ y $N_{\text{forma}}$ quedan **consumidos** por el motor en producción

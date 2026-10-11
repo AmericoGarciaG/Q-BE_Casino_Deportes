@@ -10,7 +10,8 @@ Nota de trazabilidad (Decreto Sprint 3 — enmiendas ratificadas del pre-vuelo):
 * D-2: el kernel empírico en eje localía se sella bajo `[LN-QBE-020-C]` porque `[LN-QBE-020]` ya
   está materializado (`src/core/temporal.py`, Juez `abstract_test_LN_QBE_020_temporal.py`) y opera
   sobre el eje FAVORITO/UNDERDOG. Cero doble fuente de verdad sobre un nodo [ALGO-PROTECTED].
-* D-3: el damping se delega en `[VAULT-CORE-001]` (κ_damp = 2.5·σ_liga); el κ = ln(2)/180 del
+* D-3: el damping se delega en `[VAULT-CORE-001]` (κ_net = 0.2500 ABSOLUTO; la escalera
+  κ = 2.5·σ_liga queda derogada por `VAR-2026-LIVE-AUDIT-J11`/V-2). El κ = ln(2)/180 del
   decaimiento H2H queda expresamente prohibido como escala de amortiguamiento.
 """
 
@@ -25,6 +26,8 @@ def test_ln_qbe_036_bayesian_form_contraction():
         from src.core.sovereign.bayesian_form import contraer_factores_forma_bayesiana
     except ImportError as e:
         pytest.fail(f"❌ [LN-QBE-036] Falta el módulo bayesian_form.py: {e}")
+
+    from src.core.intensity_canonical_loglink import KAPPA_NET
 
     # Escenario 1: Sin shock (Q_mod = 1.0) -> Ponderación equilibrada (rho = 0.55)
     res_neutro = contraer_factores_forma_bayesiana(
@@ -49,8 +52,8 @@ def test_ln_qbe_036_bayesian_form_contraction():
     assert res_shock.a_contraido > res_neutro.a_contraido
     assert res_shock.rho_aplicado == 0.30
 
-    # [D-3] Amortiguamiento delegado en [VAULT-CORE-001]: κ_damp = 2.5·σ_liga (NUNCA ln(2)/180).
-    kappa_damp = 2.5 * 1.0
+    # [D-3] Amortiguamiento delegado en [VAULT-CORE-001]: κ_net = 0.2500 (NUNCA ln(2)/180).
+    kappa_damp = KAPPA_NET
     assert res_neutro.a_amortiguado == pytest.approx(
         kappa_damp * math.tanh(res_neutro.a_contraido / kappa_damp), abs=1e-12
     )

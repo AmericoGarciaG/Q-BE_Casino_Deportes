@@ -7,7 +7,8 @@ Régimen: [DIRGEN-STRICT] — [ALGO-PROTECTED]; legislado en `docs/LOGIC.md` ([L
 Composición sellada (cero duplicación de constantes ni de fórmulas):
 * Amortiguamiento hiperbólico: delegado en `[VAULT-CORE-001]`
   (`src/core/intensity_canonical_loglink.py: aplicar_damping_hiperbolico`), con
-  κ_damp = 2.5 · σ_liga. El símbolo κ de este módulo NUNCA se usa como escala de damping.
+  κ_net = 0.2500 ABSOLUTO (`VAR-2026-LIVE-AUDIT-J11`/V-2; escalera κ = 2.5·σ_liga derogada).
+  El símbolo κ de este módulo NUNCA se usa como escala de damping.
 * Pesos Opta 0.65/0.35 y denominador μ_liga/2: transcripción de `[LN-QBE-035-B]` / `[LN-QBE-036]`.
 
 Pureza funcional: sin I/O, sin red, sin SQLAlchemy, sin imports de `src.storage` / `src.ingestion`.
@@ -64,7 +65,8 @@ def contraer_factores_forma_bayesiana(
     * `rho_aplicado` = 0.30 si el shock contextual está verificado (`q_mod != 1.00`); 0.55 en estabilidad.
     * `A*_i = (1 - ρ)·A_reciente + ρ·A_macro`.
     * `A_amortiguado` = `aplicar_damping_hiperbolico(A*, sigma_liga)` — canon `[VAULT-CORE-001]`
-      (κ_damp = 2.5 · σ_liga), jamás el κ del decaimiento H2H de `[LN-QBE-020]`.
+      (κ_net = 0.2500 absoluto; `sigma_liga` vestigial en la firma), jamás el κ del decaimiento
+      H2H de `[LN-QBE-020]`.
 
     El mismo operador se aplica al par defensivo (`xGA`/`GC`) por simetría; el signo del factor
     defensivo lo legisla `[LN-QBE-035-B]` en el llamador (cero reglas inventadas aquí).

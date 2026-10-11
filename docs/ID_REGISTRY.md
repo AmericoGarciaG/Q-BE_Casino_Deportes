@@ -59,6 +59,7 @@
 | `[LN-QBE-072]` | LOGIC | `docs/LOGIC.md` | Modelo Estocástico Combinatorio de Resiliencia 3^K y Trinidad de Certeza | SELLADO |
 | `[LN-QBE-025]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates y Preservación de Estado Inter-Jornadas | SELLADO |
 | `[LN-QBE-037]` | LOGIC | `docs/LOGIC.md` | Algoritmo de Detección de Sesgo Popular en Quinielas Progol | SELLADO |
+| `[LN-QBE-038]` | LOGIC | `docs/LOGIC.md` | Modelo de Desempeño Específico de Sede (Home/Away Splits) y Fortaleza de Plaza | SELLADO |
 | `[LN-QBE-073]` | LOGIC | `docs/LOGIC.md` | Algoritmo del Slider Dinámico de Certeza (Risk Dial) | SELLADO |
 | `[LN-QBE-074]` | LOGIC | `docs/LOGIC.md` | Optimizador de Quinielas Progol por Presupuesto | SELLADO |
 | `[LN-QBE-075]` | LOGIC | `docs/LOGIC.md` | Ingesta Fáctica de Concursos Progol y Resiliencia Multi-Torneo | SELLADO |
@@ -109,6 +110,8 @@
 | `[ARCH-1.4.12]` | ARCH | `docs/ARCH.md` | Servicio del Centro de Control y Despacho de Tareas Administrativas [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.13]` | ARCH | `docs/ARCH.md` | Guarda de Resiliencia ante Base de Datos Vacía en Live Board [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.0]` | ARCH | `docs/ARCH.md` | Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.5.0-B]` | ARCH | `docs/ARCH.md` | Aislamiento de Persistencia del Canal Gateway en The Shield [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
+| `[ARCH-1.5.0-B-Δ1]` | ARCH | `docs/ARCH.md` | Deuda Técnica: Unificación de Motores de Persistencia y Retiro de database.py | ABIERTO |
 | `[ARCH-1.5.1]` | ARCH | `docs/ARCH.md` | Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT] | SELLADO |
 | `[ARCH-1.5.2]` | ARCH | `docs/ARCH.md` | Persistencia Local en Base de Datos SQLite [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.3]` | ARCH | `docs/ARCH.md` | Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
@@ -136,6 +139,7 @@
 | `[ARCH-1.6.8]` | ARCH | `docs/ARCH.md` | Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE] | SELLADO |
 | `[ARCH-1.6.13]` | ARCH | `docs/ARCH.md` | Motor de Ingesta Total de Temporada y Reconstrucción Histórica [DIRGEN-SEALED] [GOVERNANCE-01] | SELLADO |
 | `[ARCH-1.6.13-B]` | ARCH | `docs/ARCH.md` | Unicidad Estricta de Encuentros Reprogramados [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.13-C]` | ARCH | `docs/ARCH.md` | Extracción de Tablas Desagregadas por Sede e Inyección H2H en Centinela Deportivo | SELLADO |
 | `[ARCH-1.6.15]` | ARCH | `docs/ARCH.md` | Resolución Dinámica de Jornada Activa en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.15-B]` | ARCH | `docs/ARCH.md` | Desacoplamiento Cronológico en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.16]` | ARCH | `docs/ARCH.md` | Política de Depuración y Archivado de Sondas Temporales [ARCH-PILLAR] | SELLADO |
@@ -179,6 +183,21 @@
 | `[DES-QBE-063]` | DESIGN | `docs/DESIGN.md` | Diseño de la Radiografía Forense: Barras Duales Apiladas, Radiografía Estructural y Cero Estrellas [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-099]` | LOGIC  | `docs/LOGIC.md` | Registro Fiduciario de Congelamiento de Boletos (Paper Trading) | SELLADO |
 | `[ARCH-1.4.32]`| ARCH   | `docs/ARCH.md`  | Contenedor de Acciones de Tarjeta y Congelamiento de Cuotas     | SELLADO |
+| `[LN-QBE-039]` | LOGIC | `docs/LOGIC.md` | Motor de Ortogonalización Residual y Factores Latentes Tridimensionales (GSL-3D) | SELLADO |
+| `[ARCH-1.4.33]` | ARCH | `docs/ARCH.md` | Contenedor de Factores Latentes Tridimensionales y Motor GSL-3D [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R | SELLADO |
+| `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
+
+> **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
+> `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`
+> (piso de ventanilla) y `[LN-QBE-040]` (matriz Poisson bivariada), respectivamente. Su cuerpo
+> normativo vigente es la cláusula `.3` de `[LN-QBE-071]` (piso bivariado $2 \times \$2.00 = \$4.00$
+> MXN y cobertura universal de las familias H1/H2/R1/R2, Juez
+> `tests/shield/test_shield_portfolio_integrity_and_floor.py`) y el techo conjunto anti-resonancia
+> legislado en `[LN-QBE-040]`/`[LN-QBE-039]`. Su promoción a encabezado propio (`### ID:`) en
+> `docs/LOGIC.md` queda registrada como **pendiente de texto normativo del Director**: el emisor
+> tiene prohibido inventar prosa normativa (cero invención bajo `[DIRGEN-STRICT]`).
+
 
 
 ---
@@ -196,6 +215,7 @@
 | `VAR-10-A/B/E` | Deriva FastAPI 0.141.1 (_IncludedRouter) + 3/5 tramos pre-sellados + límite estacional FotMob | ALT-1 (OpenAPI), alcance acotado a Tramos 3–4, congelación ALT-5-A | RESUELTO |
 | `VAR-H2-SIMETRIA-CANONICA` | Inversión histórica de piernas en `QBE-H2` (commit génesis `0f4b340`): ataque en el Empate y seguro en el Favorito | Reconciliación con el Tratado Vol. II §2.10 y con el nodo sellado `[LN-QBE-083]` (Ataque en Favorito Visitante, Seguro en Empate $V=0$), ley `[VAULT-CORE-070-DUTCHING]` conectada y Juez `[INVARIANTE VIII-11]` en The Shield | RESUELTO |
 | `VAR-H2-UMBRAL` | Mandato de admisión $\Delta_{\text{epist}} \le 0.08$ para `QBE-H2` vs. frontera global vigente $\Delta_{\text{epist}} \le 0.12$ | Umbral sellado intacto; armonización pendiente de dictamen | ABIERTO |
+| `VAR-2026-LIVE-AUDIT-J11` | Desfase de damping κ_damp en bayesian_form vs κ_net conjunto, guarda de piso $2.00 en Familia R y amarre L/V en modal | Ratificada ALT-1: armonización de compresión hiperbólica κ_net=0.2500, guarda universal ("QBE-H1","QBE-H2","QBE-R1","QBE-R2") con piso bivariado $4.00, y corrección de row-binding en modal JS | RATIFICADO |
 
 ---
 
