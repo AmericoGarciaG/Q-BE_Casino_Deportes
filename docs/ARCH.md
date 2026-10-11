@@ -122,6 +122,14 @@ El sistema `Q_BE_CD_WEB` se estructura como un **Monolito Full-Stack Local Gober
 
 ---
 
+### [ARCH-1.4.1-B] Sensor de Estados Temporales Fácticos (Live vs. Finished en FotMob) [ARCH-PILLAR]
+
+* **Regla de Finalización Inviolable:** Un encuentro solo puede ser clasificado como `FINISHED` y archivado en la sección de concluidos si la carga fáctica de FotMob explicita unívocamente:
+  `status.get("finished") is True` o `status.get("cancelled") is True`.
+* **Prohibición de Deducción por Goles:** Queda estrictamente prohibido clasificar un partido como concluido simplemente porque contenga un marcador intermedio (`home_score is not None`). Si `status.get("live") is True` o `status.get("started") is True` sin estar finalizado, el partido permanece en estado **EN JUEGO (LIVE)** y no debe pasar al historial de concluidos ni generar rótulos `MARCADOR_PENDIENTE`.
+
+---
+
 ### [ARCH-1.4.2] Pipeline de Ingesta Soberana de Tabla de Posiciones (Liga MX FMF) [ARCH-PILLAR] [GOVERNANCE-01]
 
 * **Fuente de Verdad Soberana:** La única fuente fáctica autorizada para nutrir la tabla de posiciones de la Liga MX (ID: 262) es la Federación Mexicana de Fútbol a través de `https://ligamx.net/cancha/tablas/tablaGeneralClasificacion/`.
@@ -1372,6 +1380,17 @@ def sincronizar_progol_pipeline_completo(
 * **Responsabilidad:** Módulo funcional puro en $O(m)$ (donde $m \le 44$). Recibe vectores de señales observables crudas y sus homólogos en sede, ejecuta el algoritmo de Gram-Schmidt para purgar colinealidad respecto a la señal directora Opta, y emite los tres factores latentes invariantes $\mathcal{A}^*, \mathcal{D}^*, \mathcal{C}^*$.
 * **Axioma de Contención de Escala:** Toda adición o suspensión de variables en el catálogo de 44 se ejecuta exclusivamente dentro de este contenedor. La ecuación log-lineal de intensidades solo interactúa con los 3 factores latentes sellados, blindando al servidor contra amplificaciones exponenciales.
 * **[SHIELD]:** `tests/shield/test_shield_gsl3d_orthogonal_engine.py`
+
+
+### [ARCH-1.4.34] Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor (CLI Auditor) [ARCH-PILLAR]
+* **Ubicación Canónica:** `scripts/auditoria/auditar_coherencia_cartelera.py`.
+* **Naturaleza Operativa:** Utilidad pura de solo lectura (`Read-Only`). Prohibido mutar estados de base de datos o forzar vetos automáticos (`QBE-00`). Su única misión es la observabilidad forense y el diagnóstico semafórico (🟢 CONFORME, 🟡 ADVERTENCIA, 🔴 DISCREPANCIA).
+* **Seis Sondas Relacionales (núcleo operativo certificado):** evalúa (1) paridad de los vectores $P'$ y $\hat{P}$ en $\Delta^2$; (2) aduana de Overround $[0.85, 1.30]$ (`OVERROUND_MIN_ADMISIBLE` / `OVERROUND_MAX_ADMISIBLE`, `docs/CONSTANTS.md` — `[LN-QBE-007-H]`), con banda de vigilancia diagnóstica $(1.25, 1.30]$ (margen elevado) y $[0.85, 1.00)$ (margen no positivo: posible arbitraje cross-market o captura corrupta); (3) piso de ventanilla ($\ge \$2.00$ MXN) y piso bivariado ($\ge \$4.00$ MXN) de `[LN-QBE-071-B]`; (4) techo de goles ($\le 2.20\text{ xG}$), con banda de vigilancia anti-resonancia $(1.86, 2.20]$ de `[LN-QBE-040-B]`; (5) coherencia Capa 0 vs. estrategia declarada (cotejo contra el triaje canónico `triaje_determinista_9_estrategias`, `[LN-QBE-060-B]`); y (6) divergencia de mercado ($\text{TVD} \le 0.22$), con banda de vigilancia $(0.15, 0.22]$.
+* **Degradación Honesta (Cero Veto Fabricado):** la ausencia de evidencia fáctica (cuotas no publicadas o vectores probabilísticos ausentes) emite `SIN VEREDICTO` (🇾🇪) y **jamás** una discrepancia: la sonda no inventa cifras, ni umbrales, ni bloqueos (`[GOVERNANCE-01]`).
+* **Semántica de Salida (Contrato del CLI):** `--check` retorna `EXIT CODE 1` **exclusivamente** ante `DISCREPANCIA` (🔴); `ADVERTENCIA` (🟡) y `SIN VEREDICTO` (🇾🇪) no bloquean el pre-vuelo. `--todo` barre el histórico completo y por tanto puede retornar `EXIT CODE 1` por discrepancias heredadas (diagnóstico forense, sin mutarlas). `--json` emite **un único objeto JSON puro** por `stdout` (modo máquina: `sonda`, `regimen`, `jornadas`, `total_partidos`, `codigo_salida`, `resumen`, `reportes`), sin decoración ni resumen humano.
+* **Agregación Semafórica (honestidad de cobertura):** el veredicto del partido es 🔴 si alguna sonda discrepa; 🟡 si alguna advierte **o si la evidencia es parcial** (existe al menos un 🟢 con alguna sonda en 🇾🇪); 🟢 sólo con las seis sondas conformes; 🇾🇪 si ninguna sonda pudo pronunciarse. Un 🟢 de cobertura parcial nunca se publica como certificación plena.
+* **Integración al DoD:** Es mandatorio que el Agente Constructor ejecute esta sonda sobre la jornada activa como paso previo a la emisión del Manifiesto de Cierre.
+* **[SHIELD]:** `tests/shield/test_shield_auditor_coherencia_cartelera.py`
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

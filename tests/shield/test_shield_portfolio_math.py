@@ -77,10 +77,16 @@ class AbstractTestPortfolioMath(ABC):
         assert res_h1["codigo"] == "QBE-H1"
         assert res_h1["pa"] is True
 
-        # 4. Caso Underdog Familia R (QBE-R1)
-        p_r1 = {"p_local": 0.28, "p_empate": 0.24, "p_visitante": 0.48, "delta_epist": 0.03, "es_operable": True}
-        # Dog local a 4.50 con p=0.28 -> alpha = 0.28*4.50 - 1 = +0.26 (+26% EV)
+        # 4. Caso Underdog Familia R (QBE-R1) — Admisible exclusivamente en PARIDAD_CIEGA ([LN-QBE-060-B])
+        #    tras la derogación de Bipolaridad por la Invariante VIII-37 (Decreto VAR-2026-TRIAJE-R-BIPOLAR).
+        p_r1 = {"p_local": 0.334, "p_empate": 0.333, "p_visitante": 0.333, "delta_epist": 0.03, "es_operable": True}
+        # Dog local a 4.50 con p=0.334 -> alpha = 0.334*4.50 - 1 = +0.503 (+50.3% EV)
         assert triaje_determinista_9_estrategias(p_r1, {"L": 4.50, "E": 3.40, "V": 1.80})["codigo"] == "QBE-R1"
+
+        # 4-bis. Blindaje Invariante VIII-37: el mismo perro en BIPOLARIDAD_TERRITORIAL (s_12 = 0.76 >= Gamma)
+        #        queda terminantemente enmudecido (QBE-00) por dejar >33% de riesgo descubierto.
+        p_bipolar = {"p_local": 0.28, "p_empate": 0.24, "p_visitante": 0.48, "delta_epist": 0.03, "es_operable": True}
+        assert triaje_determinista_9_estrategias(p_bipolar, {"L": 4.50, "E": 3.40, "V": 1.80})["codigo"] == "QBE-00"
 
     def test_ranking_friccion(self):
         """Verifica que el ordenamiento priorice activos de alto +EV y bajo desacuerdo."""

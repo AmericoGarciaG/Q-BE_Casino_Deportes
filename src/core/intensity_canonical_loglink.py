@@ -20,6 +20,8 @@ CATALOGO_FORTALEZA_PLAZA: Dict[str, float] = {
     "tigres-uanl": 0.0700,
     "deportivo-toluca": 0.0600,
     "pumas-unam": 0.0500,
+    "atlas-fc": 0.0400,
+    "atlas": 0.0400,
     "club-america": 0.0400,
     "guadalajara": 0.0400,
     "chivas-guadalajara": 0.0400,

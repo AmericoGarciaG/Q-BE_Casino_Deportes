@@ -95,6 +95,12 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
     aL = p1 * oL - 1.0 if oL > 1.0 else -1.0
     aV = p2 * oV - 1.0 if oV > 1.0 else -1.0
 
+    # [LN-QBE-007-H] Aduana de Sanidad Comercial de Overround
+    if oL > 1.0 and oX > 1.0 and oV > 1.0:
+        s_overround = (1.0 / oL) + (1.0 / oX) + (1.0 / oV)
+        if s_overround < 0.8500 or s_overround > 1.3000:
+            return {"codigo": "QBE-00", "nombre": "Cuarentena: Overround Anómalo", "alpha": 0.0, "pa": False}
+
     # -- CAPA 0: CLASIFICACION MORFOLOGICA CON EL PARAMETRO GAMMA DINAMICO --
     morf = clasificar_morfologia_simplex((p1, pX, p2), gamma=gamma)
     familia = morf.familia
@@ -105,13 +111,7 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
     if familia == "HEGEMONIA_VISITANTE" and delta_epist <= 0.04 and aV > 0.05:
         return {"codigo": "QBE-D2", "nombre": "Directa Visita", "alpha": aV, "pa": pa}
 
-    # 2. Underdogs Familia R (4 Leyes de Hierro)
-    if p1 >= 0.20 and oL >= 3.50 and aL >= 0.20 and delta_epist <= 0.05:
-        return {"codigo": "QBE-R1", "nombre": "Reversa Local Underdog", "alpha": aL, "pa": pa}
-    if p2 >= 0.20 and oV >= 3.50 and aV >= 0.20 and delta_epist <= 0.05:
-        return {"codigo": "QBE-R2", "nombre": "Reversa Visita Underdog", "alpha": aV, "pa": pa}
-
-    # 3. Híbridas Dutching V=0 (Subordinadas a Asimetría en Capa 0)
+    # 2. Híbridas Dutching V=0 (Subordinadas a Asimetría en Capa 0)
     theta_1 = oL / (oL - 1.0) if oL > 1.0 else 99.0
     theta_2 = oV / (oV - 1.0) if oV > 1.0 else 99.0
 
@@ -119,6 +119,12 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
         return {"codigo": "QBE-H1", "nombre": "Híbrida Local + Empate V=0", "alpha": aL, "pa": pa}
     if familia == "ASIMETRIA_VISITANTE" and oX > theta_2 and aV > 0:
         return {"codigo": "QBE-H2", "nombre": "Híbrida Visita + Empate V=0", "alpha": aV, "pa": pa}
+
+    # 3. Underdogs Familia R (Subordinados estrictamente a Capa 0: prohibido en Asimetrías opuestas y Bipolaridad)
+    if familia not in ("ASIMETRIA_VISITANTE", "HEGEMONIA_VISITANTE", "BIPOLARIDAD_TERRITORIAL") and p1 >= 0.20 and oL >= 3.50 and aL >= 0.20 and delta_epist <= 0.05:
+        return {"codigo": "QBE-R1", "nombre": "Reversa Local Underdog", "alpha": aL, "pa": pa}
+    if familia not in ("ASIMETRIA_LOCAL", "HEGEMONIA_LOCAL", "BIPOLARIDAD_TERRITORIAL") and p2 >= 0.20 and oV >= 3.50 and aV >= 0.20 and delta_epist <= 0.05:
+        return {"codigo": "QBE-R2", "nombre": "Reversa Visita Underdog", "alpha": aV, "pa": pa}
 
     # 4. Mutación DNB si el empate fue caníbal en Asimetrías
     if familia in ("ASIMETRIA_LOCAL", "ASIMETRIA_VISITANTE"):

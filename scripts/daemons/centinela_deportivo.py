@@ -204,15 +204,26 @@ def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: in
         fecha_dt = "2026-09-25T19:00:00"
         fecha_bloque = "Partidos Programados"
 
-    finished = bool(st.get("finished", False))
     score_str = st.get("scoreStr")
 
-    if finished or (score_str and "-" in score_str):
+    # [ARCH-1.4.1-B] Solo clasificar como concluido si el oráculo certifica finalización o cancelación.
+    es_concluido = bool(st.get("finished") or st.get("cancelled"))
+    es_live = bool(st.get("live") or (st.get("started") and not es_concluido))
+
+    if es_concluido:
         estado = "FINALIZADO"
         disponible = False
         operable = False
         minuto = "Final"
         marcador = score_str or "0 - 0"
+    elif es_live:
+        # [ARCH-1.4.1-B] El partido está en juego: permanece en la cartelera activa (badge LIVE).
+        # Prohibida la deducción por goles: un marcador intermedio jamás concluye el encuentro.
+        estado = "EN_CURSO"
+        disponible = True
+        operable = True
+        minuto = None
+        marcador = score_str
     else:
         estado = "PROGRAMADO"
         disponible = True
@@ -230,6 +241,8 @@ def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: in
         "fecha_dt": fecha_dt,
         "fecha_bloque": "Partidos Concluidos" if estado == "FINALIZADO" else fecha_bloque,
         "estado": estado,
+        "is_live": es_live,
+        "is_finished": es_concluido,
         "marcador_actual": marcador,
         "minuto_juego": minuto,
         "disponible_para_seleccion": disponible,

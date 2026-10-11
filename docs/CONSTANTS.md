@@ -38,8 +38,15 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 * `tigres-uanl` (Estadio Universitario / "El Volcán"): `+0.0700`
 * `deportivo-toluca` (Estadio Nemesio Diez / "La Bombonera"): `+0.0600`
 * `pumas-unam` (Estadio Olímpico Universitario / "CU"): `+0.0500`
+* `atlas-fc` / `atlas` (Estadio Jalisco): `+0.0400`
 * `club-america` / `chivas-guadalajara` / `rayados-de-monterrey`: `+0.0400`
 * Plazas estándar / neutrales: `0.0000`
+
+### Cotas de Admisibilidad de Margen Comercial (Overround)
+| Símbolo | Nombre Canónico | Valor Exacto | Dominio de Validez |
+|:---:|---|:---:|:---:|
+| $S_{\min}$ | `OVERROUND_MIN_ADMISIBLE` | `0.8500` | Rechazo por arbitraje imposible o cuota duplicada |
+| $S_{\max}$ | `OVERROUND_MAX_ADMISIBLE` | `1.3000` | Rechazo por cuota usuraria o mercado suspendido |
 
 | Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
 |:---:|---|---|:---:|:---:|---|---|

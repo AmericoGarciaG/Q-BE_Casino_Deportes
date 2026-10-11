@@ -146,6 +146,10 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ### ID: [LN-QBE-007-H] Cotas de Admisibilidad de Cuotas y Overround en Betway
 * **Ω (Resumen):** Filtrado de cuotas en $1.05 < O < 50.0$ y overround comercial admisible en $0.0\% < S \le 30.0\%$ para validar mercados operables de Betway.
+* **Aduana de Sanidad Comercial de Overround en Ventanilla:**
+  Toda tupla de cuotas 1X2 $(O_L, O_E, O_V)$ debe satisfacer obligatoriamente que la suma de probabilidades implícitas brutas (margen comercial) pertenezca al intervalo admisible:
+  $$S = \frac{1}{O_L} + \frac{1}{O_E} + \frac{1}{O_V} \in [0.8500, 1.3000]$$
+  Si $S < 0.8500$ (margen negativo / cuotas corruptas o duplicadas) o $S > 1.3000$ (overround usurario o cuota rota), el partido entra de forma atómica en **Cuarentena Fiduciaria Total (`QBE-00`)**, prohibiendo cualquier cálculo de $+EV$ o colocación de capital.
 
 ### ID: [LN-QBE-007-I] Validación de Suma de Inversas en Caliente
 * **Ω (Resumen):** Exigencia estricta de sanidad matemática sobre las cuotas 1X2 de Caliente, requiriendo que la suma de inversas $1/L + 1/E + 1/V$ se ubique estrictamente en $[1.00, 1.35]$.
@@ -370,6 +374,20 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-040-B] Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia)
+
+* **Ω (Resumen):** Mecanismo de compresión hiperbólica conjunta sobre el diferencial neto atacante-defensor $(A_H^* - D_A^*)$ para erradicar la sobre-amplificación exponencial en duelos entre plantillas de alta jerarquía.
+* **I (Input):** Factores individuales amortiguados $A_H^*, D_A^*$ y constante de compresión $\kappa_{\text{net}} = 0.2500$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  $$\Delta_{\text{net}} = \kappa_{\text{net}} \cdot \tanh\left(\frac{A_H^* - D_A^*}{\kappa_{\text{net}}}\right) \quad \text{con } \kappa_{\text{net}} = 0.2500$$
+  $$\eta_H = \alpha + \gamma_{\text{contextual}} + \Delta_{\text{net}} + C_H$$
+  Garantiza analíticamente que $\lambda_H \le 1.8600\text{ xG}$ en partidos equilibrados de liga, preservando la ligadura $\alpha$ y la conservación de masa global de goles.
+* **O (Output):** Intensidades físicas acotadas $\lambda_H, \lambda_A$.
+* **Φ (Transición):** Hacia `[LN-QBE-040]` (Matriz Dixon-Coles 2D) y `[VAULT-CORE-001]`.
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_integrity_and_floor.py`
+
+---
+
 ### ID: [LN-QBE-050] Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$)
 
 * **Ω (Resumen):** Calcular analíticamente los umbrales exactos donde la Esperanza Matemática se anula ($EV = 0$), acotados estrictamente en $[0.00, 1.00]$.
@@ -470,6 +488,10 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   7. Por defecto ante ausencia de valor $\implies$ **`QBE-00`** (Abstención).
 * **O (Output):** `strategy_code: str`, `pago_anticipado: bool`, `alpha_neto: float`.
 * **Φ (Transición):** Hacia [LN-QBE-070-B] (Asignación de Capital).
+* **Axioma de Subordinación Morfológica de la Familia R (Anti-Secuestro de Triaje):**
+  1. La Capa 0 precede estrictamente a la búsqueda de Underdogs. Si la morfología de masa $\Delta^2$ clasifica el partido como `ASIMETRIA_LOCAL` ($p_1' + p_X' \ge \Gamma$), queda **TERMINANTEMENTE PROHIBIDO** emitir la estrategia reversa visitante `QBE-R2`, sin importar cuán alta sea la cuota foránea o el $+EV$ aparente.
+  2. Recíprocamente, si la morfología es `ASIMETRIA_VISITANTE` ($p_2' + p_X' \ge \Gamma$), queda prohibido emitir `QBE-R1`.
+  3. Las estrategias de la Familia R (`QBE-R1` y `QBE-R2`) solo son legalmente admisibles en el estado morfológico de `PARIDAD_CIEGA` ($\mathcal{M}_{\text{PARIDAD-0}}$) donde ningún bando supere $1 - \Gamma$. Queda terminantemente prohibida su emisión en `BIPOLARIDAD_TERRITORIAL` ($\mathcal{M}_{\text{BIPOLAR}}$) por violar la cota de riesgo residual desprotegido de la Invariante VIII-37 ($p_{\text{riesgo}} \le 33\%$).
 
 ---
 
@@ -761,6 +783,20 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   3. Para Doble Oportunidad Sintética (`QBE-R2`): Si $\min(B_1, B_2) < \$2.00$, escalar ambos boletos por el factor $k = \frac{2.00}{\min(B_1, B_2)}$.
   4. Para apuestas directas (`QBE-D1`, `D1+`): Si $A_i < \$2.00$, fijar $A_i = \$2.00$, $B_2 = \$2.00$, y asignar al boleto de seguro $B_1$ el momio real del empate con monto $\$0.00\text{ MXN}$.
 * **O (Output):** Asignaciones escaladas $A_i^*$, $B_1^*$ y $B_2^*$ cumpliendo $B \ge \$2.00\text{ MXN}$ y $V=0$.
+
+---
+
+### ID: [LN-QBE-071-B] Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal de la Familia R
+
+* **Ω (Resumen):** Extensión constitucional del piso mínimo de ventanilla a todas las estrategias con dos boletos simultáneos, imponiendo una inversión mínima por partido de $\$4.00\text{ MXN}$ y financiando los ajustes de seguro con el superávit del libro.
+* **I (Input):** Cartera de órdenes de ejecución, bankroll total, cuotas de empate $O_{\text{emp}}$, piso legal $\$2.00\text{ MXN}$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Guarda Universal de Cobertura:** Aplica obligatoriamente a `("QBE-H1", "QBE-H2", "QBE-R1", "QBE-R2", "QBE-C1")`.
+  2. **Piso Bivariado Inviolable:** Si una posición porta seguro y ataque, $B_i \ge \$4.00\text{ MXN}$ ($2.00 + 2.00$).
+  3. **Preservación del Techo del 25%:** Todo reescalado del seguro a $\$2.00\text{ MXN}$ se financia con el superávit de asignación sin desbordar el límite patrimonial de cartera.
+* **O (Output):** Órdenes de cartera certificadas con $B_{\text{seg}} \ge \$2.00\text{ MXN}$ y $B_{\text{prio}} \ge \$2.00\text{ MXN}$.
+* **Φ (Transición):** Hacia `[VAULT-CORE-070-PRORRATEO]` y `src/pipeline/adapter.py`.
+* **[SHIELD]:** `tests/shield/test_shield_portfolio_integrity_and_floor.py`
 
 ---
 

@@ -90,6 +90,7 @@
 | `[ARCH-1.3.4]` | ARCH | `docs/ARCH.md` | GeminiCognitiveGateway y Ledger Contable de Inferencia [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.0]` | ARCH | `docs/ARCH.md` | Inversión de Carga Neuro-Simbólica (FotMob Primary Sensor) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.1]` | ARCH | `docs/ARCH.md` | Resiliencia Defensiva del Scraper de Mercado [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
+| `[ARCH-1.4.1-B]` | ARCH | `docs/ARCH.md` | Sensor de Estados Temporales Fácticos (Live vs Finished en FotMob) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.2]` | ARCH | `docs/ARCH.md` | Pipeline de Ingesta Soberana de Tabla de Posiciones (Liga MX FMF) [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
 | `[ARCH-1.4.3]` | ARCH | `docs/ARCH.md` | Motor de Extracción Focalizada de Cuotas Caliente.mx [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.4.4]` | ARCH | `docs/ARCH.md` | Ingesta Estructurada de Forma (5P) vía FotMob Next.js (__NEXT_DATA__) [ARCH-PILLAR] | SELLADO |
@@ -187,6 +188,7 @@
 | `[ARCH-1.4.33]` | ARCH | `docs/ARCH.md` | Contenedor de Factores Latentes Tridimensionales y Motor GSL-3D [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R | SELLADO |
 | `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
+| `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor [ARCH-PILLAR] | SELLADO |
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
 > `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`
@@ -194,9 +196,11 @@
 > normativo vigente es la cláusula `.3` de `[LN-QBE-071]` (piso bivariado $2 \times \$2.00 = \$4.00$
 > MXN y cobertura universal de las familias H1/H2/R1/R2, Juez
 > `tests/shield/test_shield_portfolio_integrity_and_floor.py`) y el techo conjunto anti-resonancia
-> legislado en `[LN-QBE-040]`/`[LN-QBE-039]`. Su promoción a encabezado propio (`### ID:`) en
-> `docs/LOGIC.md` queda registrada como **pendiente de texto normativo del Director**: el emisor
-> tiene prohibido inventar prosa normativa (cero invención bajo `[DIRGEN-STRICT]`).
+> legislado en `[LN-QBE-040]`/`[LN-QBE-039]`. **Pendiente LIQUIDADO** (Directiva Maestra de
+> Saneamiento Legislativo y Centinela Diagnóstico de Cartelera, 2026-10-11): ambos nodos publican
+> hoy encabezado canónico propio (`### ID:`) en `docs/LOGIC.md` con el texto normativo dictado por la
+> Dirección, por lo que su anclaje ya no depende de la lista `RESERVADOS` de
+> `reconciliar_registro_legislativo.py`: el reconciliador los lee **nativamente** del Libro.
 
 
 
@@ -216,6 +220,8 @@
 | `VAR-H2-SIMETRIA-CANONICA` | Inversión histórica de piernas en `QBE-H2` (commit génesis `0f4b340`): ataque en el Empate y seguro en el Favorito | Reconciliación con el Tratado Vol. II §2.10 y con el nodo sellado `[LN-QBE-083]` (Ataque en Favorito Visitante, Seguro en Empate $V=0$), ley `[VAULT-CORE-070-DUTCHING]` conectada y Juez `[INVARIANTE VIII-11]` en The Shield | RESUELTO |
 | `VAR-H2-UMBRAL` | Mandato de admisión $\Delta_{\text{epist}} \le 0.08$ para `QBE-H2` vs. frontera global vigente $\Delta_{\text{epist}} \le 0.12$ | Umbral sellado intacto; armonización pendiente de dictamen | ABIERTO |
 | `VAR-2026-LIVE-AUDIT-J11` | Desfase de damping κ_damp en bayesian_form vs κ_net conjunto, guarda de piso $2.00 en Familia R y amarre L/V en modal | Ratificada ALT-1: armonización de compresión hiperbólica κ_net=0.2500, guarda universal ("QBE-H1","QBE-H2","QBE-R1","QBE-R2") con piso bivariado $4.00, y corrección de row-binding en modal JS | RATIFICADO |
+| `VAR-2026-TRIAJE-R-BIPOLAR` | Juez Invariante 1 colisiona con admisibilidad de R en BIPOLARIDAD_TERRITORIAL | Ratificada ALT-1+ALT-2: derogada admisibilidad de Familia R en Bipolaridad por Invariante VIII-37 (riesgo > 33%) y extendidas guardas en portfolio_math.py | RATIFICADO |
+| `VAR-2026-TRIAJE-R-BIPOLAR-II` | Caso #4 de test_shield_portfolio_math.py huérfano por derogación de R en Bipolaridad | Ratificada ALT-A: migración de caso positivo a PARIDAD_CIEGA (0.334/0.333/0.333) y cerrojo negativo bipolar en QBE-00 | RATIFICADO |
 
 ---
 
