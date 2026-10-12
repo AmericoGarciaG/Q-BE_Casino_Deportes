@@ -101,8 +101,12 @@ async function seleccionarLiga(fotmobId, forceRefresh = false, targetJornada = n
             // [DES-QBE-056 / ARCH-1.6.15-C] Etiqueta derivada del payload: cero celdas quemadas.
             const vigenteLbl = (currentLiveBoard.jornada_actual !== null && currentLiveBoard.jornada_actual !== undefined)
                 ? currentLiveBoard.jornada_actual : currentLiveBoard.jornada_mostrada;
-            lblJornada.textContent = currentLiveBoard.jornada ||
+            const jornadaBase = currentLiveBoard.jornada ||
                 (Number.isInteger(vigenteLbl) ? `Jornada ${vigenteLbl}` : "Jornada —");
+            // [UI-REFINEMENT-5-POINTS §4] La fecha de la jornada NO se quema: se deriva del
+            // rango fáctico de los fixtures vigentes del Live Board.
+            const rangoFechasJornada = _rangoFechasJornada(currentLiveBoard.fixtures);
+            lblJornada.textContent = rangoFechasJornada ? `${jornadaBase} · ${rangoFechasJornada}` : jornadaBase;
         }
         const lblTime = document.getElementById("lbl-timestamp-tabla");
         if (lblTime) {
@@ -248,6 +252,33 @@ function _formatearFechaHoraActual() {
     const mes = meses[ahora.getMonth()];
     const hora = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
     return `${dia}-${mes} ${hora}`;
+}
+
+// [DES-QBE-056 / UI-REFINEMENT-5-POINTS §4] Rango fáctico de fechas de la jornada derivado
+// EXCLUSIVAMENTE de los fixtures entregados por el Live Board (cero fechas quemadas en la UI).
+// Degradación honesta: sin `fecha_dt`/`fecha_bloque` legibles retorna "" y el rótulo conserva
+// únicamente el número de jornada ([GOVERNANCE-01]).
+function _rangoFechasJornada(fixtures) {
+    const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+                   "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const fechas = (Array.isArray(fixtures) ? fixtures : [])
+        .map(f => (f ? (f.fecha_dt || f.fecha_bloque) : null))
+        .map(v => (v ? new Date(v) : null))
+        .filter(d => d instanceof Date && !isNaN(d.getTime()))
+        .sort((a, b) => a - b);
+    if (fechas.length === 0) return "";
+    const ini = fechas[0];
+    const fin = fechas[fechas.length - 1];
+    const mes = (d) => MESES[d.getMonth()];
+    if (ini.getFullYear() === fin.getFullYear() && ini.getMonth() === fin.getMonth()) {
+        return (ini.getDate() === fin.getDate())
+            ? `${ini.getDate()} de ${mes(ini)} de ${ini.getFullYear()}`
+            : `${ini.getDate()} al ${fin.getDate()} de ${mes(fin)} de ${fin.getFullYear()}`;
+    }
+    if (ini.getFullYear() === fin.getFullYear()) {
+        return `${ini.getDate()} de ${mes(ini)} al ${fin.getDate()} de ${mes(fin)} de ${fin.getFullYear()}`;
+    }
+    return `${ini.getDate()} de ${mes(ini)} de ${ini.getFullYear()} al ${fin.getDate()} de ${mes(fin)} de ${fin.getFullYear()}`;
 }
 
 // ── 1. Refrescar ÚNICAMENTE la Tabla de Posiciones (Panel Izquierdo) ─────────
@@ -663,9 +694,16 @@ function actualizarProgresoHUD(paso, porcentaje) {
     }
 }
 
+// [DICTAMEN DIRECTOR 2026-10-11 / UI-REFINEMENT-5-POINTS] Defaults soberanos de cartera del
+// frontend: el DTO de backend (src/models/web_schemas.py) permanece INTACTO — cero mutación de
+// contrato. La UI SIEMPRE envía los valores explícitos en el payload JSON:
+// Bankroll = $100.00 MXN · Γ (Concentración de Masa) = 70% (0.70).
+const DEFAULTS_CARTERA = Object.freeze({ bankroll: 100.0, gamma: 0.70 });
+
 async function ejecutarDespachoPortafolio() {
     const bankrollInput = document.getElementById('input-bankroll') || document.getElementById('bankroll-input');
-    const bankroll = bankrollInput ? parseFloat(bankrollInput.value) : 200.0;
+    const bankrollParsed = bankrollInput ? parseFloat(bankrollInput.value) : NaN;
+    const bankroll = Number.isFinite(bankrollParsed) ? bankrollParsed : DEFAULTS_CARTERA.bankroll;
 
     const operatorSelect = document.getElementById('casino-operator-select');
     const operador = operatorSelect ? operatorSelect.value : "caliente";
@@ -674,8 +712,9 @@ async function ejecutarDespachoPortafolio() {
     const certaintySlider = document.getElementById('slider-risk-certainty');
     const certeza = certaintySlider ? parseFloat(certaintySlider.value) / 100.0 : 0.80;
 
-    // [ARCH-1.4.30] Masa Γ de Capa 0 seleccionada en la barra de configuración (67% | 70% | 75%).
-    const gammaSeleccionada = parseFloat(document.querySelector('input[name="opcion_gamma"]:checked')?.value || "0.67");
+    // [ARCH-1.4.30] Concentración de Masa Γ de Capa 0 seleccionada en la barra de configuración
+    // (67% | 70% | 75%). Default soberano sellado: 70% (0.70) cuando ningún radio queda marcado.
+    const gammaSeleccionada = parseFloat(document.querySelector('input[name="opcion_gamma"]:checked')?.value || String(DEFAULTS_CARTERA.gamma));
 
     const leagueId = (currentLiveBoard && currentLiveBoard.league_id) ? currentLiveBoard.league_id : 262;
 
@@ -783,6 +822,47 @@ function _aplicarDisponibilidadOperadores(mapaOperadores) {
     }
 }
 
+// ─── [LN-QBE-025-B / ARCH-1.4.35] Banner de Preservación de Capital (Cartera Vacía) ─────
+// Publica en la vista de Cartera el estado fiduciario `PRESERVACION_EFECTIVO` (cero activos
+// +EV). IDEMPOTENTE: reutiliza el nodo `#banner-preservacion-capital`, por lo que despachos
+// sucesivos jamás duplican el aviso. CERO `alert()` para este caso: la cartera vacía es un
+// estado LEGÍTIMO del contrato, no una excepción de usuario ([GOVERNANCE-01]). El texto se
+// toma del contrato emitido (`control.mensaje_fiduciario`); si no viaja, se declara el motivo
+// canónico del triaje. Cero cifras inventadas: el riesgo se publica como $0.00 MXN.
+function _renderizarBannerPreservacionCapital(esCarteraVacia, control) {
+    const contenedor = document.getElementById('tab-portfolio');
+    if (!contenedor) return;
+
+    let banner = document.getElementById('banner-preservacion-capital');
+    if (!esCarteraVacia) {
+        if (banner) banner.remove();
+        return;
+    }
+
+    const mensaje = (control && control.mensaje_fiduciario)
+        || "Ningún partido superó el triaje fiduciario (+EV). Capital 100% preservado en efectivo.";
+
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'banner-preservacion-capital';
+        contenedor.insertBefore(banner, contenedor.firstChild);
+    }
+
+    banner.style.cssText = "border:1px solid var(--accent-amber, #F59E0B);"
+        + " background:rgba(245,158,11,0.10); color:#FBBF24; border-radius:10px;"
+        + " padding:10px 14px; margin:0 0 14px 0; font-size:8.4pt; font-weight:800;"
+        + " display:flex; align-items:center; gap:10px;";
+
+    banner.innerHTML = `
+        <span style="font-size:12pt;">🛡️</span>
+        <span style="flex:1;">
+            <span style="display:block; letter-spacing:0.06em;">CAPITAL 100% PROTEGIDO · PRESERVACIÓN EN EFECTIVO</span>
+            <span style="display:block; font-weight:400; color:var(--text-muted, #94A3B8); margin-top:2px;">${mensaje}</span>
+        </span>
+        <span style="font-family:monospace; font-weight:900; color:#FBBF24; white-space:nowrap;">$0.00 MXN EN RIESGO</span>
+    `;
+}
+
 function renderizarResultadosPortafolio(data) {
     currentPortfolioData = data;
     // [DES-QBE-045] Consumo de las claves canónicas 3NF emitidas por markets.py (con fallback declarado).
@@ -795,11 +875,29 @@ function renderizarResultadosPortafolio(data) {
     // activa se rotula `(Sin cuotas disponibles)` y queda inhabilitada en el selector.
     _aplicarDisponibilidadOperadores(data.operadores_disponibles || {});
 
+    // [LN-QBE-025-B / ARCH-1.4.35] Axioma de la Cartera Vacía: cuando el contrato fiduciario
+    // entrega $0.00 MXN en riesgo (cero activos +EV) la UI NO reporta error alguno —publica el
+    // banner ámbar de PRESERVACIÓN y la vista degrada naturalmente (tabla sin filas). La
+    // detección es fáctica y exclusiva de este contrato: sólo la cartera vacía emite
+    // `capital_en_riesgo_mxn` (NaN en la cartera con posiciones ⇒ jamás un falso positivo).
+    const capitalEnRiesgo = Number(
+        balance.capital_en_riesgo_mxn ?? control.capital_en_riesgo_mxn ?? NaN
+    );
+    _renderizarBannerPreservacionCapital(capitalEnRiesgo === 0.0 && orders.length === 0, control);
+
     // 1. Encabezado Macro
     const elTorneo = document.getElementById("hdr-torneo-portfolio");
     if (elTorneo) elTorneo.textContent = meta.torneo || "Liga MX — Apertura 2026";
     const elFechas = document.getElementById("hdr-fechas-portfolio");
-    if (elFechas) elFechas.textContent = `${meta.jornada || 'Jornada Activa'} · ${meta.fechas || 'Septiembre 2026'}`;
+    if (elFechas) {
+        // [UI-REFINEMENT-5-POINTS §4] Cero fecha quemada en la UI: si el contrato no entrega
+        // `meta.fechas`, el rango se deriva de los fixtures del Live Board vigente; sin hecho
+        // fechable se emite "—" ([GOVERNANCE-01]).
+        const fechasPortfolio = meta.fechas
+            || _rangoFechasJornada(currentLiveBoard ? currentLiveBoard.fixtures : null)
+            || "—";
+        elFechas.textContent = `${meta.jornada || "Jornada Activa"} · ${fechasPortfolio}`;
+    }
 
     // 2. Macro KPIs Duales
     const invTotal = balance.capital_total_comprometido_mxn || 0.0;
@@ -920,24 +1018,30 @@ function renderizarResultadosPortafolio(data) {
                 ? `<small style="display:block; font-weight:400; color:var(--text-muted); font-size:7.6pt;">⏰ ${ord.horario_evento}</small>`
                 : "";
 
+            // [UI-REFINEMENT-5-POINTS §3] Columna ROI %: cifra fáctica del contrato
+            // (`roi_principal_porcentaje`). Cero estimaciones locales.
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td style="font-weight:700; color:#fff;">${ord.partido}${horarioHtml}</td>
                 <td style="text-align:center;"><span class="badge-status-live" style="background:${pal.bg}; color:${pal.fg}; border-color:${pal.borde};">${cod}</span></td>
                 <td style="text-align:right; font-weight:700;">$${inv.toFixed(2)}</td>
                 <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>
+                <td style="text-align:right; font-family:monospace; font-weight:700; color:#00E676;">${roi > 0 ? "+" : ""}${roi.toFixed(1)}%</td>
                 <td>${coberturaHtml}</td>
             `;
             tbodyResumen.appendChild(tr);
         });
 
         if (tfootResumen) {
+            // [UI-REFINEMENT-5-POINTS §3] ROI % ponderado de cartera (`roi_global_esperado_porcentaje`,
+            // KPI macro ya calculado por el motor). Sin hecho declarado se emite "—".
             tfootResumen.innerHTML = `
                 <tr>
                     <td>TOTAL EN CARTERA</td>
                     <td style="text-align:center;">${orders.length} Posiciones</td>
                     <td style="text-align:right;">$${invTotal.toFixed(2)} MXN</td>
                     <td style="text-align:right; color:#00E676;">+$${sumaPremios.toFixed(2)} MXN</td>
+                    <td style="text-align:right; font-family:monospace; color:#00E676;">${roiGlobal ? `${roiGlobal > 0 ? "+" : ""}${roiGlobal.toFixed(1)}%` : "—"}</td>
                     <td></td>
                 </tr>
             `;
@@ -1114,6 +1218,9 @@ function renderizarResultadosPortafolio(data) {
             `;
             contSplit.appendChild(card);
         });
+        // [UI-REFINEMENT-5-POINTS §1] La píldora del Ledger reside ahora en la CABECERA de
+        // #panel-resumen-asignacion: se re-hidrata tras pintar la cartera entregada.
+        _actualizarContadorBoletosComprados();
     }
 
     // 6. Radar de Descartes (QBE-00)
@@ -1382,7 +1489,9 @@ function _hidratarRadarYMarcadores(p) {
 function _hidratarTablasRadiografia(p) {
     const COLOR_ATAQUE = "#00E676";
     const COLOR_COBERTURA = "#38BDF8";
-    const COLOR_NEUTRO = "#94A3B8";
+    // [UI-REFINEMENT-5-POINTS §5 / DES-QBE-005] Gris Pizarra #64748B: token canónico legislado
+    // para la serie NEUTRA (Empate / Rival no cubierto) del comparador de barras del modal.
+    const COLOR_NEUTRO = "#64748B";
     const ord = p.orden || (Array.isArray(p.ordenes) ? p.ordenes[0] : null);
 
     // P' certificado (prob_qbe) por pierna + operador asignado, desde la orden soberana.
@@ -1582,7 +1691,7 @@ function _hidratarTablasRadiografia(p) {
             const arr = Array.isArray(forma) ? forma : [];
             if (arr.length === 0) return SIN_HECHO;
             return arr.map(f => {
-                const c = (f === "G" || f === "W") ? "#10b981" : (f === "E" || f === "D") ? "#94a3b8" : "#ef4444";
+                const c = (f === "G" || f === "W") ? "#00E676" : (f === "E" || f === "D") ? "#64748B" : "#ef4444";
                 return `<span title="${f}" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${c}; margin:0 2px;"></span>`;
             }).join("");
         };

@@ -837,6 +837,29 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-025-B] Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting Fiduciario)
+
+* **Ω (Resumen):** Habilita la simulación retrospectiva de carteras sobre jornadas históricas congeladas en SQLite 3NF y formaliza que una cartelera con cero oportunidades +EV no constituye un error de sistema (HTTP 400), sino una decisión fiduciaria de preservación del 100% del capital en efectivo (HTTP 200 con riesgo $0.00). Contrasta las órdenes simuladas contra los marcadores finales reales para calcular el PnL y ROI histórico.
+* **I (Input):** `matchday_target: int`, `modo_simulacion: bool`, `bankroll: float`, `standings_snapshots` (al corte de $N-1$), `fixtures_snapshots` (pre-kickoff) y marcadores reales de `matches`.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Axioma de la Cartera Vacía (Preservación Absoluta en Efectivo):**  
+     Si tras evaluar el catálogo de 9 estrategias ningún partido supera el umbral $+EV$ ($\alpha > 0$) o todos los partidos están concluidos/vetados, el sistema emite obligatoriamente una cartera con `capital_en_riesgo_mxn = 0.00`, `total_partidos_core_aprobados = 0` y `ordenes = []`. Queda terminantemente prohibido abortar con excepciones de error de cliente (`HTTP 400`).
+  2. **Regla Anti-Fuga de Datos (Cero Data Leakage):**  
+     Para simular la jornada $N$, el motor debe consumir estrictamente la tabla general y los factores estructurales calculados con datos acumulados **al corte de la jornada $N-1$**. Queda proscrito utilizar la tabla de posiciones posterior a los partidos simulados.
+  3. **Algoritmo de Liquidación Post-Evento (Real vs. Predicho):**  
+     Para cada orden histórica $i$ generada en el plan:
+     - Si gana el Favorito respaldado: $\text{PnL}_i = B_{i,\text{prio}} \cdot O_{i,\text{fav}} - B_i$.
+     - Si ocurre Empate en cobertura $V=0$: $\text{PnL}_i = B_{i,\text{seg}} \cdot O_{i,\text{emp}} - B_i \equiv \$0.00\text{ MXN}$.
+     - Si gana el Underdog no cubierto: $\text{PnL}_i = -B_i$.
+     $$\text{PnL\_Real\_Jornada} = \sum_{i=1}^K \text{PnL}_i, \quad \text{ROI\_Real} = \frac{\text{PnL\_Real}}{\sum B_i} \times 100$$
+  4. **El Doble Seguro de Interfaz:**  
+     La consulta de jornadas pasadas exige que el usuario active explícitamente el interruptor `modo_simulacion = True`. Por defecto, el sistema permanece bloqueado en la jornada activa de producción.
+* **O (Output):** `PortfolioExecutionPlan` enriquecido con el objeto opcional `liquidacion_post_evento: LiquidacionJornadaReal`.
+* **Φ (Transición):** Hacia `src/web/routes/markets.py` y `src/pipeline/adapter.py`.
+* **[SHIELD]:** `tests/shield/test_shield_backtesting_and_empty_portfolio.py`
+
+---
+
 ### ID: [LN-QBE-037] Algoritmo de Detección de Sesgo Popular en Quinielas Progol
 
 * **Ω (Resumen):** Explotar la sobre-representación de apuestas populares en quinielas colectivas contrastando la venta pública nacional contra la distribución soberana de Q-BE.

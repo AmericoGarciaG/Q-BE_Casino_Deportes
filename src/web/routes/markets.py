@@ -628,7 +628,28 @@ def generate_sportsbook_portfolio_endpoint(
             })
 
         if not partidos_candidatos:
-            raise HTTPException(status_code=400, detail="Ningun partido supero el triaje fiduciario (+EV).")
+            # [LN-QBE-025-B] & [ARCH-1.4.35] AXIOMA DE LA CARTERA VACÍA: la ausencia de activos con
+            # +EV NO es un error de cliente (HTTP 400). Es una decisión fiduciaria explícita: se
+            # preserva el 100% del capital en efectivo y se emite el contrato `PortfolioExecutionPlan`
+            # con HTTP 200 y $0.00 MXN en riesgo. El rastro fáctico del veto ([LN-QBE-078] /
+            # [ARCH-1.4.8 §3]) y el denominador de cartelera ([ARCH-1.4.14]) viajan SIEMPRE en el
+            # payload emitido: cero pérdida de auditabilidad (mismo pos-procesamiento que la cartera
+            # con posiciones, líneas 686-699 de este controlador).
+            from src.pipeline.adapter import generar_cartera_vacia_fiduciaria
+
+            plan_vacio = generar_cartera_vacia_fiduciaria(
+                bankroll=req.bankroll,
+                mensaje=(
+                    "Ningún partido superó el triaje fiduciario (+EV). "
+                    "Capital 100% preservado en efectivo."
+                )
+            )
+            plan_vacio["descartes"] = descartes
+            plan_vacio["control_portafolio"]["total_partidos_jornada"] = total_jornada
+            plan_vacio["control_portafolio"]["total_partidos_escaneados"] = total_jornada
+            plan_vacio["operadores_disponibles"] = operadores_capturados
+            plan_vacio["parametros_cartera"] = parametros_cartera.model_dump()
+            return plan_vacio
 
         # 2. Ranking de Friccion
         candidatos_ordenados = calcular_ranking_friccion(partidos_candidatos)

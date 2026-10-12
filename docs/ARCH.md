@@ -1393,6 +1393,16 @@ def sincronizar_progol_pipeline_completo(
 * **[SHIELD]:** `tests/shield/test_shield_auditor_coherencia_cartelera.py`
 
 
+### [ARCH-1.4.35] Contrato de Cartera Vacía y Conmutador de Slates en Mesa de Apuestas [ARCH-PILLAR]
+* **Endpoint de Portafolio Resiliente:** `POST /api/markets/sportsbook/portfolio/generate`  
+  - Parámetros opcionales: `jornada: Optional[int] = None`, `simulacion: bool = False`.
+  - Si no hay activos operables con +EV, responde obligatoriamente con código **`200 OK`** entregando el esquema `PortfolioExecutionPlan` con `capital_en_riesgo_mxn: 0.0` y estado `"PRESERVACION_EFECTIVO"`. Prohibido lanzar HTTP 400.
+* **Endpoint de Cartelera Histórica:** `GET /api/markets/sportsbook/live-board?jornada={N}`  
+  - Lee el snapshot archivado de la jornada $N$ en SQLite 3NF (`slates.matchday == N`).
+* **Seguridad de Interfaz (Doble Seguro):** El frontend (`app.js`) bloquea el selector de fechas bajo el estado `modo_simulacion = false`. Al conmutar a `true`, la interfaz despliega el borde de alerta ámbar y solicita confirmación del usuario para entrar en el modo Backtesting.
+* **[SHIELD]:** `tests/shield/test_shield_backtesting_and_empty_portfolio.py`
+
+
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:
   `https://www.fotmob.com/api/searchapi/suggest?term={club_sanitizado}`

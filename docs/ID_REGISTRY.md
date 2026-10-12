@@ -189,6 +189,8 @@
 | `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R | SELLADO |
 | `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
 | `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-025-B]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting) | SELLADO |
+| `[ARCH-1.4.35]` | ARCH | `docs/ARCH.md` | Contrato de Cartera Vacía y Conmutador de Slates en Mesa de Apuestas [ARCH-PILLAR] | SELLADO |
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
 > `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`

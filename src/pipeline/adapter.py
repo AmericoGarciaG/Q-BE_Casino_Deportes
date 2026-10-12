@@ -227,3 +227,76 @@ def hidratar_partidos_cuantitativos(
         ))
 
     return raw_inputs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [LN-QBE-025-B] & [ARCH-1.4.35] CONTRATO FIDUCIARIO DE CARTERA VACÍA
+# Autoridad: Directiva del Director (Paso 3). RÉGIMEN: [DBBD-FUNGIBLE] — es un DTO de
+# transporte de estado (no aritmética sellada): materializa el `PortfolioExecutionPlan`
+# de PRESERVACIÓN EN EFECTIVO cuando el triaje no aprobó ningún activo +EV.
+# [GOVERNANCE-01] CERO CIFRAS INVENTADAS: todos los escalares emitidos son estructurales
+# (capital en riesgo $0.00, ganancia potencial $0.00, blindaje 100%, ruina 0%).
+# Los alias `capital_total_banca_mxn` / `blindaje_capital_porcentaje` son el contrato
+# exigido por el Juez de The Shield; las claves canónicas 3NF viajan en paralelo para
+# que la Mesa de Apuestas degrade sin `undefined` (mismo shape que `PortfolioBalance` /
+# `PortfolioControl` de `src/models/decision.py`).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def generar_cartera_vacia_fiduciaria(bankroll: float, mensaje: str) -> Dict[str, Any]:
+    """[LN-QBE-025-B §1] Emite una cartera válida con $0.00 MXN en riesgo.
+
+    La ausencia de oportunidades +EV jamás es un error de cliente: es una decisión
+    fiduciaria de preservación absoluta en efectivo. El denominador fáctico de
+    cartelera y el rastro de descartes los anexa el controlador ([ARCH-1.4.14] /
+    [LN-QBE-078]) sobre este mismo diccionario.
+    """
+    banca = round(float(bankroll or 0.0), 2)
+    return {
+        "control_portafolio": {
+            "modalidad": "BANKROLL",
+            "estado_cartera": "PRESERVACION_EFECTIVO",
+            "total_partidos_core_aprobados": 0,
+            "total_partidos_jornada": 0,
+            "total_partidos_escaneados": 0,
+            "capital_total_core_mxn": 0.0,
+            "probabilidad_ruina_total_porcentaje": 0.0,
+            "blindaje_global_preservacion_porcentaje": 100.0,
+            "blindaje_capital_porcentaje": 100.0,
+            "mensaje_fiduciario": str(mensaje),
+            "desglose_vaquita": {},
+            "desglose_bankroll": {
+                "activa": True,
+                "bankroll_total": banca,
+                "porcentaje_total_arriesgado": 0.0,
+                "porcentaje_en_riesgo": 0.0,
+                # [LN-QBE-072] Trinidad de Resiliencia en su LÍMITE EXACTO sobre la cartera vacía
+                # (K = 0): el único estado del producto combinatorio 3^K es PnL = $0.00 MXN. La
+                # probabilidad del evento "≥ $0.00" es el producto vacío = 1.0 (certeza
+                # ESTRUCTURAL de no-pérdida por AUSENCIA de exposición, no una estimación
+                # estocástica: el techo epistémico 99.9 de [LN-QBE-072] no aplica) y la ruina
+                # total es matemáticamente IMPOSIBLE con cero capital comprometido. Cifras
+                # DERIVADAS del propio axioma, coherentes con el blindaje 100.0% y la ruina 0.0%
+                # exigidos por el contrato [LN-QBE-025-B]. Cero cifras inventadas.
+                "trinidad_resiliencia": {
+                    "pleno_exito": {"pnl_mxn": 0.0, "probabilidad_pct": 0.0},
+                    "tablas_o_ganancia": {"umbral_pnl_mxn": 0.0, "probabilidad_pct": 100.0},
+                    "ruina_total": {"pnl_mxn": 0.0, "probabilidad_pct": 0.0},
+                },
+            },
+        },
+        "ordenes_ejecucion_partidos": [],
+        "modulo_satelite_asimetrico": {
+            "autorizado": False,
+            "justificacion_financiamiento": "Sin operaciones Core: cartera vacía por ausencia de +EV.",
+        },
+        "balance_global_portafolio": {
+            "capital_total_banca_mxn": banca,
+            "capital_total_comprometido_mxn": 0.0,
+            "capital_en_riesgo_mxn": 0.0,
+            "ganancia_neta_esperada_jornada_mxn": 0.0,
+            "ganancia_neta_potencial_maxima_mxn": 0.0,
+            "roi_global_esperado_porcentaje": 0.0,
+        },
+    }
+

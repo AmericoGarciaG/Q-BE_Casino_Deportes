@@ -526,3 +526,67 @@ class PortfolioParameters(BaseModel):
     certainty_slider: float = 0.80
     gamma_threshold: float = 0.67
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [LN-QBE-025-B] & [ARCH-1.4.35] EXTENSIÓN AUTORIZADA POR EL DIRECTOR (PASO 3).
+# Liquidador Post-Evento del Backtesting Fiduciario: contrasta una orden histórica del
+# plan contra el marcador final REAL emitido por el oráculo y devuelve el PnL neto
+# bancario. Es aritmética sellada: cero E/S, cero números mágicos, cero heurística.
+#
+# RÉGIMEN: [DIRGEN-STRICT] — Transcripción de las ecuaciones legisladas en el Libro
+# Primero [LN-QBE-025-B §3]. Un cambio de coma exige nueva Directiva.
+# NOTA DE GOBERNANZA: se anexa al FINAL del módulo (mismo precedente que [ARCH-1.4.30])
+# para preservar ÍNTEGROS los anclajes de línea del plano canónico [ARCH-1.4.9]
+# (p. ej. la fórmula Ψ = 1 − (Δ/0.12)² citada como "portfolio_math.py L139").
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def liquidar_orden_post_evento(
+    orden: Dict[str, Any],
+    home_score: int,
+    away_score: int,
+) -> Dict[str, Any]:
+    """[LN-QBE-025-B §3] Liquidación real (Real vs. Predicho) de una orden histórica.
+
+    Ecuaciones legisladas — cero desviación:
+      - Gana el Favorito respaldado: PnL = B_prio * O_fav - B_total
+      - Empate con cobertura V=0:    PnL = B_seg  * O_emp - B_total  (≡ $0.00 MXN)
+      - Gana el Underdog:            PnL = -B_total
+
+    `seleccion_favorito` es la identidad de la pierna Ataque ("LOCAL" | "VISITA");
+    el marcador final decide el desenlace sin transformar ninguna probabilidad.
+    """
+    inversion_total = round(float(orden.get("inversion_total", 0.0) or 0.0), 2)
+    monto_ataque = float(orden.get("monto_ataque", 0.0) or 0.0)
+    cuota_ataque = float(orden.get("cuota_ataque", 0.0) or 0.0)
+    monto_seguro = float(orden.get("monto_seguro", 0.0) or 0.0)
+    cuota_seguro = float(orden.get("cuota_seguro", 0.0) or 0.0)
+    favorito_local = str(orden.get("seleccion_favorito", "LOCAL")).strip().upper() == "LOCAL"
+
+    if home_score == away_score:
+        # Escenario TABLAS: se cobra la pierna de cobertura (Dutching V=0 => PnL ≈ $0.00).
+        retorno_bruto = round(monto_seguro * cuota_seguro, 2)
+        return {
+            "estado": "TABLAS_V0",
+            "pnl_neto_mxn": round(retorno_bruto - inversion_total, 2),
+            "retorno_bruto_mxn": retorno_bruto,
+            "inversion_mxn": inversion_total,
+        }
+
+    if (home_score > away_score) == favorito_local:
+        # Escenario PLENO ÉXITO: se cobra la pierna Ataque respaldada.
+        retorno_bruto = round(monto_ataque * cuota_ataque, 2)
+        return {
+            "estado": "COBRADO_ATAQUE",
+            "pnl_neto_mxn": round(retorno_bruto - inversion_total, 2),
+            "retorno_bruto_mxn": retorno_bruto,
+            "inversion_mxn": inversion_total,
+        }
+
+    # Escenario FALLO: el desenlace no cubierto consume el stake íntegro.
+    return {
+        "estado": "FALLO",
+        "pnl_neto_mxn": round(-inversion_total, 2),
+        "retorno_bruto_mxn": 0.0,
+        "inversion_mxn": inversion_total,
+    }

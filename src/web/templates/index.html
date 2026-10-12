@@ -146,11 +146,9 @@
                     <div>
                         <h2 style="margin: 0; font-size: 1.15rem; color: #fff;">⚙️ Mesa de Apuestas — Configuración de Cartera</h2>
                         <span style="font-size: 7.5pt; color: #94A3B8;">Cálculos integrados: Kelly fraccional, Coberturas Sintéticas (V=0) y Descarte Temprano de Ineficiencia (+EV Gate)</span>
-                        <div style="margin-top: 6px;">
-                            <span id="badge-boletos-comprados" class="badge ms-2" style="background: rgba(0, 230, 118, 0.15); color: #00E676; border: 1px solid #00E676; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px;">
-                                🎟️ Comprados: 0 ($0.00 MXN)
-                            </span>
-                        </div>
+                        <!-- [UI-REFINEMENT-5-POINTS / 2026-10-11] La píldora del Ledger (Comprados)
+                             migra a la CABECERA de #panel-resumen-asignacion: es un agregado de la
+                             cartera completa, no un atributo del Router de Configuración. -->
                     </div>
                     <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Casino:</label>
@@ -166,18 +164,20 @@
                             <option value="betway">Betway.MX</option>
                         </select>
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Bankroll: $</label>
-                        <input type="number" id="input-bankroll" value="200" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 85px; font-weight: 700;">
+                        <input type="number" id="input-bankroll" value="100" style="padding: 6px 10px; background: #0f172a; border: 1px solid #38BDF8; color: white; border-radius: 6px; width: 85px; font-weight: 700;">
                         <label style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Certeza:</label>
                         <input type="range" id="slider-risk-certainty" min="70" max="90" value="80" style="width: 75px; accent-color: #38BDF8;" oninput="document.getElementById('certainty-val').textContent = this.value + '%'">
                         <span id="certainty-val" style="font-size: 8.5pt; color: #38BDF8; font-weight: 700;">80%</span>
-                        <!-- [ARCH-1.4.30] Selector Interactivo tri-estado de Masa Γ (Capa 0: 67% | 70% | 75%) -->
+                        <!-- [ARCH-1.4.30] Selector Interactivo tri-estado de Concentración de Masa Γ (Capa 0: 67% | 70% | 75%) -->
                         <div class="d-inline-flex align-items-center" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 8px;">
-                            <span class="text-muted small" style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Masa Γ:</span>
+                            <!-- [DICTAMEN DIRECTOR 2026-10-11] Denominación canónica «Concentración de Masa (Γ)».
+                                 Default soberano sellado: Γ = 70% (0.70). -->
+                            <span class="text-muted small" style="font-size: 8.5pt; color: #cbd5e1; font-weight: 600;">Concentración de Masa (Γ):</span>
                             <div class="btn-group btn-group-sm" role="group" id="grupo-selector-gamma">
-                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_67" value="0.67" checked autocomplete="off">
+                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_67" value="0.67" autocomplete="off">
                                 <label class="btn btn-outline-info px-2 py-0" for="gamma_67" style="font-size: 0.78rem;">67%</label>
 
-                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_70" value="0.70" autocomplete="off">
+                                <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_70" value="0.70" checked autocomplete="off">
                                 <label class="btn btn-outline-info px-2 py-0" for="gamma_70" style="font-size: 0.78rem;">70%</label>
 
                                 <input type="radio" class="btn-check" name="opcion_gamma" id="gamma_75" value="0.75" autocomplete="off">
@@ -244,8 +244,16 @@
             </div>
 
             <!-- BLOQUE 3: TABLA SINTÉTICA DE ASIGNACIÓN -->
-            <div class="card" style="margin-bottom: 1.5rem;">
-                <h3 style="margin-bottom: 0.8rem; font-size: 1rem;">📊 Resumen de Asignación</h3>
+            <!-- [UI-REFINEMENT-5-POINTS / 2026-10-11] La píldora del Ledger de comprados reside en la
+                 CABECERA de este panel, inmediatamente debajo del título y por encima de la tabla
+                 #tabla-resumen-asignacion (ordenanza expresa del Director). -->
+            <div id="panel-resumen-asignacion" class="card" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.8rem;">
+                    <h3 style="margin: 0; font-size: 1rem;">📊 Resumen de Asignación</h3>
+                    <span id="badge-boletos-comprados" class="badge ms-2" style="background: rgba(0, 230, 118, 0.15); color: #00E676; border: 1px solid #00E676; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px;">
+                        🎟️ Comprados: 0 ($0.00 MXN)
+                    </span>
+                </div>
                 <div style="overflow-x: auto;">
                     <table class="fintech-table" id="tabla-resumen-asignacion">
                         <thead>
@@ -254,6 +262,7 @@
                                 <th style="text-align: center;">ESTRATEGIA</th>
                                 <th style="text-align: right;">INVERSIÓN</th>
                                 <th style="text-align: right;">GANANCIA NETA</th>
+                                <th style="text-align: right;">ROI %</th>
                                 <th>ESCENARIO COBERTURA</th>
                             </tr>
                         </thead>
