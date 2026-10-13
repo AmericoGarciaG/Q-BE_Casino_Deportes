@@ -184,8 +184,57 @@
                                 <label class="btn btn-outline-info px-2 py-0" for="gamma_75" style="font-size: 0.78rem;">75%</label>
                             </div>
                         </div>
+                        <!-- [ARCH-1.4.35 / DOBLE SEGURO DEL DIRECTOR] Conmutador de Slates con candado.
+                             🔒 (locked)   = ventanilla VIVA: el backend resuelve la jornada dinámicamente
+                                             ([ARCH-1.6.15]) y el payload NO ancla jornada alguna.
+                             🔓 (unlocked) = BACKTESTING: el payload ancla la jornada elegida y cada orden
+                                             se liquida contra el marcador REAL de la bóveda 3NF
+                                             (Real vs. Predicho, [LN-QBE-025-B]).
+                             [GOVERNANCE-01] El cliente sólo EXHIBE: cero fechas, marcadores o cuotas
+                             inventadas. El detalle fáctico lo hidrata el backend. -->
+                        <div class="control-group" id="grupo-conmutador-jornada" style="display:inline-flex; align-items:center; gap:8px; margin-left:12px;">
+                            <label style="font-family:monospace; font-size:12px; color:#94A3B8;">Jornada:</label>
+                            <button type="button" id="btn-lock-jornada" class="btn-lock locked" title="Click para desbloquear modo simulación histórica" style="background:#1E293B; border:1px solid #475569; color:#F59E0B; border-radius:6px; padding:4px 8px; cursor:pointer;">
+                                🔒
+                            </button>
+                            <select id="select-jornada" disabled style="background:#0F172A; border:1px solid #475569; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:12px;">
+                                <option value="">— hidratando bóveda 3NF —</option>
+                            </select>
+                        </div>
+                        <!-- [ARCH-1.4.37 / LN-QBE-077-B] Tríptico de Cobertura (δ): la ventanilla
+                             declara el modo de partición del capital. `DEF` (V=0) subsiste como
+                             contrato sellado; `BAL` y `AGR` activan la ley general del Dutching
+                             Dinámico (δ*). El cliente sólo EXHIBE: las cifras las certifica el
+                             motor ([GOVERNANCE-01] paridad estricta backend↔pantalla). -->
+                        <div class="control-group" id="grupo-modo-cobertura" style="display:inline-flex; align-items:center; gap:8px; margin-left:12px;">
+                            <label style="font-family:monospace; font-size:12px; color:#94A3B8;">Cobertura:</label>
+                            <div class="btn-group-toggle" id="toggle-modo-cobertura">
+                                <button type="button" class="btn-cobertura active" data-modo="DEF" title="Preservación Pura (V=0, PnL Empate = $0.00)" style="background:#1E293B; border:1px solid #38BDF8; color:#38BDF8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
+                                    🛡️ Defensivo (V=0)
+                                </button>
+                                <button type="button" class="btn-cobertura" data-modo="BAL" title="Crecimiento Balanceado (Empate genera beneficio neto)" style="background:#0F172A; border:1px solid #334155; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
+                                    ⚡ Balanceado (+15%)
+                                </button>
+                                <button type="button" class="btn-cobertura" data-modo="AGR" title="Isorrendimiento de Doble Cosecha (Misma ganancia en favorito y empate)" style="background:#0F172A; border:1px solid #334155; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
+                                    👑 Isorrendimiento (δ*)
+                                </button>
+                            </div>
+                        </div>
                         <button id="btn-calcular-cartera" class="btn-primary" onclick="ejecutarDespachoPortafolio()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;"> ⚡ Calcular Cartera </button>
                         <button id="export-pdf-btn" class="btn-primary" style="background: rgba(56,189,248,0.15); border: 1px solid #38BDF8; color: #38BDF8; padding: 7px 16px; font-size: 8.5pt; font-weight: 700; margin-left: 4px;">📄 Exportar PDF A4</button>
+                    </div>
+                    <!-- [ARCH-1.4.35 / CONMUTADOR DE SLATES] Banner factual del Modo Backtesting:
+                         visible SOLO con el candado abierto (🔓), se oculta al re-bloquear (🔒). La
+                         leyenda base es la legislada; el detalle fáctico (jornada congelada, cuotas
+                         capturadas, marcadores reales, PnL Real) lo hidrata el backend con datos de
+                         la bóveda ([GOVERNANCE-01] paridad estricta backend↔pantalla). -->
+                    <div id="banner-backtesting-jornada" style="display: none; margin-top: 14px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 8px; padding: 10px 14px;">
+                        <div style="font-family: monospace; font-size: 8.5pt; font-weight: 800; color: #F59E0B;">
+                            ⚠️ MODO BACKTESTING ACTIVO: Simulando sobre datos históricos congelados
+                        </div>
+                        <div id="txt-detalle-backtesting" style="font-size: 7.8pt; color: #cbd5e1; margin-top: 4px;">Selecciona una jornada histórica y pulsa ⚡ Calcular Cartera.</div>
+                        <!-- Cartelera del slate congelado (GET /api/markets/sportsbook/live-board?jornada=N) -->
+                        <div id="slate-cartelera-jornada" style="display: none; margin-top: 10px; overflow-x: auto;"></div>
                     </div>
                 </div>
             </div>
@@ -264,6 +313,11 @@
                                 <th style="text-align: right;">GANANCIA NETA</th>
                                 <th style="text-align: right;">ROI %</th>
                                 <th>ESCENARIO COBERTURA</th>
+                                <!-- [ARCH-1.4.35 / LN-QBE-025-B] Columna de Liquidación REAL del
+                                     Backtesting. En la ventanilla VIVA degrada a "—" (jornada sin
+                                     marcador publicado en la bóveda 3NF). La celda SÓLO exhibe el
+                                     veredicto sellado del oráculo: cero cálculos en el cliente. -->
+                                <th style="text-align: center;">LIQUIDACIÓN REAL</th>
                             </tr>
                         </thead>
                         <tbody id="cuerpo-resumen-asignacion"></tbody>

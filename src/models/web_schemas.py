@@ -127,6 +127,12 @@ class GeneratePortfolioRequest(BaseModel):
     mode: str = Field(default="BANKROLL", pattern="^(BANKROLL|VAQUITA)$")
     # [ARCH-1.4.30] Parámetro interactivo de concentración de masa Γ (Capa 0).
     gamma_slider: Optional[float] = Field(0.67, ge=0.67, le=0.75, description="Umbral de concentración de masa Capa 0")
+    # [ARCH-1.4.37] Parámetro de Cobertura Dinámica δ (Dutching con Rendimiento, [LN-QBE-077-B]).
+    # `DEF` = indemnidad pura V=0 (contrato sellado) | `BAL` = 50% de δ* | `AGR` = δ* |
+    # `CUSTOM` = δ explícito resuelto por la ley pura `calcular_particion_dutching_dinamico()`.
+    modo_cobertura: Optional[str] = Field(
+        "DEF", description="DEF (V=0), BAL (50% delta*), AGR (delta*)"
+    )
 
 
 class IngestionExtractRequest(BaseModel):

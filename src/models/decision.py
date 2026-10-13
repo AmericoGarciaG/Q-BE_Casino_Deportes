@@ -88,6 +88,15 @@ class MatchExecutionOrder(BaseModel):
         default=None,
         description="Métricas del desenlace rival descartado (nombre, momio, prob_qbe)"
     )
+    # [LN-QBE-077-B] / [ARCH-1.4.37] Invariante VIII-54: trazabilidad contractual del parámetro δ
+    # de Cobertura Dinámica y de los ROIs proyectados (favorito / empate). Bloque DERIVADO de sólo
+    # lectura hidratado por el motor de cartera (`[ARCH-1.4.37]`); el frontend lo EXHIBE sin
+    # recalcular nada ([GOVERNANCE-01] paridad fáctica backend↔pantalla). `None` en las familias
+    # sin seguro de empate (D1/D2/C1/QBE-00) y en toda orden cuya modalidad sellada sea `DEF`.
+    cobertura_dinamica: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="δ de cobertura dinámica y ROIs proyectados (favorito / empate)"
+    )
 
 
 class SatelliteModule(BaseModel):

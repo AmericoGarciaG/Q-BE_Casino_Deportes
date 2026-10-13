@@ -55,6 +55,22 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $\|\mathcal{D}^*\|_{\max}$ | Techo de Norma de Resistencia Defensiva | `1.0000` | Desv. Estándar | `[LN-QBE-039]` | Límite superior del espacio latente $\mathbb{H}_{\text{def}}$ | Inviolable (Anti-Resonancia) |
 | $\|\mathcal{C}^*\|_{\max}$ | Techo de Norma de Contexto y Plaza | `0.2500` | Log-Ratio | `[LN-QBE-039]` | Límite superior del espacio latente $\mathbb{H}_{\text{ctx}}$ | Inviolable (Anti-Resonancia) |
 
+### Parámetros de Cobertura Dinámica (Dutching con Rendimiento)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez |
+|:---:|---|:---:|:---:|:---:|---|
+| $\delta_{\text{def}}$ | `DELTA_DUTCHING_DEF` | `0.0000` | Ratio | `[LN-QBE-077-B]` | Modo Defensivo (V=0 exacto) |
+| $r_{\text{bal}}$ | `RATIO_DELTA_BAL` | `0.5000` | Fracción | `[LN-QBE-077-D]` | 50% del delta de isorrendimiento |
+| $\text{Margen}_{\delta}$ | `FACTOR_SEGURIDAD_DELTA_MAX` | `0.9500` | Fracción | `[LN-QBE-077-C]` | Techo de seguridad sobre δ_max |
+
+### Invariantes Constitucionales de Cobertura Dinámica (VIII-49 a VIII-54)
+* **Invariante VIII-49 (Cota de Viabilidad Analítica):** $\delta < (O_{\text{emp}} / \theta^*) - 1.0000$ estricto; prohibido anular la ganancia del favorito.
+* **Invariante VIII-50 (No Negatividad del Seguro):** $\delta \ge 0.0000$ obligatorio; prohibido diseñar coberturas con pérdida ante empate.
+* **Invariante VIII-51 (Condición de Existencia de Isorrendimiento):** Exige $(1/O_{\text{fav}}) + (1/O_{\text{emp}}) < 1.0000$.
+* **Invariante VIII-52 (Monotonía del Gasto de Seguro):** $\delta_1 < \delta_2 \implies B_{\text{seg}}(\delta_1) < B_{\text{seg}}(\delta_2)$.
+* **Invariante VIII-53 (Piso Legal Inviolable en Ambas Piernas):** $B_{\text{seg}} \ge \$2.00\text{ MXN}$ y $B_{\text{prio}} \ge \$2.00\text{ MXN}$.
+* **Invariante VIII-54 (Trazabilidad Contractual de δ):** Toda orden en cartera debe explicitar en JSON el parámetro $\delta$ y los ROIs proyectados de favorito y empate.
+
+
 
 ## 3. DOMINIO DE CONTRACCIÓN BAYESIANA DE FORMA (10 PARTIDOS)
 

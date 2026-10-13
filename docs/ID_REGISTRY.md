@@ -191,6 +191,11 @@
 | `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-025-B]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting) | SELLADO |
 | `[ARCH-1.4.35]` | ARCH | `docs/ARCH.md` | Contrato de Cartera Vacía y Conmutador de Slates en Mesa de Apuestas [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.36]` | ARCH | `docs/ARCH.md` | Sensor de Ingesta Histórica BetExplorer y Cortes Progresivos Anti-Leakage [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-077-B]` | LOGIC | `docs/LOGIC.md` | Teorema de Aceleración Asintótica y Partición de Capital con Cobertura Activa (V = δ > 0) | SELLADO |
+| `[LN-QBE-077-C]` | LOGIC | `docs/LOGIC.md` | Techo de Viabilidad Analítica δ_max y Umbral de Breakeven θ* | SELLADO |
+| `[LN-QBE-077-D]` | LOGIC | `docs/LOGIC.md` | Dutching Isorrendimiento de Doble Cosecha (δ*) | SELLADO |
+| `[ARCH-1.4.37]` | ARCH | `docs/ARCH.md` | Parámetro de Cobertura Dinámica δ en el Pipeline de Cartera y DTOs [ARCH-PILLAR] | SELLADO |
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
 > `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`

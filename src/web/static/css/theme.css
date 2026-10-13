@@ -1055,3 +1055,25 @@ table.fintech-table {
     color: #f8fafc;
 }
 
+
+/* ─── [ARCH-1.4.35 / DOBLE SEGURO DEL DIRECTOR] Conmutador de Slates (candado de jornada) ───
+   🔒 `locked`   = ventanilla VIVA: jornada dinámica ([ARCH-1.6.15]), selector inhabilitado.
+   🔓 `unlocked` = BACKTESTING: jornada anclada, las órdenes se liquidan contra el marcador REAL
+   de la bóveda 3NF ([LN-QBE-025-B]). El estado se publica con clases explícitas para que el
+   color del candado no dependa de estilos en línea ni de heurísticas del cliente. */
+.btn-lock {
+    background: #1E293B;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 11pt;
+    line-height: 1;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-lock.locked { color: #F59E0B; border-color: #475569; }
+.btn-lock.locked:hover { border-color: #F59E0B; }
+.btn-lock.unlocked { color: #38BDF8; border-color: #38BDF8; background: rgba(56, 189, 248, 0.10); }
+.btn-lock.unlocked:hover { border-color: #F59E0B; }
+

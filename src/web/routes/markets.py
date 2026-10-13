@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from src.storage.gateway import PersistenceGateway
-from src.storage.models import FixtureSnapshot, League, SovereignDistribution, Slate, SlateItem
+from src.storage.models import FixtureSnapshot, League, Match, SovereignDistribution, Slate, SlateItem
 from src.storage.database import get_db
 from src.core.contracts.progol_math import (
     calcular_sesgo_quiniela,
@@ -142,6 +142,18 @@ class SportsbookPortfolioRequest(BaseModel):
     operador: Optional[str] = Field(default="caliente")
     # [ARCH-1.4.30] Parámetro interactivo de concentración de masa Γ (Capa 0), tri-estado UI.
     gamma_slider: float = Field(default=0.67, ge=0.67, le=0.75)
+    # [ARCH-1.4.37 / LN-QBE-077-B] Parámetro de Cobertura Dinámica δ (Dutching con Rendimiento):
+    # `DEF` = indemnidad pura V=0 (contrato sellado) | `BAL` = 50% de δ* | `AGR` = δ*.
+    # Cero aritmética en la capa web: el δ efectivo y su clamping los dicta la ley pura
+    # `calcular_particion_dutching_dinamico()` invocada por `PortfolioEngine.build_plan()`.
+    modo_cobertura: Optional[str] = Field(
+        default="DEF", description="DEF (V=0), BAL (50% delta*), AGR (delta*)"
+    )
+    # [ARCH-1.4.35 / CONMUTADOR DE SLATES] Jornada explícita del Backtesting Fiduciario: cuando
+    # viaja, la ventanilla se ANCLA al slate histórico de ESA jornada (se relaja la exigencia de
+    # jornada activa/operable [ARCH-1.6.2]) y cada orden emitida se liquida contra el marcador
+    # REAL de la bóveda 3NF (`matches`). Ausente ⇒ resolución dinámica intacta [ARCH-1.6.15].
+    jornada: Optional[int] = Field(default=None, ge=1, le=38)
 
 
 class ProgolOptimizeRequest(BaseModel):
@@ -158,6 +170,67 @@ class ProgolOptimizeRequest(BaseModel):
 # snapshots capturados. Frontera de Despacho ([ARCH-1.6.2-B]): la selección MANUAL la
 # gobierna el Live Board; el DESPACHO AUTOMÁTICO opera sobre las cuotas ya publicadas y
 # no puede ser vetado por staleness sin declarar la jornada completa inoperable.
+
+
+def _captura_de_cuotas(fx: Dict[str, Any]) -> bool:
+    """
+    [ARCH-1.4.15 / LN-QBE-076] ¿Porta el fixture alguna captura FÁCTICA 1X2 (L > 1.0)?
+    Sólo se examinan capturas reales (canónica del snapshot + por operador): jamás se presta la
+    cuota de una casa a otra [GOVERNANCE-01].
+    """
+    capturas: List[Dict[str, Any]] = [fx.get("momios") or {}]
+    capturas.extend((fx.get("momios_operadores") or {}).values())
+    for m_data in capturas:
+        try:
+            if float((m_data or {}).get("L", 0.0) or 0.0) > 1.0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _cuotas_del_operador(fx: Dict[str, Any], op_sel: str) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.15 / LN-QBE-076] Resuelve las cuotas 1X2 del operador solicitado sobre la captura
+    congelada del fixture:
+      - `mejor_combinacion`: la casa que paga el mejor momio del local entre las capturas
+        FÁCTICAS (L > 1.0); sin capturas se degrada a la captura canónica del snapshot.
+      - Operador certificado: su PROPIA captura (`momios_operadores[op]`), con respaldo en la
+        captura canónica. Una casa sin cuotas devuelve `{}`: cero cuotas inventadas.
+    """
+    m_ops = fx.get("momios_operadores") or {}
+    if op_sel == "mejor_combinacion":
+        candidatas = [
+            (vals or {}) for vals in m_ops.values()
+            if float((vals or {}).get("L", 0.0) or 0.0) > 1.0
+        ]
+        if candidatas:
+            return max(candidatas, key=lambda v: float(v.get("L", 0.0)))
+        return fx.get("momios") or {}
+    return m_ops.get(op_sel) or fx.get("momios") or {}
+
+
+def _captura_canonica_1x2(fx: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.15 / LN-QBE-076 · Dictamen V-6] Captura CANÓNICA del snapshot: el trío 1X2 factual
+    (`L`, `E`, `V` > 1.0) sellado en `momios`, más su bandera de Pago Anticipado declarada.
+
+    Cero reparación de cuotas: un trío incompleto devuelve `{}`. La procedencia la declara el propio
+    fixture (`operador`); esta función NUNCA la atribuye a una casa que no la publicó
+    ([GOVERNANCE-01]).
+    """
+    momios = fx.get("momios") or {}
+    try:
+        if not all(float(momios.get(k, 0.0) or 0.0) > 1.0 for k in ("L", "E", "V")):
+            return {}
+        return {
+            "L": float(momios.get("L", 0.0) or 0.0),
+            "E": float(momios.get("E", 0.0) or 0.0),
+            "V": float(momios.get("V", 0.0) or 0.0),
+            "pa": bool(momios.get("pa", False) or momios.get("pago_anticipado", False)),
+        }
+    except (TypeError, ValueError):
+        return {}
 
 
 def _fixture_operable_en_ventanilla(fx: Dict[str, Any]) -> bool:
@@ -184,17 +257,34 @@ def _fixture_operable_en_ventanilla(fx: Dict[str, Any]) -> bool:
 def _resolver_snapshot_ventanilla(
     session: Session,
     league_id: int,
-    selected_ids: Optional[List[str]] = None
+    selected_ids: Optional[List[str]] = None,
+    jornada: Optional[int] = None
 ) -> Optional[FixtureSnapshot]:
     """
     [ARCH-1.6.15 / ARCH-1.4.10] Resuelve el snapshot de la jornada activa de la ventanilla
     sin constantes quemadas:
+      0. Carril BACKTESTING (`jornada` explícita, [ARCH-1.4.35]): anclaje EXACTO al slate de esa
+         jornada, aunque esté concluida. Cero exigencia de `is_active`/operabilidad: el histórico
+         congelado se re-expone tal cual fue capturado (cero cuotas inventadas [GOVERNANCE-01]).
       1. Carril MANUAL (`selected_ids` con contenido): el snapshot más reciente que contenga
          alguno de los partidos solicitados (la selección la gobierna el Live Board).
       2. Carril AUTOMÁTICO: el snapshot más reciente que porte al menos un partido operable
          (no concluido con cuotas publicadas); si la jornada vigente concluyó en su
          totalidad, conmuta a la última jornada operable registrada en la bóveda.
     """
+    if jornada is not None:
+        # [ARCH-1.4.35 / CONMUTADOR DE SLATES] El anclaje por jornada MANDA sobre cualquier
+        # heurística de vigencia: es la ordenanza expresa del Director (doble seguro del candado).
+        return (
+            session.query(FixtureSnapshot)
+            .filter(
+                FixtureSnapshot.league_id == league_id,
+                FixtureSnapshot.matchday == int(jornada)
+            )
+            .order_by(FixtureSnapshot.updated_at.desc())
+            .first()
+        )
+
     snapshots = session.query(FixtureSnapshot).filter(
         FixtureSnapshot.league_id == league_id
     ).order_by(FixtureSnapshot.updated_at.desc()).all()
@@ -214,6 +304,167 @@ def _resolver_snapshot_ventanilla(
             return snap
 
     return snapshots[0]
+
+
+# ── [ARCH-1.4.35 / LN-QBE-025-B] LIQUIDACIÓN REAL DEL BACKTESTING (Real vs. Predicho) ──
+# [GOVERNANCE-01] Cero marcadores sintéticos: el oráculo es la bóveda 3NF (`matches`), única
+# autoridad de resultados reales. La aritmética de liquidación NO vive aquí: se delega VERBATIM
+# a la ley sellada `liquidar_orden_post_evento` de `src.core.contracts.portfolio_math`
+# ([DIRGEN-STRICT] — este controlador sólo TRANSPORTA el contrato plano de piernas).
+
+
+def _reales_3nf_por_jornada(session: Session) -> Dict[int, Dict[str, Tuple[int, int]]]:
+    """
+    [ARCH-1.4.35] Foto completa de resultados REALES de la bóveda 3NF (`matches`), agrupada por
+    jornada: `{jornada: {id_partido: (goles_local, goles_visitante)}}`. Una sola consulta
+    alimenta la cartelera congelada, el resumen de jornadas del conmutador y la liquidación.
+    Sólo entran marcadores concluidos (ambos goles capturados): cero resultados inventados.
+    """
+    agrupado: Dict[int, Dict[str, Tuple[int, int]]] = {}
+    for fila in session.query(Match).all():
+        if fila.matchday_num is None or fila.score_home is None or fila.score_away is None:
+            continue
+        agrupado.setdefault(int(fila.matchday_num), {})[str(fila.id)] = (
+            int(fila.score_home), int(fila.score_away)
+        )
+    return agrupado
+
+
+def _marcadores_reales_3nf(session: Session, jornada: int) -> Dict[str, Tuple[int, int]]:
+    """
+    [ARCH-1.4.35] Marcadores REALES publicados en la 3NF para una jornada (`matches`).
+    Devuelve `{id_partido: (goles_local, goles_visitante)}` con sólo resultados concluidos:
+    un partido sin marcador capturado simplemente NO se liquida (cero invención).
+    """
+    return _reales_3nf_por_jornada(session).get(int(jornada), {})
+
+
+def _piernas_liquidables(
+    orden: Dict[str, Any],
+    fixture: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """
+    [VAULT-CORE-006 / INVARIANTE VIII-11] Traduce una orden emitida a su contrato PLANO de
+    liquidación, sin re-calcular capital alguno (los montos y momios vienen certificados por el
+    motor). Contrato de piernas: `boleto_2_ganancia` es SIEMPRE la pierna Ataque ("Gana {equipo}")
+    y `boleto_1_seguro` la cobertura ("Empate", o "Empate (Sin Cobertura)" con monto 0.00 en las
+    familias directas D1/D2). La identidad de la pierna Ataque se resuelve por el NOMBRE del
+    equipo que la selección transporta (el mismo literal que el motor recibió del snapshot), con
+    respaldo en el favorito soberano del fixture. Devuelve None si el contrato es ininteligible:
+    en ese caso NO se liquida (cero liquidaciones inventadas [GOVERNANCE-01]).
+    """
+    boletos = orden.get("boletos") or {}
+    b1 = boletos.get("boleto_1_seguro") or {}
+    b2 = boletos.get("boleto_2_ganancia") or {}
+    # Guarda de orden invertido: sólo se permuta si el `boleto_1_seguro` porta la pierna Ataque.
+    ataque, cobertura = (b1, b2) if str(b1.get("seleccion", "")).strip().upper().startswith("GANA") else (b2, b1)
+    if not ataque:
+        return None
+
+    seleccion = str(ataque.get("seleccion", "")).upper()
+    local = str((fixture or {}).get("local", "")).upper()
+    visitante = str((fixture or {}).get("visitante", "")).upper()
+    if local and local in seleccion:
+        lado_respaldado = "LOCAL"
+    elif visitante and visitante in seleccion:
+        lado_respaldado = "VISITA"
+    else:
+        p_local = float((fixture or {}).get("p_local", 0.0) or 0.0)
+        p_visitante = float((fixture or {}).get("p_visitante", 0.0) or 0.0)
+        lado_respaldado = "LOCAL" if p_local >= p_visitante else "VISITA"
+
+    return {
+        "inversion_total": float(boletos.get("inversion_partido_A_i", 0.0) or 0.0),
+        "monto_ataque": float(ataque.get("monto_mxn", 0.0) or 0.0),
+        "cuota_ataque": float(ataque.get("momio", 0.0) or 0.0),
+        "monto_seguro": float((cobertura or {}).get("monto_mxn", 0.0) or 0.0),
+        "cuota_seguro": float((cobertura or {}).get("momio", 0.0) or 0.0),
+        "seleccion_favorito": lado_respaldado,
+        # [ARCH-1.4.37 / LN-QBE-077-B] Cobertura Dinámica: el δ CERTIFICADO por el motor viaja
+        # verbatim a la ley de liquidación (el bloque `cobertura_dinamica` sólo existe en las
+        # familias con seguro de empate; su ausencia ⇒ δ = 0.0000 y veredicto sellado `TABLAS_V0`).
+        # Cero re-derivación: la capa web no recalcula coberturas, sólo transporta el contrato.
+        "delta_cobertura": float(
+            ((orden.get("cobertura_dinamica") or {}) or {}).get("delta_cobertura", 0.0) or 0.0
+        ),
+    }
+
+
+def _adjuntar_liquidacion_real(
+    data: Dict[str, Any],
+    session: Session,
+    jornada: int,
+    fixtures_por_id: Dict[str, Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.35 / LN-QBE-025-B] Adjunta a cada orden emitida su `liquidacion_real` (marcador
+    final real + PnL neto bancario) y publica el bloque agregado `backtesting` del payload.
+    El contrato emitido NO se altera: la liquidación es evidencia AÑADIDA (montos, momios y
+    estrategias quedan intactos). Las órdenes sin marcador real en la bóveda o con contrato
+    ininteligible NO se liquidan: el agregado declara el denominador completo (`ordenes_sin_
+    marcador_real`), cero marcadores o PnL inventados ([GOVERNANCE-01]).
+    """
+    from src.core.contracts.portfolio_math import liquidar_orden_post_evento
+
+    marcadores = _marcadores_reales_3nf(session, jornada)
+    ordenes: List[Dict[str, Any]] = data.get("ordenes_ejecucion_partidos") or []
+
+    liquidados = 0
+    cobrados = 0
+    tablas = 0
+    fallos = 0
+    cosechas_delta = 0
+    inversion_liquidada = 0.0
+    pnl_total = 0.0
+
+    for orden in ordenes:
+        mid = str(orden.get("id_partido", ""))
+        marcador = marcadores.get(mid)
+        if marcador is None:
+            continue
+        piernas = _piernas_liquidables(orden, fixtures_por_id.get(mid, {}))
+        if piernas is None:
+            continue
+
+        # [DIRGEN-STRICT] Aritmética sellada: la ley del backtesting dicta el veredicto.
+        resultado = liquidar_orden_post_evento(piernas, marcador[0], marcador[1])
+        resultado["marcador_final"] = f"{marcador[0]} - {marcador[1]}"
+        resultado["lado_respaldado"] = piernas["seleccion_favorito"]
+        resultado["jornada"] = int(jornada)
+        # [GOVERNANCE-01] Trazabilidad: el desenlace exhibido es el marcador REAL de la bóveda.
+        resultado["fuente_marcador"] = "3NF `matches` (resultado real)"
+        orden["liquidacion_real"] = resultado
+
+        liquidados += 1
+        inversion_liquidada += float(resultado.get("inversion_mxn", 0.0) or 0.0)
+        pnl_total += float(resultado.get("pnl_neto_mxn", 0.0) or 0.0)
+        estado = resultado.get("estado")
+        if estado == "COBRADO_ATAQUE":
+            cobrados += 1
+        elif estado == "COBRADO_SEGURO_DELTA":
+            # [ARCH-1.4.37] COSECHA ACTIVA: el empate cubierto con δ > 0 devenga PnL positivo.
+            # Se contabiliza como COBRO (jamás como fallo): cero tergiversación del agregado.
+            cosechas_delta += 1
+        elif estado == "TABLAS_V0":
+            tablas += 1
+        else:
+            fallos += 1
+
+    data["backtesting"] = {
+        "activo": True,
+        "jornada": int(jornada),
+        "total_ordenes": len(ordenes),
+        "ordenes_liquidadas": liquidados,
+        "ordenes_sin_marcador_real": len(ordenes) - liquidados,
+        "cobrados": cobrados,
+        "tablas_v0": tablas,
+        "cosechas_seguro_delta": cosechas_delta,
+        "fallos": fallos,
+        "inversion_liquidada_mxn": round(inversion_liquidada, 2),
+        "pnl_neto_total_mxn": round(pnl_total, 2),
+        "marcadores_reales": {mid: f"{h} - {a}" for mid, (h, a) in sorted(marcadores.items())},
+    }
+    return data
 
 
 # ── ENDPOINTS ────────────────────────────────────────────────────────────────
@@ -295,6 +546,166 @@ def get_sportsbook_matches(
             "league_id": league_id,
             "total_abiertos": len(matches_out),
             "matches": matches_out
+        }
+
+
+@router.get("/sportsbook/live-board")
+def get_sportsbook_live_board(
+    bookmaker: str = Query("caliente", description="Operador de casino (ej. caliente) o mejor_combinacion"),
+    league_id: int = Query(262, description="ID de la liga (fotmob_id o id 3NF)"),
+    jornada: Optional[int] = Query(default=None, description="Jornada del slate (histórica o activa)")
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.35 / CONMUTADOR DE SLATES] Cartelera 1X2 de UNA jornada con su captura fáctica de
+    cuotas y su soberanía certificada. Es la cartelera que consume el conmutador del Director:
+
+      - `jornada` AUSENTE ⇒ jornada ACTIVA dinámica [ARCH-1.6.15] (idéntica resolución que la
+        ventanilla de capital).
+      - `jornada` PRESENTE ⇒ slate ANCLADO de esa jornada, aunque esté CONCLUIDA: el histórico
+        congelado se re-expone como cartelera del backtesting.
+
+    [GOVERNANCE-01] Cero cuotas, marcadores o fechas inventadas: el partido sin captura viaja con
+    `con_cuotas: false` y momios `null`; el marcador real emana EXCLUSIVAMENTE de la bóveda 3NF
+    (`matches`). Jamás se presta la cuota de una casa a otra.
+    """
+    gateway = PersistenceGateway()
+    op_sel = (bookmaker or "caliente").lower()
+
+    with gateway.read_session() as session:
+        league = session.query(League).filter((League.fotmob_id == league_id) | (League.id == league_id)).first()
+        if not league:
+            raise HTTPException(status_code=404, detail="Liga no encontrada.")
+
+        jornada_solicitada = int(jornada) if isinstance(jornada, int) else None
+        fix_snap = _resolver_snapshot_ventanilla(session, league.id, None, jornada_solicitada)
+
+        reales_por_jornada = _reales_3nf_por_jornada(session)
+        snap_activa = _resolver_snapshot_ventanilla(session, league.id)
+        jornada_activa = int(snap_activa.matchday) if (snap_activa and snap_activa.matchday is not None) else None
+
+        # [ARCH-1.4.15] Resumen fáctico de la bóveda: qué jornadas existen y qué porta cada una,
+        # en UNA sola lectura (hidrata el conmutador sin multiplicar peticiones).
+        resumen_jornadas: List[Dict[str, Any]] = []
+        for snap in (
+            session.query(FixtureSnapshot)
+            .filter(FixtureSnapshot.league_id == league.id)
+            .order_by(FixtureSnapshot.matchday.asc())
+            .all()
+        ):
+            fixtures_snap = [fx for fx in (snap.matches_json or []) if isinstance(fx, dict)]
+            num_jornada = int(snap.matchday) if snap.matchday is not None else None
+            resumen_jornadas.append({
+                "jornada": num_jornada,
+                "total_partidos": len(fixtures_snap),
+                "con_cuotas": sum(1 for fx in fixtures_snap if _captura_de_cuotas(fx)),
+                "concluida": bool(fixtures_snap) and all(
+                    str(fx.get("estado", "")) == "FINALIZADO" for fx in fixtures_snap),
+                "con_marcador_real": len(reales_por_jornada.get(num_jornada, {})) if num_jornada else 0,
+            })
+
+        if not fix_snap or not fix_snap.matches_json:
+            # Vaciedad declarada: cero carteleras sintéticas ([GOVERNANCE-01]).
+            return {
+                "bookmaker": op_sel,
+                "league_id": league_id,
+                "jornada": jornada_solicitada,
+                "jornada_activa": jornada_activa,
+                "es_backtesting": jornada_solicitada is not None,
+                "motivo": "La bóveda no contiene captura de cartelera para la jornada solicitada.",
+                "jornadas": resumen_jornadas,
+                "operadores_disponibles": {},
+                "total_partidos": 0,
+                "partidos": []
+            }
+
+        num_jornada_snap = int(fix_snap.matchday) if fix_snap.matchday is not None else None
+        marcadores_jornada = reales_por_jornada.get(num_jornada_snap, {}) if num_jornada_snap else {}
+
+        partidos_out: List[Dict[str, Any]] = []
+        operadores_disponibles: Dict[str, Dict[str, Any]] = {}
+
+        for fx in fix_snap.matches_json:
+            if not isinstance(fx, dict):
+                continue
+            mid = str(fx.get("id_partido", ""))
+
+            # [ARCH-1.4.15] Disponibilidad fáctica por casa de ESTA jornada (las certificadas se
+            # declaran siempre: `disponible: false` es un estado legítimo y explícito).
+            for op_disp, vals_disp in (fx.get("momios_operadores") or {}).items():
+                reg = operadores_disponibles.setdefault(op_disp, {"disponible": False, "capturas_validas": 0})
+                try:
+                    if float((vals_disp or {}).get("L", 0.0) or 0.0) > 1.0:
+                        reg["capturas_validas"] += 1
+                        reg["disponible"] = True
+                except (TypeError, ValueError):
+                    continue
+
+            cuotas = _cuotas_del_operador(fx, op_sel)
+            momio_l = float((cuotas or {}).get("L", 0.0) or 0.0)
+            momio_e = float((cuotas or {}).get("E", 0.0) or 0.0)
+            momio_v = float((cuotas or {}).get("V", 0.0) or 0.0)
+            con_cuotas = momio_l > 1.0
+
+            dist_db = session.query(SovereignDistribution).filter(SovereignDistribution.match_id == mid).first()
+            p_local = fx.get("p_local") if fx.get("p_local") is not None else (dist_db.p_local if dist_db else None)
+            p_empate = fx.get("p_empate") if fx.get("p_empate") is not None else (dist_db.p_empate if dist_db else None)
+            p_visitante = fx.get("p_visitante") if fx.get("p_visitante") is not None else (dist_db.p_visitante if dist_db else None)
+            sin_soberania = p_local is None or p_empate is None or p_visitante is None
+
+            gap_l = gap_e = gap_v = None
+            if con_cuotas and not sin_soberania:
+                gap_l = round(float(p_local) - (1.0 / momio_l), 4)
+                gap_e = round(float(p_empate) - (1.0 / momio_e), 4) if momio_e > 0 else None
+                gap_v = round(float(p_visitante) - (1.0 / momio_v), 4) if momio_v > 0 else None
+
+            marcador = marcadores_jornada.get(mid)
+            partidos_out.append({
+                "match_id": mid,
+                "local": fx.get("local", ""),
+                "visitante": fx.get("visitante", ""),
+                "local_escudo_url": fx.get("local_escudo_url", ""),
+                "visitante_escudo_url": fx.get("visitante_escudo_url", ""),
+                "horario": fx.get("horario", ""),
+                "fecha_dt": fx.get("fecha_dt"),
+                "estado": fx.get("estado"),
+                "concluido": str(fx.get("estado", "")) == "FINALIZADO",
+                "seleccionable": (str(fx.get("estado", "")) != "FINALIZADO" and con_cuotas),
+                "con_cuotas": con_cuotas,
+                "sin_soberania": sin_soberania,
+                "momio_l": momio_l if con_cuotas else None,
+                "momio_e": momio_e if con_cuotas else None,
+                "momio_v": momio_v if con_cuotas else None,
+                "pago_anticipado": bool((cuotas or {}).get("pago_anticipado", False)) if con_cuotas else None,
+                "p_local": float(p_local) if p_local is not None else None,
+                "p_empate": float(p_empate) if p_empate is not None else None,
+                "p_visitante": float(p_visitante) if p_visitante is not None else None,
+                "gap_local": gap_l,
+                "gap_empate": gap_e,
+                "gap_visitante": gap_v,
+                "es_viable_ev": bool(
+                    gap_l is not None and (gap_l > 0.0 or (gap_e or 0.0) > 0.0 or (gap_v or 0.0) > 0.0)),
+                "marcador_real": f"{marcador[0]} - {marcador[1]}" if marcador else None,
+                "marcador_capturado": fx.get("marcador_actual"),
+                "liquidable": marcador is not None,
+            })
+
+        for slug_certificado in _CASINOS_VENTANILLA:
+            operadores_disponibles.setdefault(slug_certificado, {"disponible": False, "capturas_validas": 0})
+        operadores_disponibles["mejor_combinacion"] = {
+            "disponible": any(v["disponible"] for v in operadores_disponibles.values()),
+            "capturas_validas": sum(v["capturas_validas"] for v in operadores_disponibles.values()),
+        }
+
+        return {
+            "bookmaker": op_sel,
+            "league_id": league_id,
+            "jornada": num_jornada_snap,
+            "jornada_activa": jornada_activa,
+            "es_backtesting": jornada_solicitada is not None,
+            "jornadas": resumen_jornadas,
+            "operadores_disponibles": operadores_disponibles,
+            "total_partidos": len(partidos_out),
+            "partidos": partidos_out
         }
 
 
@@ -398,11 +809,30 @@ def generate_sportsbook_portfolio_endpoint(
         if not league:
             raise HTTPException(status_code=404, detail="Liga no encontrada en SQLite.")
 
+        # [ARCH-1.4.35 / CONMUTADOR DE SLATES] Jornada ANCLADA del Backtesting Fiduciario: cuando
+        # viaja (`req.jornada`), la ventanilla se congela en el slate histórico de esa jornada
+        # —se relaja la exigencia de jornada activa/operable [ARCH-1.6.2] y el veto por partido
+        # FINALIZADO, porque el backtesting EXISTE para cuantificar contra resultados ya
+        # concluidos— y cada orden emitida se liquida contra el marcador REAL de la bóveda 3NF
+        # (`matches`, [LN-QBE-025-B]). Ausente ⇒ resolución dinámica intacta [ARCH-1.6.15].
+        jornada_anclada = int(req.jornada) if req.jornada is not None else None
+        en_backtesting = jornada_anclada is not None
+
         # [ARCH-1.6.15 / ARCH-1.6.2-B] Frontera de Despacho: carril manual (Live Board) vs.
         # despacho automático de jornada (pool multiversal de snapshots capturados).
-        fix_snap = _resolver_snapshot_ventanilla(session, league.id, req.selected_match_ids)
+        fix_snap = _resolver_snapshot_ventanilla(session, league.id, req.selected_match_ids, jornada_anclada)
 
         if not fix_snap or not fix_snap.matches_json:
+            if en_backtesting:
+                # [ARCH-1.4.35] Vaciedad declarada del slate anclado: la bóveda no capturó esa
+                # jornada. Cero carteleras sintéticas, cero marcadores inventados.
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"La bóveda 3NF no contiene captura de cartelera para la "
+                        f"Jornada {jornada_anclada}."
+                    ),
+                )
             raise HTTPException(status_code=400, detail="No hay partidos registrados para la jornada activa.")
 
         partidos_candidatos = []
@@ -413,6 +843,14 @@ def generate_sportsbook_portfolio_endpoint(
         # fecha en el snapshot de origen (no los que sobreviven el triaje). Cero heurística:
         # el conteo emana de la longitud del payload capturado (ej. 9 en Liga MX).
         total_jornada = len(fix_snap.matches_json or [])
+
+        # [ARCH-1.4.35] Índice del slate por `id_partido`: hidrata la traducción de cada orden
+        # emitida a su contrato PLANO de piernas ([VAULT-CORE-006]) durante la liquidación real.
+        fixtures_por_id: Dict[str, Dict[str, Any]] = {
+            str(fx.get("id_partido", "")): fx
+            for fx in (fix_snap.matches_json or [])
+            if isinstance(fx, dict)
+        }
 
         # [ARCH-1.4.15] Contrato de Disponibilidad Dinámica de Operadores: se reporta la captura
         # FÁCTICA por casa en la jornada activa. Una casa sin cuotas válidas viaja `disponible: false`.
@@ -431,6 +869,23 @@ def generate_sportsbook_portfolio_endpoint(
         for slug_certificado in _CASINOS_VENTANILLA:
             operadores_capturados.setdefault(
                 slug_certificado, {"disponible": False, "capturas_validas": 0})
+        # [ARCH-1.4.15 / LN-QBE-076 · Dictamen V-6] Captura MONO-FUENTE declarada: en un fixture sin
+        # capturas multi-casa, la cuota canónica del snapshot se reporta con el NOMBRE DE SU FUENTE
+        # (`fx["operador"]`) y jamás se presta a una casa local ([GOVERNANCE-01]). Es lo que habilita
+        # el carril por defecto (Mejor Combinación) sobre jornadas de captura histórica.
+        for fx_disp in (fix_snap.matches_json or []):
+            if not _captura_canonica_1x2(fx_disp):
+                continue
+            capturas_casa = [
+                vals for vals in (fx_disp.get("momios_operadores") or {}).values()
+                if float((vals or {}).get("L", 0.0) or 0.0) > 1.0
+            ]
+            if capturas_casa:
+                continue
+            reg = operadores_capturados.setdefault(
+                str(fx_disp.get("operador") or "snapshot"), {"disponible": False, "capturas_validas": 0})
+            reg["capturas_validas"] += 1
+            reg["disponible"] = True
         operadores_capturados["mejor_combinacion"] = {
             "disponible": any(v["disponible"] for v in operadores_capturados.values()),
             "capturas_validas": sum(v["capturas_validas"] for v in operadores_capturados.values()),
@@ -440,13 +895,18 @@ def generate_sportsbook_portfolio_endpoint(
             mid = fx.get("id_partido", "")
             if req.selected_match_ids and mid not in req.selected_match_ids:
                 continue
-            if fx.get("estado") == "FINALIZADO":
+            if fx.get("estado") == "FINALIZADO" and not en_backtesting:
                 # [ARCH-1.6.2] Partido concluido: vetado de la ventanilla de capital.
                 _descartar_partido(
                     descartes, mid, fx.get("local", ""), fx.get("visitante", ""),
                     "Partido finalizado: fuera de ventanilla [ARCH-1.6.2]",
                     "QBE-00", "QBE-00", "Partido finalizado: fuera de ventanilla [ARCH-1.6.2]")
                 continue
+
+            # [ARCH-1.4.35 / CONMUTADOR DE SLATES] En BACKTESTING la jornada anclada es
+            # necesariamente histórica: el veto [ARCH-1.6.2] se suspende porque la liquidación
+            # real EXIGE el resultado concluido. Cero relajación más: el partido sin captura
+            # fáctica de cuotas muere igual en la compuerta de abajo ([GOVERNANCE-01]).
 
             # Extraer cuotas del operador solicitado
             m_ops = fx.get("momios_operadores") or {}
@@ -460,11 +920,19 @@ def generate_sportsbook_portfolio_endpoint(
             }
             if lane_combinado:
                 if not cuotas_lane:
-                    _descartar_partido(
-                        descartes, mid, fx.get("local", ""), fx.get("visitante", ""),
-                        "Sin captura multi-operador suficiente para la Mejor Combinación",
-                        "QBE-00", "QBE-00", "Sin captura multi-operador suficiente para la Mejor Combinación")
-                    continue
+                    # [ARCH-1.4.15 / LN-QBE-076 · Dictamen V-6] Degradación MONO-FUENTE legislada:
+                    # sin capturas multi-casa la puja cae a la captura CANÓNICA del snapshot, con su
+                    # procedencia declarada (`fx["operador"]`). Cero atribución a una casa local que
+                    # no publicó esa cuota ([GOVERNANCE-01]); idéntica axiomática que el helper
+                    # legislado `_cuotas_del_operador()` (carril del Live Board).
+                    canonica = _captura_canonica_1x2(fx)
+                    if not canonica:
+                        _descartar_partido(
+                            descartes, mid, fx.get("local", ""), fx.get("visitante", ""),
+                            "Sin captura multi-operador suficiente para la Mejor Combinación",
+                            "QBE-00", "QBE-00", "Sin captura multi-operador suficiente para la Mejor Combinación")
+                        continue
+                    cuotas_lane = {str(fx.get("operador") or "snapshot"): canonica}
                 # Referencia mono-operador para el pre-chequeo de factibilidad: la casa que
                 # paga el mejor momio del local (mejor ejecución de la pierna Ataque).
                 m_data = max(cuotas_lane.values(), key=lambda v: float(v.get("L", 0.0)))
@@ -649,14 +1117,22 @@ def generate_sportsbook_portfolio_endpoint(
             plan_vacio["control_portafolio"]["total_partidos_escaneados"] = total_jornada
             plan_vacio["operadores_disponibles"] = operadores_capturados
             plan_vacio["parametros_cartera"] = parametros_cartera.model_dump()
+            # [ARCH-1.4.35] Cartera vacía en BACKTESTING: el agregado declara la jornada anclada y
+            # el denominador íntegro de órdenes sin liquidar (cero PnL inventado [GOVERNANCE-01]).
+            if en_backtesting:
+                plan_vacio = _adjuntar_liquidacion_real(
+                    plan_vacio, session, jornada_anclada, fixtures_por_id)
             return plan_vacio
 
         # 2. Ranking de Friccion
         candidatos_ordenados = calcular_ranking_friccion(partidos_candidatos)
 
         # 3. Construccion del Plan via PortfolioEngine
+        # [ARCH-1.4.37] La modalidad de Cobertura Dinámica δ viaja VERBATIM al motor: el orquestador
+        # sólo transporta el parámetro; la resolución y el clamping son ley pura del motor.
         plan = PortfolioEngine.build_plan(
-            candidatos_ordenados, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL", total_jornada=total_jornada)
+            candidatos_ordenados, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL",
+            total_jornada=total_jornada, modo_cobertura=req.modo_cobertura)
         data = plan.model_dump()
 
         # 4. Modulacion con Slider de Certeza [LN-QBE-073] — ALT-1 RATIFICADO (VAR FASE5_PASO3)
@@ -701,7 +1177,8 @@ def generate_sportsbook_portfolio_endpoint(
                 or codigos_finales != codigos_previos
             ):
                 plan = PortfolioEngine.build_plan(
-                    candidatos_finales, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL", total_jornada=total_jornada)
+                    candidatos_finales, bankroll=parametros_cartera.total_bankroll, mode="BANKROLL",
+                    total_jornada=total_jornada, modo_cobertura=req.modo_cobertura)
                 data = plan.model_dump()
 
         # Alias de compatibilidad para The Shield
@@ -727,6 +1204,13 @@ def generate_sportsbook_portfolio_endpoint(
                     o_item["boletos"]["boleto_1_seguro"]["operador"] = operador_boleto
                 if o_item["boletos"].get("boleto_2_ganancia") and not o_item["boletos"]["boleto_2_ganancia"].get("operador"):
                     o_item["boletos"]["boleto_2_ganancia"]["operador"] = operador_boleto
+
+        # [ARCH-1.4.35 / LN-QBE-025-B] BACKTESTING: con la jornada anclada, cada orden emitida se
+        # liquida contra el marcador REAL de la bóveda 3NF y el payload publica el agregado
+        # `backtesting`. La liquidación es evidencia AÑADIDA: montos, momios y estrategias del
+        # contrato emitido quedan INTACTOS ([GOVERNANCE-01] paridad estricta backend↔pantalla).
+        if en_backtesting:
+            data = _adjuntar_liquidacion_real(data, session, jornada_anclada, fixtures_por_id)
 
         return data
 

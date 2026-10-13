@@ -1403,6 +1403,25 @@ def sincronizar_progol_pipeline_completo(
 * **[SHIELD]:** `tests/shield/test_shield_backtesting_and_empty_portfolio.py`
 
 
+### [ARCH-1.4.36] Sensor de Ingesta Histórica BetExplorer y Cortes Progresivos Anti-Leakage [ARCH-PILLAR]
+* **Ubicación Canónica:** `scripts/ingesta/ingestar_historico_betexplorer.py` (+ `scripts/ingesta/__init__.py`).
+* **Régimen Dual de la Pieza (`[HÍBRIDO DUAL-TRACK]`):** el transporte HTTP y el parseo de presentación (DOM ajeno) operan en `[DBBD-FUNGIBLE]`; la matemática del corte acumulado permanece en `[DIRGEN-STRICT]` por **reutilización obligatoria** del plano canónico `reconstruir_tabla_acumulada` (`scripts/daemons/centinela_deportivo.py`, transcrito en `docs/DIRGEN_VAULT.md`). **Prohibida la reimplementación o transcripción divergente**: el sensor importa la función y el Juez certifica la identidad de objeto del algoritmo.
+* **Contrato de Fuente (DOM real certificado en Paso 0):** bloques de jornada en `tr > th` con etiqueta `N. Round` (la repetición del encabezado **no** duplica partidos: la clave de identidad es la pareja canónica local-visita dentro del bloque); etiqueta de partido en celda `h-text-left` **o** `table-main__tt` (parser dual-DOM); marcador en celda con separador `:`; cuotas en `td.table-main__odds[data-odd]` (3 celdas, índice `0 = 1`, `1 = X`, `2 = 2`); ganador señalado por la clase `colored` (exactamente una celda por fila). Evidencia fáctica: `scratch/betexplorer_results_raw.html` y `scratch/out_paridad_cortes.txt`.
+* **Paridad de Referencia (verificada contra la bóveda):** los cortes $J1 \dots J9$ reconstruidos desde BetExplorer presentan **paridad total** (`18/18` clubes × `15` campos: `pos, pj, pg, pe, pp, gf, gc, dif, puntos, pts_pj, xg, xga, xpts, forma, escudo_url`, más orden idéntico); $J10$ diverge legítimamente porque `tablas_historicas[10] = standings_raw` (tabla viva FotMob, no reconstrucción); $J11$ es un hueco real de bóveda (8/9 resultados publicados). Oráculo de ganador: `96/96`.
+* **Anti-Leakage Estricto (Future-Blindness):** el corte $N$ se computa **exclusivamente** con resultados publicados de jornadas $\le N$; se exige $pj \le N$ para los 18 clubes y **ninGÚN** dato de jornadas $> N$ puede alterar el corte $N$ (juez de inmutabilidad por inyección de resultados futuros).
+* **Orden Canónico de Desempate:** el universo `clubes` se construye respetando el orden de la tabla viva (réplica del call-site canónico `centinela_deportivo` L484), porque `sorted()` es estable y ese orden decide los empates exactos de la clave $(puntos, dif, gf)$.
+* **Persistencia 3NF No Destructiva:** `standings_snapshots` opera con política **insert-if-absent** (jamás sobreescribe un corte preexistente ni el corte de tabla viva); `matches` opera con **fill-if-null** exclusivo de `score_home`/`score_away` (jamás muta un marcador ya registrado y jamás inventa identificadores de calendario para jornadas sin filas 3NF). La materialización de un marcador publicado conlleva la transición de estado `PROGRAMADO`/`EN VIVO` $\to$ `FINALIZADO` (sin marcador no hay transición ni escritura de estado): marcador y estado operan como una única unidad de escritura no reversible.
+* **[SHIELD]:** `tests/shield/test_shield_betexplorer_ingestion.py`
+
+
+### [ARCH-1.4.37] Parámetro de Cobertura Dinámica δ en el Pipeline de Cartera y DTOs [ARCH-PILLAR]
+* **Contrato de Petición:** `GeneratePortfolioRequest` admite el campo opcional:
+  `modo_cobertura: Optional[str] = Field("DEF", description="DEF (V=0), BAL (50% delta*), AGR (delta*)")`
+* **Orquestación en `PortfolioEngine`:** Al procesar estrategias con cobertura (`QBE-H1`, `QBE-H2`), `build_plan()` resuelve $\delta$ mediante `calcular_particion_dutching_dinamico()` y distribuye el capital respetando el piso duro de ventanilla de $\$2.00\text{ MXN}$ en ambas piernas.
+* **Liquidación Post-Evento (`liquidar_orden_post_evento`):** Si un partido concluye en empate y la orden portaba $\delta > 0$, la liquidación acredita como cobro bruto $(1.0 + \delta) B_i$, registrando el estado `COBRADO_SEGURO_DELTA` y acreditando la ganancia neta en el PnL real.
+* **[SHIELD]:** `tests/shield/test_shield_dynamic_dutching_delta.py`
+
+
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:
   `https://www.fotmob.com/api/searchapi/suggest?term={club_sanitizado}`

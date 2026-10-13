@@ -15,7 +15,9 @@ from src.core.catalog import STRATEGY_CATALOG
 from src.core.contracts.portfolio_math import (
     calcular_dutching_v0, calcular_kelly_atenuado, aplicar_hard_caps_constitucionales,
     contraer_distribucion_fiduciaria, calcular_probabilidad_exito_estrategia,
-    ordenar_cartera_por_certeza_lexicografica, asignar_capital_monotono_cartera
+    ordenar_cartera_por_certeza_lexicografica, asignar_capital_monotono_cartera,
+    # [LN-QBE-077-B/C/D] / [ARCH-1.4.37] Cobertura Dinámica (V = δ > 0) de la Familia H.
+    calcular_particion_dutching_dinamico,
 )
 from src.models.decision import (
     MatchExecutionOrder, StrategySelection, KeyMetrics, TicketOrder,
@@ -308,7 +310,8 @@ class PortfolioEngine:
         approved_matches: List[Dict[str, Any]],
         bankroll: float,
         mode: str = "BANKROLL",
-        total_jornada: int = 9
+        total_jornada: int = 9,
+        modo_cobertura: str = "DEF"
     ) -> PortfolioExecutionPlan:
         # [ARCH-1.4.14] `total_jornada` es el denominador fáctico de la cartelera: la cantidad
         # total de partidos que componen la fecha oficial (ej. 9 en Liga MX). Se propaga VERBATIM
@@ -321,6 +324,13 @@ class PortfolioEngine:
         # delta_epist > 0.12 <=> psi_epist = 0 => f*_adj = 0 => Cuarentena Fiduciaria (QBE-00, $0.00).
         # El filtro se ejecuta ANTES del ordenamiento para que la ruina conjunta, los pesos
         # y la Trinidad 3^K se computen exclusivamente sobre activos con capital autorizado.
+        # ── [LN-QBE-077-B/C/D] / [ARCH-1.4.37] MODALIDAD CANÓNICA DE COBERTURA DINÁMICA ──────
+        # `DEF` (default) conserva la indemnidad pura V=0 (paridad bit a bit con el contrato
+        # histórico sellado); `BAL` ⇒ δ = 0.50·δ*, `AGR` ⇒ δ = δ*, `CUSTOM` ⇒ δ explícito. La
+        # resolución del valor efectivo y su clamping fiduciario viven EXCLUSIVAMENTE en la ley
+        # pura `calcular_particion_dutching_dinamico` ([LN-QBE-077-C]): cero números nuevos aquí.
+        modo_cobertura_norm = str(modo_cobertura or "DEF").strip().upper()
+
         approved_matches = [
             m for m in approved_matches
             if float(m.get("delta_epist", 0.02)) <= 0.12
@@ -443,6 +453,17 @@ class PortfolioEngine:
             else:
                 inv_partido = 10.00
 
+            # ── [LN-QBE-077-B/C/D] / [ARCH-1.4.37] Parámetro δ de COBERTURA DINÁMICA ──────────
+            # Toda orden sin cobertura dinámica viaja con δ = 0.0000 y ROI de empate 0.00%,
+            # preservando el contrato sellado y satisfaciendo la Invariante VIII-54 (trazabilidad).
+            delta_cobertura_i = 0.0
+            roi_empate_i = 0.0
+            # [LN-QBE-077-B] Proyección de COSECHA certificada por la ley pura: con δ = 0.0000
+            # (modalidad defensiva) ambas cifras permanecen en 0.0000 — la modalidad sellada no
+            # proyecta ganancia alguna en empate (cero promesa inventada, [GOVERNANCE-01]).
+            cobro_empate_i = 0.0
+            pnl_empate_i = 0.0
+
             if "H2" in code:
                 # ══════════════════════════════════════════════════════════════════════════════
                 # [INVARIANTE VIII-11] / [LN-QBE-083] SIMETRÍA CANÓNICA H1/H2 — RESOLUCIÓN
@@ -464,6 +485,22 @@ class PortfolioEngine:
                 # La asignación de importes se delega VERBATIM a la ley sellada
                 # `[VAULT-CORE-070-DUTCHING]` (`calcular_dutching_v0`): b_seg = B_i / O_emp.
                 b_prio, b_seg, _, _ = calcular_dutching_v0(inv_partido, o_fav, o_emp)
+                # [ARCH-1.4.37] CAPA DE COBERTURA DINÁMICA: cuando la ventanilla solicita δ > 0,
+                # la partición la dicta la ley GENERAL [LN-QBE-077-B] (B_seg(δ) = (1+δ)·B_i/O_emp)
+                # y el δ efectivo viaja con la orden. Con la modalidad `DEF` (δ = 0.0000) nada
+                # cambia: el contrato sellado V=0 subsiste idéntico (paridad bit a bit).
+                res_dutch = calcular_particion_dutching_dinamico(
+                    inv_partido, o_fav, o_emp, modo=modo_cobertura_norm
+                )
+                if res_dutch["delta_efectivo"] > 0.0:
+                    b_prio = res_dutch["monto_ataque"]
+                    b_seg = res_dutch["monto_seguro"]
+                    # Cosecha Activa: cobro bruto y PnL neto de EMPATE literalmente certificados
+                    # por la ley pura ([LN-QBE-077-B]) — se declaran, jamás se recalculan.
+                    cobro_empate_i = res_dutch["cobro_bruto_empate"]
+                    pnl_empate_i = res_dutch["pnl_neto_empate"]
+                delta_cobertura_i = res_dutch["delta_efectivo"]
+                roi_empate_i = res_dutch["roi_empate_porcentaje"]
                 b1_sel = "Empate"
                 b1_momio = o_emp
                 b1_monto = b_seg
@@ -479,6 +516,20 @@ class PortfolioEngine:
                 b2_sel = f"Gana {fav_name}{suffix_pa}"
                 b2_momio = o_fav
                 b2_monto = round(inv_partido - b1_monto, 2)
+                # [ARCH-1.4.37] Capa de Cobertura Dinámica: con δ > 0 la partición la dicta la ley
+                # general [LN-QBE-077-B]; con δ = 0.0000 subsiste la fórmula sellada V=0 idéntica.
+                res_dutch = calcular_particion_dutching_dinamico(
+                    inv_partido, o_fav, o_emp, modo=modo_cobertura_norm
+                )
+                if res_dutch["delta_efectivo"] > 0.0:
+                    b1_monto = res_dutch["monto_seguro"]
+                    b2_monto = res_dutch["monto_ataque"]
+                    # Cosecha Activa: cobro bruto y PnL neto de EMPATE certificados por la ley
+                    # pura ([LN-QBE-077-B]); se declaran, jamás se recalculan downstream.
+                    cobro_empate_i = res_dutch["cobro_bruto_empate"]
+                    pnl_empate_i = res_dutch["pnl_neto_empate"]
+                delta_cobertura_i = res_dutch["delta_efectivo"]
+                roi_empate_i = res_dutch["roi_empate_porcentaje"]
                 out_min85 = "Sin descuento. Dejar correr al 90' para cobrar 100% Tablas o cobro anticipado por ventaja de 2 goles."
                 tablas_amt = inv_partido
             elif code == "QBE-R1":
@@ -540,7 +591,14 @@ class PortfolioEngine:
                 "m": m, "idx": idx, "code": code, "nombre": nombre, "ev_roi": ev_roi, "psi": psi, "phi": phi,
                 "pa_activo": pa_activo, "inv_partido": inv_partido, "b1_sel": b1_sel, "b1_momio": b1_momio,
                 "b1_monto": b1_monto, "b2_sel": b2_sel, "b2_momio": b2_momio, "b2_monto": b2_monto,
-                "out_min85": out_min85, "tablas_amt": tablas_amt
+                "out_min85": out_min85, "tablas_amt": tablas_amt,
+                # [LN-QBE-077-B] / Invariante VIII-54: el δ efectivo y las proyecciones de
+                # cosecha en empate viajan con el libro de órdenes (se declaran VERBATIM desde la
+                # ley pura, jamás se recalculan downstream). Con δ = 0.0000 (modo `DEF`) las
+                # cifras de cosecha son 0.0000: la modalidad sellada no promete ganancia en empate.
+                "delta_cobertura": delta_cobertura_i, "roi_empate_porcentaje": roi_empate_i,
+                "cobro_bruto_empate_mxn": cobro_empate_i, "pnl_neto_empate_mxn": pnl_empate_i,
+                "modo_cobertura": modo_cobertura_norm
             })
 
         # ── [ARCH-1.4.19 / ALT-1] SEGUNDO PASE DE MONOTONÍA FIDUCIARIA NO CRECIENTE ──────────
@@ -674,6 +732,22 @@ class PortfolioEngine:
             und_pts = m.get("und_pts", 0)
             q_und = m.get("q_mod_und", 1.0)
 
+            # [LN-QBE-077-B] / Invariante VIII-54: bloque DERIVADO de trazabilidad de δ y de los
+            # ROIs proyectados (favorito / empate). Cero aritmética nueva: se declara lo certificado
+            # por el motor y sólo viaja en las familias con seguro de empate (H1/H2).
+            es_familia_h = code.replace("+", "").strip() in ("QBE-H1", "QBE-H2")
+            cobertura_dinamica = {
+                "modo": item.get("modo_cobertura", "DEF"),
+                "delta_cobertura": round(float(item.get("delta_cobertura", 0.0) or 0.0), 4),
+                "roi_empate_porcentaje": float(item.get("roi_empate_porcentaje", 0.0) or 0.0),
+                "roi_favorito_porcentaje": roi_pct,
+                # Alias canónico del contrato de salida de la ley pura ([LN-QBE-077-B] declara
+                # `delta_efectivo`): la ventanilla exhibe este nombre sin re-derivar nada.
+                "delta_efectivo": round(float(item.get("delta_cobertura", 0.0) or 0.0), 4),
+                "cobro_bruto_empate_mxn": round(float(item.get("cobro_bruto_empate_mxn", 0.0) or 0.0), 2),
+                "pnl_neto_empate_mxn": round(float(item.get("pnl_neto_empate_mxn", 0.0) or 0.0), 2)
+            } if es_familia_h else None
+
             order = MatchExecutionOrder(
                 id_partido=m["id_partido"],
                 partido=m["partido_nombre"],
@@ -720,8 +794,12 @@ class PortfolioEngine:
                     instruccion_emergencia_rompequinielas=f"CashOut en cuanto ofrezca Tablas (${inv_partido} MXN) al igualar en el 2T." if tablas_amt > 0 else "Monitorear en el 2T.",
                     instruccion_desarrollo_normal=out_min85
                 ),
+                # [LN-QBE-077-B] / Invariante VIII-54: bloque DERIVADO de trazabilidad de δ y de
+                # los ROIs proyectados (favorito / empate), hidratado más arriba sin aritmética
+                # nueva: se declara lo certificado por el motor (sólo familias con seguro).
                 # [DES-QBE-060] Bloque de Transparencia 360°: desenlace rival descartado.
-                opcion_no_jugada=opcion_no_jugada
+                opcion_no_jugada=opcion_no_jugada,
+                cobertura_dinamica=cobertura_dinamica
             )
             orders.append(order)
 

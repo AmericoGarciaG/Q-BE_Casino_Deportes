@@ -36,6 +36,139 @@ def calcular_dutching_v0(b_total: float, o_fav: float, o_emp: float) -> Tuple[fl
     return (b_prio, b_seg, ganancia_neta, roi_pct)
 
 
+# ── [LN-QBE-077-B] / [LN-QBE-077-C] / [LN-QBE-077-D] COBERTURA DINÁMICA (V = δ > 0) ───────────
+# Manifiesto canónico de `docs/CONSTANTS.md` («Parámetros de Cobertura Dinámica»). El Dutching
+# clásico V=0 subsiste como la especialización δ = δ_def de la MISMA ley general de partición.
+DELTA_DUTCHING_DEF: float = 0.0000          # δ_def — indemnidad pasiva V=0 exacta
+RATIO_DELTA_BAL: float = 0.5000             # r_bal — fracción balanceada del δ de isorrendimiento
+FACTOR_SEGURIDAD_DELTA_MAX: float = 0.9500  # Margen_δ — techo fiduciario de seguridad sobre δ_max
+# Umbral operativo de reconocimiento de la Cosecha Activa: por debajo de este δ el desvío de
+# capital hacia el seguro es ruido de redondeo y el veredicto permanece en la ley sellada V=0.
+UMBRAL_DELTA_COSECHA_ACTIVA: float = 0.05
+
+
+def calcular_delta_max_analitico(o_fav: float, o_emp: float) -> float:
+    """[LN-QBE-077-C] Techo de viabilidad analítica δ_max = O_emp / θ* − 1.0000.
+
+    θ* = O_fav / (O_fav − 1.0) es el umbral de breakeven sellado en [LN-QBE-050]. Por encima de
+    δ_max la victoria del favorito dejaría de ser rentable (G_fav(δ) ≤ 0), violando la Invariante
+    VIII-49: fuera del dominio viable se devuelve 0.0000 (degeneración al contrato defensivo).
+    """
+    if o_fav <= 1.0 or o_emp <= 1.0:
+        return 0.0
+    theta_estrella = calcular_umbral_theta_estrella(o_fav)
+    if theta_estrella <= 0.0:
+        return 0.0
+    return round((o_emp / theta_estrella) - 1.0000, 4)
+
+
+def calcular_delta_isorrendimiento(o_fav: float, o_emp: float) -> float:
+    """[LN-QBE-077-D] δ* = (O_fav · O_emp) / (O_fav + O_emp) − 1.0000.
+
+    Exige la condición de existencia del sub-símplex (Invariante VIII-51):
+    (1.0/O_fav) + (1.0/O_emp) < 1.0000. Fuera de ese dominio no existe punto de doble cosecha
+    simétrica y se devuelve δ = 0.0000 (degeneración al contrato defensivo sellado).
+    """
+    if o_fav <= 1.0 or o_emp <= 1.0:
+        return 0.0
+    if ((1.0 / o_fav) + (1.0 / o_emp)) >= 1.0000:
+        return 0.0
+    return round(((o_fav * o_emp) / (o_fav + o_emp)) - 1.0000, 4)
+
+
+def calcular_particion_dutching_dinamico(
+    b_total: float,
+    o_fav: float,
+    o_emp: float,
+    modo: str = "DEF",
+    delta_custom: float = 0.0,
+    piso_min_boleto: float = 2.00
+) -> Dict[str, Any]:
+    """[LN-QBE-077-B / C / D] Partición de capital del Dutching con Cobertura Activa (V = δ > 0).
+
+    Generaliza `calcular_dutching_v0` ([LN-QBE-070]) transformando el retorno de indemnidad pasiva
+    ($0.00 MXN en tablas) en un retorno neto estrictamente positivo. Cero desviación del plano:
+
+      1. Partición generalizada: B_seg(δ) = (1.0 + δ)·B_i / O_emp ; B_prio(δ) = B_i − B_seg(δ)
+      2. Retornos proyectados: G_fav(δ) = B_prio·O_fav − B_i  [> 0 — Invariante VIII-49]
+                              G_emp(δ) = δ·B_i                [δ ≥ 0 — Invariante VIII-50]
+      3. Techo y clamping fiduciario ([LN-QBE-077-C]):
+         δ_max = O_emp / θ* − 1.0000 ; δ_efectivo = max(0, min(δ, 0.95 · δ_max))
+      4. Tríptico operativo ([LN-QBE-077-D]): `DEF` ⇒ δ = 0.0 (V=0) | `BAL` ⇒ δ = 0.50·δ*
+         | `AGR` ⇒ δ = δ* | `CUSTOM` ⇒ δ = delta_custom (sujeto a clamping seguro).
+
+    El piso legal de ventanilla (Invariante VIII-53) se DECLARA en `piso_ventanilla_insatisfecho`
+    y jamás se clampa silenciosamente aquí: su reimposición es competencia del pase canónico de
+    monotonía/piso de `PortfolioEngine.build_plan` ([LN-QBE-071] / [ARCH-1.4.19]), de modo que esta
+    función permanece una ley PURA de partición (cero I/O, cero estado externo).
+    """
+    vacio: Dict[str, Any] = {
+        "modo_resuelto": "DEF",
+        "delta_solicitado": DELTA_DUTCHING_DEF,
+        "delta_max": 0.0,
+        "delta_isorrendimiento": 0.0,
+        "delta_efectivo": DELTA_DUTCHING_DEF,
+        "monto_seguro": 0.0,
+        "monto_ataque": 0.0,
+        "cobro_bruto_favorito": 0.0,
+        "cobro_bruto_empate": 0.0,
+        "pnl_neto_favorito": 0.0,
+        "pnl_neto_empate": 0.0,
+        "roi_favorito_porcentaje": 0.0,
+        "roi_empate_porcentaje": 0.0,
+        "piso_ventanilla_insatisfecho": False,
+    }
+    if b_total <= 0.0 or o_fav <= 1.0 or o_emp <= 1.0:
+        return vacio
+
+    modo_resuelto = str(modo or "DEF").strip().upper()
+    delta_max = calcular_delta_max_analitico(o_fav, o_emp)
+    delta_isorrendimiento = calcular_delta_isorrendimiento(o_fav, o_emp)
+
+    if modo_resuelto == "BAL":
+        delta_solicitado = round(RATIO_DELTA_BAL * delta_isorrendimiento, 4)
+    elif modo_resuelto == "AGR":
+        delta_solicitado = delta_isorrendimiento
+    elif modo_resuelto == "CUSTOM":
+        delta_solicitado = round(float(delta_custom or 0.0), 4)
+    else:
+        # `DEF` y cualquier modalidad no legislada degeneran al contrato defensivo sellado.
+        modo_resuelto = "DEF"
+        delta_solicitado = DELTA_DUTCHING_DEF
+
+    # Invariante VIII-50 (δ ≥ 0.0) + [LN-QBE-077-C] δ_clamped = min(δ, 0.95 · δ_max).
+    delta_efectivo = round(
+        max(DELTA_DUTCHING_DEF, min(delta_solicitado, FACTOR_SEGURIDAD_DELTA_MAX * delta_max)), 4
+    )
+
+    # [LN-QBE-077-B].1 Partición generalizada de capital.
+    b_seg = round(((1.0 + delta_efectivo) * b_total) / o_emp, 2)
+    b_prio = round(b_total - b_seg, 2)
+
+    cobro_fav = round(b_prio * o_fav, 2)
+    cobro_emp = round(b_seg * o_emp, 2)
+    pnl_fav = round(cobro_fav - b_total, 2)
+    pnl_emp = round(cobro_emp - b_total, 2)
+
+    return {
+        "modo_resuelto": modo_resuelto,
+        "delta_solicitado": delta_solicitado,
+        "delta_max": delta_max,
+        "delta_isorrendimiento": delta_isorrendimiento,
+        "delta_efectivo": delta_efectivo,
+        "monto_seguro": b_seg,
+        "monto_ataque": b_prio,
+        "cobro_bruto_favorito": cobro_fav,
+        "cobro_bruto_empate": cobro_emp,
+        "pnl_neto_favorito": pnl_fav,
+        "pnl_neto_empate": pnl_emp,
+        "roi_favorito_porcentaje": round((pnl_fav / b_total) * 100.0, 2),
+        "roi_empate_porcentaje": round((pnl_emp / b_total) * 100.0, 2),
+        # [GOVERNANCE-01] Cero silencios fiduciarios: la insuficiencia del piso se declara.
+        "piso_ventanilla_insatisfecho": bool(b_seg < piso_min_boleto or b_prio < piso_min_boleto),
+    }
+
+
 def escalar_a_piso_ventanilla(b_total: float, o_emp: float, piso_min: float = 2.00) -> Tuple[float, float, float]:
     """[LN-QBE-071] Reescalado proporcional si el seguro cae por debajo de $2.00 MXN preservando V=0."""
     if o_emp <= 1.0 or b_total <= 0.0:
@@ -541,6 +674,33 @@ class PortfolioParameters(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _resolver_familia_cobertura(orden: Dict[str, Any]) -> Optional[str]:
+    """[LN-QBE-077-B] Resuelve el código canónico de estrategia del contrato plano de liquidación.
+
+    Acepta `strategy_code` (contrato plano interno consumido por `aplicar_hard_caps_*`) o
+    `estrategia_seleccionada.codigo` (contrato EMITIDO por el motor de cartera). Devuelve `None`
+    cuando el transporte es LEGADO —ninguna de las dos claves viaja—: en ese caso el liquidador
+    preserva la ley sellada V=0 (`TABLAS_V0`) en lugar de inventar una pérdida total, honrando el
+    principio de cero liquidaciones fabricadas ([GOVERNANCE-01]).
+    """
+    crudo = orden.get("strategy_code")
+    if crudo is None:
+        seleccion = orden.get("estrategia_seleccionada")
+        if isinstance(seleccion, dict):
+            crudo = seleccion.get("codigo")
+    if crudo is None:
+        return None
+    codigo = str(crudo).upper().replace("+", "").strip()
+    return codigo or None
+
+
+def _roi_real_porcentaje(pnl_neto: float, inversion: float) -> float:
+    """[LN-QBE-025-B] ROI real bancario (%), sin división por cero."""
+    if inversion <= 0.0:
+        return 0.0
+    return round((pnl_neto / inversion) * 100.0, 2)
+
+
 def liquidar_orden_post_evento(
     orden: Dict[str, Any],
     home_score: int,
@@ -551,10 +711,16 @@ def liquidar_orden_post_evento(
     Ecuaciones legisladas — cero desviación:
       - Gana el Favorito respaldado: PnL = B_prio * O_fav - B_total
       - Empate con cobertura V=0:    PnL = B_seg  * O_emp - B_total  (≡ $0.00 MXN)
+      - Empate con COSECHA ACTIVA:   PnL = (1.0 + δ)·B_i - B_total = δ·B_i > 0  [ARCH-1.4.37]
       - Gana el Underdog:            PnL = -B_total
 
     `seleccion_favorito` es la identidad de la pierna Ataque ("LOCAL" | "VISITA");
     el marcador final decide el desenlace sin transformar ninguna probabilidad.
+
+    [ARCH-1.4.37] Cuando el empate acaece sobre una orden que portaba δ > 0
+    (`delta_cobertura`) en una familia con cobertura ([LN-QBE-077-B]), el cobro bruto devengado
+    (1.0 + δ)·B_i se acredita con el estado `COBRADO_SEGURO_DELTA`. Las familias SIN cobertura
+    (D1/D2/C1/QBE-00) consumen el stake íntegro en tablas (estado `FALLO`, cobro $0.00 MXN).
     """
     inversion_total = round(float(orden.get("inversion_total", 0.0) or 0.0), 2)
     monto_ataque = float(orden.get("monto_ataque", 0.0) or 0.0)
@@ -564,23 +730,42 @@ def liquidar_orden_post_evento(
     favorito_local = str(orden.get("seleccion_favorito", "LOCAL")).strip().upper() == "LOCAL"
 
     if home_score == away_score:
-        # Escenario TABLAS: se cobra la pierna de cobertura (Dutching V=0 => PnL ≈ $0.00).
+        # Escenario TABLAS: se cobra la pierna de cobertura.
+        # [LN-QBE-077-B] / [ARCH-1.4.37] Cosecha Activa: si la orden viajó con δ > 0 la cobertura
+        # devenga (1.0 + δ)·B_i y el veredicto se eleva a `COBRADO_SEGURO_DELTA`; con δ = δ_def
+        # subsiste la ley sellada V=0 (indemnidad pasiva ⇒ `TABLAS_V0`).
         retorno_bruto = round(monto_seguro * cuota_seguro, 2)
+        familia = _resolver_familia_cobertura(orden)
+        delta_cobertura = float(orden.get("delta_cobertura", DELTA_DUTCHING_DEF) or 0.0)
+
+        if familia is not None and familia not in FAMILIAS_CON_COBERTURA:
+            # Familia SIN cobertura en empate (D1/D2/C1/QBE-00): el stake se consume íntegro.
+            retorno_bruto = 0.0
+            estado = "FALLO"
+        elif delta_cobertura > UMBRAL_DELTA_COSECHA_ACTIVA and retorno_bruto > inversion_total:
+            estado = "COBRADO_SEGURO_DELTA"
+        else:
+            estado = "TABLAS_V0"
+
+        pnl_neto = round(retorno_bruto - inversion_total, 2)
         return {
-            "estado": "TABLAS_V0",
-            "pnl_neto_mxn": round(retorno_bruto - inversion_total, 2),
+            "estado": estado,
+            "pnl_neto_mxn": pnl_neto,
             "retorno_bruto_mxn": retorno_bruto,
             "inversion_mxn": inversion_total,
+            "roi_real_porcentaje": _roi_real_porcentaje(pnl_neto, inversion_total),
         }
 
     if (home_score > away_score) == favorito_local:
         # Escenario PLENO ÉXITO: se cobra la pierna Ataque respaldada.
         retorno_bruto = round(monto_ataque * cuota_ataque, 2)
+        pnl_neto = round(retorno_bruto - inversion_total, 2)
         return {
             "estado": "COBRADO_ATAQUE",
-            "pnl_neto_mxn": round(retorno_bruto - inversion_total, 2),
+            "pnl_neto_mxn": pnl_neto,
             "retorno_bruto_mxn": retorno_bruto,
             "inversion_mxn": inversion_total,
+            "roi_real_porcentaje": _roi_real_porcentaje(pnl_neto, inversion_total),
         }
 
     # Escenario FALLO: el desenlace no cubierto consume el stake íntegro.
@@ -589,4 +774,5 @@ def liquidar_orden_post_evento(
         "pnl_neto_mxn": round(-inversion_total, 2),
         "retorno_bruto_mxn": 0.0,
         "inversion_mxn": inversion_total,
+        "roi_real_porcentaje": _roi_real_porcentaje(round(-inversion_total, 2), inversion_total),
     }

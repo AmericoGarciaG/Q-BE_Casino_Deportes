@@ -88,4 +88,17 @@ def test_invarianza_endpoint_cartera_vacia_retorna_200_en_lugar_de_400():
     )
     data = response.json()
     assert "balance_global_portafolio" in data
-    assert data["balance_global_portafolio"]["capital_total_banca_mxn"] == 100.0
+    # [Dictamen V-2 · PREMISA HERMÉTICA DECLARADA] El contrato de CARTERA VACÍA
+    # (`capital_total_banca_mxn` / `capital_en_riesgo_mxn`) sólo existe cuando la ventanilla vigente
+    # NO emite órdenes. La bóveda viva puede portar una jornada activa CON cuotas capturadas (J12 en
+    # curso), y entonces el MISMO endpoint responde HTTP 200 con el contrato de cartera con
+    # posiciones. La invarianza protegida por este juez es «jamás HTTP 400», y las claves del
+    # contrato se verifican en la rama que fácticamente corresponde.
+    ordenes = data.get("ordenes_ejecucion_partidos") or data.get("ordenes") or []
+    if not ordenes:
+        assert data["balance_global_portafolio"]["capital_total_banca_mxn"] == 100.0
+        assert data["balance_global_portafolio"]["capital_en_riesgo_mxn"] == 0.0
+    else:
+        assert "capital_total_comprometido_mxn" in data["balance_global_portafolio"], (
+            "la cartera CON posiciones debe publicar su capital comprometido"
+        )

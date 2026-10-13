@@ -1023,6 +1023,51 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-077-B] Teorema de Aceleración Asintótica y Partición de Capital con Cobertura Activa (V = δ > 0)
+
+* **Ω (Resumen):** Generalización de la cobertura sintética en tablas para transformar el retorno de indemnidad pasiva ($0.00 MXN) en un retorno neto estrictamente positivo ($G_{\text{emp}} = \delta \cdot B_i > 0$). Erradica la fricción por estancamiento de capital (Growth Drag) en jornadas dominadas por empates, inyectando energía positiva a la tasa de crecimiento compuesto de Kelly ($g$).
+* **I (Input):** Presupuesto asignado $B_i > 0$, cuota comercial del favorito $O_{\text{fav}} > 1.0$, cuota del empate $O_{\text{emp}} > 1.0$, parámetro de retorno exigido $\delta \ge 0.0$, piso legal de ventanilla $B_{\min} = \$2.00\text{ MXN}$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Partición Generalizada de Capital:**
+     $$B_{\text{seg}}(\delta) = \frac{(1.0 + \delta) \cdot B_i}{O_{\text{emp}}}$$
+     $$B_{\text{prio}}(\delta) = B_i - B_{\text{seg}}(\delta) = B_i \left[ 1.0 - \frac{1.0 + \delta}{O_{\text{emp}}} \right]$$
+  2. **Retornos Proyectados por Desenlace:**
+     - En Victoria del Favorito: $G_{\text{fav}}(\delta) = B_i \left( \left[ 1.0 - \frac{1.0 + \delta}{O_{\text{emp}}} \right] O_{\text{fav}} - 1.0 \right)$
+     - En Empate (Cobertura Activa): $G_{\text{emp}}(\delta) = \delta \cdot B_i$
+     - En Victoria del Underdog: $\text{PnL} = -B_i$
+  3. **Piso de Ventanilla en Ambas Piernas:** $B_{\text{seg}} \ge \$2.00$ y $B_{\text{prio}} \ge \$2.00$ ($B_i \ge \$4.00$).
+* **O (Output):** `ParticionDutchingResult(B_prio, B_seg, G_fav, G_emp, roi_fav, roi_emp, delta_efectivo)`.
+* **Φ (Transición):** Hacia `[LN-QBE-070-D]` (`PortfolioEngine.build_plan`), `[VAULT-CORE-070-DUTCHING]` y `[ARCH-1.4.37]`.
+* **[SHIELD]:** `tests/shield/test_shield_dynamic_dutching_delta.py`
+
+### ID: [LN-QBE-077-C] Techo de Viabilidad Analítica δ_max y Umbral de Breakeven θ*
+
+* **Ω (Resumen):** Cota analítica superior que limita el desvío de capital hacia el boleto de seguro, garantizando que la victoria del favorito mantenga una ganancia neta estrictamente positiva ($G_{\text{fav}}(\delta) > 0$).
+* **I (Input):** Cuotas comerciales $O_{\text{fav}}, O_{\text{emp}}$, umbral de breakeven $\theta^* = O_{\text{fav}} / (O_{\text{fav}} - 1.0)$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  $$\delta_{\max} = \frac{O_{\text{emp}}}{\theta^*} - 1.0000 = O_{\text{emp}} \left( 1.0 - \frac{1.0}{O_{\text{fav}}} \right) - 1.0000$$
+  Todo parámetro solicitado debe satisfacer $\delta < \delta_{\max}$. Si una solicitud excede la cota, el motor aplica clamping fiduciario seguro:
+  $$\delta_{\text{clamped}} = \min(\delta, \; 0.95 \cdot \delta_{\max})$$
+* **O (Output):** Cota máxima admisible $\delta_{\max}$ y delta acotado fiduciario.
+* **Φ (Transición):** Hacia `[LN-QBE-077-B]`.
+* **[SHIELD]:** `tests/shield/test_shield_dynamic_dutching_delta.py`
+
+### ID: [LN-QBE-077-D] Dutching Isorrendimiento de Doble Cosecha (δ*)
+
+* **Ω (Resumen):** Determinación del punto óptimo de simetría donde la posición rinde exactamente el mismo porcentaje de retorno neto tanto en victoria del favorito como en empate: $\text{ROI}_{\text{fav}} \equiv \text{ROI}_{\text{emp}} = \delta^*$.
+* **I (Input):** Cuotas comerciales $O_{\text{fav}}, O_{\text{emp}}$ que satisfagan la condición de sub-símplex $(1/O_{\text{fav}}) + (1/O_{\text{emp}}) < 1.0000$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  $$\delta^* = \frac{O_{\text{fav}} \cdot O_{\text{emp}}}{O_{\text{fav}} + O_{\text{emp}}} - 1.0000 = \frac{1.0}{\frac{1.0}{O_{\text{fav}}} + \frac{1.0}{O_{\text{emp}}}} - 1.0000$$
+  Tríptico Operativo de Modalidades:
+  - `DEF` (Defensivo): $\delta = 0.0000$ (Indemnidad pura $V=0$).
+  - `BAL` (Balanceado): $\delta = 0.50 \cdot \delta^*$ (Crecimiento compuesto balanceado).
+  - `AGR` (Isorrendimiento): $\delta = \delta^*$ (Doble cosecha simétrica).
+* **O (Output):** Parámetro de isorrendimiento $\delta^*$ y modalidad resuelta.
+* **Φ (Transición):** Hacia `[LN-QBE-077-B]`.
+* **[SHIELD]:** `tests/shield/test_shield_dynamic_dutching_delta.py`
+
+---
+
 ### ID: [LN-QBE-070-E] Prorrateo Resiliente de Hard-Caps con Respeto al Piso de Ventanilla
 * **Ω (Resumen):** Resuelve la colisión entre el Hard-Cap global de cartera ($\sum B_i \le 25\% \cdot \text{Bankroll}$) y el piso mínimo de ventanilla ($B_{\text{seg}} \ge \$2.00\text{ MXN}$).
 * **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**

@@ -738,7 +738,16 @@ async function ejecutarDespachoPortafolio() {
                 bankroll: bankroll,
                 target_certeza: certeza,
                 operador: operador,
-                gamma_slider: gammaSeleccionada
+                gamma_slider: gammaSeleccionada,
+                // [ARCH-1.4.37 / LN-QBE-077-B] Tríptico de Cobertura: la ventanilla declara el modo
+                // de partición δ del capital. `DEF` (V=0) es el default soberano sellado; `BAL`
+                // (r_bal = 50% de δ*) y `AGR` (δ*) activan la ley general del Dutching Dinámico.
+                modo_cobertura: state.modo_cobertura,
+                // [ARCH-1.4.35 / CONMUTADOR DE SLATES] El anclaje de jornada viaja SÓLO con el
+                // candado abierto (🔓). Con el candado cerrado (🔒) se emite `null` y el backend
+                // resuelve la jornada activa dinámicamente ([ARCH-1.6.15]). Doble seguro: la UI
+                // jamás congela la mesa por accidente.
+                jornada: esModoBacktestingJornada() ? _jornadaSeleccionadaConmutador() : null
             })
         });
 
@@ -774,6 +783,10 @@ window.ejecutarDespachoMesaApuestas = ejecutarDespachoPortafolio;
 
 let currentPortfolioData = null;
 let currentCasinoOperador = "caliente";
+// [ARCH-1.4.37 / LN-QBE-077-B] Estado soberano del Tríptico de Cobertura (δ): `DEF` es el
+// contrato sellado V=0 (paridad bit a bit con el Dutching clásico); `BAL`/`AGR` activan la ley
+// general de partición. Sólo la VENTANILLA declara el modo; el motor jamás lo infiere.
+let state = { modo_cobertura: "DEF" };
 
 // ─── [DES-QBE-055 / ARCH-1.5.10-B] Rótulo de Casa Patrocinadora por Boleto ─────
 // El emblema viaja desde la bóveda LOCAL de activos (`/static/img/bookmakers/{slug}.png`,
@@ -822,6 +835,245 @@ function _aplicarDisponibilidadOperadores(mapaOperadores) {
     }
 }
 
+// ─── [ARCH-1.4.35 / CONMUTADOR DE SLATES] Doble Seguro del Backtesting Fiduciario ────────
+// CANDADO 🔒 = ventanilla VIVA: el backend resuelve la jornada dinámicamente ([ARCH-1.6.15]) y
+//   el payload de despacho NO ancla jornada alguna (cero congelamiento accidental de la mesa).
+// CANDADO 🔓 = BACKTESTING: el payload ancla la jornada elegida y el backend liquida cada orden
+//   contra el marcador REAL de la bóveda 3NF (Real vs. Predicho, [LN-QBE-025-B]).
+// [GOVERNANCE-01] El cliente sólo EXHIBE hechos de la bóveda: cero fechas, marcadores, cuotas o
+// PnL inventados; toda cifra llega hidratada por el backend.
+let modoBacktestingJornada = false;
+
+function esModoBacktestingJornada() {
+    return modoBacktestingJornada === true;
+}
+
+function _jornadaSeleccionadaConmutador() {
+    const sel = document.getElementById('select-jornada');
+    if (!sel) return null;
+    const valor = parseInt(sel.value, 10);
+    return Number.isFinite(valor) ? valor : null;
+}
+
+// [DOBLE SEGURO] Al re-bloquear se restituye la jornada ACTIVA declarada por la bóveda. La
+// jornada activa es un HECHO ([ARCH-1.6.15]): se lee del contrato del Live Board (`jornada_activa`)
+// o del cache hidratado por el conmutador. Sin declaración de bóveda se conserva la primera opción
+// legislada: el cliente JAMÁS inventa una jornada ([GOVERNANCE-01]).
+let _jornadaActivaBoveda = null;
+
+function _jornadaActivaDelConmutador() {
+    const sel = document.getElementById('select-jornada');
+    if (!sel) return null;
+    const valores = Array.from(sel.options)
+        .map(op => parseInt(op.value, 10))
+        .filter(Number.isFinite);
+    if (!valores.length) return null;
+    const declarada = (currentLiveBoard && currentLiveBoard.jornada_activa !== undefined)
+        ? Number(currentLiveBoard.jornada_activa)
+        : Number(_jornadaActivaBoveda);
+    if (Number.isFinite(declarada) && valores.includes(declarada)) return String(declarada);
+    return String(valores[0]);
+}
+
+function _pintarEstadoConmutadorJornada() {
+    const btn = document.getElementById('btn-lock-jornada');
+    const sel = document.getElementById('select-jornada');
+    const tarjeta = document.getElementById('configuracion-cartera');
+    const banner = document.getElementById('banner-backtesting-jornada');
+    const strip = document.getElementById('slate-cartelera-jornada');
+    if (!btn || !sel) return;
+
+    if (esModoBacktestingJornada()) {
+        btn.textContent = '🔓';
+        btn.classList.remove('locked');
+        btn.classList.add('unlocked');
+        btn.style.color = '#38BDF8';
+        btn.title = 'Click para bloquear y volver a la jornada activa';
+        sel.disabled = false;
+        sel.style.borderColor = '#F59E0B';
+        sel.style.color = '#F8FAFC';
+        if (tarjeta) tarjeta.style.border = '1px solid rgba(245, 158, 11, 0.45)';
+        if (banner) banner.style.display = 'block';
+    } else {
+        btn.textContent = '🔒';
+        btn.classList.remove('unlocked');
+        btn.classList.add('locked');
+        btn.style.color = '#F59E0B';
+        btn.title = 'Click para desbloquear modo simulación histórica';
+        sel.disabled = true;
+        sel.style.borderColor = '#475569';
+        sel.style.color = '#94A3B8';
+        if (tarjeta) tarjeta.style.border = '';
+        if (banner) banner.style.display = 'none';
+        if (strip) { strip.style.display = 'none'; strip.innerHTML = ''; }
+    }
+}
+
+async function conmutarCandadoJornada() {
+    // [DOBLE SEGURO / GOVERNANCE-01] Sin jornadas declaradas por la bóveda el candado NO se abre:
+    // el modo Backtesting exige anclar una jornada REAL y el cliente JAMÁS inventa un número. La
+    // degradación es declarada (tooltip) y la ventanilla viva permanece operativa.
+    if (!esModoBacktestingJornada() && _jornadaSeleccionadaConmutador() === null) {
+        const btnSinSlate = document.getElementById('btn-lock-jornada');
+        if (btnSinSlate) btnSinSlate.title = 'La bóveda 3NF no declara jornadas: backtesting no disponible';
+        console.warn('Conmutador de jornadas: la bóveda no declaró slate alguno; el candado permanece cerrado.');
+        return;
+    }
+    modoBacktestingJornada = !esModoBacktestingJornada();
+    const sel = document.getElementById('select-jornada');
+    if (!esModoBacktestingJornada() && sel) {
+        // [DOBLE SEGURO] Candado cerrado ⇒ SIEMPRE la jornada activa (jamás una histórica).
+        const activa = _jornadaActivaDelConmutador();
+        if (activa !== null) sel.value = activa;
+    }
+    _pintarEstadoConmutadorJornada();
+    if (esModoBacktestingJornada()) {
+        await cargarCarteleraJornada(_jornadaSeleccionadaConmutador());
+    } else {
+        // [DOBLE SEGURO] Al re-bloquear NO se dispara sincronización ni navegación alguna: el
+        // candado sólo restituye la jornada activa en el selector y retira el detalle histórico
+        // (la cartelera viva del Live Board permanece intacta e independiente).
+        _restituirDetalleBacktesting();
+    }
+}
+
+// [ARCH-1.4.35] Cartelera del slate CONGELADO: consume el endpoint del conmutador
+// (`GET /api/markets/sportsbook/live-board?jornada=N`) y exhibe únicamente lo que la bóveda
+// declara (cuotas capturadas y marcadores reales de la 3NF). Cero cifras calculadas en cliente.
+async function cargarCarteleraJornada(jornada) {
+    const numJornada = parseInt(jornada, 10);
+    const detalle = document.getElementById('txt-detalle-backtesting');
+    const strip = document.getElementById('slate-cartelera-jornada');
+    if (!Number.isFinite(numJornada)) {
+        if (detalle) detalle.textContent = 'Selecciona una jornada válida para simular.';
+        return;
+    }
+    const leagueId = (currentLiveBoard && currentLiveBoard.league_id) ? currentLiveBoard.league_id : 262;
+    const selOp = document.getElementById('casino-operator-select');
+    const operador = selOp ? selOp.value : 'caliente';
+    if (detalle) detalle.textContent = `Consultando la cartelera congelada de la Jornada ${numJornada}…`;
+
+    try {
+        const resp = await fetch(`/api/markets/sportsbook/live-board?jornada=${numJornada}&league_id=${leagueId}&bookmaker=${encodeURIComponent(operador)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        renderizarSlateCartelera(await resp.json());
+    } catch (e) {
+        if (detalle) detalle.textContent = `No fue posible cargar la cartelera de la Jornada ${numJornada}: ${e.message}`;
+        if (strip) { strip.innerHTML = ''; strip.style.display = 'none'; }
+    }
+}
+
+function renderizarSlateCartelera(data) {
+    const strip = document.getElementById('slate-cartelera-jornada');
+    const detalle = document.getElementById('txt-detalle-backtesting');
+    const partidos = (data && data.partidos) || [];
+    const conCuotas = partidos.filter(p => p.con_cuotas).length;
+    const conMarcador = partidos.filter(p => p.marcador_real).length;
+
+    // [ARCH-1.4.35] El conmutador se hidrata con las jornadas REALES de la bóveda ([GOVERNANCE-01]).
+    _hidratarOpcionesJornada(data.jornadas, data.jornada_activa);
+
+    if (detalle) {
+        detalle.innerHTML = `Jornada ${data.jornada} congelada · <strong>${conCuotas}/${partidos.length}</strong> partidos con cuotas reales capturadas · ` +
+            `<strong>${conMarcador}/${partidos.length}</strong> con marcador real en la bóveda 3NF · Casa: <strong>${String(data.bookmaker || '').toUpperCase()}</strong>` +
+            (data.jornada_activa ? ` · Jornada activa dinámica: ${data.jornada_activa}` : '');
+    }
+    if (!strip) return;
+
+    if (!partidos.length) {
+        strip.innerHTML = `<div style="font-size:7.8pt; color:#F59E0B;">La bóveda no contiene captura para la Jornada ${data.jornada}: ${data.motivo || 'sin cartelera registrada'}.</div>`;
+        strip.style.display = 'block';
+        return;
+    }
+
+    const filas = partidos.map(p => {
+        const cuotasHtml = p.con_cuotas
+            ? `<span style="font-family:monospace; color:#F8FAFC;">${Number(p.momio_l).toFixed(2)} | ${Number(p.momio_e).toFixed(2)} | ${Number(p.momio_v).toFixed(2)}</span>`
+            : `<span style="color:#64748B;">Sin cuotas capturadas</span>`;
+        const marcadorHtml = p.marcador_real
+            ? `<span style="color:#F59E0B; font-weight:800;">${p.marcador_real}</span>`
+            : `<span style="color:#64748B;">—</span>`;
+        const evHtml = p.es_viable_ev
+            ? `<span style="color:#00E676; font-weight:800;">+EV</span>`
+            : `<span style="color:#64748B;">—</span>`;
+        return `<tr>
+            <td style="white-space:nowrap; color:#e2e8f0;">${p.local} vs ${p.visitante}</td>
+            <td style="text-align:center;">${cuotasHtml}</td>
+            <td style="text-align:center;">${marcadorHtml}</td>
+            <td style="text-align:center; color:#94A3B8;">${p.estado || '—'}</td>
+            <td style="text-align:center;">${evHtml}</td>
+        </tr>`;
+    }).join('');
+
+    strip.innerHTML = `
+        <table class="fintech-table" style="margin:0; font-size:7.8pt;">
+            <thead>
+                <tr>
+                    <th>PARTIDO (SLATE CONGELADO)</th>
+                    <th style="text-align:center;">CUOTAS L | E | V</th>
+                    <th style="text-align:center;">MARCADOR REAL (3NF)</th>
+                    <th style="text-align:center;">ESTADO</th>
+                    <th style="text-align:center;">+EV</th>
+                </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+        </table>
+    `;
+    strip.style.display = 'block';
+}
+
+// [DOBLE SEGURO] Reposo del banner: sin jornada anclada no se exhibe cifra alguna de simulación.
+function _restituirDetalleBacktesting() {
+    const detalle = document.getElementById('txt-detalle-backtesting');
+    if (detalle) detalle.textContent = 'Selecciona una jornada histórica y pulsa ⚡ Calcular Cartera.';
+}
+
+// ─── [ARCH-1.4.35 / CONMUTADOR DE SLATES] Hidratación fáctica de la lista de jornadas ────
+// `data.jornadas` es el resumen que emite la bóveda 3NF en UNA sola lectura (`GET /api/markets/
+// sportsbook/live-board`): jornada, partidos capturados, partidos con cuotas reales capturadas,
+// conclusión y marcadores reales disponibles. Cero jornadas quemadas en el HTML ([GOVERNANCE-01]).
+function _hidratarOpcionesJornada(jornadas, jornadaActiva) {
+    const sel = document.getElementById('select-jornada');
+    if (!sel || !Array.isArray(jornadas) || !jornadas.length) return;
+
+    const previa = sel.value;
+    const activa = Number(jornadaActiva);
+    if (Number.isFinite(activa)) _jornadaActivaBoveda = activa;
+
+    const opciones = jornadas.map(function (j) {
+        const n = parseInt(j.jornada, 10);
+        if (!Number.isFinite(n)) return '';
+        const esActiva = Number.isFinite(activa) && n === activa;
+        const etiqueta = esActiva ? `Jornada ${n} (Activa)` : `Jornada ${n} (Histórica)`;
+        const hechos = [`${j.con_marcador_real || 0}/${j.total_partidos || 0} res. reales`];
+        hechos.push(j.con_cuotas ? `${j.con_cuotas} con cuotas` : 'sin cuotas');
+        if (!esActiva && (j.con_marcador_real || 0) > 0) hechos.push('⚡ backtesting viable');
+        return `<option value="${n}">${etiqueta} · ${hechos.join(' · ')}</option>`;
+    }).filter(Boolean);
+    if (!opciones.length) return;
+
+    sel.innerHTML = opciones.join('');
+    // [DOBLE SEGURO] Se conserva la jornada elegida si la bóveda todavía la declara; si no, la activa.
+    const disponibles = Array.from(sel.options).map(function (op) { return op.value; });
+    if (disponibles.includes(previa)) sel.value = previa;
+    else if (Number.isFinite(activa) && disponibles.includes(String(activa))) sel.value = String(activa);
+}
+
+// [ARCH-1.4.35] Lectura inicial (una sola vez, al arrancar la SPA): la lista de jornadas del
+// conmutador es un HECHO de la bóveda. Si la bóveda no responde se conserva la lista legislada y
+// el candado sigue operativo: degradación declarada, cero jornadas inventadas ([GOVERNANCE-01]).
+async function hidratarConmutadorJornadas() {
+    const leagueId = (currentLiveBoard && currentLiveBoard.league_id) ? currentLiveBoard.league_id : 262;
+    try {
+        const resp = await fetch(`/api/markets/sportsbook/live-board?league_id=${leagueId}&bookmaker=caliente`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        _hidratarOpcionesJornada(data.jornadas, data.jornada_activa);
+    } catch (e) {
+        console.warn('Conmutador de jornadas: la bóveda no respondió al arranque.', e);
+    }
+}
+
 // ─── [LN-QBE-025-B / ARCH-1.4.35] Banner de Preservación de Capital (Cartera Vacía) ─────
 // Publica en la vista de Cartera el estado fiduciario `PRESERVACION_EFECTIVO` (cero activos
 // +EV). IDEMPOTENTE: reutiliza el nodo `#banner-preservacion-capital`, por lo que despachos
@@ -863,6 +1115,115 @@ function _renderizarBannerPreservacionCapital(esCarteraVacia, control) {
     `;
 }
 
+// ─── [ARCH-1.4.35 / LN-QBE-025-B] Liquidación REAL del Backtesting (Real vs. Predicho) ────
+// Agregado del contrato `data.backtesting` que emite el controlador (`POST
+// /api/markets/sportsbook/portfolio/generate` con la jornada anclada). IDEMPOTENTE: reutiliza el
+// nodo `#banner-liquidacion-backtesting`. CERO aritmética de capital en el cliente: el PnL neto
+// real, los denominadores y los marcadores finales llegan CERTIFICADOS por el backend, que a su
+// vez delega la ley a `liquidar_orden_post_evento` ([DIRGEN-STRICT], cero reinvención).
+function _renderizarLiquidacionBacktesting(data) {
+    const contenedor = document.getElementById('tab-portfolio');
+    if (!contenedor) return;
+
+    const bt = data && data.backtesting;
+    let banner = document.getElementById('banner-liquidacion-backtesting');
+    if (!bt || bt.activo !== true) {
+        // Ventanilla VIVA: sin jornada anclada no existe liquidación que exhibir.
+        if (banner) banner.remove();
+        return;
+    }
+
+    const pnl = Number(bt.pnl_neto_total_mxn || 0.0);
+    const colorPnl = pnl > 0 ? '#00E676' : (pnl < 0 ? '#f87171' : '#FBBF24');
+    const signo = pnl < 0 ? '−' : '+';
+
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'banner-liquidacion-backtesting';
+        contenedor.insertBefore(banner, contenedor.firstChild);
+    }
+
+    banner.style.cssText = "border:1px solid rgba(56,189,248,0.45);"
+        + " background:rgba(56,189,248,0.08); color:#38BDF8; border-radius:10px;"
+        + " padding:10px 14px; margin:0 0 14px 0; font-size:8.2pt; font-weight:800;";
+
+    banner.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span>🧪 LIQUIDACIÓN REAL · REAL vs. PREDICHO (Jornada ${bt.jornada} congelada)</span>
+            <span style="font-family:monospace; font-weight:900; color:${colorPnl}; white-space:nowrap;">
+                ${signo}$${Math.abs(pnl).toFixed(2)} MXN PnL NETO REAL
+            </span>
+        </div>
+        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:6px; font-weight:400; color:var(--text-muted,#94A3B8); font-size:7.6pt;">
+            <span>Órdenes liquidadas: <strong style="color:#e2e8f0;">${bt.ordenes_liquidadas}/${bt.total_ordenes}</strong></span>
+            <span>Sin marcador real en la bóveda: <strong style="color:#e2e8f0;">${bt.ordenes_sin_marcador_real}</strong></span>
+            <span>Cobrados (ataque): <strong style="color:#00E676;">${bt.cobrados}</strong></span>
+            <span>Tablas (V=0): <strong style="color:#38BDF8;">${bt.tablas_v0}</strong></span>
+            <span>Cosechas δ (seguro): <strong style="color:#34D399;">${bt.cosechas_seguro_delta || 0}</strong></span>
+            <span>Fallos: <strong style="color:#f87171;">${bt.fallos}</strong></span>
+            <span>Capital liquidado: <strong style="color:#e2e8f0;">$${Number(bt.inversion_liquidada_mxn || 0).toFixed(2)} MXN</strong></span>
+        </div>
+    `;
+}
+
+// [ARCH-1.4.35] Celda de la columna LIQUIDACIÓN REAL (7ª) de `#tabla-resumen-asignacion`. En la
+// ventanilla VIVA degrada a "—": sólo el oráculo 3NF dicta veredictos ([GOVERNANCE-01]).
+function _celdaLiquidacionReal(ord) {
+    const liq = ord && ord.liquidacion_real;
+    if (!liq) return `<td style="text-align:center; color:#64748B;">—</td>`;
+
+    const pnl = Number(liq.pnl_neto_mxn || 0.0);
+    const color = pnl > 0 ? '#00E676' : (pnl < 0 ? '#f87171' : '#FBBF24');
+    const etiqueta = String(liq.estado || '').replace(/_/g, ' ');
+    return `<td style="text-align:center; font-size:7.6pt; line-height:1.3;">
+        <span style="display:block; font-family:monospace; font-weight:900; color:#F59E0B;">${liq.marcador_final || '—'}</span>
+        <span style="display:block; color:${color}; font-weight:800;">${pnl < 0 ? '−' : '+'}$${Math.abs(pnl).toFixed(2)} MXN</span>
+        <span style="display:block; color:#94A3B8;">${etiqueta}</span>
+    </td>`;
+}
+
+// [ARCH-1.4.35] Celda de cierre del `tfoot`: PnL real agregado de la jornada anclada.
+function _celdaLiquidacionRealAgregada(data) {
+    const bt = data && data.backtesting;
+    if (!bt || bt.activo !== true) return `<td style="text-align:center; color:#64748B;">—</td>`;
+
+    const pnl = Number(bt.pnl_neto_total_mxn || 0.0);
+    const color = pnl > 0 ? '#00E676' : (pnl < 0 ? '#f87171' : '#FBBF24');
+    return `<td style="text-align:center; font-family:monospace; color:${color};">
+        ${pnl < 0 ? '−' : '+'}$${Math.abs(pnl).toFixed(2)} MXN
+        <span style="display:block; font-size:6.8pt; font-weight:400; color:#94A3B8;">${bt.ordenes_liquidadas}/${bt.total_ordenes} liquidadas</span>
+    </td>`;
+}
+
+// [ARCH-1.4.35 / Dictamen V-4] Sello FÁCTICO de liquidación DENTRO de la tarjeta de boleto: pinta el
+// veredicto ya sellado por el backend (`ord.liquidacion_real`) sin aritmética nueva en el cliente.
+// Sin liquidación (ventanilla VIVA) NO se emite sello alguno ([GOVERNANCE-01]).
+function _badgeLiquidacionReal(ord) {
+    const liq = ord && ord.liquidacion_real;
+    if (!liq) return '';
+    const base = 'padding:4px 8px; border-radius:6px; font-weight:800; font-size:7.4pt; white-space:nowrap;';
+    const pnl = Number(liq.pnl_neto_mxn || 0.0);
+    const estado = String(liq.estado || '');
+    if (estado === 'COBRADO_ATAQUE') {
+        return `<span class="badge-liquidacion-cobrado" style="background:#065F46; color:#34D399; border:1px solid #34D399; ${base}">🟢 COBRADO (+$${pnl.toFixed(2)} MXN)</span>`;
+    }
+    if (estado === 'COBRADO_SEGURO_DELTA') {
+        // [ARCH-1.4.37 / LN-QBE-077-B] Cosecha Activa consumada en la cancha: el ROI exhibido es
+        // el CERTIFICADO por el bloque `cobertura_dinamica` del motor (δ > 0). Cero aritmética
+        // fiduciaria en el cliente ([GOVERNANCE-01] paridad estricta backend↔pantalla).
+        const roiDelta = Number((ord && ord.cobertura_dinamica && ord.cobertura_dinamica.roi_empate_porcentaje) || 0);
+        return `<span class="badge-liquidacion-seguro-delta" style="background:#065F46; color:#34D399; font-weight:bold; padding:4px 8px; border-radius:6px;">🟢 COBRADO_SEGURO_DELTA (+${roiDelta.toFixed(1)}%)</span>`;
+    }
+    if (estado === 'TABLAS_V0') {
+        return `<span class="badge-liquidacion-tablas" style="background:#1E293B; color:#F59E0B; border:1px solid #F59E0B; ${base}">🛡️ TABLAS V=0 ($${pnl.toFixed(2)} MXN)</span>`;
+    }
+    if (estado === 'FALLO') {
+        return `<span class="badge-liquidacion-fallo" style="background:#7F1D1D; color:#F87171; border:1px solid #F87171; ${base}">🔴 FALLO (−$${Math.abs(pnl).toFixed(2)} MXN)</span>`;
+    }
+    // Un veredicto no legislado se rotula VERBATIM sobre su marcador final: cero invención de estados.
+    return `<span class="badge-liquidacion-otro" style="background:#1E293B; color:#94A3B8; border:1px solid #334155; ${base}">${estado || 'SIN VEREDICTO'}${liq.marcador_final ? ` · ${liq.marcador_final}` : ''}</span>`;
+}
+
 function renderizarResultadosPortafolio(data) {
     currentPortfolioData = data;
     // [DES-QBE-045] Consumo de las claves canónicas 3NF emitidas por markets.py (con fallback declarado).
@@ -884,6 +1245,10 @@ function renderizarResultadosPortafolio(data) {
         balance.capital_en_riesgo_mxn ?? control.capital_en_riesgo_mxn ?? NaN
     );
     _renderizarBannerPreservacionCapital(capitalEnRiesgo === 0.0 && orders.length === 0, control);
+
+    // [ARCH-1.4.35 / LN-QBE-025-B] Liquidación REAL del Backtesting (Real vs. Predicho): el
+    // agregado del contrato sólo se exhibe cuando la jornada fue anclada (`data.backtesting`).
+    _renderizarLiquidacionBacktesting(data);
 
     // 1. Encabezado Macro
     const elTorneo = document.getElementById("hdr-torneo-portfolio");
@@ -1006,7 +1371,15 @@ function renderizarResultadosPortafolio(data) {
                 coberturaHtml = paActivoFila
                     ? `<span style="color:#00E676; font-weight:600;">Ambos boletos ganan (+${roi.toFixed(1)}% ROI)</span>`
                     : `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
-            } else if (cod.startsWith("QBE-H1") || cod.startsWith("QBE-H2") || cod.startsWith("QBE-R1")) {
+            } else if (cod.startsWith("QBE-H1") || cod.startsWith("QBE-H2")) {
+                // [ARCH-1.4.37 / LN-QBE-077-B] Con δ > 0 el seguro de tablas ya no recupera:
+                // COSECHA. El veredicto lo certifica el bloque `cobertura_dinamica` del motor;
+                // con δ = 0.0000 subsiste el rótulo sellado de recuperación V=0 (paridad).
+                const cobFila = ord.cobertura_dinamica || null;
+                coberturaHtml = (cobFila && Number(cobFila.delta_efectivo || 0) > 0)
+                    ? `<span style="color:#00E676; font-weight:600;">Ganas +$${Number(cobFila.pnl_neto_empate_mxn || 0).toFixed(2)} MXN si empatan (+${Number(cobFila.roi_empate_porcentaje || 0).toFixed(1)}% ROI)</span>`
+                    : `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
+            } else if (cod.startsWith("QBE-R1")) {
                 coberturaHtml = `<span style="color:#38BDF8;">Recuperas $${tablas.toFixed(2)} MXN ($0.00 pérdida)</span>`;
             }
 
@@ -1028,6 +1401,7 @@ function renderizarResultadosPortafolio(data) {
                 <td style="text-align:right; font-weight:700; color:#00E676;">+$${gan.toFixed(2)} MXN</td>
                 <td style="text-align:right; font-family:monospace; font-weight:700; color:#00E676;">${roi > 0 ? "+" : ""}${roi.toFixed(1)}%</td>
                 <td>${coberturaHtml}</td>
+                ${_celdaLiquidacionReal(ord)}
             `;
             tbodyResumen.appendChild(tr);
         });
@@ -1043,6 +1417,7 @@ function renderizarResultadosPortafolio(data) {
                     <td style="text-align:right; color:#00E676;">+$${sumaPremios.toFixed(2)} MXN</td>
                     <td style="text-align:right; font-family:monospace; color:#00E676;">${roiGlobal ? `${roiGlobal > 0 ? "+" : ""}${roiGlobal.toFixed(1)}%` : "—"}</td>
                     <td></td>
+                    ${_celdaLiquidacionRealAgregada(data)}
                 </tr>
             `;
         }
@@ -1061,6 +1436,9 @@ function renderizarResultadosPortafolio(data) {
             // [DES-QBE-045] Paleta canónica de familia + distintivo de Pago Anticipado gobernado por bandera.
             const pal = _paletaEstrategia(est.codigo || "");
             const paBadgeHtml = _badgePagoAnticipado(ord, est);
+            // [Dictamen V-4] Sello de liquidación real consumado en la cancha: sólo viaja cuando el
+            // contrato del backend porta `liquidacion_real` (jornada anclada en backtesting).
+            const selloLiquidacionHtml = _badgeLiquidacionReal(ord);
             const proy = ord.proyecciones || {};
             const inv = ord.boletos?.inversion_partido_A_i || 0;
 
@@ -1088,6 +1466,11 @@ function renderizarResultadosPortafolio(data) {
             // [DES-QBE-062] El renglón de Doble Cobro se gobierna por la bandera PA
             // ([DES-QBE-045]: por bandera booleana, jamás por proxies de proyección heredados).
             const paActivo = (ord.pa_activo === true) || Boolean(est.linea_promocional);
+            // [ARCH-1.4.37 / LN-QBE-077-B] COSECHA ACTIVA: el bloque `cobertura_dinamica` es el
+            // artefacto DERIVADO sellado por el motor (δ efectivo + ROIs proyectados). δ > 0 ⇒
+            // el seguro de tablas deja de ser mera recuperación. Sin bloque ⇒ δ = 0.0000 (DEF).
+            const cobDin = ord.cobertura_dinamica || null;
+            const cosechaActiva = !!cobDin && Number(cobDin.delta_efectivo || 0) > 0;
 
             // [DES-QBE-062] Tetralogía de Escenarios en orden estricto y estilo sobrio (CERO balazos)
             let escenariosHtml = `
@@ -1101,9 +1484,17 @@ function renderizarResultadosPortafolio(data) {
                 // (H1/H2). El renglón exhibe el capital recuperado CERTIFICADO POR EL MOTOR
                 // (`inv`, con V=0 garantizado por `calcular_dutching_v0`), sin re-derivaciones
                 // del cliente ([GOVERNANCE-01] paridad estricta backend↔pantalla).
-                escenariosHtml += `
-                    <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${inv.toFixed(2)} MXN ($0.00 pérdida de capital).</div>
-                `;
+                if (cosechaActiva) {
+                    // [ARCH-1.4.37 / LN-QBE-077-B] COSECHA EN EMPATE: cifras CERTIFICADAS por el
+                    // motor (`cobertura_dinamica`). El cliente sólo exhibe ([GOVERNANCE-01]).
+                    escenariosHtml += `
+                        <div>• <strong style="color: #00E676;">Cosecha en Empate (δ=${Number(cobDin.delta_efectivo).toFixed(4)}):</strong> Cobro de $${Number(cobDin.cobro_bruto_empate_mxn || 0).toFixed(2)} MXN (+$${Number(cobDin.pnl_neto_empate_mxn || 0).toFixed(2)} MXN netos, +${Number(cobDin.roi_empate_porcentaje || 0).toFixed(1)}% ROI).</div>
+                    `;
+                } else {
+                    escenariosHtml += `
+                        <div>• <strong style="color: #e2e8f0;">Cobertura en Empate:</strong> Recuperación de $${inv.toFixed(2)} MXN ($0.00 pérdida de capital).</div>
+                    `;
+                }
             }
 
             // Renglón 3: Pago Anticipado con Empate (Doble Cobro) si pa_activo es True y existe seguro
@@ -1146,6 +1537,16 @@ function renderizarResultadosPortafolio(data) {
                 ? `<button class="btn btn-sm" style="background:#1e293b; color:#00E676; border:1px solid #00E676; padding:6px 14px; border-radius:4px; font-size:7.8pt; font-weight:800; cursor:default;" disabled>✔ Boleto Registrado</button>`
                 : `<button id="btn-comprar-${ord.id_partido}" onclick="comprarBoleto('${ord.id_partido}')" style="background:linear-gradient(135deg, #00E676 0%, #059669 100%); border:none; color:#0b1120; padding:6px 16px; border-radius:4px; font-size:8pt; font-weight:800; cursor:pointer; box-shadow:0 0 10px rgba(0,230,118,0.3);">🎟️ Comprar Boleto</button>`;
 
+            // [ARCH-1.4.37 / LN-QBE-077-B] Rótulos del bloque de seguro según el veredicto del
+            // motor: con δ > 0 el boleto se titula SEGURO ACTIVO y exhibe su proyección neta
+            // certificada; con δ = 0.0000 subsiste el rótulo sellado de recuperación V=0.
+            const tituloBoleto2 = cosechaActiva
+                ? `🛡️ BOLETO 2: SEGURO ACTIVO (+${Number(cobDin.roi_empate_porcentaje || 0).toFixed(1)}% ROI)`
+                : '🛡️ BOLETO 2: SEGURO (RECUPERACIÓN)';
+            const subtituloCosechaHtml = cosechaActiva
+                ? `<div style="font-size:7.5pt; color:#00E676; margin-top:2px;">Ganancia en Empate: Cobro de $${Number(cobDin.cobro_bruto_empate_mxn || 0).toFixed(2)} MXN (+$${Number(cobDin.pnl_neto_empate_mxn || 0).toFixed(2)} MXN netos, +${Number(cobDin.roi_empate_porcentaje || 0).toFixed(1)}% ROI)</div>`
+                : '';
+
             const card = document.createElement("div");
             card.className = "card";
             card.style.cssText = "background:#1C2541; border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:16px;";
@@ -1156,6 +1557,7 @@ function renderizarResultadosPortafolio(data) {
                             <span class="badge-status-live" style="background:${pal.bg}; color:${pal.fg}; border-color:${pal.borde}; font-weight:800;">${est.codigo}</span>
                             <span style="font-size:7.5pt; color:#cbd5e1;">${est.descripcion_ejecutiva}</span>
                             ${paBadgeHtml}
+                            ${selloLiquidacionHtml}
                         </div>
                         <h3 style="margin:0; font-size:1.15rem; color:#fff;">${ord.partido}</h3>
                         <div style="font-size:7.5pt; color:#94A3B8; margin-top:3px;">⏰ ${ord.horario_evento} ${momiosCompletos ? `<span style="color:#64748B; margin:0 4px;">•</span> <span style="color:#38BDF8; font-weight:700;">${momiosCompletos}</span>` : ''}</div>
@@ -1181,9 +1583,10 @@ function renderizarResultadosPortafolio(data) {
                     </div>
 
                     <!-- BOLETO SEGURO / RECUPERACIÓN (DERECHA - AZUL) -->
-                    <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:12px;">
-                        <span style="font-size:7.2pt; color:#38BDF8; font-weight:800;">🛡️ BOLETO 2: SEGURO (RECUPERACIÓN)</span>
+                    <div style="background:#0f172a; border:1px solid ${cosechaActiva ? 'rgba(0,230,118,0.45)' : 'rgba(56,189,248,0.3)'}; border-radius:6px; padding:12px;">
+                        <span style="font-size:7.2pt; color:${cosechaActiva ? '#00E676' : '#38BDF8'}; font-weight:800;">${tituloBoleto2}</span>
                         <div style="font-size:1rem; font-weight:700; color:#fff; margin-top:3px;">${b1.seleccion || 'N/A ($0.00)'}</div>
+                        ${subtituloCosechaHtml}
                         <div style="font-size:7.5pt; color:#94A3B8; margin-top:2px;">Momio Casino: <strong style="color:#fff;">${momioDualB2}</strong></div>
                         <div style="font-size:7.5pt; color:#94A3B8;">Predicción Q-BE con P': <strong style="color:#38BDF8;">${probB2Txt}</strong></div>
                         <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:flex-end;">
@@ -2489,5 +2892,57 @@ window.ejecutarOptimizadorProgol = ejecutarOptimizadorProgol;
 // Arranque de la SPA: se hidrata el concurso Progol vigente sin bloquear el render del Live Board.
 document.addEventListener("DOMContentLoaded", function () {
     cargarSlateProgolActivo();
+});
+
+// ─── [ARCH-1.4.35] Cableado del Conmutador de Slates (Doble Seguro del Director) ─────────────
+// 🔒/🔓 `#btn-lock-jornada` conmuta la ventanilla (viva ⇄ backtesting) y `#select-jornada` sólo
+// re-expone la cartelera congelada si el candado está ABIERTO; con el candado cerrado el selector
+// está inhabilitado (doble seguro contra el congelamiento accidental de la mesa).
+document.addEventListener("DOMContentLoaded", function () {
+    const btnLock = document.getElementById('btn-lock-jornada');
+    if (btnLock) btnLock.addEventListener('click', function () { conmutarCandadoJornada(); });
+
+    const selJornada = document.getElementById('select-jornada');
+    if (selJornada) {
+        selJornada.addEventListener('change', function () {
+            if (esModoBacktestingJornada()) cargarCarteleraJornada(_jornadaSeleccionadaConmutador());
+        });
+    }
+
+    // Estado inicial legislado: candado CERRADO (ventanilla viva, jornada dinámica [ARCH-1.6.15]).
+    _pintarEstadoConmutadorJornada();
+    hidratarConmutadorJornadas();
+});
+
+window.conmutarCandadoJornada = conmutarCandadoJornada;
+window.cargarCarteleraJornada = cargarCarteleraJornada;
+window.hidratarConmutadorJornadas = hidratarConmutadorJornadas;
+
+// ─── [ARCH-1.4.37 / LN-QBE-077-B] Cableado del Tríptico de Cobertura (δ) ─────────────────────
+// `state.modo_cobertura` es la ÚNICA fuente de verdad del modo declarado; la clase `active` y los
+// estilos de resalte se RE-DERIVAN de ese estado (cero estado duplicado ni divergente en el DOM).
+// Default soberano sellado: `DEF` (paridad bit a bit con el contrato V=0 de [LN-QBE-070]).
+document.addEventListener("DOMContentLoaded", function () {
+    const botonesCobertura = document.querySelectorAll("#toggle-modo-cobertura .btn-cobertura");
+    if (!botonesCobertura.length) return;
+    const COBERTURA_ACTIVA = { background: "#1E293B", border: "1px solid #38BDF8", color: "#38BDF8" };
+    const COBERTURA_INACTIVA = { background: "#0F172A", border: "1px solid #334155", color: "#94A3B8" };
+    const _pintarCobertura = () => {
+        botonesCobertura.forEach((boton) => {
+            const esActivo = boton.getAttribute("data-modo") === state.modo_cobertura;
+            boton.classList.toggle("active", esActivo);
+            const estilo = esActivo ? COBERTURA_ACTIVA : COBERTURA_INACTIVA;
+            boton.style.background = estilo.background;
+            boton.style.border = estilo.border;
+            boton.style.color = estilo.color;
+        });
+    };
+    botonesCobertura.forEach((boton) => {
+        boton.addEventListener("click", () => {
+            state.modo_cobertura = boton.getAttribute("data-modo") || "DEF";
+            _pintarCobertura();
+        });
+    });
+    _pintarCobertura();
 });
 
