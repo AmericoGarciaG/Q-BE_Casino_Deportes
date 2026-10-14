@@ -2910,7 +2910,7 @@ function _pintarDimensionDrift(dimension, estado) {
     const glifo = document.getElementById(`drift-glifo-${dimension}`);
     const detalle = document.getElementById(`drift-detalle-${dimension}`);
     const nivel = (estado && estado.nivel) ? String(estado.nivel) : 'SIN_VEREDICTO';
-    if (glifo) glifo.textContent = (estado && estado.glifo) ? estado.glifo : '🇾🇪';
+    if (glifo) glifo.textContent = (estado && estado.glifo) ? estado.glifo : '⚪';
     if (detalle) detalle.textContent = (estado && estado.detalle) ? estado.detalle : 'Sin lectura del motor.';
     if (contenedor) {
         Object.values(CLASE_NIVEL_DRIFT).forEach((clase) => contenedor.classList.remove(clase));
@@ -2953,14 +2953,52 @@ function pintarSemaforoDrift(data) {
     }
 }
 
+// [ARCH-1.4.12-B] Narración del sondeo en la Terminal de Streaming (Decreto
+// `VAR-2026-DRIFT-STREAM-MAP`): los cuatro pasos del diagnóstico se narran con sello de reloj.
+// La consola monospaciada de la vista es `#terminal-stream-output` (contrato `[DES-QBE-048]`):
+// cero salida silenciosa y cero interpretación de HTML (`[GOVERNANCE-01]`: texto plano).
+function logDriftTerminal(msg) {
+    const term = document.getElementById('terminal-stream-output');
+    if (!term) return;
+    const hora = new Date().toLocaleTimeString('es-MX', { hour12: false });
+    term.textContent += `\n[${hora}] ${msg}`;
+    term.scrollTop = term.scrollHeight;
+}
+
+// Guion literal del sondeo: los 4 pasos del diagnóstico de [ARCH-1.4.12-B].
+const PASOS_SONDEO_DRIFT = [
+    '📡 [DERIVA] Iniciando escaneo de frescura de fuentes en SQLite 3NF...',
+    '⏳ [1/4] Sondeando timestamps de cuotas (Caliente / Novibet / Betway)...',
+    '⏳ [2/4] Verificando horarios y marcadores en bóveda...',
+    '⏳ [3/4] Verificando concurso oficial Progol...',
+    '⏳ [4/4] Auditando integridad de cartelera...'
+];
+
+// Lee el nivel REAL del contrato REST (`.nivel`) y degrada honestamente a `SIN_VEREDICTO` si el
+// payload llegara incompleto (cero veredicto inventado en el cliente: `[GOVERNANCE-01]`).
+function _nivelDrift(dimension) {
+    return (dimension && dimension.nivel) ? String(dimension.nivel) : 'SIN_VEREDICTO';
+}
+
 async function cargarEstadoDriftCentroControl() {
     const texto = document.getElementById('drift-accion-texto');
+    PASOS_SONDEO_DRIFT.forEach((paso) => logDriftTerminal(paso));
+    if (texto) texto.textContent = '[SISTEMA] Analizando integridad y vigencia...';
     try {
         const resp = await fetch('/api/admin/status/drift', { headers: { 'Accept': 'application/json' } });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        pintarSemaforoDrift(await resp.json());
+        const data = await resp.json();
+        pintarSemaforoDrift(data);
+
+        // Cierre de la narración: veredicto agregado (campos reales `.nivel` / `.motivo`).
+        logDriftTerminal('🏁 [DERIVA] Diagnóstico concluido en tiempo récord.');
+        logDriftTerminal(`🚦 Veredicto: Mercado (${_nivelDrift(data.status_mercado)}) · Deportivo (${_nivelDrift(data.status_deportivo)}) · Progol (${_nivelDrift(data.status_progol)}) · Integridad (${_nivelDrift(data.status_integridad)})`);
+        if (data.accion_recomendada && data.accion_recomendada.motivo) {
+            logDriftTerminal(`⚡ Acción sugerida: ${data.accion_recomendada.motivo}`);
+        }
     } catch (e) {
         console.error('Fallo sondeando el semáforo de deriva:', e);
+        logDriftTerminal(`❌ [DERIVA] Sonda inaccesible: ${e.message}`);
         if (texto) texto.textContent = `[ERROR] Sonda de deriva inaccesible: ${e.message}`;
     }
 }
@@ -3191,21 +3229,34 @@ function mostrarMicroJornadaBacktesting(idx) {
         const n = Number(valor);
         return n > 1 ? n.toFixed(2) : "--";
     };
-    const tagTipo = tipo => {
-        if (tipo === "FAVORITO") return "bt-tag-favorito";
-        if (tipo === "EMPATE") return "bt-tag-empate";
-        return "bt-tag-underdog";
-    };
 
     const partidos = jornada.partidos || [];
     const bloques = partidos.map(p => {
         const momios = p.momios || {};
+        const claseResultado = p.tipo_resultado === "FAVORITO"
+            ? "box-resultado-fav"
+            : p.tipo_resultado === "EMPATE"
+                ? "box-resultado-emp"
+                : "box-resultado-dog";
+        const badgeEstado = {
+            FAVORITO: '<span class="badge-fiduciario badge-fav">🎯 ACIERTO FAVORITO</span>',
+            EMPATE: '<span class="badge-fiduciario badge-emp">🛡️ COBERTURA TABLAS</span>',
+            UNDERDOG: '<span class="badge-fiduciario badge-dog">💀 RUPTURA UNDERDOG</span>',
+        }[p.tipo_resultado] || "";
+        const favNombre = p.favorito_designado === "LOCAL" ? p.local : p.visitante;
+        const pFavPct = _pctBacktesting(
+            p.favorito_designado === "LOCAL" ? p.p_local : p.p_visitante
+        );
+        const bsQbe = Number(p.brier_qbe || 0).toFixed(4);
+        const bsMkt = Number(p.brier_mercado || 0).toFixed(4);
+        const diffBrier = Number(p.brier_qbe || 0) - Number(p.brier_mercado || 0);
+        const diffBrierText = `${diffBrier >= 0 ? "+" : ""}${diffBrier.toFixed(4)}`;
         const casillas = [
             { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
             { titulo: "X EMPATE", clave: "EMPATE", p: p.p_empate, q: p.q_empate, o: momios.E },
             { titulo: "2 VISITANTE", clave: "VISITANTE", p: p.p_visitante, q: p.q_visitante, o: momios.V },
         ].map(c => `
-            <div class="bt-casilla ${p.resultado_real === c.clave ? "bt-casilla-ganadora" : ""}">
+            <div class="bt-casilla ${p.resultado_real === c.clave ? claseResultado : "micro-box-inactivo"}">
                 <span class="bt-casilla-titulo">${c.titulo}</span>
                 <span class="bt-casilla-valor">P′ ${_pctBacktesting(c.p)}</span>
                 <span class="bt-casilla-valor">q_mkt ${_pctBacktesting(c.q)}</span>
@@ -3218,13 +3269,16 @@ function mostrarMicroJornadaBacktesting(idx) {
             <div class="bt-micro-marcador">${p.marcador}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
-            <div class="bt-micro-metricas">
-                <span class="${tagTipo(p.tipo_resultado)}">${p.tipo_resultado}</span>
-                <span>Favorito P′: ${p.favorito_designado}</span>
-                <span>Desenlace real: ${p.resultado_real}</span>
-                <span>Brier Q-BE ${Number(p.brier_qbe || 0).toFixed(4)}</span>
-                <span>Brier mercado ${Number(p.brier_mercado || 0).toFixed(4)}</span>
-                <span>${p.acierto ? "🔵 Cobertura" : "🔴 No cubierto"}</span>
+            <div class="micro-partido-footer">
+                <div class="footer-badge-status">${badgeEstado}</div>
+                <div class="footer-pronostico">
+                    Pronóstico P′: <strong>${favNombre} (${pFavPct})</strong>
+                    · Final: <strong>${p.marcador}</strong>
+                </div>
+                <div class="footer-brier">
+                    Brier: Q-BE <span>${bsQbe}</span> · Mkt <span>${bsMkt}</span>
+                    (Δ ${diffBrierText})
+                </div>
             </div>
         </div>`;
     }).join("");
@@ -3239,4 +3293,3 @@ function mostrarMicroJornadaBacktesting(idx) {
         </div>
         ${bloques}`;
 }
-

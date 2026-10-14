@@ -15,8 +15,13 @@ Base de Gobierno (autoridad delegada, cero umbrales inventados):
   * `docs/LOGIC.md` `[LN-QBE-059]` y `[LN-QBE-060-B]` → morfología Capa 0 y triaje determinista.
   * `docs/ARCH.md` `[ARCH-1.4.34]` → contrato de esta sonda (seis sondas, degradación honesta,
     semántica de salida).
+  * Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` (Dictamen A1, 2026-10-13) → banda decretada del
+    techo de goles `(1.8600, 2.5000]` xG (🟡), 🔴 sólo por desborde físico o λ ≤ 0.0; sonda de
+    divergencia de mercado: 🔴 reservado a rupturas axiomáticas (símplex fuera de Δ² / overround
+    fuera de aduana), divergencia informativa ⇒ 🟡; y guarda de ignorancia declarada
+    (`suficiencia_S_I == 0` ⇒ ⚪ SIN VEREDICTO).
 
-Degradación honesta ([GOVERNANCE-01]): la ausencia de evidencia emite `SIN_VEREDICTO` (🇾🇪) y
+Degradación honesta ([GOVERNANCE-01]): la ausencia de evidencia emite `SIN_VEREDICTO` (⚪) y
 JAMÁS una discrepancia. Cero invención de cifras, umbrales o bloqueos.
 
 Uso:
@@ -55,9 +60,16 @@ PISO_VENTANILLA_MXN = 2.00
 PISO_BIVARIADO_MXN = 4.00
 FAMILIAS_CON_COBERTURA: Tuple[str, ...] = ("QBE-H1", "QBE-H2", "QBE-R1", "QBE-R2", "QBE-C1")
 
-# [LN-QBE-040] / [LN-QBE-040-B] Techo conjunto de intensidad ofensiva (anti-resonancia)
-TECHO_XG = 2.20
-TECHO_XG_ANTIRESONANCIA = 1.86
+# [LN-QBE-040] / [LN-QBE-040-B] Techo conjunto de intensidad ofensiva (anti-resonancia).
+# Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` (Dictamen A1 — umbrales decretados, transcripción
+# literal; cero calibración autónoma):
+#   🟢 λ_max ≤ 1.8600 xG · 🟡 1.8600 < λ_max ≤ 2.5000 xG (asimetría legítima de plaza) ·
+#   🔴 λ_max > 2.5000 xG o λ ≤ 0.0 xG (desborde físico / captura corrupta).
+# `TECHO_XG` es un límite de ESCALA FÍSICA de Liga MX para el semáforo del auditor: NO es la cota
+# del motor sellado (`[LN-QBE-040-B]` garantiza λ ≤ 1.8600 xG en duelos equilibrados y el clamp
+# canónico del plano de intensidades es más amplio).
+TECHO_XG_ANTIRESONANCIA = 1.8600
+TECHO_XG = 2.5000
 
 # [LN-QBE-059] / [LN-QBE-060-B] Parámetro de partición morfológica
 GAMMA_BASE = 0.67
@@ -94,14 +106,17 @@ class NivelSeveridad(str, Enum):
     CONFORME = "CONFORME"            # 🟢
     ADVERTENCIA = "ADVERTENCIA"      # 🟡
     DISCREPANCIA = "DISCREPANCIA"    # 🔴
-    SIN_VEREDICTO = "SIN_VEREDICTO"  # 🇾🇪
+    SIN_VEREDICTO = "SIN_VEREDICTO"  # ⚪
 
 
+# Glifos universales y neutros por nivel ([ARCH-1.4.12-B] · Decreto `VAR-2026-DRIFT-STREAM-MAP`):
+# quedan PROHIBIDOS los emojis de bandera regional (p. ej. el par `U+1F1FE U+1F1EA`, que Windows
+# descompone en los caracteres alfabéticos `Y` y `E`): el nivel sin veredicto emite `⚪`.
 GLIFO_NIVEL: Dict[str, str] = {
     NivelSeveridad.CONFORME.value: "🟢",
     NivelSeveridad.ADVERTENCIA.value: "🟡",
     NivelSeveridad.DISCREPANCIA.value: "🔴",
-    NivelSeveridad.SIN_VEREDICTO.value: "🇾🇪",
+    NivelSeveridad.SIN_VEREDICTO.value: "⚪",
 }
 
 
@@ -169,9 +184,11 @@ def _probabilidades_vig_free(momios: Sequence[float]) -> Tuple[float, float, flo
     return (1.0 / float(momios[0]) / s, 1.0 / float(momios[1]) / s, 1.0 / float(momios[2]) / s)
 
 
-def _sin_veredicto(sonda: str, titulo: str, detalle: str) -> HallazgoSonda:
-    """Degradación honesta ([GOVERNANCE-01]): ausencia de evidencia ⇒ 🇾🇪, nunca 🔴."""
-    return HallazgoSonda(sonda=sonda, titulo=titulo, nivel=NivelSeveridad.SIN_VEREDICTO, detalle=detalle)
+def _sin_veredicto(sonda: str, titulo: str, detalle: str, metrica: Optional[float] = None) -> HallazgoSonda:
+    """Degradación honesta ([GOVERNANCE-01]): ausencia de evidencia ⇒ ⚪, nunca 🔴."""
+    return HallazgoSonda(
+        sonda=sonda, titulo=titulo, nivel=NivelSeveridad.SIN_VEREDICTO, detalle=detalle, metrica=metrica
+    )
 
 
 # ===========================================================================
@@ -357,10 +374,13 @@ def _sonda_techo_goles(data: Dict[str, Any]) -> HallazgoSonda:
             "sin intensidades λ (xG) declaradas: no hay techo ofensivo que auditar",
         )
 
-    if any(lam < 0.0 for lam in intensidades):
+    if any(lam <= 0.0 for lam in intensidades):
         return HallazgoSonda(
             sonda=SONDA_TECHO_GOLES, titulo=titulo, nivel=NivelSeveridad.DISCREPANCIA,
-            detalle=f"intensidad λ negativa (captura corrupta o dirección invertida): {intensidades}",
+            detalle=(
+                f"intensidad λ no positiva (λ ≤ 0.0000 xG: captura corrupta o dirección invertida): "
+                f"{intensidades}"
+            ),
             metrica=round(min(intensidades), 4),
         )
 
@@ -368,7 +388,10 @@ def _sonda_techo_goles(data: Dict[str, Any]) -> HallazgoSonda:
     if lam_max > TECHO_XG:
         return HallazgoSonda(
             sonda=SONDA_TECHO_GOLES, titulo=titulo, nivel=NivelSeveridad.DISCREPANCIA,
-            detalle=f"λ_max={lam_max:.4f} xG excede el techo conjunto {TECHO_XG:.2f} xG ([LN-QBE-040-B])",
+            detalle=(
+                f"λ_max={lam_max:.4f} xG excede el límite de escala física {TECHO_XG:.4f} xG "
+                f"(decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE`): desborde o resonancia patológica"
+            ),
             metrica=round(lam_max, 4),
         )
 
@@ -376,15 +399,15 @@ def _sonda_techo_goles(data: Dict[str, Any]) -> HallazgoSonda:
         return HallazgoSonda(
             sonda=SONDA_TECHO_GOLES, titulo=titulo, nivel=NivelSeveridad.ADVERTENCIA,
             detalle=(
-                f"λ_max={lam_max:.4f} xG dentro del techo pero en banda de vigilancia "
-                f"anti-resonancia ({TECHO_XG_ANTIRESONANCIA:.2f}, {TECHO_XG:.2f}]"
+                f"λ_max={lam_max:.4f} xG dentro del límite físico pero en banda de vigilancia "
+                f"anti-resonancia ({TECHO_XG_ANTIRESONANCIA:.4f}, {TECHO_XG:.4f}] (asimetría de plaza)"
             ),
             metrica=round(lam_max, 4),
         )
 
     return HallazgoSonda(
         sonda=SONDA_TECHO_GOLES, titulo=titulo, nivel=NivelSeveridad.CONFORME,
-        detalle=f"λ_max={lam_max:.4f} xG ≤ {TECHO_XG_ANTIRESONANCIA:.2f} xG (banda sana)",
+        detalle=f"λ_max={lam_max:.4f} xG ≤ {TECHO_XG_ANTIRESONANCIA:.4f} xG (banda sana)",
         metrica=round(lam_max, 4),
     )
 
@@ -476,12 +499,47 @@ def _sonda_divergencia_mercado(data: Dict[str, Any]) -> HallazgoSonda:
     q_vig_free = _probabilidades_vig_free(momios)
     tvd = 0.5 * sum(abs(p - q) for p, q in zip(p_hat, q_vig_free))
 
-    if tvd > TVD_MAX:
+    # -- Degradación Honesta: ignorancia declarada por el motor (S(I) = 0 ⇒ Prior Fiduciario) --
+    # Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §2: un modelo que declara honestamente
+    # «no tengo datos suficientes» jamás se penaliza como si hubiera emitido una mala predicción.
+    suficiencia = data.get("suficiencia_S_I")
+    if _es_numero(suficiencia) and int(suficiencia) == 0:
+        return _sin_veredicto(
+            SONDA_DIVERGENCIA_MERCADO, titulo,
+            "S(I) = 0 declarado por el motor (Prior Fiduciario): no hay distribución informada que contrastar.",
+            metrica=round(tvd, 4),
+        )
+
+    # -- 🔴 exclusivo de RUPTURAS AXIOMÁTICAS (vectores fuera de Δ² o cuotas fuera de aduana) --
+    if abs(sum(p_hat) - 1.0) > TOL_PARIDAD_SIMPLEX:
         return HallazgoSonda(
             sonda=SONDA_DIVERGENCIA_MERCADO, titulo=titulo, nivel=NivelSeveridad.DISCREPANCIA,
             detalle=(
-                f"TVD={tvd:.4f} excede el umbral de {TVD_MAX:.2f}: "
-                f"P^=({p_hat[0]:.4f}, {p_hat[1]:.4f}, {p_hat[2]:.4f}) vs. vig-free=({q_vig_free[0]:.4f}, {q_vig_free[1]:.4f}, {q_vig_free[2]:.4f})"
+                f"ruptura axiomática: P^=({p_hat[0]:.4f}, {p_hat[1]:.4f}, {p_hat[2]:.4f}) "
+                f"no pertenece a Δ² (Σ={sum(p_hat):.6f} ≠ 1.0000)"
+            ),
+            metrica=round(tvd, 6),
+        )
+    overround = _overround(momios)
+    if not (OVERROUND_MIN_ADMISIBLE <= overround <= OVERROUND_MAX_ADMISIBLE):
+        return HallazgoSonda(
+            sonda=SONDA_DIVERGENCIA_MERCADO, titulo=titulo, nivel=NivelSeveridad.DISCREPANCIA,
+            detalle=(
+                f"ruptura axiomática: margen comercial S={overround:.4f} fuera de la aduana canónica "
+                f"[{OVERROUND_MIN_ADMISIBLE:.4f}, {OVERROUND_MAX_ADMISIBLE:.4f}] ([LN-QBE-007-H])"
+            ),
+            metrica=round(tvd, 6),
+        )
+
+    # -- Divergencia informativa modelo ↔ mercado: jamas 🔴 (es la esencia de la búsqueda de Alpha) --
+    if tvd > TVD_MAX:
+        return HallazgoSonda(
+            sonda=SONDA_DIVERGENCIA_MERCADO, titulo=titulo, nivel=NivelSeveridad.ADVERTENCIA,
+            detalle=(
+                f"TVD={tvd:.4f} excede el umbral informativo de {TVD_MAX:.2f}: divergencia declarada "
+                f"modelo↔mercado (búsqueda de valor, NO ruptura axiomática); "
+                f"P^=({p_hat[0]:.4f}, {p_hat[1]:.4f}, {p_hat[2]:.4f}) vs. "
+                f"vig-free=({q_vig_free[0]:.4f}, {q_vig_free[1]:.4f}, {q_vig_free[2]:.4f})"
             ),
             metrica=round(tvd, 6),
         )
@@ -507,8 +565,8 @@ def _agregar_nivel(hallazgos: Sequence[HallazgoSonda]) -> NivelSeveridad:
     """
     Agregación semafórica conservadora y honesta:
       🔴 si existe DISCREPANCIA; 🟡 si existe ADVERTENCIA o si la cobertura de evidencia es
-      parcial (hay 🟢 pero alguna sonda quedó 🇾🇪); 🟢 sólo con evidencia completa y conforme;
-      🇾🇪 si ninguna sonda pudo pronunciarse (jornada sin mercado ni vectores).
+      parcial (hay 🟢 pero alguna sonda quedó ⚪); 🟢 sólo con evidencia completa y conforme;
+      ⚪ si ninguna sonda pudo pronunciarse (jornada sin mercado ni vectores).
     """
     niveles = [h.nivel for h in hallazgos]
     if NivelSeveridad.DISCREPANCIA in niveles:
@@ -559,7 +617,7 @@ def auditar_coherencia_partido(data: Dict[str, Any]) -> ReporteCoherenciaPartido
 def calcular_codigo_salida(reportes: Iterable[ReporteCoherenciaPartido]) -> int:
     """
     [ARCH-1.4.34] Contrato de salida del CLI: `1` exclusivamente ante 🔴 DISCREPANCIA.
-    🟡 ADVERTENCIA y 🇾🇪 SIN VEREDICTO no bloquean el pre-vuelo (`[GOVERNANCE-01]`).
+    🟡 ADVERTENCIA y ⚪ SIN VEREDICTO no bloquean el pre-vuelo (`[GOVERNANCE-01]`).
     """
     for reporte in reportes:
         if reporte.nivel_global == NivelSeveridad.DISCREPANCIA:
@@ -571,7 +629,13 @@ def calcular_codigo_salida(reportes: Iterable[ReporteCoherenciaPartido]) -> int:
 # CLI (SOLO LECTURA) — PRE-VUELO DIAGNÓSTICO
 # ===========================================================================
 def _expediente_desde_fixture(partido: Dict[str, Any]) -> Dict[str, Any]:
-    """Traduce un partido de `FixtureSnapshot.matches_json` al expediente de la sonda."""
+    """Traduce un partido de `FixtureSnapshot.matches_json` al expediente de la sonda.
+
+    Contrato de captura: 6 claves numéricas de P′ + el sello de suficiencia `suficiencia_S_I`
+    (0 ó 1) transcrito *verbatim* de `SovereignDistributionOutput.audit_trace.suficiencia_S_I`
+    (Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2). Un fixture legado sin el sello se
+    transcribe como `None` ⇒ la sonda de divergencia NO degrada por ausencia de señal.
+    """
     momios = partido.get("momios") if isinstance(partido.get("momios"), dict) else {}
     local = str(partido.get("local") or "").strip()
     visitante = str(partido.get("visitante") or "").strip()
@@ -585,6 +649,8 @@ def _expediente_desde_fixture(partido: Dict[str, Any]) -> Dict[str, Any]:
         "lambda_away": partido.get("lambda_away"),
         "momios": momios,
         "es_operable": partido.get("es_operable", True),
+        # Sello de suficiencia fáctica S(I) del motor (0 = Prior Fiduciario declarado).
+        "suficiencia_S_I": partido.get("suficiencia_S_I"),
         # Sólo se transcribe lo que la bóveda declare: cero estrategias ni boletos inventados.
         "estrategia_codigo": partido.get("estrategia_codigo") or partido.get("codigo_triaje"),
         "boletos": partido.get("boletos"),
@@ -644,7 +710,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("=" * 78)
 
         if not jornadas:
-            print("🇾🇪 SIN VEREDICTO: la bóveda no registra jornada alguna (cero invención de cartelera).")
+            print("⚪ SIN VEREDICTO: la bóveda no registra jornada alguna (cero invención de cartelera).")
             return 0
 
     reportes: List[ReporteCoherenciaPartido] = []
@@ -653,7 +719,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if salida_humana:
             print(f"\n── JORNADA {jornada} · {len(partidos)} partido(s) en cartelera ──")
             if not partidos:
-                print("🇾🇪 SIN VEREDICTO: jornada sin partidos persistidos.")
+                print("⚪ SIN VEREDICTO: jornada sin partidos persistidos.")
         for partido in partidos:
             reporte = auditar_coherencia_partido(_expediente_desde_fixture(partido))
             reportes.append(reporte)

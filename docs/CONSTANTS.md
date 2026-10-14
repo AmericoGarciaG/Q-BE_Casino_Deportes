@@ -48,6 +48,21 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $S_{\min}$ | `OVERROUND_MIN_ADMISIBLE` | `0.8500` | Rechazo por arbitraje imposible o cuota duplicada |
 | $S_{\max}$ | `OVERROUND_MAX_ADMISIBLE` | `1.3000` | Rechazo por cuota usuraria o mercado suspendido |
 
+### Cotas Diagnósticas del Pre-Vuelo de Coherencia Relacional (Auditor `[ARCH-1.4.34]`)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
+|:---:|---|---|:---:|:---:|---|---|
+| $\text{Techo}_{xG}^{\text{plaza}}$ | `TECHO_XG` | `2.5000` | xG | `[LN-QBE-040-B]` + Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` (A1) | Límite de escala física de Liga MX: $\lambda_{\max} > 2.5000$ ⇒ 🔴 (`DISCREPANCIA`) en el semáforo del auditor | **PROHIBIDO** usar como cota del motor, como clamp de intensidad o como umbral de morfología Γ |
+| $\text{Techo}_{xG}^{\text{anti-res}}$ | `TECHO_XG_ANTIRESONANCIA` | `1.8600` | xG | `[LN-QBE-040-B]` | Frontera inferior de la banda de vigilancia del auditor: $\lambda_{\max} \in (1.8600, 2.5000]$ ⇒ 🟡 (`ADVERTENCIA`) | **PROHIBIDO** usar como umbral de descarte o de cuarentena |
+| $\text{TVD}_{\max}$ | `TVD_MAX` | `0.2200` | Variación Total | `[ARCH-1.4.34]` + Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §2 | Divergencia informativa modelo↔mercado: $\text{TVD} > 0.2200$ ⇒ 🟡 (búsqueda de Alpha, **jamás** 🔴) | **PROHIBIDO** usar como umbral de exclusión de boletos o de cartera |
+| $\text{TVD}_{\text{vig}}$ | `TVD_VIGILANCIA` | `0.1500` | Variación Total | `[ARCH-1.4.34]` | Banda de vigilancia diagnóstica $(0.1500, 0.2200]$ | No confundir con $\tau_{\text{disp}}$ (`0.12`, discrepancia inter-modelos) |
+
+> **Addendum del Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` (2026-10-13):** las cuatro cotas
+> anteriores son **umbrales de OBSERVABILIDAD del auditor** (semáforo de presentación), no parámetros
+> del motor estocástico. La garantía analítica de `[LN-QBE-040-B]` ($\lambda_H \le 1.8600$ xG en
+> duelos equilibrados de liga) y el clamp canónico del plano de intensidades permanecen intactos: el
+> semáforo no re-calibra la física, sólo amplía su banda de reporte para no castigar asimetrías
+> legítimas de plaza ni divergencias de valor.
+
 | Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
 |:---:|---|---|:---:|:---:|---|---|
 | $\varepsilon_{\text{ort}}$ | Tolerancia de Singularidad Ortogonal | `1e-5` ($0.00001$) | Adimensional | `[LN-QBE-039]` | Umbral de norma para descartar variables colineales | Prohibido usar como cota bancaria |

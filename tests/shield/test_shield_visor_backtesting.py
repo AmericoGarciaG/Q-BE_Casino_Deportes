@@ -12,6 +12,40 @@ Gobierno: [GOV-TEST-01] Aislamiento hermético en memoria (cero red / cero naveg
 """
 
 
+def test_juez_4_parrilla_micro_semantica_visual():
+    """[ARCH-1.4.38] El resultado real conserva su tipo fiduciario en cajas y franja inferior."""
+    from pathlib import Path
+
+    js = Path("src/web/static/js/app.js").read_text(encoding="utf-8")
+    css = Path("src/web/static/css/theme.css").read_text(encoding="utf-8")
+
+    assert 'p.resultado_real === c.clave ? claseResultado : "micro-box-inactivo"' in js
+    assert 'p.tipo_resultado === "FAVORITO"' in js
+    assert 'p.tipo_resultado === "EMPATE"' in js
+    assert '"box-resultado-dog"' in js
+    assert "🎯 ACIERTO FAVORITO" in js
+    assert "🛡️ COBERTURA TABLAS" in js
+    assert "💀 RUPTURA UNDERDOG" in js
+    assert "Pronóstico P′:" in js
+    assert "· Final:" in js
+    assert "Brier: Q-BE" in js
+    assert "bt-casilla-ganadora" not in js
+
+    for color_class, color, background in (
+        ("box-resultado-fav", "#00E676", "rgba(0, 230, 118, 0.12)"),
+        ("box-resultado-emp", "#38BDF8", "rgba(56, 189, 248, 0.12)"),
+        ("box-resultado-dog", "#EF4444", "rgba(239, 68, 68, 0.12)"),
+    ):
+        rule_start = css.index(f".{color_class} {{")
+        rule_end = css.index("}", rule_start)
+        rule = css[rule_start:rule_end]
+        assert color in rule
+        assert background in rule
+        assert "border:" in rule
+
+    assert ".micro-box-inactivo" in css
+
+
 def test_juez_1_desmarque_proporcional_de_vig():
     """
     [INVARIANZA 1 - DESMARQUE PROPORCIONAL DE VIG]:

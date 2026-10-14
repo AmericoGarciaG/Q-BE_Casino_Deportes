@@ -16,6 +16,11 @@ constante de negocio se inventa aquí:
   * El semáforo de integridad REUTILIZA el canon puro de [ARCH-1.4.34]
     (`scripts.auditoria.auditar_coherencia_cartelera`): cero reimplementación de las seis sondas
     y cero duplicación de su vocabulario (`NivelSeveridad` / `GLIFO_NIVEL`).
+  * Iconografía Universal ([ARCH-1.4.12-B] · Decreto `VAR-2026-DRIFT-STREAM-MAP`): los glifos se
+    heredan ÍNTEGROS de `GLIFO_NIVEL` del canon (🟢 / 🟡 / 🔴 / ⚪). Este adaptador JAMÁS escribe un
+    glifo literal —ni el detalle de integridad, que también se compone del canon—, por lo que la
+    erradicación del emoji de bandera regional (`U+1F1FE U+1F1EA`, que Windows descompone en `YE`)
+    se propaga a la pantalla y al JSON sin una sola sustitución local.
 """
 
 from datetime import datetime, timedelta, timezone

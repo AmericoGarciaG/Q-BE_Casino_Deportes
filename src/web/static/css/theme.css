@@ -1292,22 +1292,56 @@ table.fintech-table {
     font-size: 7.8pt;
     padding: 6px 8px;
 }
-.bt-casilla.bt-casilla-ganadora {
-    background: rgba(0, 230, 118, 0.08);
-    border-color: var(--accent-green);
-    color: var(--accent-green);
-}
 .bt-casilla-titulo { color: var(--text-muted); font-size: 7.4pt; letter-spacing: 0.05em; }
 .bt-casilla-valor { font-family: var(--font-mono); font-size: 8.4pt; }
-.bt-micro-metricas {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    grid-column: 1 / -1;
-    font-size: 7.8pt;
-    margin-top: 6px;
-}
-.bt-tag-favorito { color: var(--accent-green); font-weight: 700; }
-.bt-tag-empate { color: var(--accent-cyan); font-weight: 700; }
-.bt-tag-underdog { color: var(--accent-red); font-weight: 700; }
 
+/* ==========================================================================
+   PARRILLA MICRO DEL VISOR DE BACKTESTING [ARCH-1.4.38]
+   ========================================================================== */
+.box-resultado-fav {
+    border: 1px solid #00E676 !important;
+    background: rgba(0, 230, 118, 0.12) !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.2);
+}
+.box-resultado-emp {
+    border: 1px solid #38BDF8 !important;
+    background: rgba(56, 189, 248, 0.12) !important;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+.box-resultado-dog {
+    border: 1px solid #EF4444 !important;
+    background: rgba(239, 68, 68, 0.12) !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+.micro-box-inactivo {
+    border: 1px solid #334155;
+    background: #0F172A;
+    opacity: 0.75;
+}
+.micro-partido-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    grid-column: 1 / -1;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1E293B;
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+.badge-fiduciario {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.badge-fav { background: #065F46; color: #34D399; }
+.badge-emp { background: #0C4A6E; color: #38BDF8; }
+.badge-dog { background: #7F1D1D; color: #F87171; }
+.footer-pronostico { color: #94A3B8; }
+.footer-pronostico strong,
+.footer-brier span { color: #F8FAFC; }
+.footer-brier { color: #64748B; }

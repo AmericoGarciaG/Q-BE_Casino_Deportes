@@ -665,6 +665,16 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
                     f["lambda_home"] = dist_out.lambda_home
                     f["lambda_away"] = dist_out.lambda_away
                     f["phi_lead2_home"] = dist_out.phi_lead2_home
+                    # [Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2] Sello de suficiencia
+                    # fáctica S(I) ∈ {0, 1} transcrito *verbatim* de la traza forense del motor
+                    # (0 = Prior Fiduciario declarado). Amplía el contrato de captura a 7 campos: sin
+                    # este sello ningún consumidor —el auditor incluido— puede distinguir ignorancia
+                    # declarada de divergencia de mercado.
+                    f["suficiencia_S_I"] = (
+                        int(dist_out.audit_trace.suficiencia_S_I)
+                        if hasattr(dist_out, "audit_trace") and hasattr(dist_out.audit_trace, "suficiencia_S_I")
+                        else (0 if dist_out.p_local == 0.3333 else 1)
+                    )
                 except Exception as ex_dist:
                     logger.warning(f"No se pudo generar distribución para {f['id_partido']}: {ex_dist}")
 

@@ -59,3 +59,22 @@ def test_invarianza_mesa_apuestas_default_cobertura_balanceado():
     assert 'class="btn-cobertura active" data-modo="BAL"' in html_content or (
         'data-modo="BAL"' in html_content and 'active' in html_content.split('data-modo="BAL"')[0].split('<button')[-1]
     )
+
+
+def test_invarianza_iconografia_universal_sin_glifo_ye():
+    """
+    [INVARIANZA 4 - ICONOGRAFÍA UNIVERSAL]:
+    Verifica que ni el backend ni la plantilla contengan el emoji regional '🇾🇪'
+    que Windows descompone como 'YE', utilizando exclusivamente '⚪' o '⏳'.
+    """
+    from fastapi.testclient import TestClient
+    from src.web.app import app
+    from pathlib import Path
+
+    client = TestClient(app)
+    resp = client.get("/api/admin/status/drift")
+    assert resp.status_code == 200
+    assert "🇾🇪" not in resp.text, "🚨 GLIFO ROTO: Se detectó 🇾🇪 en /api/admin/status/drift"
+
+    html = Path("src/web/templates/index.html").read_text(encoding="utf-8")
+    assert "🇾🇪" not in html, "🚨 GLIFO ROTO: Se detectó 🇾🇪 en index.html"

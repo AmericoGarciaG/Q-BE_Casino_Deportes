@@ -1388,7 +1388,23 @@ def _cuotas_1x2_factuales(fx: Dict[str, Any]) -> Dict[str, float]:
     [ARCH-1.4.38] Trío 1X2 factual para el desmarque: captura CANÓNICA del snapshot
     ([ARCH-1.4.15]) con respaldo determinista en la mejor captura por operador. Un fixture
     sin trío completo devuelve `{}`: cero cuotas prestadas entre casas [GOVERNANCE-01].
+
+    Decreto del Director (2026-10-14): la captura congelada se lee con FALLBACK DUAL,
+    `cuotas` (ingesta explícita) o `momios` (ingesta nativa). El mismo trío factual no puede
+    quedar invisible al Visor por el nombre del campo que lo porta: el Brier del mercado se
+    deriva de las cuotas de cierre realmente capturadas, jamás de un relleno uniforme.
     """
+    cuotas_dict = fx.get("cuotas") or fx.get("momios") or {}
+    try:
+        if all(float(cuotas_dict.get(k, 0.0) or 0.0) > 1.0 for k in ("L", "E", "V")):
+            return {
+                "L": float(cuotas_dict["L"]),
+                "E": float(cuotas_dict["E"]),
+                "V": float(cuotas_dict["V"]),
+            }
+    except (TypeError, ValueError):
+        pass
+
     canonica = _captura_canonica_1x2(fx)
     if canonica:
         return {"L": canonica["L"], "E": canonica["E"], "V": canonica["V"]}
@@ -1472,7 +1488,13 @@ def _construir_reporte_calibracion(
 
         id_partido = str(fila.id)
         fixture = fixtures.get(id_partido)
-        p_prima = _p_prima_del_fixture(fixture) if fixture else soberanas.get(id_partido)
+        # [ARCH-1.4.38] P' sellada: captura del snapshot o, EN SU DEFECTO, tabla soberana 3NF.
+        # El respaldo rige también cuando el fixture EXISTE pero NO porta P' (jornadas históricas
+        # con momios de cierre y distribución sellada sólo en la tabla soberana): sin él, una
+        # jornada con cuotas reales quedaría invisible al Visor (Decreto del Director, 2026-10-14).
+        p_prima = _p_prima_del_fixture(fixture) if fixture else None
+        if p_prima is None:
+            p_prima = soberanas.get(id_partido)
         if p_prima is None:
             # Sin captura sellada de P' el partido no es auditable: cero invención.
             partidos_pendientes += 1
