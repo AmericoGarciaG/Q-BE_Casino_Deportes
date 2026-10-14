@@ -1432,6 +1432,16 @@ def sincronizar_progol_pipeline_completo(
   - Sección `#panel-visor-backtesting` en `index.html` hidratada por `app.js`.
 * **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py`
 
+### [ARCH-1.4.39] Motor de Homologación Histórica Opta/H2H y Reconstrucción Progresiva [ARCH-PILLAR] [GOVERNANCE-01]
+* **Principio de Paridad Homóloga:** Queda terminantemente prohibido alimentar el Visor de Backtesting con distribuciones calculadas sobre insumos mutilados o degradados. Todo partido histórico debe evaluarse con exactamente el mismo vector dimensional que un partido en vivo:
+  $$\mathcal{I}_{\text{match}} = \langle \text{Standings}_{N-1}, \; \text{SplitsSede}_{N-1}, \; xG_{\text{Opta}}, \; H2H_{540d}, \; \Delta\gamma_{\text{plaza}}, \; \text{Cuotas}_{\text{cierre}} \rangle$$
+* **Arquitectura de Suministro Fáctico en Tres Pilares:**
+  1. **Splits de Sede Progresivos ($N-1$):** Se reconstruyen matemáticamente desde SQLite 3NF acumulando los partidos jugados en casa y de visita en las jornadas $1 \dots N-1$. Cumple $PJ_{\text{local}} + PJ_{\text{visita}} \equiv PJ_{\text{total}}$.
+  2. **Sensor de Eventos Opta Históricos (FotMob API):** Descarga una sola vez y congela en `data/cache_optaxg_liga_mx_2026.json` los goles esperados ($xG$), tiros a puerta ($SoT$) y posesión de los 90 partidos de la temporada.
+  3. **Kernel H2H Profundo:** Recupera los últimos 5 enfrentamientos directos oficiales con decaimiento temporal $\tau = 540.0\text{ días}$.
+* **Invarianza de Rectificación:** Al inyectar las métricas homólogas en encuentros con disparidad jerárquica demostrada (ej. Puebla vs. Toluca en J7), el motor debe rectificar el sesgo ciego y asignar el favoritismo soberano al equipo futbolísticamente superior ($P_{\text{fav}}' \ge 50.0\%$).
+* **[SHIELD]:** `tests/shield/test_shield_historical_homologation.py`
+
 
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`

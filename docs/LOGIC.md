@@ -1357,7 +1357,8 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      - `UNDERDOG`: Ganó el rival no cubierto.
 * **O (Output):** `CalibrationReportResponse` (resumen macro, tabla meso por jornada y parrilla micro estilo BetExplorer).
 * **Φ (Transición):** Hacia `[ARCH-1.4.38]` e interfaz `index.html`.
-* **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py`
+* **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py` · `tests/shield/test_shield_visor_backtesting_cold_start.py`
+* **Axioma del Prior de Mercado (Cold Start Resolution):** Para evitar que el Brier Score global y la clasificación de aciertos (FAS/FES/FUS) se degraden artificialmente con "basura estadística" durante las primeras jornadas, todo partido que declare ignorancia fáctica ($S(\mathcal{I}) = 0$) sustituirá retrospectivamente su vector de probabilidad por el vector des-marginado del mercado ($q^{\text{mkt}}$) antes de ejecutar el clasificador factual. Esto garantiza un $\text{Alpha} = 0.00\%$ en dichos eventos. Para honrar el principio de Degradación Honesta (`[GOVERNANCE-01]`), la interfaz visual rotulará obligatoriamente estos partidos como `COLD START`.
 
 ---
 

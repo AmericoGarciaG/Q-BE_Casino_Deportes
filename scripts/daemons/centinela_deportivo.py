@@ -47,6 +47,14 @@ os.makedirs(LEAGUES_DIR, exist_ok=True)
 LIGAMX_FOTMOB_ID = 262
 MU_LIGA_DEFAULT = 2.65
 
+# [VAR-2026-J7-HOMOLOGACION §6.4 · E4 — Decreto del Director] Contrato de captura SOBERANO de
+# `fixtures_snapshots`: 6 claves numéricas de P′ + el sello de suficiencia S(I) ∈ {0, 1}
+# (Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2). El daemon PRESERVA estos campos.
+CLAVES_CONTRATO_CAPTURA = (
+    "p_local", "p_empate", "p_visitante", "lambda_home", "lambda_away",
+    "phi_lead2_home", "suficiencia_S_I",
+)
+
 # Catálogo Canónico Oficial de Clubes Liga MX y CDN de FMF
 CLUBS_MASTER_LIGAMX = [
     {"nombre": "Club América", "slug": "america", "aliases": ["club-america", "aguilas"], "urls": ["https://cldrsrcs.apilmx.com/v1/docs/archdgtl/AfldDrct/logos/1/1.png"]},
@@ -696,10 +704,18 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
             else:
                 if snap_fix.matches_json:
                     momios_cache = {(fx["local"], fx["visitante"]): fx["momios"] for fx in snap_fix.matches_json if fx.get("momios")}
+                    previos = {(fx.get("local"), fx.get("visitante")): fx for fx in snap_fix.matches_json}
                     for f in fixtures_r:
                         k = (f["local"], f["visitante"])
                         if k in momios_cache:
                             f["momios"] = momios_cache[k]
+                        # [VAR-2026-J7-HOMOLOGACION §6.4 · E4 — Decreto del Director] Pilar 4: el
+                        # contrato de captura P′ (7 campos) es DATO SOBERANO. `fill-if-absent` campo
+                        # a campo: el daemon repone lo ausente y JAMÁS sobreescribe lo ya sellado.
+                        # Cero matemática, cero constantes, cero rutas de motor: sólo preservación.
+                        for clave in CLAVES_CONTRATO_CAPTURA:
+                            if f.get(clave) is None and previos.get(k, {}).get(clave) is not None:
+                                f[clave] = previos[k][clave]
 
                 snap_fix.matches_json = fixtures_r
                 snap_fix.updated_at = ahora

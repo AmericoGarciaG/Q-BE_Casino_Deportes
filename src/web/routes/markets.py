@@ -1503,7 +1503,6 @@ def _construir_reporte_calibracion(
         p_local, p_empate, p_visitante = p_prima
         goles_local, goles_visitante = int(fila.score_home), int(fila.score_away)
         desenlace = _desenlace_real_1x2(goles_local, goles_visitante)
-        favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
 
         cuotas = _cuotas_1x2_factuales(fixture) if fixture else {}
         q_local, q_empate, q_visitante = desmarcar_cuotas_proporcional(
@@ -1511,6 +1510,20 @@ def _construir_reporte_calibracion(
             float(cuotas.get("E", 0.0) or 0.0),
             float(cuotas.get("V", 0.0) or 0.0),
         )
+
+        # [LN-QBE-100] Axioma del Prior de Mercado (Cold Start Resolution) — 2026-10-14:
+        # un partido que declara ignorancia fáctica S(I)=0 sólo porta el prior uniforme
+        # (1/3, 1/3, 1/3), que no es una predicción informada. Su vector se sustituye POR EL
+        # CONSENSO DES-MARGINADO DEL MERCADO antes de ejecutar el clasificador factual y el Brier,
+        # aislando el Alpha (≡ 0.00% por identidad de vectores) para medir la ventaja estocástica
+        # únicamente donde el modelo operó con evidencia. Cuotas inválidas ⇒ la ley de bóveda
+        # `desmarcar_cuotas_proporcional` ya devuelve (1/3, 1/3, 1/3): cero cifras inventadas.
+        _s_i = (fixture or {}).get("suficiencia_S_I")
+        suficiencia_s_i = 1 if _s_i is None else int(_s_i)
+        if suficiencia_s_i == 0:
+            p_local, p_empate, p_visitante = q_local, q_empate, q_visitante
+
+        favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
 
         registro_qbe = {
             "p_local": p_local, "p_empate": p_empate,
@@ -1545,6 +1558,9 @@ def _construir_reporte_calibracion(
             "brier_qbe": calcular_brier_multicategorico([registro_qbe]),
             "brier_mercado": calcular_brier_multicategorico([registro_mkt]),
             "acierto": tipo_resultado in ("FAVORITO", "EMPATE"),
+            # [LN-QBE-100] Sello de suficiencia S(I) del contrato de captura (fixture legado sin
+            # el campo ⇒ `None` ⇒ 1: la ausencia de señal no degrada el partido).
+            "suficiencia_S_I": suficiencia_s_i,
         })
         registros_qbe.setdefault(jornada, []).append(registro_qbe)
         registros_mkt.setdefault(jornada, []).append(registro_mkt)

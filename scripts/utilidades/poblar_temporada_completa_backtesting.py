@@ -381,6 +381,9 @@ def _sellar_p_prima_en_capturas(
     `suficiencia_S_I` ∈ {0, 1} (Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2). El sellado es
     `fill-if-absent` **por campo**: un fixture que ya porta P′ se preserva intacto y sólo recibe el
     sello S(I) si le falta ⇒ segunda pasada = cero escrituras (idempotencia verificable en cada campo).
+    [VAR-2026-J7-HOMOLOGACION §6.5 · E5] La unidad del `fill-if-absent` es el CAMPO, no el fixture:
+    un contrato mutilado (p. ej. `suficiencia_S_I` presente y P′ ausente) se COMPLETA en las claves
+    ausentes en lugar de preservarse a medias — las claves ya selladas jamás se sobreescriben.
     """
     reporte: Dict[str, Any] = {
         "selladas": 0,
@@ -414,13 +417,20 @@ def _sellar_p_prima_en_capturas(
             valores_fila = valores.get(id_partido)
             if not valores_fila:
                 reporte["sin_valor"].append(id_partido)
-            elif any(fx.get(clave) is not None for clave in CLAVES_CAPTURA_P_PRIMA):
-                reporte["preservadas"] += 1
             else:
+                # [VAR-2026-J7-HOMOLOGACION §6.5 · E5] Fill-if-absent POR CAMPO ([Pilar 4]): un
+                # fixture con contrato MUTILADO (p. ej. sólo `suficiencia_S_I`) recibe únicamente
+                # las claves ausentes; las ya selladas jamás se sobreescriben.
+                completadas = 0
                 for clave, valor in valores_fila.items():
-                    fx[clave] = valor
-                reporte["selladas"] += 1
-                selladas_jornada += 1
+                    if fx.get(clave) is None:
+                        fx[clave] = valor
+                        completadas += 1
+                if completadas:
+                    reporte["selladas"] += 1
+                    selladas_jornada += 1
+                else:
+                    reporte["preservadas"] += 1
             # Sello de suficiencia S(I): campo independiente, `fill-if-absent` y transcripción literal.
             if fx.get(CLAVE_SUFICIENCIA_SI) is not None:
                 reporte["suficiencia_preservadas"] += 1

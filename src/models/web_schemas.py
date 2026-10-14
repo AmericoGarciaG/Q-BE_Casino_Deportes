@@ -170,6 +170,9 @@ class CalibrationMatchOut(BaseModel):
     brier_qbe: float
     brier_mercado: float
     acierto: bool
+    # [LN-QBE-100 · Axioma del Prior de Mercado (Cold Start Resolution)] Sello de suficiencia
+    # fáctica S(I) del partido: 0 = ignorancia declarada ⇒ P′ fue sustituida por q_mkt (Cold Start).
+    suficiencia_S_I: Optional[int] = None
 
 
 class CalibrationJornadaOut(BaseModel):

@@ -198,6 +198,7 @@
 | `[ARCH-1.4.37]` | ARCH | `docs/ARCH.md` | Parámetro de Cobertura Dinámica δ en el Pipeline de Cartera y DTOs [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-100]` | LOGIC | `docs/LOGIC.md` | Motor de Calibración Factual de Temporada y Evaluación Multicategórica de Brier | SELLADO |
 | `[ARCH-1.4.38]` | ARCH | `docs/ARCH.md` | Endpoint de Calibración Histórica y Visor de Backtesting [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.39]` | ARCH | `docs/ARCH.md` | Motor de Homologación Histórica Opta/H2H y Reconstrucción Progresiva [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR] | SELLADO |
 
@@ -233,6 +234,7 @@
 | `VAR-2026-LIVE-AUDIT-J11` | Desfase de damping κ_damp en bayesian_form vs κ_net conjunto, guarda de piso $2.00 en Familia R y amarre L/V en modal | Ratificada ALT-1: armonización de compresión hiperbólica κ_net=0.2500, guarda universal ("QBE-H1","QBE-H2","QBE-R1","QBE-R2") con piso bivariado $4.00, y corrección de row-binding en modal JS | RATIFICADO |
 | `VAR-2026-TRIAJE-R-BIPOLAR` | Juez Invariante 1 colisiona con admisibilidad de R en BIPOLARIDAD_TERRITORIAL | Ratificada ALT-1+ALT-2: derogada admisibilidad de Familia R en Bipolaridad por Invariante VIII-37 (riesgo > 33%) y extendidas guardas en portfolio_math.py | RATIFICADO |
 | `VAR-2026-TRIAJE-R-BIPOLAR-II` | Caso #4 de test_shield_portfolio_math.py huérfano por derogación de R en Bipolaridad | Ratificada ALT-A: migración de caso positivo a PARIDAD_CIEGA (0.334/0.333/0.333) y cerrojo negativo bipolar en QBE-00 | RATIFICADO |
+| `VAR-2026-COLD-START-PRIOR` | Juez 1 vacío por DTO sin S(I) y colisión de variables ql | Ratificada Opción A Holística: S(I)=0 en DTO, sustitución de P' por q_mkt pre-clasificación, rótulo visual COLD START | RATIFICADO |
 
 ---
 

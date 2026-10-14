@@ -3233,6 +3233,11 @@ function mostrarMicroJornadaBacktesting(idx) {
     const partidos = jornada.partidos || [];
     const bloques = partidos.map(p => {
         const momios = p.momios || {};
+        // [LN-QBE-100 · Axioma del Prior de Mercado] Honestidad visual ([GOVERNANCE-01]): con
+        // S(I)=0 la parrilla espeja el consenso del mercado, NO una distribución propia de Q-BE.
+        const pildoraColdStart = p.suficiencia_S_I === 0
+            ? '<span style="background:#475569; color:#F8FAFC; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;">🧊 COLD START: PRIOR DE MERCADO</span>'
+            : "";
         const claseResultado = p.tipo_resultado === "FAVORITO"
             ? "box-resultado-fav"
             : p.tipo_resultado === "EMPATE"
@@ -3266,7 +3271,7 @@ function mostrarMicroJornadaBacktesting(idx) {
         return `
         <div class="bt-micro-row">
             <div class="bt-micro-equipo">${escudo(p.local_escudo_url)}<span>${p.local}</span></div>
-            <div class="bt-micro-marcador">${p.marcador}</div>
+            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
             <div class="micro-partido-footer">
