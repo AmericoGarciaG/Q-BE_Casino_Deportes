@@ -62,9 +62,14 @@ def _ast_de_funcion(nombre: str) -> ast.FunctionDef:
 class AbstractTestPurgaTotalBoveda3NF(ABC):
     """Juez Abstracto: whitelist, canal in-process, atomicidad, exención fiduciaria y cockpit."""
 
-    # ── 1. WHITELIST AMPLIADA A 10 (VAR-A1) ─────────────────────────────────
+    # ── 1. WHITELIST AMPLIADA (VAR-A1) ──────────────────────────────────────
     def test_whitelist_ampliada_a_diez_tareas_con_canal_in_process(self):
-        """[ARCH-1.4.29] La whitelist de [ARCH-1.4.12] pasa de 9 a 10 tareas, y sólo esa."""
+        """
+        [ARCH-1.4.29 → ARCH-1.4.12-C] La whitelist de [ARCH-1.4.12] pasa de 9 a 10 tareas con la purga
+        in-process ([ARCH-1.4.29]) y, por la Enmienda [ARCH-1.4.12-C], a **15 exactas**: la cifra
+        legislada es la única constante supersedida; la igualdad estricta se preserva y el canal
+        in-process de la purga total permanece intacto.
+        """
         from src.web.routes.admin_tasks import (
             CANAL_IN_PROCESS,
             TAREAS_PERMITIDAS,
@@ -72,8 +77,8 @@ class AbstractTestPurgaTotalBoveda3NF(ABC):
         )
 
         assert TAREA_PURGA_TOTAL_DB == "purga_total_db"
-        assert len(TAREAS_PERMITIDAS) == 10, (
-            "Violación [ARCH-1.4.29]: la whitelist debe ser de exactamente 10 tareas certificadas."
+        assert len(TAREAS_PERMITIDAS) == 15, (
+            "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 15 tareas certificadas."
         )
 
         especificacion = TAREAS_PERMITIDAS[TAREA_PURGA_TOTAL_DB]

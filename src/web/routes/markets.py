@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, League, Match, SovereignDistribution, Slate, SlateItem
+from src.models.web_schemas import CalibrationReportResponse
 from src.storage.database import get_db
 from src.core.contracts.progol_math import (
     calcular_sesgo_quiniela,
@@ -1320,3 +1321,284 @@ def optimize_progol_endpoint(req: ProgolOptimizeRequest) -> Dict[str, Any]:
         "boletas": resultado_soberano["boletas"],
         "matriz_quiniela": matriz_quiniela
     }
+
+
+# ── [ARCH-1.4.38 / LN-QBE-100] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL DE TEMPORADA) ──
+# [GOVERNANCE-01] Cero cifras sintéticas: el oráculo de resultados reales es la bóveda 3NF
+# (`matches`) y la fuente de P'/cuotas de cierre son las capturas congeladas de
+# `fixtures_snapshots.matches_json`. La aritmética de calibración NO vive aquí: se delega
+# VERBATIM a las leyes selladas `desmarcar_cuotas_proporcional` y
+# `calcular_brier_multicategorico` de `src.core.contracts.portfolio_math`
+# ([DIRGEN-STRICT] — este controlador sólo TRANSPORTA el contrato plano).
+# Prohibido acoplar el centinela de mercado al router web [ARCH-1.6.4].
+
+_ESTADOS_CONCLUIDOS_BACKTESTING = frozenset({"FINISHED", "FINALIZADO"})
+
+
+def _fixtures_snapshot_indexados(
+    session: Session, league_id: Optional[int] = None
+) -> Dict[str, Dict[str, Any]]:
+    """
+    [ARCH-1.4.38] Índice `{id_partido: fixture}` sobre las capturas congeladas de la bóveda.
+    Ante varios snapshots de la MISMA jornada rige el más reciente (`updated_at DESC`).
+    """
+    consulta = session.query(FixtureSnapshot)
+    if league_id is not None:
+        consulta = consulta.filter(FixtureSnapshot.league_id == int(league_id))
+    snapshots = consulta.order_by(
+        FixtureSnapshot.matchday.asc(), FixtureSnapshot.updated_at.desc()
+    ).all()
+
+    indice: Dict[str, Dict[str, Any]] = {}
+    for snap in snapshots:
+        for fx in (snap.matches_json or []):
+            id_partido = str(fx.get("id_partido") or "")
+            if id_partido:
+                indice.setdefault(id_partido, fx)
+    return indice
+
+
+def _soberanas_por_id(session: Session) -> Dict[str, Tuple[float, float, float]]:
+    """
+    [ARCH-1.4.38] Respaldo SECUNDARIO de P': la tabla soberana 3NF
+    (`sovereign_distributions`). La autoridad primaria es la captura del snapshot.
+    """
+    return {
+        str(fila.match_id): (
+            float(fila.p_local), float(fila.p_empate), float(fila.p_visitante)
+        )
+        for fila in session.query(SovereignDistribution).all()
+    }
+
+
+def _p_prima_del_fixture(fx: Dict[str, Any]) -> Optional[Tuple[float, float, float]]:
+    """[ARCH-1.4.38] P' sellada en la captura congelada; `None` si la bóveda no la porta."""
+    try:
+        return (
+            float(fx.get("p_local")),
+            float(fx.get("p_empate")),
+            float(fx.get("p_visitante")),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _cuotas_1x2_factuales(fx: Dict[str, Any]) -> Dict[str, float]:
+    """
+    [ARCH-1.4.38] Trío 1X2 factual para el desmarque: captura CANÓNICA del snapshot
+    ([ARCH-1.4.15]) con respaldo determinista en la mejor captura por operador. Un fixture
+    sin trío completo devuelve `{}`: cero cuotas prestadas entre casas [GOVERNANCE-01].
+    """
+    canonica = _captura_canonica_1x2(fx)
+    if canonica:
+        return {"L": canonica["L"], "E": canonica["E"], "V": canonica["V"]}
+
+    capturas = fx.get("momios_operadores") or {}
+    for operador in sorted(capturas.keys()):
+        m_data = capturas.get(operador) or {}
+        try:
+            if all(float(m_data.get(k, 0.0) or 0.0) > 1.0 for k in ("L", "E", "V")):
+                return {
+                    "L": float(m_data["L"]),
+                    "E": float(m_data["E"]),
+                    "V": float(m_data["V"]),
+                }
+        except (TypeError, ValueError):
+            continue
+    return {}
+
+
+def _desenlace_real_1x2(score_home: int, score_away: int) -> str:
+    """[LN-QBE-100] Traducción factual del marcador consumado al desenlace 1X2."""
+    if score_home > score_away:
+        return "LOCAL"
+    if score_home < score_away:
+        return "VISITANTE"
+    return "EMPATE"
+
+
+def _clasificacion_factual(
+    desenlace_real: str, p_local: float, p_visitante: float
+) -> Tuple[str, str]:
+    """
+    [LN-QBE-100] Clasificación factual: `FAVORITO` (el desenlace coincide con el favorito de
+    P'), `EMPATE` (marcador nivelado) o `UNDERDOG` (ganó el rival no cubierto).
+    Devuelve `(favorito_designado, tipo_resultado)`.
+    """
+    favorito = "LOCAL" if p_local >= p_visitante else "VISITANTE"
+    if desenlace_real == "EMPATE":
+        return favorito, "EMPATE"
+    return favorito, ("FAVORITO" if desenlace_real == favorito else "UNDERDOG")
+
+
+def _alpha_calibracion_pct(brier_qbe: float, brier_mercado: float) -> float:
+    """[LN-QBE-100] Alpha de Calibración = (1 - BS_QBE / BS_MKT) × 100. Guarda de cero."""
+    if brier_mercado <= 0.0:
+        return 0.0
+    return round((1.0 - (brier_qbe / brier_mercado)) * 100.0, 2)
+
+
+def _construir_reporte_calibracion(
+    session: Session, league_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.38 / LN-QBE-100] Reporte macro/meso/micro de calibración factual de temporada.
+
+    Universo auditable: partidos de la bóveda 3NF con estado concluido y marcador consumado
+    que portan P' sellada (captura del snapshot o, en su defecto, tabla soberana). Un partido
+    concluido sin captura P' NO se evalúa ni se repara: se contabiliza como
+    "Pendiente de captura" [GOVERNANCE-01].
+    """
+    from src.core.contracts.portfolio_math import (
+        desmarcar_cuotas_proporcional,
+        calcular_brier_multicategorico,
+    )
+
+    fixtures = _fixtures_snapshot_indexados(session, league_id)
+    soberanas = _soberanas_por_id(session)
+
+    micro_por_jornada: Dict[int, List[Dict[str, Any]]] = {}
+    registros_qbe: Dict[int, List[Dict[str, Any]]] = {}
+    registros_mkt: Dict[int, List[Dict[str, Any]]] = {}
+    partidos_pendientes = 0
+
+    filas = session.query(Match).order_by(Match.matchday_num.asc(), Match.id.asc()).all()
+
+    for fila in filas:
+        if fila.matchday_num is None or fila.score_home is None or fila.score_away is None:
+            continue
+        if str(fila.status or "").upper() not in _ESTADOS_CONCLUIDOS_BACKTESTING:
+            continue
+
+        id_partido = str(fila.id)
+        fixture = fixtures.get(id_partido)
+        p_prima = _p_prima_del_fixture(fixture) if fixture else soberanas.get(id_partido)
+        if p_prima is None:
+            # Sin captura sellada de P' el partido no es auditable: cero invención.
+            partidos_pendientes += 1
+            continue
+
+        p_local, p_empate, p_visitante = p_prima
+        goles_local, goles_visitante = int(fila.score_home), int(fila.score_away)
+        desenlace = _desenlace_real_1x2(goles_local, goles_visitante)
+        favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
+
+        cuotas = _cuotas_1x2_factuales(fixture) if fixture else {}
+        q_local, q_empate, q_visitante = desmarcar_cuotas_proporcional(
+            float(cuotas.get("L", 0.0) or 0.0),
+            float(cuotas.get("E", 0.0) or 0.0),
+            float(cuotas.get("V", 0.0) or 0.0),
+        )
+
+        registro_qbe = {
+            "p_local": p_local, "p_empate": p_empate,
+            "p_visitante": p_visitante, "resultado": desenlace,
+        }
+        registro_mkt = {
+            "p_local": q_local, "p_empate": q_empate,
+            "p_visitante": q_visitante, "resultado": desenlace,
+        }
+
+        jornada = int(fila.matchday_num)
+        micro_por_jornada.setdefault(jornada, []).append({
+            "id_partido": id_partido,
+            "jornada": jornada,
+            "local": (fixture or {}).get("local") or str(fila.home_team_slug),
+            "visitante": (fixture or {}).get("visitante") or str(fila.away_team_slug),
+            "local_escudo_url": (fixture or {}).get("local_escudo_url"),
+            "visitante_escudo_url": (fixture or {}).get("visitante_escudo_url"),
+            "marcador": f"{goles_local} - {goles_visitante}",
+            "goles_local": goles_local,
+            "goles_visitante": goles_visitante,
+            "resultado_real": desenlace,
+            "favorito_designado": favorito,
+            "tipo_resultado": tipo_resultado,
+            "p_local": round(p_local, 4),
+            "p_empate": round(p_empate, 4),
+            "p_visitante": round(p_visitante, 4),
+            "q_local": q_local,
+            "q_empate": q_empate,
+            "q_visitante": q_visitante,
+            "momios": cuotas,
+            "brier_qbe": calcular_brier_multicategorico([registro_qbe]),
+            "brier_mercado": calcular_brier_multicategorico([registro_mkt]),
+            "acierto": tipo_resultado in ("FAVORITO", "EMPATE"),
+        })
+        registros_qbe.setdefault(jornada, []).append(registro_qbe)
+        registros_mkt.setdefault(jornada, []).append(registro_mkt)
+
+    jornadas: List[Dict[str, Any]] = []
+    for jornada in sorted(micro_por_jornada.keys()):
+        partidos = sorted(micro_por_jornada[jornada], key=lambda x: x["id_partido"])
+        total = len(partidos)
+        favorito_n = sum(1 for p in partidos if p["tipo_resultado"] == "FAVORITO")
+        empate_n = sum(1 for p in partidos if p["tipo_resultado"] == "EMPATE")
+        underdog_n = sum(1 for p in partidos if p["tipo_resultado"] == "UNDERDOG")
+
+        bs_qbe = calcular_brier_multicategorico(registros_qbe[jornada])
+        bs_mkt = calcular_brier_multicategorico(registros_mkt[jornada])
+
+        jornadas.append({
+            "jornada": jornada,
+            "total_partidos": total,
+            "aciertos_cobertura": favorito_n + empate_n,
+            "tasa_cobertura_pct": (
+                round(((favorito_n + empate_n) / total) * 100.0, 2) if total else 0.0
+            ),
+            "desglose": {
+                "favorito": favorito_n, "empate": empate_n, "underdog": underdog_n,
+            },
+            "brier_score_qbe": bs_qbe,
+            "brier_score_mercado": bs_mkt,
+            "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe, bs_mkt),
+            "partidos": partidos,
+        })
+
+    todos_qbe = [r for j in sorted(registros_qbe.keys()) for r in registros_qbe[j]]
+    todos_mkt = [r for j in sorted(registros_mkt.keys()) for r in registros_mkt[j]]
+    total_temporada = len(todos_qbe)
+    favorito_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "FAVORITO")
+    empate_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "EMPATE")
+    underdog_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "UNDERDOG")
+
+    bs_qbe_temporada = calcular_brier_multicategorico(todos_qbe)
+    bs_mkt_temporada = calcular_brier_multicategorico(todos_mkt)
+
+    return {
+        "resumen_temporada": {
+            "total_partidos": total_temporada,
+            "partidos_favorito": favorito_t,
+            "partidos_empate": empate_t,
+            "partidos_underdog": underdog_t,
+            "tasa_coincidencia_fiduciaria_pct": (
+                round(((favorito_t + empate_t) / total_temporada) * 100.0, 2)
+                if total_temporada else 0.0
+            ),
+            "brier_score_qbe": bs_qbe_temporada,
+            "brier_score_mercado": bs_mkt_temporada,
+            "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe_temporada, bs_mkt_temporada),
+            "partidos_pendientes_captura": partidos_pendientes,
+            "jornadas_auditadas": [j["jornada"] for j in jornadas],
+        },
+        "jornadas": jornadas,
+    }
+
+
+@router.get("/backtesting/calibration-report", response_model=CalibrationReportResponse)
+def get_backtesting_calibration_report(
+    league_id: Optional[int] = Query(
+        None, description="ID de liga de la bóveda 3NF (ej. 1 = Liga MX). Sin valor: universo global."
+    ),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.38 / LN-QBE-100] Visor de Backtesting — Calibración Factual de Temporada.
+
+    Operación 100% READ-ONLY sobre la bóveda 3NF: cruza los resultados reales consumados
+    (`matches`) con las capturas congeladas de P' y cuotas de cierre
+    (`fixtures_snapshots.matches_json`) y emite el reporte macro/meso/micro.
+    Jamás muta la bóveda ni dispara ingesta: cero red, cero escritura.
+    """
+    return _construir_reporte_calibracion(db, league_id)
+
+

@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.storage.seeder import seed_initial_leagues
 from src.storage.sync_service import sync_active_leagues_data
-from src.web.routes import leagues, portfolio, export, sovereign, markets, admin_tasks
+from src.web.routes import leagues, portfolio, export, sovereign, markets, admin_tasks, admin_status
 from src.web.routes.admin import router as admin_router, llm_router
 
 # [ARCH-1.4.28] Directorio de plantillas resuelto UNA sola vez para toda la fábrica.
@@ -83,6 +83,7 @@ def create_app() -> FastAPI:
     api.include_router(sovereign.router)  # [ARCH-1.4.5] Endpoint Soberano Deportivo Puro
     api.include_router(markets.router)    # [ARCH-1.4.5] Endpoints de Mercados Financieros (Casino / Progol)
     api.include_router(admin_tasks.router)  # [ARCH-1.4.12] Centro de Control: whitelist de tareas
+    api.include_router(admin_status.router)  # [ARCH-1.4.12-B] Semáforo de deriva y frescura de fuentes
 
     @api.get("/health")
     def health_check():

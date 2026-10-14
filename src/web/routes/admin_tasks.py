@@ -89,6 +89,37 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
             ["scripts", "daemons", "centinela_progol.py"],
         ],
     },
+    # ── [ARCH-1.4.12-C] SENSORES AMPLIADOS Y CADENAS TEMPORALES HOMOLOGADAS ──────────────────
+    # Dos ejecutores individuales y tres cadenas temporales se incorporan a la whitelist
+    # certificada. Materialización canónica del módulo (intérprete activo + rutas internas
+    # absolutas, cero shell): `_comando_absoluto` es la ÚNICA vía de despacho.
+    "ingestar_historico_betexplorer": {
+        "descripcion": "Reconstrucción histórica BetExplorer (paridad de cortes de jornada)",
+        "comandos": [["scripts", "ingesta", "ingestar_historico_betexplorer.py"]],
+    },
+    "auditar_coherencia_cartelera": {
+        "descripcion": "Pre-vuelo diagnóstico de coherencia relacional (solo lectura)",
+        "comandos": [["scripts", "auditoria", "auditar_coherencia_cartelera.py"]],
+    },
+    "cadena_pre_jornada": {
+        "descripcion": "Secuencia pre-jornada: Deportivo ➔ Mercado ➔ Pre-Vuelo de Coherencia",
+        "comandos": [
+            ["scripts", "daemons", "centinela_deportivo.py"],
+            ["scripts", "daemons", "centinela_mercado.py"],
+            ["scripts", "auditoria", "auditar_coherencia_cartelera.py"],
+        ],
+    },
+    "cadena_post_jornada": {
+        "descripcion": "Secuencia post-jornada: Histórico BetExplorer ➔ Pre-Vuelo de Coherencia",
+        "comandos": [
+            ["scripts", "ingesta", "ingestar_historico_betexplorer.py"],
+            ["scripts", "auditoria", "auditar_coherencia_cartelera.py"],
+        ],
+    },
+    "cadena_progol": {
+        "descripcion": "Secuencia de quiniela: Centinela Progol (concurso vigente)",
+        "comandos": [["scripts", "daemons", "centinela_progol.py"]],
+    },
     "auditar_pureza_vol1": {
         "descripcion": "Auditoría de pureza matemática del Tratado I (7/7 tests)",
         "comandos": [["scripts", "auditar_pureza_matematica_vol1.py"]],
@@ -113,8 +144,9 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
 }
 
 # ── [ARCH-1.4.28] MODOS DE DESPACHO Y PUENTE INTEGRADO (CAPA 5) ───────────────
-# La whitelist de [ARCH-1.4.12] (9 tareas) se amplía a 10 con la purga total in-process sellada
-# por [ARCH-1.4.29]; ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
+# La whitelist de [ARCH-1.4.12] (9 tareas) se amplió a 10 con la purga total in-process sellada
+# por [ARCH-1.4.29] y a 15 con los dos sensores individuales y las tres cadenas temporales
+# homologadas de [ARCH-1.4.12-C]; ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
 # sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
 # hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.
 MODO_DESPACHO_SUBPROCESS = "subprocess"

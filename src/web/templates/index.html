@@ -20,6 +20,7 @@
                 <button class="tab-btn active" data-tab="view-leagues-hub">🌐 Ligas y Torneos</button>
                 <button class="tab-btn" data-tab="view-matchday-selection" id="btn-tab-split">📊 Equipos y Partidos</button>
                 <button class="tab-btn" data-tab="tab-portfolio">💼 Mesa de Apuestas</button>
+                <button class="tab-btn" id="tab-visor-backtesting" data-tab="panel-visor-backtesting">🔬 Visor de Backtesting</button>
                 <button class="tab-btn" data-tab="view-control-center" id="btn-tab-control">⚙️ Centro de Control</button>
             </nav>
 
@@ -201,18 +202,21 @@
                                 <option value="">— hidratando bóveda 3NF —</option>
                             </select>
                         </div>
-                        <!-- [ARCH-1.4.37 / LN-QBE-077-B] Tríptico de Cobertura (δ): la ventanilla
-                             declara el modo de partición del capital. `DEF` (V=0) subsiste como
-                             contrato sellado; `BAL` y `AGR` activan la ley general del Dutching
-                             Dinámico (δ*). El cliente sólo EXHIBE: las cifras las certifica el
-                             motor ([GOVERNANCE-01] paridad estricta backend↔pantalla). -->
+                        <!-- [ARCH-1.4.37 / LN-QBE-077-B / ARCH-1.4.12-C] Tríptico de Cobertura (δ):
+                             la ventanilla declara el modo de partición del capital. `DEF` (V=0) subsiste
+                             como contrato sellado; `BAL` y `AGR` activan la ley general del Dutching
+                             Dinámico (δ*). DEFAULT LEGISLADO = `BAL` (Balanceado +15%), modo de cobertura
+                             por omisión de la Mesa de Apuestas según [ARCH-1.4.12-C]: la clase `active`
+                             y los estilos se RE-DERIVAN de `state.modo_cobertura` en app.js (cero estado
+                             duplicado). El cliente sólo EXHIBE: las cifras las certifica el motor
+                             ([GOVERNANCE-01] paridad estricta backend↔pantalla). -->
                         <div class="control-group" id="grupo-modo-cobertura" style="display:inline-flex; align-items:center; gap:8px; margin-left:12px;">
                             <label style="font-family:monospace; font-size:12px; color:#94A3B8;">Cobertura:</label>
                             <div class="btn-group-toggle" id="toggle-modo-cobertura">
-                                <button type="button" class="btn-cobertura active" data-modo="DEF" title="Preservación Pura (V=0, PnL Empate = $0.00)" style="background:#1E293B; border:1px solid #38BDF8; color:#38BDF8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
+                                <button type="button" class="btn-cobertura" data-modo="DEF" title="Preservación Pura (V=0, PnL Empate = $0.00)" style="background:#0F172A; border:1px solid #334155; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
                                     🛡️ Defensivo (V=0)
                                 </button>
-                                <button type="button" class="btn-cobertura" data-modo="BAL" title="Crecimiento Balanceado (Empate genera beneficio neto)" style="background:#0F172A; border:1px solid #334155; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
+                                <button type="button" class="btn-cobertura active" data-modo="BAL" title="Crecimiento Balanceado (Empate genera beneficio neto) — MODO POR OMISIÓN [ARCH-1.4.12-C]" style="background:#1E293B; border:1px solid #38BDF8; color:#38BDF8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
                                     ⚡ Balanceado (+15%)
                                 </button>
                                 <button type="button" class="btn-cobertura" data-modo="AGR" title="Isorrendimiento de Doble Cosecha (Misma ganancia en favorito y empate)" style="background:#0F172A; border:1px solid #334155; color:#94A3B8; border-radius:6px; padding:4px 8px; font-family:monospace; font-size:11px; cursor:pointer;">
@@ -610,6 +614,85 @@
         </div>
     </div>
 
+        <!-- VISTA 5: VISOR DE BACKTESTING (DES-QBE-064 / LN-QBE-100 / ARCH-1.4.38) -->
+        <section id="panel-visor-backtesting" class="view-section">
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3 style="margin-top: 0;">🔬 Visor de Backtesting — Calibración Factual de Temporada</h3>
+                <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 14px;">
+                    Auditoría <strong>de solo lectura</strong> contra la bóveda 3NF (<code>matches</code> ·
+                    <code>fixtures_snapshots</code>): mide la Tasa de Coincidencia Fiduciaria (H_fid), el
+                    Brier Score Multicategórico de Q-BE contra el consenso del mercado y el Alpha de
+                    Calibración de la temporada. Cero cifras fabricadas: sin captura sellada de P' el
+                    partido se rotula <em>Pendiente de captura</em>
+                    <span style="opacity: 0.85;">[LN-QBE-100] / [ARCH-1.4.38]</span>.
+                </p>
+
+                <div class="bt-macro-grid">
+                    <div class="bt-kpi-card">
+                        <span class="bt-kpi-label">PARTIDOS AUDITADOS</span>
+                        <span class="bt-kpi-value" id="kpi-bt-total-partidos">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-jornadas">--</span>
+                    </div>
+                    <div class="bt-kpi-card">
+                        <span class="bt-kpi-label">COINCIDENCIA FIDUCIARIA (H_fid)</span>
+                        <span class="bt-kpi-value" id="kpi-bt-coincidencia">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-desglose">--</span>
+                    </div>
+                    <div class="bt-kpi-card">
+                        <span class="bt-kpi-label">BRIER SCORE · Q-BE vs MERCADO</span>
+                        <span class="bt-kpi-value" id="kpi-bt-brier">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-brier-detalle">--</span>
+                    </div>
+                    <div class="bt-kpi-card">
+                        <span class="bt-kpi-label">ALPHA DE CALIBRACIÓN</span>
+                        <span class="bt-kpi-value" id="kpi-bt-alpha">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-alpha-detalle">--</span>
+                    </div>
+                </div>
+
+                <div id="bt-estado" class="bt-estado">Lectura pendiente: abre la pestaña para consultar la bóveda.</div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h4 style="margin-top: 0;">📅 Calibración por Jornada (Tabla Meso)</h4>
+                <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+                    🔵 Azul = Cobertura (favorito o empate) · 🔴 Rojo = Underdog no cubierto ·
+                    FAS/FES/FUS = desglose factual por jornada.
+                </p>
+                <div style="overflow-x: auto;">
+                    <table class="bt-table">
+                        <thead>
+                            <tr>
+                                <th>JORNADA</th>
+                                <th>PARTIDOS</th>
+                                <th>COBERTURA (H_fid)</th>
+                                <th>DESGLOSE (FAS · FES · FUS)</th>
+                                <th>BRIER Q-BE</th>
+                                <th>BRIER MERCADO</th>
+                                <th>ALPHA</th>
+                                <th>ACCIÓN</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-meso-jornadas"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h4 style="margin-top: 0;">🎯 Parrilla Micro por Partido (estilo BetExplorer)</h4>
+                <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+                    Cada casilla 1X2 contrasta la probabilidad fiduciaria <strong>P'</strong> contra el
+                    consenso desmarcado del mercado (<strong>q_mkt</strong>) y su momio de ventanilla.
+                    La casilla del desenlace real se ilumina con la colorimetría de cobertura.
+                </p>
+                <div id="contenedor-micro-partidos">
+                    <div class="bt-estado">
+                        Selecciona <strong>Ver partidos</strong> en la tabla meso para desplegar la parrilla micro 1X2.
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- VISTA 4: CENTRO DE CONTROL ADMINISTRATIVO (DES-QBE-048 / ARCH-1.4.12) -->
         <section id="view-control-center" class="view-section">
             <div class="card" style="margin-bottom: 1.5rem;">
@@ -620,8 +703,51 @@
                     ejecuta texto libre del cliente (cero inyección de comandos).
                 </p>
 
+                <!-- [ARCH-1.4.12-B] SEMÁFORO DE DERIVA Y FRESCURA DE FUENTES (cuatro luces, SOLO
+                     LECTURA): el veredicto emana de `GET /api/admin/status/drift`; la pantalla sólo
+                     EXHIBE el veredicto del motor ([GOVERNANCE-01] cero cifra inventada en el cliente). -->
+                <div class="cc-drift-panel" id="cc-drift-panel">
+                    <div class="cc-drift-head">
+                        <span class="cc-drift-title">🚦 Semáforo de Deriva · Jornada <span id="drift-jornada">—</span></span>
+                        <span class="cc-drift-regimen" id="drift-regimen">solo lectura</span>
+                    </div>
+                    <div class="cc-drift-luces" id="cc-drift-luces">
+                        <div class="cc-drift-luz" id="drift-luz-mercado" data-dimension="mercado">
+                            <span class="cc-drift-glifo" id="drift-glifo-mercado">🇾🇪</span>
+                            <span class="cc-drift-etiqueta">Mercado</span>
+                            <span class="cc-drift-detalle" id="drift-detalle-mercado">Sondeando frescura de cuotas…</span>
+                        </div>
+                        <div class="cc-drift-luz" id="drift-luz-deportivo" data-dimension="deportivo">
+                            <span class="cc-drift-glifo" id="drift-glifo-deportivo">🇾🇪</span>
+                            <span class="cc-drift-etiqueta">Deportivo</span>
+                            <span class="cc-drift-detalle" id="drift-detalle-deportivo">Sondeando estado deportivo…</span>
+                        </div>
+                        <div class="cc-drift-luz" id="drift-luz-progol" data-dimension="progol">
+                            <span class="cc-drift-glifo" id="drift-glifo-progol">🇾🇪</span>
+                            <span class="cc-drift-etiqueta">Quiniela</span>
+                            <span class="cc-drift-detalle" id="drift-detalle-progol">Sondeando concurso vigente…</span>
+                        </div>
+                        <div class="cc-drift-luz" id="drift-luz-integridad" data-dimension="integridad">
+                            <span class="cc-drift-glifo" id="drift-glifo-integridad">🇾🇪</span>
+                            <span class="cc-drift-etiqueta">Integridad</span>
+                            <span class="cc-drift-detalle" id="drift-detalle-integridad">Auditando coherencia de cartelera…</span>
+                        </div>
+                    </div>
+                    <div class="cc-drift-accion" id="cc-drift-accion">
+                        <span class="cc-drift-accion-texto" id="drift-accion-texto">[SISTEMA] Evaluando deriva…</span>
+                        <button id="btn-drift-accion" class="cc-task-btn cc-drift-boton" style="display:none;" title="Ejecuta la tarea certificada que la sonda recomienda para cerrar la deriva detectada (siempre pertenece a la whitelist [ARCH-1.4.12]).">▶ Ejecutar Acción Recomendada</button>
+                        <button id="btn-drift-refresco" class="cc-drift-refresco" title="Vuelve a sondear el semáforo de deriva (solo lectura, cero mutación de la bóveda).">↻ Reevaluar Semáforo</button>
+                    </div>
+                </div>
+
+                <!-- [ARCH-1.4.12-C] TRES CADENAS TEMPORALES HOMOLOGADAS (derogan el botón maestro
+                     monolítico): pre-jornada (reparación integral Deportivo ➔ Mercado ➔ Pre-Vuelo),
+                     post-jornada (cierre factual Histórico BetExplorer ➔ Pre-Vuelo) y quiniela
+                     (concurso vigente). Toda cadena se despacha por la whitelist certificada. -->
                 <div class="cc-master-bar">
-                    <button id="btn-tarea-master" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_ingesta_total')" title="Qué hace: Ejecuta en secuencia automática e ininterrumpida la cadena completa: Centinela Deportivo ➔ Centinela de Mercado ➔ Centinela Progol. Ideal tras purgar la base de datos.">🚀 Ejecutar Cadena de Ingesta Total</button>
+                    <button id="btn-tarea-pre-jornada" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_pre_jornada')" title="Qué hace: Ejecuta en secuencia la cadena PRE-JORNADA certificada: Centinela Deportivo ➔ Centinela de Mercado ➔ Pre-Vuelo de Coherencia de Cartelera. Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas, tras una purga o cuando el semáforo detecte deriva deportiva/mercado/integridad.">🌅 Cadena Pre-Jornada · Deportivo ➔ Mercado ➔ Pre-Vuelo</button>
+                    <button id="btn-tarea-post-jornada" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_post_jornada')" title="Qué hace: Ejecuta la cadena POST-JORNADA certificada: Ingesta Histórica BetExplorer ➔ Pre-Vuelo de Coherencia de Cartelera. Cuándo usar: Al concluir la jornada, para sellar el histórico de cortes y verificar la coherencia relacional de la cartelera liquidada.">🌇 Cadena Post-Jornada · Histórico BetExplorer ➔ Pre-Vuelo</button>
+                    <button id="btn-tarea-progol" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_progol')" title="Qué hace: Ejecuta la cadena de QUINIELA certificada: Centinela Progol (concurso oficial vigente de miloteria.mx). Cuándo usar: Cada semana al publicarse el concurso o cuando el semáforo detecte cierre vencido.">🎟️ Cadena Quiniela · Centinela Progol</button>
                     <span id="cc-estado" class="cc-badge cc-badge-idle">● En espera</span>
                 </div>
 
@@ -632,6 +758,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_deportivo')" title="Qué hace: Extrae la temporada completa (J1 a J17) desde FotMob y reconstruye tablas históricas. Cuándo usar: Al iniciar el sistema o tras disputarse una jornada para actualizar marcadores y clasificaciones.">🏟️ Centinela Deportivo · FotMob (J1-J17)</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_mercado')" title="Qué hace: Escanea cuotas vivas en Caliente y Betway para la jornada activa, calculando arbitrajes y deltas. Cuándo usar: Previo a operar la Mesa de Apuestas.">💰 Centinela de Mercado · Caliente + Betway</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_progol')" title="Qué hace: Descarga el concurso oficial vigente de miloteria.mx (21 casillas). Cuándo usar: Cada semana al publicarse la nueva quiniela.">🎟️ Centinela Progol · Concurso #2353</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('ingestar_historico_betexplorer')" title="Qué hace: Reconstruye el histórico de cortes de jornada desde BetExplorer (marcadores y cuotas de cierre) para la paridad factual del backtesting. Cuándo usar: Tras concluir una jornada o al reconstruir la serie histórica de la temporada.">🛰️ Ingesta Histórica BetExplorer · Cortes de Jornada</button>
                         </div>
                     </div>
 
@@ -639,8 +766,8 @@
                         <h4 class="cc-group-title">🗄️ Activos y Mantenimiento 3NF</h4>
                         <div class="cc-tasks">
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('sincronizar_activos')" title="Qué hace: Descarga y cachea los escudos y logos oficiales de los clubes. Cuándo usar: Tras una purga o al incorporar clubes nuevos; es idempotente y no altera datos deportivos.">🖼️ Sincronizar Escudos y Logos</button>
-                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')" title="Qué hace: Purga atómica de snapshots, partidos y estados en SQLite. Qué implica: Deja la base de datos en blanco (preserva ligas y equipos). Cómo se restaura: Pulsando el botón maestro 'Ejecutar Cadena de Ingesta Total'.">🧹 Purga Selectiva de Snapshots</button>
-                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purga_total_db')" title="Qué hace: Purga TOTAL de la bóveda 3NF [ARCH-1.4.29] bajo una única Unit of Work: vacía las 15 tablas (ligas, equipos, partidos, snapshots, distribuciones soberanas, slates y bitácoras) preservando intacto el libro mayor de tokens llm_token_ledger. Qué implica: Deja la base virgen, sin catálogo alguno. Cómo se restaura: Pulsando el botón maestro 'Ejecutar Cadena de Ingesta Total' (Deportivo ➔ Mercado ➔ Progol).">🧨 Purga Total de la Bóveda 3NF</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')" title="Qué hace: Purga atómica de snapshots, partidos y estados en SQLite. Qué implica: Deja la base de datos en blanco (preserva ligas y equipos). Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo).">🧹 Purga Selectiva de Snapshots</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purga_total_db')" title="Qué hace: Purga TOTAL de la bóveda 3NF [ARCH-1.4.29] bajo una única Unit of Work: vacía las 15 tablas (ligas, equipos, partidos, snapshots, distribuciones soberanas, slates y bitácoras) preservando intacto el libro mayor de tokens llm_token_ledger. Qué implica: Deja la base virgen, sin catálogo alguno. Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo) y, si la quiniela quedó vacía, la cadena 'Quiniela'.">🧨 Purga Total de la Bóveda 3NF</button>
                         </div>
                     </div>
 
@@ -649,6 +776,7 @@
                         <div class="cc-tasks">
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pureza_vol1')" title="Qué hace: Audita las invarianzas matemáticas del Tratado I (Poisson, André, Kelly). Cuándo usar: Antes de certificar cualquier cambio en src/core/.">📐 Pureza Matemática · Tratado I</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_cartera_shield')" title="Qué hace: Verifica las invarianzas financieras de cartera (hard caps 8% individual / 25% jornada, piso de boleto). Cuándo usar: Tras modificar reglas de capital o estrategias.">🔍 Invarianzas de Cartera · Shield</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_coherencia_cartelera')" title="Qué hace: Ejecuta el pre-vuelo diagnóstico de coherencia relacional de la cartelera activa (paridad de vector p, overround, piso/techo, coherencia Capa 0 y divergencia de mercado). Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas o cuando el semáforo marque integridad en rojo.">🧭 Coherencia de Cartelera · Pre-Vuelo</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('consultar_uso_llm')" title="Qué hace: Reporta el consumo de tokens y la salud del pool de llaves Gemini. Cuándo usar: Antes de lanzar la cadena de ingesta o ante errores de cuota.">🔑 Salud de Llaves Gemini y Tokens</button>
                         </div>
                     </div>

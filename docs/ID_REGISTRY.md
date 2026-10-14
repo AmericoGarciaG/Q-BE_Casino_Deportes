@@ -196,6 +196,10 @@
 | `[LN-QBE-077-C]` | LOGIC | `docs/LOGIC.md` | Techo de Viabilidad Analítica δ_max y Umbral de Breakeven θ* | SELLADO |
 | `[LN-QBE-077-D]` | LOGIC | `docs/LOGIC.md` | Dutching Isorrendimiento de Doble Cosecha (δ*) | SELLADO |
 | `[ARCH-1.4.37]` | ARCH | `docs/ARCH.md` | Parámetro de Cobertura Dinámica δ en el Pipeline de Cartera y DTOs [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-100]` | LOGIC | `docs/LOGIC.md` | Motor de Calibración Factual de Temporada y Evaluación Multicategórica de Brier | SELLADO |
+| `[ARCH-1.4.38]` | ARCH | `docs/ARCH.md` | Endpoint de Calibración Histórica y Visor de Backtesting [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR] | SELLADO |
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
 > `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`

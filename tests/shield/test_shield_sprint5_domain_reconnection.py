@@ -20,14 +20,23 @@ def test_arch_1_4_28_admin_tasks_whitelist_and_coordinator_wiring():
     """Audita que admin_tasks.py reconozca IngestionCoordinator y mantenga la whitelist."""
     from src.web.routes.admin_tasks import TAREAS_PERMITIDAS
 
-    # Verificar que la whitelist de 10 tareas sigue intacta (9 de [ARCH-1.4.12] + la purga
-    # total in-process sellada por [ARCH-1.4.29]).
+    # Verificar que la whitelist legislada sigue intacta: 9 de [ARCH-1.4.12] + la purga total
+    # in-process sellada por [ARCH-1.4.29] = 10, ampliada a 15 exactas por la Enmienda
+    # [ARCH-1.4.12-C] (2 ejecutores individuales + 3 cadenas temporales homologadas).
     assert "cadena_ingesta_total" in TAREAS_PERMITIDAS
     assert "centinela_deportivo" in TAREAS_PERMITIDAS
     assert "centinela_mercado" in TAREAS_PERMITIDAS
     assert "centinela_progol" in TAREAS_PERMITIDAS
     assert "purga_total_db" in TAREAS_PERMITIDAS
-    assert len(TAREAS_PERMITIDAS) == 10
+    # [ARCH-1.4.12-C] Miembros nuevos de la Enmienda: cero degradación de la igualdad estricta.
+    assert "ingestar_historico_betexplorer" in TAREAS_PERMITIDAS
+    assert "auditar_coherencia_cartelera" in TAREAS_PERMITIDAS
+    assert "cadena_pre_jornada" in TAREAS_PERMITIDAS
+    assert "cadena_post_jornada" in TAREAS_PERMITIDAS
+    assert "cadena_progol" in TAREAS_PERMITIDAS
+    assert len(TAREAS_PERMITIDAS) == 15, (
+        "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 15 tareas certificadas."
+    )
 
     # Auditar AST de admin_tasks.py para confirmar cableado del coordinador
     admin_tasks_path = Path("src/web/routes/admin_tasks.py")

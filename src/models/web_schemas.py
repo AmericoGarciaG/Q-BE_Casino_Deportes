@@ -139,3 +139,73 @@ class IngestionExtractRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     url: Optional[str] = None
     imagen_path: Optional[str] = None
+
+
+# ── [ARCH-1.4.38 / LN-QBE-100] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL) ─────
+class CalibrationMatchOut(BaseModel):
+    """
+    [LN-QBE-100] Casilla micro estilo BetExplorer: P' fiduciaria vs consenso de mercado (q_mkt),
+    resultado real consumado y error de Brier de ambas predicciones.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id_partido: str
+    jornada: int
+    local: str
+    visitante: str
+    local_escudo_url: Optional[str] = None
+    visitante_escudo_url: Optional[str] = None
+    marcador: str
+    goles_local: int
+    goles_visitante: int
+    resultado_real: Literal["LOCAL", "EMPATE", "VISITANTE"]
+    favorito_designado: Literal["LOCAL", "VISITANTE"]
+    tipo_resultado: Literal["FAVORITO", "EMPATE", "UNDERDOG"]
+    p_local: float
+    p_empate: float
+    p_visitante: float
+    q_local: float
+    q_empate: float
+    q_visitante: float
+    momios: Dict[str, float] = Field(default_factory=dict)
+    brier_qbe: float
+    brier_mercado: float
+    acierto: bool
+
+
+class CalibrationJornadaOut(BaseModel):
+    """[LN-QBE-100] Fila meso: calibración agregada de una jornada concluida."""
+    model_config = ConfigDict(extra="ignore")
+    jornada: int
+    total_partidos: int
+    aciertos_cobertura: int
+    tasa_cobertura_pct: float
+    desglose: Dict[str, int] = Field(default_factory=dict)
+    brier_score_qbe: float
+    brier_score_mercado: float
+    alpha_calibracion_pct: float
+    partidos: List[CalibrationMatchOut] = Field(default_factory=list)
+
+
+class CalibrationSummaryOut(BaseModel):
+    """[LN-QBE-100] Bloque macro de temporada (H_fid, Brier de Q-BE vs mercado y Alpha)."""
+    model_config = ConfigDict(extra="ignore")
+    total_partidos: int
+    partidos_favorito: int
+    partidos_empate: int
+    partidos_underdog: int
+    tasa_coincidencia_fiduciaria_pct: float
+    brier_score_qbe: float
+    brier_score_mercado: float
+    alpha_calibracion_pct: float
+    partidos_pendientes_captura: int = 0
+    jornadas_auditadas: List[int] = Field(default_factory=list)
+
+
+class CalibrationReportResponse(BaseModel):
+    """
+    [ARCH-1.4.38] Contrato REST del Visor de Backtesting (solo lectura):
+    resumen macro de temporada + tabla meso por jornada con parrilla micro embebida.
+    """
+    model_config = ConfigDict(extra="ignore")
+    resumen_temporada: CalibrationSummaryOut
+    jornadas: List[CalibrationJornadaOut] = Field(default_factory=list)

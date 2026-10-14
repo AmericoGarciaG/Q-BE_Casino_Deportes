@@ -776,3 +776,90 @@ def liquidar_orden_post_evento(
         "inversion_mxn": inversion_total,
         "roi_real_porcentaje": _roi_real_porcentaje(round(-inversion_total, 2), inversion_total),
     }
+
+
+# ── [VAULT-CORE-007-C / LN-QBE-100] CALIBRACIÓN FACTUAL DE TEMPORADA ─────────
+# [DIRGEN-STRICT] Transparencia verbatim de bóveda: cero margen creativo.
+
+
+def desmarcar_cuotas_proporcional(oL: float, oX: float, oV: float) -> Tuple[float, float, float]:
+    """
+    [VAULT-CORE-007-C] [DIRGEN-STRICT] Desmarque proporcional de vig (consenso Vig-Free).
+
+    Extrae el consenso de probabilidad sin comisión de la casa desde el trío de cuotas 1X2
+    de ventanilla, repartiendo el sobreprecio (overround) en proporción exacta a la
+    probabilidad implícita bruta:
+
+        S  = 1/oL + 1/oX + 1/oV      (sobreprecio; S > 1.0 cuando hay comisión)
+        q_k = (1/o_k) / S            (k ∈ {L, X, V})
+
+    Guarda fiduciaria [GOVERNANCE-01]: un trío incompleto o degenerado (cualquier cuota
+    <= 1.0) NO se repara ni se inventa; se degrada a la ignorancia máxima uniforme
+    (1/3, 1/3, 1/3).
+
+    Returns:
+        Tupla `(q_LOCAL, q_EMPATE, q_VISITANTE)` que clausura en 1.0 (redondeo a 4 decimales).
+    """
+    try:
+        o_l, o_x, o_v = float(oL), float(oX), float(oV)
+    except (TypeError, ValueError):
+        return (round(1.0 / 3.0, 4), round(1.0 / 3.0, 4), round(1.0 / 3.0, 4))
+
+    if o_l <= 1.0 or o_x <= 1.0 or o_v <= 1.0:
+        return (round(1.0 / 3.0, 4), round(1.0 / 3.0, 4), round(1.0 / 3.0, 4))
+
+    inversas = (1.0 / o_l, 1.0 / o_x, 1.0 / o_v)
+    sobreprecio = inversas[0] + inversas[1] + inversas[2]
+    q_local = round(inversas[0] / sobreprecio, 4)
+    q_empate = round(inversas[1] / sobreprecio, 4)
+    q_visitante = round(1.0 - q_local - q_empate, 4)
+    return (q_local, q_empate, q_visitante)
+
+
+def calcular_brier_multicategorico(partidos: List[Dict[str, Any]]) -> float:
+    """
+    [LN-QBE-100] [DIRGEN-STRICT] Brier Score Multicategórico 1X2.
+
+    Penaliza por igual la sobreconfianza y la subconfianza sobre las 3 casillas del
+    mercado (1, X, 2) con normalización 3N:
+
+        BS = (1 / 3N) · Σ_i Σ_{k ∈ {1, X, 2}} (p_{i,k} - y_{i,k})²
+
+    Args:
+        partidos: lista de dicts `{"p_local": float, "p_empate": float, "p_visitante": float,
+                  "resultado": "LOCAL" | "EMPATE" | "VISITANTE"}` (P', P̂ o q_mkt indistintamente).
+
+    Un partido con desenlace desconocido o probabilidades ilegibles se EXCLUYE del cómputo
+    y del denominador (N = partidos evaluados): cero cifras fabricadas [GOVERNANCE-01].
+    Sin partidos evaluables el score es 0.0.
+    """
+    suma_error = 0.0
+    evaluados = 0
+
+    for partido in (partidos or []):
+        try:
+            p_local = float(partido.get("p_local"))
+            p_empate = float(partido.get("p_empate"))
+            p_visitante = float(partido.get("p_visitante"))
+            desenlace = str(partido.get("resultado", "")).upper()
+        except (TypeError, ValueError, AttributeError):
+            continue
+
+        y_local = 1.0 if desenlace == "LOCAL" else 0.0
+        y_empate = 1.0 if desenlace == "EMPATE" else 0.0
+        y_visitante = 1.0 if desenlace == "VISITANTE" else 0.0
+
+        if (y_local + y_empate + y_visitante) == 0.0:
+            continue
+
+        suma_error += (
+            (p_local - y_local) ** 2
+            + (p_empate - y_empate) ** 2
+            + (p_visitante - y_visitante) ** 2
+        )
+        evaluados += 1
+
+    if evaluados == 0:
+        return 0.0
+    return round(suma_error / (3.0 * evaluados), 4)
+

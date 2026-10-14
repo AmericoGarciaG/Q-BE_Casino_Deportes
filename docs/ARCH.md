@@ -1421,6 +1421,46 @@ def sincronizar_progol_pipeline_completo(
 * **Liquidación Post-Evento (`liquidar_orden_post_evento`):** Si un partido concluye en empate y la orden portaba $\delta > 0$, la liquidación acredita como cobro bruto $(1.0 + \delta) B_i$, registrando el estado `COBRADO_SEGURO_DELTA` y acreditando la ganancia neta en el PnL real.
 * **[SHIELD]:** `tests/shield/test_shield_dynamic_dutching_delta.py`
 
+### [ARCH-1.4.38] Endpoint de Calibración Histórica y Visor de Backtesting [ARCH-PILLAR]
+* **Endpoint REST:** `GET /api/markets/backtesting/calibration-report?league_id=1`
+  - Operación pura de solo lectura (Read-Only).
+  - Consulta en SQLite 3NF partidos con `status == 'FINISHED'`, cruza `matches` con `fixtures_snapshots.matches_json` y calcula métricas macro, tabla meso de jornadas y detalle de casillas estilo BetExplorer.
+* **Interfaz de Usuario:**
+  - Pestaña `[ 🔬 Visor de Backtesting ]` entre *Mesa de Apuestas* y *Centro de Control*.
+  - Sección `#panel-visor-backtesting` en `index.html` hidratada por `app.js`.
+* **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py`
+
+
+### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
+* **Endpoint REST:** `GET /api/admin/status/drift`
+  - Operación pura de solo lectura (`Read-Only`) en tiempo real.
+  - Audita el estado fáctico de la persistencia en SQLite 3NF evaluando 4 dimensiones:
+    1. `status_mercado`: Verifica `updated_at` de cuotas en la jornada activa (Stale si $\Delta t > 45\text{ min}$ en ventana de ventanilla).
+    2. `status_deportivo`: Detecta si existen partidos cuyo horario oficial fue hace $> 2.5\text{ horas}$ y siguen en `PROGRAMADO`.
+    3. `status_progol`: Verifica si el concurso activo en `slates` superó su `fecha_cierre`.
+    4. `status_integridad`: Consulta el estado de la sonda de coherencia de cartelera.
+  - Retorna `accion_recomendada`: Sugerencia unívoca de la cadena o script que debe ejecutarse.
+* **[SHIELD]:** `tests/shield/test_shield_control_center_and_drift_detector.py`
+
+### [ARCH-1.4.12-C] Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR]
+* **Whitelist de Tareas Ampliada (`admin_tasks.py`):**  
+  materialización canónica de whitelist (intérprete activo + ruta interna absoluta, cero shell):
+  el despachador `_comando_absoluto` no admite la forma `-m`, por lo que la ruta de módulo se
+  transcribe como ruta de archivo; ambos ejecutores declaran todos sus argumentos con default y
+  son invocables sin parámetros adicionales.
+  - `ingestar_historico_betexplorer`: `["scripts", "ingesta", "ingestar_historico_betexplorer.py"]`.
+  - `auditar_coherencia_cartelera`: `["scripts", "auditoria", "auditar_coherencia_cartelera.py"]`.
+* **Las Tres Cadenas Temporales Homologadas:**
+  - `cadena_pre_jornada`: `centinela_deportivo` $\to$ `centinela_mercado` $\to$ `auditar_coherencia_cartelera`.
+  - `cadena_post_jornada`: `ingestar_historico_betexplorer` $\to$ `auditar_coherencia_cartelera`.
+  - `cadena_progol`: `centinela_progol`.
+* **Cardinalidad Legislada de la Whitelist:** **15 tareas certificadas** (las 10 de [ARCH-1.4.29] + 2
+  ejecutores individuales + 3 cadenas temporales de esta Enmienda). Los jueces funcionales de
+  cardinalidad (`test_shield_purga_total_db.py`, `test_shield_sprint5_domain_reconnection.py`) quedan
+  **SUPERSEDIDOS** en su cifra exacta por esta Enmienda: la igualdad estricta se preserva (jamás
+  degrada a desigualdad laxa), sólo cambia la constante legislada.
+* **[SHIELD]:** `tests/shield/test_shield_control_center_and_drift_detector.py`
+
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]
 * En `src/ingestion/progol_resolver.py`, se actualiza la URL del resolver semántico:

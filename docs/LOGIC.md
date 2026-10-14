@@ -1340,6 +1340,27 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-100] Motor de Calibración Factual de Temporada y Evaluación Multicategórica de Brier
+
+* **Ω (Resumen):** Motor analítico de solo lectura que evalúa la concordancia empírica entre las Distribuciones Soberanas/Fiduciarias (P', P̂) y los resultados reales consumados a lo largo de la temporada. Compara la calibración de Q-BE contra el mercado mediante Brier Score Multicategórico y desglosa el desempeño por jornada.
+* **I (Input):** Histórico de partidos concluidos en `matches` y cuotas de cierre en `fixtures_snapshots.matches_json` (donde residen P' y los momios 1X2).
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Tasa de Coincidencia Fiduciaria Global (H_fid):**
+     $$H_{\text{fid}} = \frac{N_{\text{favorito}} + N_{\text{empate}}}{N_{\text{total}}} \times 100$$
+  2. **Brier Score Multicategórico:**
+     $$BS_{\text{QBE}} = \frac{1}{3N} \sum_{i=1}^N \sum_{k \in \{1, X, 2\}} (\hat{p}_{i,k} - y_{i,k})^2$$
+     $$BS_{\text{MKT}} = \frac{1}{3N} \sum_{i=1}^N \sum_{k \in \{1, X, 2\}} (q_{i,k}^{\text{mkt}} - y_{i,k})^2$$
+     $$\text{Alpha de Calibración} = \left( 1.0 - \frac{BS_{\text{QBE}}}{BS_{\text{MKT}}} \right) \times 100$$
+  3. **Clasificación Factual por Partido:**
+     - `FAVORITO`: Resultado real coincide con el favorito de P' (argmax_{k in {1,2}} p_k').
+     - `EMPATE`: Resultado real fue empate (home_score == away_score).
+     - `UNDERDOG`: Ganó el rival no cubierto.
+* **O (Output):** `CalibrationReportResponse` (resumen macro, tabla meso por jornada y parrilla micro estilo BetExplorer).
+* **Φ (Transición):** Hacia `[ARCH-1.4.38]` e interfaz `index.html`.
+* **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,

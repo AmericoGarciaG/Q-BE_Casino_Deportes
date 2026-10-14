@@ -7,6 +7,7 @@ let selectedMatchIds = [];
 document.addEventListener("DOMContentLoaded", function () {
     initNavigation();
     cargarLigasDesdeBD();
+    initVisorBacktesting();
 });
 
 function initNavigation() {
@@ -739,9 +740,11 @@ async function ejecutarDespachoPortafolio() {
                 target_certeza: certeza,
                 operador: operador,
                 gamma_slider: gammaSeleccionada,
-                // [ARCH-1.4.37 / LN-QBE-077-B] Tríptico de Cobertura: la ventanilla declara el modo
-                // de partición δ del capital. `DEF` (V=0) es el default soberano sellado; `BAL`
-                // (r_bal = 50% de δ*) y `AGR` (δ*) activan la ley general del Dutching Dinámico.
+                // [ARCH-1.4.37 / LN-QBE-077-B / ARCH-1.4.12-C] Tríptico de Cobertura: la ventanilla
+                // declara el modo de partición δ del capital. `DEF` (V=0) sigue siendo el default del
+                // contrato de petición sellado; el tríptico ARRANCA en `BAL` (default legislado de la
+                // Mesa de Apuestas, [ARCH-1.4.12-C]); `BAL` (r_bal = 50% de δ*) y `AGR` (δ*) activan la
+                // ley general del Dutching Dinámico.
                 modo_cobertura: state.modo_cobertura,
                 // [ARCH-1.4.35 / CONMUTADOR DE SLATES] El anclaje de jornada viaja SÓLO con el
                 // candado abierto (🔓). Con el candado cerrado (🔒) se emite `null` y el backend
@@ -783,10 +786,12 @@ window.ejecutarDespachoMesaApuestas = ejecutarDespachoPortafolio;
 
 let currentPortfolioData = null;
 let currentCasinoOperador = "caliente";
-// [ARCH-1.4.37 / LN-QBE-077-B] Estado soberano del Tríptico de Cobertura (δ): `DEF` es el
-// contrato sellado V=0 (paridad bit a bit con el Dutching clásico); `BAL`/`AGR` activan la ley
-// general de partición. Sólo la VENTANILLA declara el modo; el motor jamás lo infiere.
-let state = { modo_cobertura: "DEF" };
+// [ARCH-1.4.37 / LN-QBE-077-B / ARCH-1.4.12-C] Estado soberano del Tríptico de Cobertura (δ):
+// `DEF` es el contrato sellado V=0 (paridad bit a bit con el Dutching clásico); `BAL`/`AGR` activan
+// la ley general de partición. DEFAULT LEGISLADO = `BAL` (Balanceado +15%), modo de cobertura por
+// omisión de la Mesa de Apuestas ([ARCH-1.4.12-C]). Sólo la VENTANILLA declara el modo; el motor
+// jamás lo infiere.
+let state = { modo_cobertura: "BAL" };
 
 // ─── [DES-QBE-055 / ARCH-1.5.10-B] Rótulo de Casa Patrocinadora por Boleto ─────
 // El emblema viaja desde la bóveda LOCAL de activos (`/static/img/bookmakers/{slug}.png`,
@@ -2879,8 +2884,106 @@ async function ejecutarTareaAdmin(taskId) {
         if (consola) consola.textContent = `[ERROR] Despacho fallido: ${e.message}`;
     } finally {
         bloquearBotonesAdmin(false);
+        // [ARCH-1.4.12-B] Toda mutación de fuentes re-sondea el semáforo: la pantalla jamás
+        // exhibe un veredicto caduco tras un despacho.
+        cargarEstadoDriftCentroControl();
     }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// [ARCH-1.4.12-B] SEMÁFORO DE DERIVA Y FRESCURA DE FUENTES (SONDA READ-ONLY)
+// El cliente NO calcula deriva: consume `GET /api/admin/status/drift` (cuatro luces
+// certificadas por el motor: [ARCH-1.4.34] + [ARCH-1.6.2-B] + umbral de 45 min) y sólo
+// PINTA el veredicto. [GOVERNANCE-01] Cero umbral ni cifra inventada en la pantalla.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const DIMENSIONES_DRIFT = ['mercado', 'deportivo', 'progol', 'integridad'];
+const CLASE_NIVEL_DRIFT = {
+    CONFORME: 'cc-drift-ok',
+    ADVERTENCIA: 'cc-drift-warn',
+    DISCREPANCIA: 'cc-drift-fail',
+    SIN_VEREDICTO: 'cc-drift-unknown'
+};
+
+function _pintarDimensionDrift(dimension, estado) {
+    const contenedor = document.getElementById(`drift-luz-${dimension}`);
+    const glifo = document.getElementById(`drift-glifo-${dimension}`);
+    const detalle = document.getElementById(`drift-detalle-${dimension}`);
+    const nivel = (estado && estado.nivel) ? String(estado.nivel) : 'SIN_VEREDICTO';
+    if (glifo) glifo.textContent = (estado && estado.glifo) ? estado.glifo : '🇾🇪';
+    if (detalle) detalle.textContent = (estado && estado.detalle) ? estado.detalle : 'Sin lectura del motor.';
+    if (contenedor) {
+        Object.values(CLASE_NIVEL_DRIFT).forEach((clase) => contenedor.classList.remove(clase));
+        contenedor.classList.add(CLASE_NIVEL_DRIFT[nivel] || CLASE_NIVEL_DRIFT.SIN_VEREDICTO);
+        contenedor.setAttribute('title', `${nivel} — ${(estado && estado.detalle) ? estado.detalle : ''}`);
+    }
+}
+
+function pintarSemaforoDrift(data) {
+    if (!data) return;
+
+    const etiquetaJornada = document.getElementById('drift-jornada');
+    if (etiquetaJornada) {
+        const jornada = data.jornada_activa;
+        etiquetaJornada.textContent = (jornada === null || jornada === undefined) ? '—' : jornada;
+    }
+    const regimen = document.getElementById('drift-regimen');
+    if (regimen) regimen.textContent = `${String(data.regimen || 'SOLO_LECTURA').toLowerCase()} · cuatro luces`;
+
+    DIMENSIONES_DRIFT.forEach((dimension) => {
+        _pintarDimensionDrift(dimension, data[`status_${dimension}`]);
+    });
+
+    const texto = document.getElementById('drift-accion-texto');
+    const boton = document.getElementById('btn-drift-accion');
+    const accion = data.accion_recomendada || {};
+    const tarea = accion.task_id ? String(accion.task_id) : '';
+
+    if (texto) texto.textContent = `[SISTEMA] ${accion.motivo ? accion.motivo : 'Semáforo sin veredicto.'}`;
+    if (boton) {
+        if (tarea) {
+            boton.style.display = '';
+            boton.textContent = `▶ Ejecutar Acción Recomendada: ${tarea}`;
+            boton.setAttribute('data-task-id', tarea);
+            boton.title = `Ejecuta la tarea certificada '${tarea}' recomendada por la sonda de deriva (siempre perteneciente a la whitelist [ARCH-1.4.12]).`;
+        } else {
+            boton.style.display = 'none';
+            boton.removeAttribute('data-task-id');
+        }
+    }
+}
+
+async function cargarEstadoDriftCentroControl() {
+    const texto = document.getElementById('drift-accion-texto');
+    try {
+        const resp = await fetch('/api/admin/status/drift', { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        pintarSemaforoDrift(await resp.json());
+    } catch (e) {
+        console.error('Fallo sondeando el semáforo de deriva:', e);
+        if (texto) texto.textContent = `[ERROR] Sonda de deriva inaccesible: ${e.message}`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const botonAccion = document.getElementById('btn-drift-accion');
+    if (botonAccion) {
+        botonAccion.addEventListener('click', function () {
+            const tarea = botonAccion.getAttribute('data-task-id');
+            if (tarea) ejecutarTareaAdmin(tarea);
+        });
+    }
+    const botonRefresco = document.getElementById('btn-drift-refresco');
+    if (botonRefresco) {
+        botonRefresco.addEventListener('click', function () { cargarEstadoDriftCentroControl(); });
+    }
+
+    // Hidratación inicial de la sonda: jamás bloquea el render del Live Board.
+    cargarEstadoDriftCentroControl();
+});
+
+window.cargarEstadoDriftCentroControl = cargarEstadoDriftCentroControl;
+window.pintarSemaforoDrift = pintarSemaforoDrift;
 
 window.ejecutarTareaAdmin = ejecutarTareaAdmin;
 window.bloquearBotonesAdmin = bloquearBotonesAdmin;
@@ -2918,10 +3021,12 @@ window.conmutarCandadoJornada = conmutarCandadoJornada;
 window.cargarCarteleraJornada = cargarCarteleraJornada;
 window.hidratarConmutadorJornadas = hidratarConmutadorJornadas;
 
-// ─── [ARCH-1.4.37 / LN-QBE-077-B] Cableado del Tríptico de Cobertura (δ) ─────────────────────
+// ─── [ARCH-1.4.37 / LN-QBE-077-B / ARCH-1.4.12-C] Cableado del Tríptico de Cobertura (δ) ──────
 // `state.modo_cobertura` es la ÚNICA fuente de verdad del modo declarado; la clase `active` y los
 // estilos de resalte se RE-DERIVAN de ese estado (cero estado duplicado ni divergente en el DOM).
-// Default soberano sellado: `DEF` (paridad bit a bit con el contrato V=0 de [LN-QBE-070]).
+// Default legislado vigente: `BAL` (Balanceado +15%), modo de cobertura por omisión de la Mesa de
+// Apuestas ([ARCH-1.4.12-C]); `DEF` (paridad bit a bit con el contrato V=0 de [LN-QBE-070])
+// subsiste como contrato sellado seleccionable.
 document.addEventListener("DOMContentLoaded", function () {
     const botonesCobertura = document.querySelectorAll("#toggle-modo-cobertura .btn-cobertura");
     if (!botonesCobertura.length) return;
@@ -2939,10 +3044,199 @@ document.addEventListener("DOMContentLoaded", function () {
     };
     botonesCobertura.forEach((boton) => {
         boton.addEventListener("click", () => {
-            state.modo_cobertura = boton.getAttribute("data-modo") || "DEF";
+            // [ARCH-1.4.12-C] Fallback defensivo = default legislado de la Mesa (`BAL`): un botón
+            // sin `data-modo` jamás degrada la ventanilla al contrato sellado por accidente.
+            state.modo_cobertura = boton.getAttribute("data-modo") || "BAL";
             _pintarCobertura();
         });
     });
     _pintarCobertura();
 });
+
+
+
+// ── [LN-QBE-100 / ARCH-1.4.38] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL DE TEMPORADA) ──
+let backtestingReportCache = null;
+
+function initVisorBacktesting() {
+    const tab = document.getElementById("tab-visor-backtesting");
+    if (tab) {
+        tab.addEventListener("click", cargarVisorBacktesting);
+    }
+}
+
+function _pctBacktesting(valor) {
+    const n = Number(valor);
+    return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : "--";
+}
+
+function _claseCoberturaBacktesting(pct) {
+    const n = Number(pct);
+    if (!Number.isFinite(n)) return "";
+    if (n >= 70) return "bt-cobertura-alta";
+    if (n >= 40) return "bt-cobertura-media";
+    return "bt-cobertura-baja";
+}
+
+async function cargarVisorBacktesting() {
+    const estado = document.getElementById("bt-estado");
+    const cuerpo = document.getElementById("cuerpo-meso-jornadas");
+    if (!cuerpo) return;
+    if (estado) estado.textContent = "Leyendo la bóveda 3NF (solo lectura)…";
+    try {
+        const resp = await fetch("/api/markets/backtesting/calibration-report?league_id=1");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        backtestingReportCache = data;
+        const resumen = data.resumen_temporada || {};
+        pintarResumenBacktesting(resumen);
+        pintarMesoBacktesting(data.jornadas || [], resumen);
+        if (estado) {
+            estado.textContent = `Lectura certificada · ${resumen.total_partidos || 0} partidos concluidos ` +
+                "auditados contra la bóveda 3NF (solo lectura: cero escritura, cero mocks).";
+        }
+    } catch (e) {
+        if (estado) {
+            estado.textContent = `⚠️ Bóveda no legible: ${e.message}. Cero cifras se muestran sin respaldo.`;
+        }
+        cuerpo.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:18px; color:#F87171;">` +
+            "Sin lectura factual disponible.</td></tr>";
+    }
+}
+
+function pintarResumenBacktesting(resumen) {
+    const set = (id, texto) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = texto;
+    };
+    set("kpi-bt-total-partidos", `${resumen.total_partidos || 0}`);
+    const jornadas = resumen.jornadas_auditadas || [];
+    set("kpi-bt-jornadas", jornadas.length
+        ? `Jornadas auditadas: J${jornadas.join(" · J")}`
+        : "Sin jornadas con captura sellada");
+    set("kpi-bt-coincidencia", `${Number(resumen.tasa_coincidencia_fiduciaria_pct || 0).toFixed(2)}%`);
+    set("kpi-bt-desglose",
+        `Favorito ${resumen.partidos_favorito || 0} · Empate ${resumen.partidos_empate || 0} · ` +
+        `Underdog ${resumen.partidos_underdog || 0}`);
+    set("kpi-bt-brier", Number(resumen.brier_score_qbe || 0).toFixed(4));
+    set("kpi-bt-brier-detalle",
+        `Mercado: ${Number(resumen.brier_score_mercado || 0).toFixed(4)} (menor = mejor calibración)`);
+    const alpha = Number(resumen.alpha_calibracion_pct || 0);
+    set("kpi-bt-alpha", `${alpha >= 0 ? "+" : ""}${alpha.toFixed(2)}%`);
+    set("kpi-bt-alpha-detalle", alpha >= 0
+        ? "Q-BE bate al consenso del mercado en la ventana auditada"
+        : "El mercado calibra mejor en la ventana auditada");
+}
+
+function pintarMesoBacktesting(jornadas, resumen) {
+    const cuerpo = document.getElementById("cuerpo-meso-jornadas");
+    if (!cuerpo) return;
+    if (!jornadas.length) {
+        cuerpo.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:18px; color:var(--text-muted);">` +
+            "La bóveda no registra jornadas con P′ y cuotas de cierre selladas.</td></tr>";
+        return;
+    }
+
+    const maxJornada = jornadas.reduce((acc, j) => Math.max(acc, Number(j.jornada)), 0);
+    const filas = [];
+    for (let j = 1; j <= maxJornada; j += 1) {
+        const idx = jornadas.findIndex(x => Number(x.jornada) === j);
+        if (idx === -1) {
+            filas.push(
+                `<tr><td><strong>J${j}</strong></td><td>--</td>` +
+                `<td colspan="6" class="bt-pendiente">Pendiente de captura ` +
+                "(sin P′/cuotas de cierre selladas en la bóveda)</td></tr>"
+            );
+            continue;
+        }
+        const fila = jornadas[idx];
+        const desglose = fila.desglose || {};
+        filas.push(`
+            <tr class="bt-jornada-auditada">
+                <td><strong>J${fila.jornada}</strong></td>
+                <td class="numeric">${fila.total_partidos}</td>
+                <td class="${_claseCoberturaBacktesting(fila.tasa_cobertura_pct)}">${Number(fila.tasa_cobertura_pct || 0).toFixed(2)}%</td>
+                <td>${desglose.favorito || 0} · ${desglose.empate || 0} · ${desglose.underdog || 0}</td>
+                <td class="numeric">${Number(fila.brier_score_qbe || 0).toFixed(4)}</td>
+                <td class="numeric">${Number(fila.brier_score_mercado || 0).toFixed(4)}</td>
+                <td class="numeric">${Number(fila.alpha_calibracion_pct || 0).toFixed(2)}%</td>
+                <td><button type="button" class="bt-btn-micro" data-jornada-idx="${idx}">Ver partidos</button></td>
+            </tr>`);
+    }
+
+    const pendientes = Number(resumen.partidos_pendientes_captura || 0);
+    if (pendientes > 0) {
+        filas.push(
+            `<tr><td colspan="8" class="bt-pendiente">` +
+            `Partidos concluidos sin P′ sellada (excluidos del cómputo): ${pendientes}</td></tr>`
+        );
+    }
+
+    cuerpo.innerHTML = filas.join("");
+    cuerpo.querySelectorAll(".bt-btn-micro").forEach(btn => {
+        btn.addEventListener("click", () => {
+            mostrarMicroJornadaBacktesting(Number(btn.getAttribute("data-jornada-idx")));
+        });
+    });
+}
+
+function mostrarMicroJornadaBacktesting(idx) {
+    const contenedor = document.getElementById("contenedor-micro-partidos");
+    const jornadas = (backtestingReportCache && backtestingReportCache.jornadas) || [];
+    const jornada = jornadas[idx];
+    if (!contenedor || !jornada) return;
+
+    const escudo = url => (url ? `<img src="${url}" alt="" class="match-crest-mini">` : "");
+    const momio = valor => {
+        const n = Number(valor);
+        return n > 1 ? n.toFixed(2) : "--";
+    };
+    const tagTipo = tipo => {
+        if (tipo === "FAVORITO") return "bt-tag-favorito";
+        if (tipo === "EMPATE") return "bt-tag-empate";
+        return "bt-tag-underdog";
+    };
+
+    const partidos = jornada.partidos || [];
+    const bloques = partidos.map(p => {
+        const momios = p.momios || {};
+        const casillas = [
+            { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
+            { titulo: "X EMPATE", clave: "EMPATE", p: p.p_empate, q: p.q_empate, o: momios.E },
+            { titulo: "2 VISITANTE", clave: "VISITANTE", p: p.p_visitante, q: p.q_visitante, o: momios.V },
+        ].map(c => `
+            <div class="bt-casilla ${p.resultado_real === c.clave ? "bt-casilla-ganadora" : ""}">
+                <span class="bt-casilla-titulo">${c.titulo}</span>
+                <span class="bt-casilla-valor">P′ ${_pctBacktesting(c.p)}</span>
+                <span class="bt-casilla-valor">q_mkt ${_pctBacktesting(c.q)}</span>
+                <span class="bt-casilla-valor">momio ${momio(c.o)}</span>
+            </div>`).join("");
+
+        return `
+        <div class="bt-micro-row">
+            <div class="bt-micro-equipo">${escudo(p.local_escudo_url)}<span>${p.local}</span></div>
+            <div class="bt-micro-marcador">${p.marcador}</div>
+            <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
+            <div class="bt-micro-casillas">${casillas}</div>
+            <div class="bt-micro-metricas">
+                <span class="${tagTipo(p.tipo_resultado)}">${p.tipo_resultado}</span>
+                <span>Favorito P′: ${p.favorito_designado}</span>
+                <span>Desenlace real: ${p.resultado_real}</span>
+                <span>Brier Q-BE ${Number(p.brier_qbe || 0).toFixed(4)}</span>
+                <span>Brier mercado ${Number(p.brier_mercado || 0).toFixed(4)}</span>
+                <span>${p.acierto ? "🔵 Cobertura" : "🔴 No cubierto"}</span>
+            </div>
+        </div>`;
+    }).join("");
+
+    const desglose = jornada.desglose || {};
+    contenedor.innerHTML = `
+        <div class="bt-micro-head">
+            Jornada ${jornada.jornada} · ${jornada.total_partidos} partidos concluidos ·
+            cobertura <strong>${Number(jornada.tasa_cobertura_pct || 0).toFixed(2)}%</strong>
+            (FAS ${desglose.favorito || 0} · FES ${desglose.empate || 0} · FUS ${desglose.underdog || 0})
+            · Alpha ${Number(jornada.alpha_calibracion_pct || 0).toFixed(2)}%
+        </div>
+        ${bloques}`;
+}
 
