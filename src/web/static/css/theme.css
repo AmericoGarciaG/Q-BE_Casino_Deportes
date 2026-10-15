@@ -1318,30 +1318,31 @@ table.fintech-table {
     background: #0F172A;
     opacity: 0.75;
 }
-.micro-partido-footer {
+
+/* ==========================================================================
+   REDISEÑO TRIDIMENSIONAL DE LA PARRILLA MICRO [ARCH-1.4.38-R3]
+   Techo blanco = favorito Q-BE (argmax P′) · Base gris = favorito del mercado
+   (argmax q_mkt). Se declaran DESPUÉS de las clases de colorimetría para ganar
+   la cascada de `border-top` / `border-bottom` (misma especificidad, `!important`).
+   `box-sizing: border-box` ya es global (theme.css `*`): las barras de 4px no
+   degradan el layout de la casilla.
+   ========================================================================== */
+.fav-techo-qbe {
+    border-top: 4px solid #FFFFFF !important;
+}
+.fav-base-mkt {
+    border-bottom: 4px solid #94A3B8 !important;
+}
+.micro-partido-footer-v2 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    grid-column: 1 / -1;
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid #1E293B;
-    font-family: var(--font-mono);
+    font-family: monospace;
     font-size: 11px;
 }
-.badge-fiduciario {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-weight: 700;
-    white-space: nowrap;
-}
-.badge-fav { background: #065F46; color: #34D399; }
-.badge-emp { background: #0C4A6E; color: #38BDF8; }
-.badge-dog { background: #7F1D1D; color: #F87171; }
-.footer-pronostico { color: #94A3B8; }
-.footer-pronostico strong,
-.footer-brier span { color: #F8FAFC; }
-.footer-brier { color: #64748B; }
+.footer-col-postura { flex: 0 0 auto; }
+.footer-col-brier { color: #64748B; flex: 1 1 auto; text-align: center; }
+.footer-col-masa { color: #94A3B8; flex: 0 0 auto; }

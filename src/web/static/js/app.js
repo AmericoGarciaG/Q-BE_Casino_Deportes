@@ -3238,35 +3238,89 @@ function mostrarMicroJornadaBacktesting(idx) {
         const pildoraColdStart = p.suficiencia_S_I === 0
             ? '<span style="background:#475569; color:#F8FAFC; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;">🧊 COLD START: PRIOR DE MERCADO</span>'
             : "";
-        const claseResultado = p.tipo_resultado === "FAVORITO"
+        // [ARCH-1.4.38-R3 · Rediseño Tridimensional 1X2] Ranking fiduciario del partido: los tres
+        // desenlaces ordenados por P′ descendente resuelven QUIÉN es 1er, 2º y 3er favorito de
+        // Q-BE. La colorimetría del desenlace real consumado se ancla a esa POSICIÓN (jamás al rol
+        // nominal del resultado): 1er favorito → verde, 2º favorito (cobertura activa) → azul cian,
+        // Underdog / ruptura → rojo carmín. Ante empate técnico desempata el orden canónico 1 · X · 2.
+        const ordenClaves = ["LOCAL", "EMPATE", "VISITANTE"];
+        const pPrimaPorClave = {
+            LOCAL: Number(p.p_local || 0),
+            EMPATE: Number(p.p_empate || 0),
+            VISITANTE: Number(p.p_visitante || 0),
+        };
+        const clavesPorPRima = ordenClaves
+            .map((clave, orden) => ({ clave, p: pPrimaPorClave[clave], orden }))
+            .sort((a, b) => (b.p - a.p) || (a.orden - b.orden))
+            .map(x => x.clave);
+        const favQbeClave = clavesPorPRima[0];
+        const rankReal = clavesPorPRima.indexOf(p.resultado_real);
+        const claseResultado = rankReal === 0
             ? "box-resultado-fav"
-            : p.tipo_resultado === "EMPATE"
+            : rankReal === 1
                 ? "box-resultado-emp"
                 : "box-resultado-dog";
-        const badgeEstado = {
-            FAVORITO: '<span class="badge-fiduciario badge-fav">🎯 ACIERTO FAVORITO</span>',
-            EMPATE: '<span class="badge-fiduciario badge-emp">🛡️ COBERTURA TABLAS</span>',
-            UNDERDOG: '<span class="badge-fiduciario badge-dog">💀 RUPTURA UNDERDOG</span>',
-        }[p.tipo_resultado] || "";
-        const favNombre = p.favorito_designado === "LOCAL" ? p.local : p.visitante;
-        const pFavPct = _pctBacktesting(
-            p.favorito_designado === "LOCAL" ? p.p_local : p.p_visitante
+        // [ARCH-1.4.38 · Decreto VAR-2026-EGO-CONTRARIAN-AUDIT] Marcador factual del FAVORITO DEL
+        // MERCADO: base gris inferior en la(s) casilla(s) que cotizan el máximo del consenso
+        // desmarcado q_mkt (contrato plano del DTO, VAR-UI-01 aprobada). Empate técnico de mercado
+        // ⇒ se marcan TODAS las casillas que alcanzan el máximo (igualdad estricta, cero desempate
+        // inventado, VAR-UI-02 aprobada). La barra gris izquierda quedó RETIRADA por el rediseño
+        // tridimensional: migró a la base inferior vía `.fav-base-mkt`.
+        const maxQmkt = Math.max(p.q_local, p.q_empate, p.q_visitante);
+        const esFavMercado = clave => (
+            (clave === "LOCAL" && p.q_local === maxQmkt)
+            || (clave === "EMPATE" && p.q_empate === maxQmkt)
+            || (clave === "VISITANTE" && p.q_visitante === maxQmkt)
         );
-        const bsQbe = Number(p.brier_qbe || 0).toFixed(4);
-        const bsMkt = Number(p.brier_mercado || 0).toFixed(4);
-        const diffBrier = Number(p.brier_qbe || 0) - Number(p.brier_mercado || 0);
-        const diffBrierText = `${diffBrier >= 0 ? "+" : ""}${diffBrier.toFixed(4)}`;
+        const qMktPorClave = {
+            LOCAL: Number(p.q_local || 0),
+            EMPATE: Number(p.q_empate || 0),
+            VISITANTE: Number(p.q_visitante || 0),
+        };
+        const favMktClave = ordenClaves.find(clave => qMktPorClave[clave] === maxQmkt) || favQbeClave;
+        // Postura fiduciaria del partido: consenso con las casas de apuestas o desmarque contrarian.
+        const badgePostura = favQbeClave === favMktClave
+            ? '<span class="badge-postura badge-consenso" style="background:#1E293B; border:1px solid #334155; color:#94A3B8; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🤝 Consenso</span>'
+            : '<span class="badge-postura badge-contrarian" style="background:#1E1B4B; border:1px solid #6366F1; color:#A5B4FC; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">⚡ Contrarian</span>';
+        // Columna central: Brier Score individual + Alpha del partido
+        // Alpha_i = (1 − BS_QBE / BS_MKT) · 100 (guarda anti-división por cero: BS_MKT = 0 ⇒ 0%).
+        const bsQbeRaw = Number(p.brier_qbe || 0);
+        const bsMktRaw = Number(p.brier_mercado || 0);
+        const bsQbe = bsQbeRaw.toFixed(4);
+        const bsMkt = bsMktRaw.toFixed(4);
+        const alphaPartido = bsMktRaw > 0 ? (1 - bsQbeRaw / bsMktRaw) * 100 : 0;
+        const alphaPct = Math.abs(alphaPartido).toFixed(1);
+        const signoAlpha = alphaPartido >= 0 ? "+" : "-";
+        const alphaColor = alphaPartido >= 0 ? "#00E676" : "#EF4444";
+        // Columna derecha: masa fiduciaria protegida por los dos primeros favoritos de Q-BE.
+        const masaPct = (
+            (pPrimaPorClave[favQbeClave] + pPrimaPorClave[clavesPorPRima[1]]) * 100
+        ).toFixed(1);
         const casillas = [
             { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
             { titulo: "X EMPATE", clave: "EMPATE", p: p.p_empate, q: p.q_empate, o: momios.E },
             { titulo: "2 VISITANTE", clave: "VISITANTE", p: p.p_visitante, q: p.q_visitante, o: momios.V },
-        ].map(c => `
-            <div class="bt-casilla ${p.resultado_real === c.clave ? claseResultado : "micro-box-inactivo"}">
+        ].map(c => {
+            // [ARCH-1.4.38-R3] Geometría de dos ejes: techo blanco (favorito Q-BE, argmax P′) y
+            // base gris (favorito del mercado, argmax q_mkt) conviven con la colorimetría del
+            // desenlace real consumado. `box-sizing: border-box` es global: las barras no degradan
+            // el layout (VAR-UI-03 preservada).
+            const marcasGeometria = [
+                c.clave === favQbeClave ? "fav-techo-qbe" : "",
+                esFavMercado(c.clave) ? "fav-base-mkt" : "",
+            ].filter(Boolean).join(" ");
+            const tituloGeometria = [
+                c.clave === favQbeClave ? "Favorito Q-BE (techo blanco P′)" : "",
+                esFavMercado(c.clave) ? "Favorito del mercado (base gris q_mkt)" : "",
+            ].filter(Boolean).join(" · ");
+            return `
+            <div class="bt-casilla ${p.resultado_real === c.clave ? claseResultado : "micro-box-inactivo"}${marcasGeometria ? " " + marcasGeometria : ""}"${tituloGeometria ? ` title="${tituloGeometria}"` : ""}>
                 <span class="bt-casilla-titulo">${c.titulo}</span>
                 <span class="bt-casilla-valor">P′ ${_pctBacktesting(c.p)}</span>
                 <span class="bt-casilla-valor">q_mkt ${_pctBacktesting(c.q)}</span>
                 <span class="bt-casilla-valor">momio ${momio(c.o)}</span>
-            </div>`).join("");
+            </div>`;
+        }).join("");
 
         return `
         <div class="bt-micro-row">
@@ -3274,15 +3328,15 @@ function mostrarMicroJornadaBacktesting(idx) {
             <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
-            <div class="micro-partido-footer">
-                <div class="footer-badge-status">${badgeEstado}</div>
-                <div class="footer-pronostico">
-                    Pronóstico P′: <strong>${favNombre} (${pFavPct})</strong>
-                    · Final: <strong>${p.marcador}</strong>
+            <div class="micro-partido-footer-v2">
+                <div class="footer-col-postura">${badgePostura}</div>
+                <div class="footer-col-brier">
+                    Brier: Q-BE <span style="color:#F8FAFC;">${bsQbe}</span>
+                    · Mkt <span style="color:#F8FAFC;">${bsMkt}</span>
+                    · <span style="color:${alphaColor}; font-weight:bold;">(Alpha ${signoAlpha}${alphaPct}%)</span>
                 </div>
-                <div class="footer-brier">
-                    Brier: Q-BE <span>${bsQbe}</span> · Mkt <span>${bsMkt}</span>
-                    (Δ ${diffBrierText})
+                <div class="footer-col-masa">
+                    Masa Cubierta: <strong style="color:#F8FAFC;">${masaPct}%</strong>
                 </div>
             </div>
         </div>`;
