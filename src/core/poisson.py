@@ -28,6 +28,61 @@ W_H2H_PISO = 0.15                 # Piso de influencia H2H cuando existe anteced
 SENTINELA_ZERO_H2H_DIAS = 9000.0  # Centinela contractual de ausencia, emitido por temporal.py
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# CONSTANTES CANÓNICAS DE LA CORRELACIÓN DIXON-COLES TÁCTICA
+# [LN-QBE-040-C] Promulgadas en docs/CONSTANTS.md §2 (Parámetros Canónicos de Correlación
+# Dixon-Coles Dinámica). Nodo dueño: `[LN-QBE-040-C]`.
+# Juez: `tests/shield/test_shield_rho_tactico_calibration.py`.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+RHO_BASE = -0.0500                  # Correlación base para partidos abiertos (Σλ > 2.6500 xG)
+RHO_TACTICA_DEFICIT = -0.1200       # Correlación táctica para partidos cerrados (Σλ ≤ 2.6500 xG)
+LAMBDA_SUMA_CORTE_TACTICO = 2.6500  # Frontera de conmutación (μ_liga canónico de Liga MX)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# [LN-QBE-040-C] CALIBRACIÓN TÁCTICA DE ρ EN LA MATRIZ BIVARIADA
+# Régimen: `[DIRGEN-STRICT]` — ley de resolución, constantes y factor τ son INMUTABLES.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+def resolver_rho_dixon_coles(lambda_h: float, lambda_a: float) -> float:
+    """[LN-QBE-040-C §P.1] Ley de resolución del régimen de correlación bivariada.
+
+    Conmuta la correlación de Dixon-Coles según el régimen de anotación proyectado:
+
+        rho = -0.1200  si  lambda_h + lambda_a <= 2.6500 xG   (partido cerrado / táctico)
+        rho = -0.0500  si  lambda_h + lambda_a >  2.6500 xG   (partido abierto / base sellada)
+
+    Función pura y determinista: sin estado interno, sin aleatoriedad y sin I/O. La frontera
+    Σ_corte = 2.6500 xG es el μ_liga canónico de Liga MX y pertenece a la rama táctica (≤).
+    """
+    suma_lambda = float(lambda_h) + float(lambda_a)
+    if suma_lambda <= LAMBDA_SUMA_CORTE_TACTICO:
+        return RHO_TACTICA_DEFICIT
+    return RHO_BASE
+
+
+def _dixon_coles_tau(x: int, y: int, lambda_h: float, lambda_a: float, rho: float) -> float:
+    """[LN-QBE-040-C §P.2] Factor de corrección τ(x, y) — transcripción verbatim del plano
+    canónico `[VAULT-CORE-004]` §5.3.1, con las cotas analíticas de admisibilidad §5.16.1
+    (Teorema de No-Negatividad Estricta, Invariante I13 ⇒ τ(x, y) ≥ 0.0 siempre).
+
+    Fuera de los cuatro vértices corregidos τ ≡ 1.0000, por lo que la matriz de Poisson pura
+    permanece intacta en el resto del retículo. Cero margen creativo: una sola coma alterada
+    aquí rompe la paridad con la Bóveda.
+    """
+    cota_inf = -min(1.0 / max(0.01, lambda_h), 1.0 / max(0.01, lambda_a))
+    cota_sup = min(1.0, 1.0 / max(0.01, lambda_h * lambda_a))
+    rho_admisible = max(cota_inf, min(cota_sup, float(rho)))
+    if x == 0 and y == 0:
+        return 1.0 - (lambda_h * lambda_a * rho_admisible)
+    if x == 0 and y == 1:
+        return 1.0 + (lambda_h * rho_admisible)
+    if x == 1 and y == 0:
+        return 1.0 + (lambda_a * rho_admisible)
+    if x == 1 and y == 1:
+        return 1.0 - rho_admisible
+    return 1.0
+
+
 class PoissonBivariateEngine:
     @classmethod
     def compute_modulations(
@@ -53,7 +108,8 @@ class PoissonBivariateEngine:
         local_gc_10p: float | None = None,
         vis_gc_10p: float | None = None,
         xg_local_prom: float | None = None,
-        xga_vis_prom: float | None = None
+        xga_vis_prom: float | None = None,
+        rho: float | None = None
     ) -> PoissonModulationResult:
         # Resolver alias de nombres Opta
         loc_xg = xg_local_prom if xg_local_prom is not None else local_xg
@@ -102,11 +158,17 @@ class PoissonBivariateEngine:
         lambda_loc = float(np.clip(raw_lambda, 0.05, 6.00))
         mu_vis = float(np.clip(raw_mu, 0.05, 6.00))
 
-        # 5. Matriz Poisson Bivariada 6x6
+        # 5. Matriz Poisson Bivariada 6x6 con corrección Dixon-Coles táctica [LN-QBE-040-C]
+        #    ρ = None ⇒ ley de resolución dinámica por régimen de anotación (Σλ vs 2.6500 xG).
+        #    ρ explícito = escape hatch sellado de auditoría (ρ = 0.0 ⇒ Poisson pura, τ ≡ 1.0).
+        rho_efectivo = resolver_rho_dixon_coles(lambda_loc, mu_vis) if rho is None else float(rho)
         p_mat = np.zeros((6, 6))
         for x in range(6):
             for y in range(6):
-                p_mat[x, y] = poisson.pmf(x, lambda_loc) * poisson.pmf(y, mu_vis)
+                tau = _dixon_coles_tau(
+                    x, y, lambda_h=lambda_loc, lambda_a=mu_vis, rho=rho_efectivo
+                )
+                p_mat[x, y] = poisson.pmf(x, lambda_loc) * poisson.pmf(y, mu_vis) * tau
 
         # Normalizar matriz truncada
         p_mat /= np.sum(p_mat)

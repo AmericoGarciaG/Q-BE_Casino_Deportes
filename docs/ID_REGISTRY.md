@@ -38,6 +38,7 @@
 | `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-060]` | LOGIC | `docs/LOGIC.md` | Evaluador Determinista del Catálogo y Triple Candado Fáctico | SELLADO |
 | `[LN-QBE-060-B]` | LOGIC | `docs/LOGIC.md` | Partición Exhaustiva de las 9 Estrategias Canónicas y Cascada de Triaje | SELLADO |
+| `[LN-QBE-060-C]` | LOGIC | `docs/LOGIC.md` | Filtro de Veto Fiduciario Inteligente Anti-Ruptura (QBE-00) | SELLADO |
 | `[LN-QBE-060-R-AWAKEN]` | LOGIC | `docs/LOGIC.md` | Las Cuatro Leyes de Hierro del Underdog (Familia R) | SELLADO |
 | `[LN-QBE-070]` | LOGIC | `docs/LOGIC.md` | Router de Utilidad Pura, Kelly y Techo Aritmético | SELLADO |
 | `[LN-QBE-070-B]` | LOGIC | `docs/LOGIC.md` | Asignación con Kelly Fraccional Atenuado y Hard-Caps Constitucionales | SELLADO |
@@ -188,6 +189,7 @@
 | `[ARCH-1.4.33]` | ARCH | `docs/ARCH.md` | Contenedor de Factores Latentes Tridimensionales y Motor GSL-3D [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R | SELLADO |
 | `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
+| `[LN-QBE-040-C]` | LOGIC | `docs/LOGIC.md` | Parámetro de Correlación Táctica Bivariada ($\rho$) en Partidos de Baja Anotación | SELLADO |
 | `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-025-B]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting) | SELLADO |
 | `[ARCH-1.4.35]` | ARCH | `docs/ARCH.md` | Contrato de Cartera Vacía y Conmutador de Slates en Mesa de Apuestas [ARCH-PILLAR] | SELLADO |

@@ -310,6 +310,12 @@ def calcular_probabilidad_pago_anticipado(matriz_2d: List[List[float]], es_local
 ## [VAULT-CORE-004] Generador Dixon-Coles y Colapso Geométrico al Símplex Δ² (`src/core/distribution_dixon_coles.py`)
 **Estado:** `[ESTADO: CANON EN FORJA]`  
 **Régimen:** `[DIRGEN-STRICT]`  
+**Enmienda vigente:** `[LN-QBE-040-C]` (2026-10-15) — parámetro de correlación táctica dinámica
+$\rho$ (`rho: Optional[float] = None`, cláusula de resolución por régimen de anotación). El cuerpo
+normativo del factor $\tau(x, y)$, de las cotas de admisibilidad de la Sección 5.16.1 y de la
+renormalización sobre el retículo truncado permanece **verbatim**; la enmienda sólo sustituye el
+default constante por una resolución dinámica cuando el invocante no aporta un $\rho$ explícito
+distinto del default sellado ($\rho_{\text{base}} = -0.0500$). Juez: `tests/shield/test_shield_rho_tactico_calibration.py`.
 
 ```python
 # [VAULT-CORE-004] Generador Dixon-Coles y Colapso Geométrico al Símplex Δ²
@@ -317,18 +323,28 @@ def calcular_probabilidad_pago_anticipado(matriz_2d: List[List[float]], es_local
 # Estado: [CANON EN FORJA] | Régimen: [DIRGEN-STRICT]
 
 import math
-from typing import List, Tuple, Dict, Any
+from typing import List, Optional, Tuple
 
 def calcular_matriz_dixon_coles(
     lambda_h: float,
     lambda_a: float,
-    rho: float = 0.0,
+    rho: Optional[float] = None,
     k_max: int = 6
 ) -> List[List[float]]:
     """
     [Sección 5.3.1 y 5.16] Generador paramétrico con corrección de dependencia
     en baja puntuación bajo Teorema de No-Negatividad Estricta (Invariante I13).
+
+    [LN-QBE-040-C] Calibración táctica dinámica: si el invocante NO aporta un `rho`
+    explícito distinto del default sellado (`RHO_BASE = -0.0500`), la correlación se
+    resuelve por régimen de anotación con `resolver_rho_dixon_coles(lambda_h, lambda_a)`.
+    `rho = 0.0` explícito es el escape hatch de auditoría (sin corrección Dixon-Coles).
     """
+    # 0. [LN-QBE-040-C] Resolución dinámica del régimen de correlación
+    from src.core.poisson import RHO_BASE, resolver_rho_dixon_coles
+    if rho is None or float(rho) == RHO_BASE:
+        rho = resolver_rho_dixon_coles(lambda_h, lambda_a)
+
     # 1. Cotas analíticas de admisibilidad de rho (Sección 5.16.1)
     cota_inf = -min(1.0 / max(0.01, lambda_h), 1.0 / max(0.01, lambda_a))
     cota_sup = min(1.0, 1.0 / max(0.01, lambda_h * lambda_a))

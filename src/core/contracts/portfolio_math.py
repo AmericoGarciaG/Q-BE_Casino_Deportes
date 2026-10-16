@@ -47,6 +47,17 @@ FACTOR_SEGURIDAD_DELTA_MAX: float = 0.9500  # Margen_δ — techo fiduciario de 
 UMBRAL_DELTA_COSECHA_ACTIVA: float = 0.05
 
 
+# ── [LN-QBE-060-C] FILTRO DE VETO FIDUCIARIO INTELIGENTE ANTI-RUPTURA (QBE-00) ─────────────────
+# Manifiesto canónico de `docs/CONSTANTS.md` («Parámetros del Filtro de Veto Inteligente
+# Anti-Ruptura»). Escalares identificables para ML. La aduana califica el veredicto VACÍO del
+# triaje (paso 6) y jamás suprime una estrategia canónica ya resuelta por la cascada
+# `[LN-QBE-060-B]` / `[VAULT-CORE-070-TRIAJE]`.
+DELTA_P_PARIDAD_VETO: float = 0.1200    # ΔP_veto — dispersión mínima para admitir convicción
+PMAX_MIN_OPERABLE: float = 0.3800       # P_max^min — piso de masa del favorito para apostar
+LAMBDA_SUMA_FUEGO_VETO: float = 3.0000  # Σλ_fuego — techo de xG combinados que vetan el 1X2
+P_EMPATE_FUEGO_TECHO: float = 0.2200    # p_X^max — cota de empate asfixiado en juegos de fuego
+
+
 def calcular_delta_max_analitico(o_fav: float, o_emp: float) -> float:
     """[LN-QBE-077-C] Techo de viabilidad analítica δ_max = O_emp / θ* − 1.0000.
 
@@ -278,6 +289,42 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
         return {"codigo": "QBE-C2", "nombre": "Cobertura Derivada Totales", "alpha": (p_under * o_under - 1.0), "pa": False}
 
     # 6. Paridad Ciega o Sin Valor
+    # ── [LN-QBE-060-C] ADUANA DE VETO FIDUCIARIO INTELIGENTE ANTI-RUPTURA (QBE-00) ─────────────
+    # Última frontera del triaje: el veredicto vacío se CALIFICA con el arquetipo de ruptura
+    # demostrado (Falsa Paridad / Bipolar de Fuego) y la calificación viaja en la traza como
+    # `arquetipo_veto` ('FALSA_PARIDAD' / 'BIPOLAR_FUEGO'), preservando el capital en escenarios
+    # de alta entropía o de fuego ingobernable. Invariante de alcance: la aduana opera
+    # EXCLUSIVAMENTE sobre el veredicto vacío; las estrategias canónicas selladas por
+    # `[LN-QBE-060-B]` (D1/D2/H1/H2/R1/R2/C1/C2) son resueltas aguas arriba y no pueden ser
+    # suprimidas aquí.
+    p_max_veto = max(p1, pX, p2)
+    delta_p_veto = p_max_veto - min(p1, pX, p2)
+
+    # 6.1 Veto de Falsa Paridad / Alta Entropía (Arquetipo 4): ΔP estrecho y masa sin convicción.
+    if delta_p_veto <= DELTA_P_PARIDAD_VETO and p_max_veto <= PMAX_MIN_OPERABLE:
+        return {
+            "codigo": "QBE-00",
+            "nombre": "Veto Anti-Ruptura: Falsa Paridad (Alta Entropía)",
+            "alpha": 0.0,
+            "pa": False,
+            "motivo": "Veto Fiduciario: Falsa Paridad / Alta Entropía (Delta P <= 12%)",
+            "arquetipo_veto": "FALSA_PARIDAD",
+        }
+
+    # 6.2 Veto de Bipolar de Fuego (Arquetipo 3): Σλ ≥ 3.00 xG con empate asfixiado en el 1X2.
+    #     El desvío táctico corresponde al mercado derivado de totales (C2), no a esta ventanilla.
+    lambda_fuego_veto = float(payload.get("lambda_home", 0.0) or 0.0) \
+        + float(payload.get("lambda_away", 0.0) or 0.0)
+    if lambda_fuego_veto >= LAMBDA_SUMA_FUEGO_VETO \
+            and pX <= P_EMPATE_FUEGO_TECHO and p_max_veto < 0.5000:
+        return {
+            "codigo": "QBE-00",
+            "nombre": "Veto Anti-Ruptura: Bipolar de Fuego",
+            "alpha": 0.0,
+            "pa": False,
+            "motivo": "Veto Fiduciario: Bipolar de Fuego (Desvío a Mercado Derivado de Altas C2)",
+            "arquetipo_veto": "BIPOLAR_FUEGO",
+        }
     return {"codigo": "QBE-00", "nombre": "Cuarentena / Sin Valor", "alpha": 0.0, "pa": False}
 
 

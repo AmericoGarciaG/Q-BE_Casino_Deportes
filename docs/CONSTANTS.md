@@ -87,6 +87,20 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 
 
 
+### Parámetros Canónicos de Correlación Dixon-Coles Dinámica ($\rho$ Táctica)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
+|:---:|---|---|:---:|:---:|---|---|
+| $\rho_{\text{base}}$ | `RHO_BASE` | `-0.0500` | Adimensional | `[LN-QBE-040-C]` | Partidos abiertos: $\lambda_H + \lambda_A > 2.6500$ xG | **PROHIBIDO** usar como cota de descarte, cuarentena o umbral de triaje |
+| $\rho_{\text{táctica}}$ | `RHO_TACTICA_DEFICIT` | `-0.1200` | Adimensional | `[LN-QBE-040-C]` | Partidos cerrados: $\lambda_H + \lambda_A \le 2.6500$ xG | **PROHIBIDO** usarlo fuera de la frontera táctica o como constante universal |
+| $\Sigma_{\text{corte}}$ | `LAMBDA_SUMA_CORTE_TACTICO` | `2.6500` | xG | `[LN-QBE-040-C]` | Frontera de conmutación de $\rho$ (coincide con $\mu_{\text{liga}}$ canónico de Liga MX) | **PROHIBIDO** reutilizarlo como umbral de morfología Γ o de rechazo de mercado |
+
+> **Cláusula de admisibilidad heredada (`[VAULT-CORE-004]` §5.16.1, preservada verbatim):** ambos valores
+> de $\rho$ circulan por las cotas analíticas $\rho_{\text{adm}} \in [-\min(1/\lambda_H, 1/\lambda_A),\ \min(1, 1/(\lambda_H\lambda_A))]$
+> antes de entrar al factor $\tau(x, y)$, por lo que el Teorema de No-Negatividad Estricta (Invariante I13)
+> y la renormalización sobre el retículo $[0, 5]$ permanecen inviolados. Un $\rho = 0.0000$ **explícito**
+> desactiva la corrección Dixon-Coles (escape hatch de auditoría); cualquier otro $\rho$ explícito se
+> transcribe verbatim sin conmutación de régimen.
+
 ## 3. DOMINIO DE CONTRACCIÓN BAYESIANA DE FORMA (10 PARTIDOS)
 
 | Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez | Prohibición de Reúso |
@@ -119,6 +133,14 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $\text{Cap}_{\text{cartera}}$ | Hard-Cap Global de Jornada | `0.2500` ($25.0\%$) | % Bankroll | `[LN-QBE-070-B]` | Exposición total simultánea de jornada | Inviolable (The Shield Invariante #4) |
 | $\text{Piso}_{\text{ventanilla}}$ | Apuesta Mínima Legal | `$2.00` | MXN | `[LN-QBE-071]` | Terminal físico de casino | Ningún boleto split puede ser $< 2.00$ |
 | $\text{Tol}_{\text{tablas}}$ | Tolerancia Bancaria $V=0$ | `$0.08` | MXN | `[LN-QBE-070]` | Desviación máxima de indemnidad | $\|B_{\text{seg}} \cdot O_{\text{emp}} - B_i\| \le 0.08$ |
+
+### Parámetros del Filtro de Veto Inteligente Anti-Ruptura (Identificables para ML)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Propósito Fiduciario |
+|:---:|---|---|:---:|:---:|---|
+| $\Delta P_{\text{paridad}}$ | `DELTA_P_PARIDAD_VETO` | `0.1200` (12.0%) | Fracción | `[LN-QBE-060-C]` | Cota de dispersión mínima para admitir convicción |
+| $P_{\max}^{\min}$ | `PMAX_MIN_OPERABLE` | `0.3800` (38.0%) | Fracción | `[LN-QBE-060-C]` | Piso de masa del favorito para apostar |
+| $\sum \lambda_{\text{fuego}}$ | `LAMBDA_SUMA_FUEGO_VETO` | `3.0000` | Goles xG | `[LN-QBE-060-C]` | Techo de goles combinados para veto en 1X2 |
+| $p_{X,\text{fuego}}^{\max}$ | `P_EMPATE_FUEGO_TECHO` | `0.2200` (22.0%) | Fracción | `[LN-QBE-060-C]` | Cota de asfixia de empate en partidos de fuego |
 
 ---
 

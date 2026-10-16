@@ -1051,9 +1051,13 @@ def generate_sportsbook_portfolio_endpoint(
                     "alpha_max": round(triaje.get("alpha", 0.0), 3),
                     "theta_estrella": round(odd_fav_veto / (odd_fav_veto - 1.0), 2) if odd_fav_veto > 1.0 else 99.0
                 }
+                # [LN-QBE-040-C] El Radar de Descartes publica el motivo fiduciario REAL
+                # emitido por el triaje ([LN-QBE-078]/[LN-QBE-065]); sólo cuando el contrato
+                # no lo trae (p. ej. veto temprano por no-operabilidad) se rotula el
+                # diagnóstico α. Prohibido inventar causa raíz en la cara al usuario.
                 _descartar_partido(
                     descartes, mid, fx.get("local", ""), fx.get("visitante", ""),
-                    f"Cuarentena / Sin Valor: α = {metricas_veto['alpha_max']}",
+                    triaje.get("motivo") or f"Cuarentena / Sin Valor: α = {metricas_veto['alpha_max']}",
                     "QBE-00", "QBE-00",
                     f"Q-BE: {round(p_l*100)}% · {round(p_e*100)}% · {round(p_v*100)}% | Momios: {o_l}/{o_e}/{o_v} | α_max: {metricas_veto['alpha_max']} (-EV)",
                     metricas_cifras=metricas_veto

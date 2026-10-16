@@ -6,19 +6,32 @@ Base de Gobierno: Kybern Framework v12.0 [ARCH-1.3.4] / Tratado Volumen I (Secci
 """
 
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+
+# [LN-QBE-040-C] Ley de resolución dinámica de la correlación táctica y constantes selladas
+# (docs/CONSTANTS.md §2). El eje de resolución tiene un único dueño normativo: `src/core/poisson.py`.
+from src.core.poisson import RHO_BASE, resolver_rho_dixon_coles
 
 
 def calcular_matriz_dixon_coles(
     lambda_h: float,
     lambda_a: float,
-    rho: float = 0.0,
+    rho: Optional[float] = None,
     k_max: int = 6
 ) -> List[List[float]]:
     """
-    [Sección 5.3.1 y 5.16] Generador paramétrico con corrección de dependencia
+    [Sección 5.3.1, 5.14 y 5.16] Generador paramétrico con corrección de dependencia
     en baja puntuación bajo Teorema de No-Negatividad Estricta (Invariante I13).
+
+    [LN-QBE-040-C] Calibración táctica dinámica: si el invocante NO aporta un `rho`
+    explícito distinto del default sellado (`RHO_BASE = -0.0500`), la correlación se
+    resuelve por régimen de anotación con `resolver_rho_dixon_coles(lambda_h, lambda_a)`.
+    `rho = 0.0` explícito es el escape hatch de auditoría (sin corrección Dixon-Coles).
     """
+    # 0. [LN-QBE-040-C] Resolución dinámica del régimen de correlación
+    if rho is None or float(rho) == RHO_BASE:
+        rho = resolver_rho_dixon_coles(lambda_h, lambda_a)
+
     # 1. Cotas analíticas de admisibilidad de rho (Sección 5.16.1)
     cota_inf = -min(1.0 / max(0.01, lambda_h), 1.0 / max(0.01, lambda_a))
     cota_sup = min(1.0, 1.0 / max(0.01, lambda_h * lambda_a))

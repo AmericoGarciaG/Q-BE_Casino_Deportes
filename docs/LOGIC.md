@@ -388,6 +388,22 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-040-C] Parámetro de Correlación Táctica Bivariada ($\rho$) en Partidos de Baja Anotación
+
+* **Ω (Resumen):** Conmutar dinámicamente la correlación de Dixon-Coles del nodo `[LN-QBE-040]` según el régimen de anotación proyectado, concentrando masa fiduciaria en los vértices de empate de baja anotación $(0,0)$ y $(1,1)$ para erradicar el déficit estructural del vértice $X$ frente a la migración de empates de baja anotación hacia $P_{\text{mid}}$ en partidos cerrados.
+* **I (Input):** Intensidades físicas certificadas $\lambda_H, \lambda_A$ (post-techo anti-resonancia `[LN-QBE-040-B]`); constantes selladas $\rho_{\text{base}} = -0.0500$, $\rho_{\text{táctica}} = -0.1200$ y frontera $\Sigma_{\text{corte}} = 2.6500$ xG (CONSTANTS.md §2).
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  $$\rho_{\text{efectivo}}(\lambda_H, \lambda_A) = \begin{cases} -0.1200 & \text{si } \lambda_H + \lambda_A \le 2.6500 \\ -0.0500 & \text{si } \lambda_H + \lambda_A > 2.6500 \end{cases}$$
+  1. **Cláusula de invocación obligatoria:** todo cómputo de la matriz bivariada que NO reciba un $\rho$ explícito distinto del default sellado ($\rho_{\text{base}} = -0.0500$) DEBE resolver su correlación con `resolver_rho_dixon_coles(lambda_h, lambda_a)`. El parámetro deja de ser constante de diseño y pasa a ser función del régimen proyectado.
+  2. **Preservación verbatim del plano sellado:** con $\rho = 0.0000$ (escape hatch "sin corrección Dixon-Coles") y con cualquier $\rho$ explícito distinto del default, la transcripción del factor $\tau(x, y)$ y de las cotas de admisibilidad de la Sección 5.16.1 permanecen intactas, garantizando el Teorema de No-Negatividad Estricta (Invariante I13).
+  3. **Sentido físico del signo:** con la convención $\tau$ sellada, $\rho < 0$ eleva $\tau(0,0)$ y $\tau(1,1)$ y deprime $\tau(0,1)$/$\tau(1,0)$; en partidos cerrados la matriz de Poisson pura subestima el empate por el truncamiento del retículo $[0,5]$.
+* **O (Output):** $\rho_{\text{efectivo}}$ (adimensional) y matriz bivariada renormalizada sobre el retículo $[0, 5]$.
+* **Φ (Transición):** Hacia `[LN-QBE-050]` (Breakeven), `[VAULT-CORE-004]` (generador Dixon-Coles) y `[VAULT-CORE-005]` (orquestador soberano).
+* **[SHIELD]:** `tests/shield/test_shield_rho_tactico_calibration.py`
+* **[RÉGIMEN]:** `[DIRGEN-STRICT]` para la ley de resolución, las constantes y el factor $\tau$; el re-etiquetado del `motivo` del Radar de Descartes es `[DBBD-FUNGIBLE]`.
+
+---
+
 ### ID: [LN-QBE-050] Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$)
 
 * **Ω (Resumen):** Calcular analíticamente los umbrales exactos donde la Esperanza Matemática se anula ($EV = 0$), acotados estrictamente en $[0.00, 1.00]$.
@@ -492,6 +508,27 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   1. La Capa 0 precede estrictamente a la búsqueda de Underdogs. Si la morfología de masa $\Delta^2$ clasifica el partido como `ASIMETRIA_LOCAL` ($p_1' + p_X' \ge \Gamma$), queda **TERMINANTEMENTE PROHIBIDO** emitir la estrategia reversa visitante `QBE-R2`, sin importar cuán alta sea la cuota foránea o el $+EV$ aparente.
   2. Recíprocamente, si la morfología es `ASIMETRIA_VISITANTE` ($p_2' + p_X' \ge \Gamma$), queda prohibido emitir `QBE-R1`.
   3. Las estrategias de la Familia R (`QBE-R1` y `QBE-R2`) solo son legalmente admisibles en el estado morfológico de `PARIDAD_CIEGA` ($\mathcal{M}_{\text{PARIDAD-0}}$) donde ningún bando supere $1 - \Gamma$. Queda terminantemente prohibida su emisión en `BIPOLARIDAD_TERRITORIAL` ($\mathcal{M}_{\text{BIPOLAR}}$) por violar la cota de riesgo residual desprotegido de la Invariante VIII-37 ($p_{\text{riesgo}} \le 33\%$).
+
+---
+
+### ID: [LN-QBE-060-C] Filtro de Veto Fiduciario Inteligente Anti-Ruptura (QBE-00)
+
+* **Ω (Resumen):** Filtro de abstención fiduciaria temprana que intercepta partidos con huella digital demostrada de ruptura estocástica hacia $P_{\text{low}}$. Aplica el principio de que "no apostar es una decisión válida e inteligente", preservando el capital en escenarios de alta entropía o volatilidad de fuego ingobernable en 1X2.
+* **I (Input):** Probabilidades ordenadas $P_{\max}, P_{\text{mid}}, P_{\text{low}}$, delta de dispersión $\Delta P = P_{\max} - P_{\text{low}}$, intensidades de gol $\lambda_H, \mu_A$, probabilidad de empate $p_X'$.
+* **P (Process) [ALGO-PROTECTED] [BIZ-LOGIC]:**
+  1. **Aduana de Falsa Paridad (Arquetipo 4 - Alta Entropía):**
+     Si la diferencia entre el primer y tercer desenlace es estrecha y no hay convicción direccional:
+     $$\Delta P \le \text{DELTA\_P\_PARIDAD\_VETO} \; (0.1200) \quad \land \quad P_{\max} \le \text{PMAX\_MIN\_OPERABLE} \; (0.3800)$$
+     El partido colapsa obligatoriamente a `QBE-00` con motivo:  
+     `"Veto Fiduciario: Falsa Paridad / Alta Entropía (Delta P <= 12%)"`.
+  2. **Aduana de Bipolar de Fuego (Arquetipo 3 - Volatilidad Extrema de Goles en 1X2):**
+     Si el partido proyecta un intercambio desmedido de goles y el empate en 1X2 está asfixiado:
+     $$(\lambda_H + \mu_A) \ge \text{LAMBDA\_SUMA\_FUEGO\_VETO} \; (3.0000\text{ xG}) \quad \land \quad p_X' \le \text{P\_EMPATE\_FUEGO\_TECHO} \; (0.2200) \quad \land \quad P_{\max} < 0.5000$$
+     El partido colapsa a `QBE-00` en el mercado 1X2 con motivo:  
+     `"Veto Fiduciario: Bipolar de Fuego (Desvío a Mercado Derivado de Altas C2)"`.
+* **O (Output):** Veredicto de Triaje con emisión de `QBE-00` e informe del arquetipo interceptado en la traza, publicado en el campo `arquetipo_veto` del veredicto (`'FALSA_PARIDAD'` | `'BIPOLAR_FUEGO'`), ausente cuando la abstención proviene de la morfología sellada y no de la aduana. Resolución de varianza: `VAR-ANTI-RUPTURA-ORDEN-01` (dictamen del Director, 2026-10-15).
+* **Φ (Transición):** Hacia `[LN-QBE-070-D]` y `src/core/contracts/portfolio_math.py`.
+* **[SHIELD]:** `tests/shield/test_shield_anti_ruptura_veto.py`
 
 ---
 
