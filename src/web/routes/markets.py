@@ -1477,6 +1477,10 @@ def _construir_reporte_calibracion(
     registros_qbe: Dict[int, List[Dict[str, Any]]] = {}
     registros_mkt: Dict[int, List[Dict[str, Any]]] = {}
     partidos_pendientes = 0
+    # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Conteos enteros de la taxonomía de vértices
+    # por jornada: acierto primario (P_MAX), rescate secundario (P_MID, desglosado en empate vs
+    # rival) y ruptura residual (P_LOW). Conteos puros: cero ponderación, cero cifra fabricada.
+    triada_por_jornada: Dict[int, Dict[str, int]] = {}
 
     filas = session.query(Match).order_by(Match.matchday_num.asc(), Match.id.asc()).all()
 
@@ -1525,6 +1529,29 @@ def _construir_reporte_calibracion(
 
         favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
 
+        # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Jerarquía estocástica de vértices en Δ²:
+        # los desenlaces se ordenan por probabilidad fiduciaria descendente (`sort` estable ⇒
+        # empate técnico resuelto por el orden canónico 1 · X · 2). P_mid queda DESVINCULADO del
+        # empate: en morfologías bipolares el vértice secundario es el equipo rival.
+        pares = [
+            ("LOCAL", float(p_local)),
+            ("EMPATE", float(p_empate)),
+            ("VISITANTE", float(p_visitante)),
+        ]
+        pares.sort(key=lambda x: x[1], reverse=True)
+        r_max, p_max_val = pares[0]
+        r_mid, p_mid_val = pares[1]
+        r_low, p_low_val = pares[2]
+
+        if desenlace == r_max:
+            clasificacion = "P_MAX"
+        elif desenlace == r_mid:
+            clasificacion = "P_MID"
+        else:
+            clasificacion = "P_LOW"
+
+        es_pmid_empate = (r_mid == "EMPATE")
+
         registro_qbe = {
             "p_local": p_local, "p_empate": p_empate,
             "p_visitante": p_visitante, "resultado": desenlace,
@@ -1535,6 +1562,23 @@ def _construir_reporte_calibracion(
         }
 
         jornada = int(fila.matchday_num)
+        # [LN-QBE-100 · REFACTOR-TRIADA] Conteo entero del vértice consumado y de la procedencia
+        # del rescate secundario (empate vs rival) en la jornada en curso.
+        conteo_jornada = triada_por_jornada.setdefault(jornada, {
+            "n_p_max": 0, "n_p_mid": 0, "n_p_low": 0,
+            "n_p_mid_empate": 0, "n_p_mid_rival": 0,
+        })
+        if clasificacion == "P_MAX":
+            conteo_jornada["n_p_max"] += 1
+        elif clasificacion == "P_MID":
+            conteo_jornada["n_p_mid"] += 1
+            if desenlace == "EMPATE" and es_pmid_empate:
+                conteo_jornada["n_p_mid_empate"] += 1
+            else:
+                conteo_jornada["n_p_mid_rival"] += 1
+        else:
+            conteo_jornada["n_p_low"] += 1
+
         micro_por_jornada.setdefault(jornada, []).append({
             "id_partido": id_partido,
             "jornada": jornada,
@@ -1561,6 +1605,15 @@ def _construir_reporte_calibracion(
             # [LN-QBE-100] Sello de suficiencia S(I) del contrato de captura (fixture legado sin
             # el campo ⇒ `None` ⇒ 1: la ausencia de señal no degrada el partido).
             "suficiencia_S_I": suficiencia_s_i,
+            # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² sellados por
+            # partido (R_(1) ≥ R_(2) ≥ R_(3)) y vértice que consumó el resultado de la cancha.
+            "r_max": r_max,
+            "r_mid": r_mid,
+            "r_low": r_low,
+            "clasificacion_triada": clasificacion,
+            # Masa individual de cobertura = (P_max + P_mid) · 100 ≡ (1 − P_low) · 100.
+            "masa_cobertura_pct": round((p_max_val + p_mid_val) * 100.0, 2),
+            "p_low_ruptura_pct": round(p_low_val * 100.0, 2),
         })
         registros_qbe.setdefault(jornada, []).append(registro_qbe)
         registros_mkt.setdefault(jornada, []).append(registro_mkt)
@@ -1576,9 +1629,31 @@ def _construir_reporte_calibracion(
         bs_qbe = calcular_brier_multicategorico(registros_qbe[jornada])
         bs_mkt = calcular_brier_multicategorico(registros_mkt[jornada])
 
+        # [LN-QBE-100 · REFACTOR-TRIADA] Desglose cuantitativo puro de la jornada: porcentaje por
+        # vértice (P_max · P_mid · P_low ≡ 100%) y conteos enteros del rescate secundario.
+        conteos_triada = triada_por_jornada.get(jornada, {})
+        n_p_max = int(conteos_triada.get("n_p_max", 0))
+        n_p_mid = int(conteos_triada.get("n_p_mid", 0))
+        n_p_low = int(conteos_triada.get("n_p_low", 0))
+        n_p_mid_empate = int(conteos_triada.get("n_p_mid_empate", 0))
+        n_p_mid_rival = int(conteos_triada.get("n_p_mid_rival", 0))
+        pct_p_max = round((n_p_max / total) * 100.0, 2) if total else 0.0
+        pct_p_mid = round((n_p_mid / total) * 100.0, 2) if total else 0.0
+        pct_p_low = round((n_p_low / total) * 100.0, 2) if total else 0.0
+
         jornadas.append({
             "jornada": jornada,
             "total_partidos": total,
+            # [LN-QBE-100 · REFACTOR-TRIADA] Masa de cobertura = % P_max + % P_mid (= 100% − % P_low).
+            "masa_cobertura_pct": round(pct_p_max + pct_p_mid, 2),
+            "pct_p_max": pct_p_max,
+            "pct_p_mid": pct_p_mid,
+            "pct_p_low": pct_p_low,
+            "n_p_max": n_p_max,
+            "n_p_mid": n_p_mid,
+            "n_p_low": n_p_low,
+            "n_p_mid_empate": n_p_mid_empate,
+            "n_p_mid_rival": n_p_mid_rival,
             "aciertos_cobertura": favorito_n + empate_n,
             "tasa_cobertura_pct": (
                 round(((favorito_n + empate_n) / total) * 100.0, 2) if total else 0.0
@@ -1602,6 +1677,31 @@ def _construir_reporte_calibracion(
     bs_qbe_temporada = calcular_brier_multicategorico(todos_qbe)
     bs_mkt_temporada = calcular_brier_multicategorico(todos_mkt)
 
+    # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Agregado macro de la temporada: porcentajes
+    # puros por vértice (P_max + P_mid + P_low ≡ 100%) y desglose factual de la procedencia del
+    # rescate secundario. Universo: total_temporada = partidos auditados con P′ sellada.
+    total_p_max = sum(c.get("n_p_max", 0) for c in triada_por_jornada.values())
+    total_p_mid = sum(c.get("n_p_mid", 0) for c in triada_por_jornada.values())
+    total_p_low = sum(c.get("n_p_low", 0) for c in triada_por_jornada.values())
+    total_p_mid_empate = sum(c.get("n_p_mid_empate", 0) for c in triada_por_jornada.values())
+    total_p_mid_rival = sum(c.get("n_p_mid_rival", 0) for c in triada_por_jornada.values())
+    p_max_aciertos_pct = (
+        round((total_p_max / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    )
+    p_mid_rescate_pct = (
+        round((total_p_mid / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    )
+    p_mid_empate_pct = (
+        round((total_p_mid_empate / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    )
+    p_mid_rival_pct = (
+        round((total_p_mid_rival / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    )
+    p_low_ruptura_pct = (
+        round((total_p_low / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    )
+    masa_cobertura_pct = round(p_max_aciertos_pct + p_mid_rescate_pct, 2)
+
     return {
         "resumen_temporada": {
             "total_partidos": total_temporada,
@@ -1612,6 +1712,19 @@ def _construir_reporte_calibracion(
                 round(((favorito_t + empate_t) / total_temporada) * 100.0, 2)
                 if total_temporada else 0.0
             ),
+            # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Taxonomía macro de vértices (payload
+            # sellado por [ARCH-1.4.38]): masa de cobertura y desglose factual del rescate P_mid.
+            "masa_cobertura_pct": masa_cobertura_pct,
+            "p_max_aciertos_pct": p_max_aciertos_pct,
+            "p_mid_rescate_pct": p_mid_rescate_pct,
+            "p_mid_empate_pct": p_mid_empate_pct,
+            "p_mid_rival_pct": p_mid_rival_pct,
+            "p_low_ruptura_pct": p_low_ruptura_pct,
+            "total_p_max": total_p_max,
+            "total_p_mid": total_p_mid,
+            "total_p_low": total_p_low,
+            "total_p_mid_empate": total_p_mid_empate,
+            "total_p_mid_rival": total_p_mid_rival,
             "brier_score_qbe": bs_qbe_temporada,
             "brier_score_mercado": bs_mkt_temporada,
             "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe_temporada, bs_mkt_temporada),

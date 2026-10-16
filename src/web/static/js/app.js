@@ -3130,8 +3130,15 @@ async function cargarVisorBacktesting() {
         pintarResumenBacktesting(resumen);
         pintarMesoBacktesting(data.jornadas || [], resumen);
         if (estado) {
+            const jornadasAuditadas = (resumen.jornadas_auditadas || []).map(j => `J${j}`).join(" · ");
             estado.textContent = `Lectura certificada · ${resumen.total_partidos || 0} partidos concluidos ` +
-                "auditados contra la bóveda 3NF (solo lectura: cero escritura, cero mocks).";
+                `auditados contra la bóveda 3NF` +
+                (jornadasAuditadas ? ` (${jornadasAuditadas})` : "") +
+                ` · Brier Q-BE ${Number(resumen.brier_score_qbe || 0).toFixed(4)} vs Mkt ` +
+                `${Number(resumen.brier_score_mercado || 0).toFixed(4)} · Alpha ` +
+                `${Number(resumen.alpha_calibracion_pct || 0) >= 0 ? "+" : ""}` +
+                `${Number(resumen.alpha_calibracion_pct || 0).toFixed(2)}% ` +
+                "(solo lectura: cero escritura, cero mocks).";
         }
     } catch (e) {
         if (estado) {
@@ -3147,23 +3154,24 @@ function pintarResumenBacktesting(resumen) {
         const el = document.getElementById(id);
         if (el) el.textContent = texto;
     };
-    set("kpi-bt-total-partidos", `${resumen.total_partidos || 0}`);
-    const jornadas = resumen.jornadas_auditadas || [];
-    set("kpi-bt-jornadas", jornadas.length
-        ? `Jornadas auditadas: J${jornadas.join(" · J")}`
-        : "Sin jornadas con captura sellada");
-    set("kpi-bt-coincidencia", `${Number(resumen.tasa_coincidencia_fiduciaria_pct || 0).toFixed(2)}%`);
-    set("kpi-bt-desglose",
-        `Favorito ${resumen.partidos_favorito || 0} · Empate ${resumen.partidos_empate || 0} · ` +
-        `Underdog ${resumen.partidos_underdog || 0}`);
-    set("kpi-bt-brier", Number(resumen.brier_score_qbe || 0).toFixed(4));
-    set("kpi-bt-brier-detalle",
-        `Mercado: ${Number(resumen.brier_score_mercado || 0).toFixed(4)} (menor = mejor calibración)`);
-    const alpha = Number(resumen.alpha_calibracion_pct || 0);
-    set("kpi-bt-alpha", `${alpha >= 0 ? "+" : ""}${alpha.toFixed(2)}%`);
-    set("kpi-bt-alpha-detalle", alpha >= 0
-        ? "Q-BE bate al consenso del mercado en la ventana auditada"
-        : "El mercado calibra mejor en la ventana auditada");
+    // [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cuatro métricas PURAS de la taxonomía de
+    // vértices del símplex Δ². La sigla derogada H_fid (FAS/FES/FUS) queda fuera de la cartelera
+    // macro: aquí solo se exhibe masa de cobertura, convicción (P_max), rescate (P_mid) y ruptura.
+    set("kpi-bt-masa-cobertura", `${Number(resumen.masa_cobertura_pct || 0).toFixed(2)}%`);
+    const partidosCubiertos =
+        Number(resumen.total_p_max || 0) + Number(resumen.total_p_mid || 0);
+    set("kpi-bt-masa-detalle",
+        `P_max + P_mid · ${partidosCubiertos} de ${resumen.total_partidos || 0} partidos`);
+    set("kpi-bt-pmax", `${Number(resumen.p_max_aciertos_pct || 0).toFixed(2)}%`);
+    set("kpi-bt-pmax-detalle",
+        `${resumen.total_p_max || 0} partidos · convicción primaria consumada`);
+    set("kpi-bt-pmid", `${Number(resumen.p_mid_rescate_pct || 0).toFixed(2)}%`);
+    set("kpi-bt-pmid-detalle",
+        `[${resumen.total_p_mid_empate || 0} Emp · ${resumen.total_p_mid_rival || 0} Riv] ` +
+        "cobertura secundaria activa");
+    set("kpi-bt-plow", `${Number(resumen.p_low_ruptura_pct || 0).toFixed(2)}%`);
+    set("kpi-bt-plow-detalle",
+        `${resumen.total_p_low || 0} partidos · vértice residual no cubierto`);
 }
 
 function pintarMesoBacktesting(jornadas, resumen) {
@@ -3188,13 +3196,26 @@ function pintarMesoBacktesting(jornadas, resumen) {
             continue;
         }
         const fila = jornadas[idx];
-        const desglose = fila.desglose || {};
+        // [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Desglose por vértices del símplex Δ²:
+        // masa de cobertura = % P_max + % P_mid (≡ 100% − % P_low) y conteos enteros que
+        // reconcilian con la masa (n_p_max + n_p_mid + n_p_low = total_partidos).
+        const masaJornada = Number(fila.masa_cobertura_pct || 0);
+        const desgloseTriada =
+            `${Number(fila.pct_p_max || 0).toFixed(2)}% · ` +
+            `${Number(fila.pct_p_mid || 0).toFixed(2)}% · ` +
+            `${Number(fila.pct_p_low || 0).toFixed(2)}%`;
+        const conteosTriada =
+            `(${fila.n_p_max || 0} · ${fila.n_p_mid || 0} · ${fila.n_p_low || 0}) · ` +
+            `[P_mid: ${fila.n_p_mid_empate || 0} Emp · ${fila.n_p_mid_rival || 0} Riv]`;
         filas.push(`
             <tr class="bt-jornada-auditada">
                 <td><strong>J${fila.jornada}</strong></td>
                 <td class="numeric">${fila.total_partidos}</td>
-                <td class="${_claseCoberturaBacktesting(fila.tasa_cobertura_pct)}">${Number(fila.tasa_cobertura_pct || 0).toFixed(2)}%</td>
-                <td>${desglose.favorito || 0} · ${desglose.empate || 0} · ${desglose.underdog || 0}</td>
+                <td class="${_claseCoberturaBacktesting(masaJornada)}">${masaJornada.toFixed(2)}%</td>
+                <td>
+                    ${desgloseTriada}
+                    <span style="display:block; color:#94A3B8; font-size:10px;">${conteosTriada}</span>
+                </td>
                 <td class="numeric">${Number(fila.brier_score_qbe || 0).toFixed(4)}</td>
                 <td class="numeric">${Number(fila.brier_score_mercado || 0).toFixed(4)}</td>
                 <td class="numeric">${Number(fila.alpha_calibracion_pct || 0).toFixed(2)}%</td>
@@ -3293,9 +3314,11 @@ function mostrarMicroJornadaBacktesting(idx) {
         const signoAlpha = alphaPartido >= 0 ? "+" : "-";
         const alphaColor = alphaPartido >= 0 ? "#00E676" : "#EF4444";
         // Columna derecha: masa fiduciaria protegida por los dos primeros favoritos de Q-BE.
-        const masaPct = (
-            (pPrimaPorClave[favQbeClave] + pPrimaPorClave[clavesPorPRima[1]]) * 100
-        ).toFixed(1);
+        const masaDto = p.masa_cobertura_pct;
+        const masaPct = (masaDto === null || masaDto === undefined)
+            ? ((pPrimaPorClave[favQbeClave] + pPrimaPorClave[clavesPorPRima[1]]) * 100).toFixed(1)
+            : Number(masaDto).toFixed(1);
+        const triadaProv = [p.r_max, p.r_mid, p.r_low].filter(Boolean).join(" ≥ ");
         const casillas = [
             { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
             { titulo: "X EMPATE", clave: "EMPATE", p: p.p_empate, q: p.q_empate, o: momios.E },
@@ -3337,17 +3360,27 @@ function mostrarMicroJornadaBacktesting(idx) {
                 </div>
                 <div class="footer-col-masa">
                     Masa Cubierta: <strong style="color:#F8FAFC;">${masaPct}%</strong>
+                    ${triadaProv
+                        ? `<span style="color:#94A3B8; font-size:10px;"> · ${triadaProv}` +
+                            `${p.clasificacion_triada ? ` (${p.clasificacion_triada})` : ""}</span>`
+                        : ""}
                 </div>
             </div>
         </div>`;
     }).join("");
 
-    const desglose = jornada.desglose || {};
+    // [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cabecera de jornada en clave de vértices: la
+    // sigla FAS/FES/FUS queda derogada y el desglose exhibe masa, triada porcentual y la
+    // procedencia del rescate secundario (empate vs rival).
     contenedor.innerHTML = `
         <div class="bt-micro-head">
             Jornada ${jornada.jornada} · ${jornada.total_partidos} partidos concluidos ·
-            cobertura <strong>${Number(jornada.tasa_cobertura_pct || 0).toFixed(2)}%</strong>
-            (FAS ${desglose.favorito || 0} · FES ${desglose.empate || 0} · FUS ${desglose.underdog || 0})
+            masa de cobertura <strong>${Number(jornada.masa_cobertura_pct || 0).toFixed(2)}%</strong>
+            (P_max ${Number(jornada.pct_p_max || 0).toFixed(2)}% ·
+            P_mid ${Number(jornada.pct_p_mid || 0).toFixed(2)}% ·
+            P_low ${Number(jornada.pct_p_low || 0).toFixed(2)}%)
+            · <span style="color:#94A3B8; font-size:10px;">[P_mid: ${Number(jornada.n_p_mid_empate || 0)} Emp ·
+            ${Number(jornada.n_p_mid_rival || 0)} Riv]</span>
             · Alpha ${Number(jornada.alpha_calibracion_pct || 0).toFixed(2)}%
         </div>
         ${bloques}`;

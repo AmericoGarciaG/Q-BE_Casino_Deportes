@@ -173,6 +173,14 @@ class CalibrationMatchOut(BaseModel):
     # [LN-QBE-100 · Axioma del Prior de Mercado (Cold Start Resolution)] Sello de suficiencia
     # fáctica S(I) del partido: 0 = ignorancia declarada ⇒ P′ fue sustituida por q_mkt (Cold Start).
     suficiencia_S_I: Optional[int] = None
+    # [ARCH-1.4.38 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² ordenados por
+    # probabilidad fiduciaria descendente (P_max ≥ P_mid ≥ P_low) y vértice consumado en cancha.
+    r_max: Optional[Literal["LOCAL", "EMPATE", "VISITANTE"]] = None
+    r_mid: Optional[Literal["LOCAL", "EMPATE", "VISITANTE"]] = None
+    r_low: Optional[Literal["LOCAL", "EMPATE", "VISITANTE"]] = None
+    clasificacion_triada: Optional[Literal["P_MAX", "P_MID", "P_LOW"]] = None
+    masa_cobertura_pct: Optional[float] = None
+    p_low_ruptura_pct: Optional[float] = None
 
 
 class CalibrationJornadaOut(BaseModel):
@@ -183,6 +191,18 @@ class CalibrationJornadaOut(BaseModel):
     aciertos_cobertura: int
     tasa_cobertura_pct: float
     desglose: Dict[str, int] = Field(default_factory=dict)
+    # [ARCH-1.4.38 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Desglose cuantitativo puro de la jornada:
+    # masa de cobertura (% P_max + % P_mid), porcentaje por vértice y conteos enteros, incluida la
+    # procedencia del rescate secundario (empate vs rival).
+    masa_cobertura_pct: float = 0.0
+    pct_p_max: float = 0.0
+    pct_p_mid: float = 0.0
+    pct_p_low: float = 0.0
+    n_p_max: int = 0
+    n_p_mid: int = 0
+    n_p_low: int = 0
+    n_p_mid_empate: int = 0
+    n_p_mid_rival: int = 0
     brier_score_qbe: float
     brier_score_mercado: float
     alpha_calibracion_pct: float
@@ -197,6 +217,20 @@ class CalibrationSummaryOut(BaseModel):
     partidos_empate: int
     partidos_underdog: int
     tasa_coincidencia_fiduciaria_pct: float
+    # [ARCH-1.4.38 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Taxonomía macro de vértices del símplex Δ²:
+    # masa de cobertura (P_max + P_mid ≡ 100% − P_low), tasas puras por vértice y conteos enteros
+    # con el desglose de la procedencia del rescate secundario (empate vs rival).
+    masa_cobertura_pct: float = 0.0
+    p_max_aciertos_pct: float = 0.0
+    p_mid_rescate_pct: float = 0.0
+    p_mid_empate_pct: float = 0.0
+    p_mid_rival_pct: float = 0.0
+    p_low_ruptura_pct: float = 0.0
+    total_p_max: int = 0
+    total_p_mid: int = 0
+    total_p_low: int = 0
+    total_p_mid_empate: int = 0
+    total_p_mid_rival: int = 0
     brier_score_qbe: float
     brier_score_mercado: float
     alpha_calibracion_pct: float

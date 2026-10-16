@@ -1427,6 +1427,9 @@ def sincronizar_progol_pipeline_completo(
   - Operación pura de solo lectura (Read-Only).
   - Consulta en SQLite 3NF partidos con `status == 'FINISHED'`, cruza `matches` con `fixtures_snapshots.matches_json` y calcula métricas macro, tabla meso de jornadas y detalle de casillas estilo BetExplorer.
   - **Lectura dual de cuotas y P′ (Decreto del Director, 2026-10-14 · `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE`):** el trío 1X2 de cierre se resuelve sobre la captura congelada con **fallback dual** (`cuotas` o, en su defecto, `momios`) y la P′ sellada se toma de la captura del snapshot o, **en su defecto, de la tabla soberana 3NF** —también cuando el fixture existe pero no porta P′—, de modo que una jornada con cuotas de cierre reales jamás quede invisible al Visor ni su Brier de mercado se degrade a un relleno uniforme. Cero cuota inventada: un fixture sin trío completo sigue devolviendo `{}` [GOVERNANCE-01].
+* **Estructura del Payload REST:**
+  - `resumen_temporada`: Expone `masa_cobertura_pct`, `p_max_aciertos_pct`, `p_mid_rescate_pct`, `p_mid_empate_pct`, `p_mid_rival_pct`, `p_low_ruptura_pct`, `total_p_max`, `total_p_mid`, `total_p_low`.
+  - `jornadas[]`: Cada fecha expone `masa_cobertura_pct`, `pct_p_max`, `pct_p_mid`, `pct_p_low`, `n_p_max`, `n_p_mid`, `n_p_low`, `n_p_mid_empate`, `n_p_mid_rival`.
 * **Interfaz de Usuario:**
   - Pestaña `[ 🔬 Visor de Backtesting ]` entre *Mesa de Apuestas* y *Centro de Control*.
   - Sección `#panel-visor-backtesting` en `index.html` hidratada por `app.js`.

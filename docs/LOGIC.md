@@ -1351,14 +1351,23 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
      $$BS_{\text{QBE}} = \frac{1}{3N} \sum_{i=1}^N \sum_{k \in \{1, X, 2\}} (\hat{p}_{i,k} - y_{i,k})^2$$
      $$BS_{\text{MKT}} = \frac{1}{3N} \sum_{i=1}^N \sum_{k \in \{1, X, 2\}} (q_{i,k}^{\text{mkt}} - y_{i,k})^2$$
      $$\text{Alpha de Calibración} = \left( 1.0 - \frac{BS_{\text{QBE}}}{BS_{\text{MKT}}} \right) \times 100$$
-  3. **Clasificación Factual por Partido:**
-     - `FAVORITO`: Resultado real coincide con el favorito de P' (argmax_{k in {1,2}} p_k').
-     - `EMPATE`: Resultado real fue empate (home_score == away_score).
-     - `UNDERDOG`: Ganó el rival no cubierto.
+  3. **Jerarquía Estocástica de Vértices en Δ²:**
+     Para cada encuentro, los desenlaces se ordenan estrictamente por probabilidad fiduciaria descendente:
+     $$P_{\max} \ge P_{\text{mid}} \ge P_{\text{low}} \quad \text{con } R_{(1)}, R_{(2)}, R_{(3)} \in \{\text{LOCAL}, \text{EMPATE}, \text{VISITANTE}\}$$
+     - $P_{\max}$ (Vértice Primario de Masa): Máxima convicción soberana de Q-BE (Golpe de ataque).
+     - $P_{\text{mid}}$ (Vértice Secundario de Apoyo): Cobertura probabilística del segundo desenlace más probable. Queda desvinculado de ser exclusivamente el empate: en morfologías bipolares, $P_{\text{mid}}$ es el equipo rival.
+     - $P_{\text{low}}$ (Vértice Residual de Riesgo): Cola de menor masa y fuente de la pérdida/ruptura.
+  4. **Métricas de Cobertura y Desglose Factual:**
+     - **Masa de Cobertura ($H_{\text{masa}}$):** $\% P_{\max} + \% P_{\text{mid}} = 100\% - \% P_{\text{low}}$.
+     - **Tasa de Acierto Primario ($\% P_{\max}$):** Porcentaje de partidos donde ganó $R_{(1)}$.
+     - **Tasa de Rescate Secundario ($\% P_{\text{mid}}$):** Porcentaje de partidos donde ocurrió $R_{(2)}$, desglosado en:
+       * $\% P_{\text{mid}}^{(\text{emp})}$: Casos donde $R_{(2)}$ era Empate y ocurrió Empate.
+       * $\% P_{\text{mid}}^{(\text{riv})}$: Casos donde $R_{(2)}$ era el Rival y ocurrió el Rival.
+     - **Tasa de Ruptura Residual ($\% P_{\text{low}}$):** Porcentaje de partidos donde ganó $R_{(3)}$ (error máximo / eventos no controlados).
 * **O (Output):** `CalibrationReportResponse` (resumen macro, tabla meso por jornada y parrilla micro estilo BetExplorer).
 * **Φ (Transición):** Hacia `[ARCH-1.4.38]` e interfaz `index.html`.
 * **[SHIELD]:** `tests/shield/test_shield_visor_backtesting.py` · `tests/shield/test_shield_visor_backtesting_cold_start.py`
-* **Axioma del Prior de Mercado (Cold Start Resolution):** Para evitar que el Brier Score global y la clasificación de aciertos (FAS/FES/FUS) se degraden artificialmente con "basura estadística" durante las primeras jornadas, todo partido que declare ignorancia fáctica ($S(\mathcal{I}) = 0$) sustituirá retrospectivamente su vector de probabilidad por el vector des-marginado del mercado ($q^{\text{mkt}}$) antes de ejecutar el clasificador factual. Esto garantiza un $\text{Alpha} = 0.00\%$ en dichos eventos. Para honrar el principio de Degradación Honesta (`[GOVERNANCE-01]`), la interfaz visual rotulará obligatoriamente estos partidos como `COLD START`.
+* **Axioma del Prior de Mercado (Cold Start Resolution):** Para evitar que el Brier Score global y la clasificación de aciertos (la tríada de vértices $P_{\max}$ / $P_{\text{mid}}$ / $P_{\text{low}}$, extirpada la sigla derogada FAS/FES/FUS) se degraden artificialmente con "basura estadística" durante las primeras jornadas, todo partido que declare ignorancia fáctica ($S(\mathcal{I}) = 0$) sustituirá retrospectivamente su vector de probabilidad por el vector des-marginado del mercado ($q^{\text{mkt}}$) antes de ejecutar el clasificador factual. Esto garantiza un $\text{Alpha} = 0.00\%$ en dichos eventos. Para honrar el principio de Degradación Honesta (`[GOVERNANCE-01]`), la interfaz visual rotulará obligatoriamente estos partidos como `COLD START`.
 
 ---
 

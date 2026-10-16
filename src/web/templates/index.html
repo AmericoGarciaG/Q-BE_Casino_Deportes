@@ -627,26 +627,29 @@
                     <span style="opacity: 0.85;">[LN-QBE-100] / [ARCH-1.4.38]</span>.
                 </p>
 
+                <!-- [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cuatro métricas PURAS de la
+                     taxonomía de vértices del símplex Δ² (P_max ≥ P_mid ≥ P_low). Queda extirpada
+                     la falsa equivalencia «Empate = Cobertura» (H_fid / FAS · FES · FUS). -->
                 <div class="bt-macro-grid">
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">PARTIDOS AUDITADOS</span>
-                        <span class="bt-kpi-value" id="kpi-bt-total-partidos">--</span>
-                        <span class="bt-kpi-sub" id="kpi-bt-jornadas">--</span>
+                        <span class="bt-kpi-label">MASA DE COBERTURA</span>
+                        <span class="bt-kpi-value" id="kpi-bt-masa-cobertura">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-masa-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">COINCIDENCIA FIDUCIARIA (H_fid)</span>
-                        <span class="bt-kpi-value" id="kpi-bt-coincidencia">--</span>
-                        <span class="bt-kpi-sub" id="kpi-bt-desglose">--</span>
+                        <span class="bt-kpi-label">ACIERTO P_MAX</span>
+                        <span class="bt-kpi-value" id="kpi-bt-pmax">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-pmax-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">BRIER SCORE · Q-BE vs MERCADO</span>
-                        <span class="bt-kpi-value" id="kpi-bt-brier">--</span>
-                        <span class="bt-kpi-sub" id="kpi-bt-brier-detalle">--</span>
+                        <span class="bt-kpi-label">RESCATE P_MID</span>
+                        <span class="bt-kpi-value" id="kpi-bt-pmid">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-pmid-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">ALPHA DE CALIBRACIÓN</span>
-                        <span class="bt-kpi-value" id="kpi-bt-alpha">--</span>
-                        <span class="bt-kpi-sub" id="kpi-bt-alpha-detalle">--</span>
+                        <span class="bt-kpi-label">RUPTURA P_LOW</span>
+                        <span class="bt-kpi-value" id="kpi-bt-plow">--</span>
+                        <span class="bt-kpi-sub" id="kpi-bt-plow-detalle">--</span>
                     </div>
                 </div>
 
@@ -656,8 +659,12 @@
             <div class="card" style="margin-bottom: 1.5rem;">
                 <h4 style="margin-top: 0;">📅 Calibración por Jornada (Tabla Meso)</h4>
                 <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
-                    🔵 Azul = Cobertura (favorito o empate) · 🔴 Rojo = Underdog no cubierto ·
-                    FAS/FES/FUS = desglose factual por jornada.
+                    🟢 Masa de cobertura = P_max + P_mid (100% − P_low) · 🔴 Ruptura = P_low no
+                    cubierto. El desglose porcentual (P_max · P_mid · P_low) con sus conteos enteros
+                    es la lectura vigente de la cobertura; la sub-etiqueta
+                    <code>[P_mid: X Emp · Y Riv]</code> mide de dónde rescató la cobertura (empate o
+                    rival). La sigla derogada queda archivada en la legislación (`[LN-QBE-100]`),
+                    jamás en la cartelera.
                 </p>
                 <div style="overflow-x: auto;">
                     <table class="bt-table">
@@ -665,8 +672,8 @@
                             <tr>
                                 <th>JORNADA</th>
                                 <th>PARTIDOS</th>
-                                <th>COBERTURA (H_fid)</th>
-                                <th>DESGLOSE (FAS · FES · FUS)</th>
+                                <th>MASA COBERTURA</th>
+                                <th>DESGLOSE (P_max · P_mid · P_low)</th>
                                 <th>BRIER Q-BE</th>
                                 <th>BRIER MERCADO</th>
                                 <th>ALPHA</th>

@@ -256,3 +256,44 @@ def test_juez_6_rediseno_tridimensional_parrilla_micro():
     assert "opacity: 0.75;" in css and ".micro-box-inactivo" in css, (
         "Las dos casillas que no ocurrieron deben conservar el fondo neutro `.micro-box-inactivo`."
     )
+
+
+def test_invarianza_clasificacion_triada_estocastica_pmax_pmid_plow():
+    """
+    [INVARIANZA 6 - TAXONOMÍA P_MAX, P_MID, P_LOW Y DESGLOSE]:
+    Verifica que el reporte de calibración exponga la jerarquía fiduciaria
+    de vértices P_max, P_mid, P_low y el desglose de P_mid (empate vs rival).
+    """
+    from fastapi.testclient import TestClient
+    from src.web.app import app
+    
+    client = TestClient(app)
+    resp = client.get("/api/markets/backtesting/calibration-report?league_id=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    
+    macro = data["resumen_temporada"]
+    assert "masa_cobertura_pct" in macro, "🚨 FALTA: masa_cobertura_pct en macro"
+    assert "p_max_aciertos_pct" in macro, "🚨 FALTA: p_max_aciertos_pct en macro"
+    assert "p_mid_rescate_pct" in macro, "🚨 FALTA: p_mid_rescate_pct en macro"
+    assert "p_mid_empate_pct" in macro, "🚨 FALTA: p_mid_empate_pct en macro"
+    assert "p_mid_rival_pct" in macro, "🚨 FALTA: p_mid_rival_pct en macro"
+    assert "p_low_ruptura_pct" in macro, "🚨 FALTA: p_low_ruptura_pct en macro"
+    
+    # Invarianza de suma: % P_max + % P_mid + % P_low == 100% (+/- 0.2% redondeo)
+    suma_pct = macro["p_max_aciertos_pct"] + macro["p_mid_rescate_pct"] + macro["p_low_ruptura_pct"]
+    assert abs(suma_pct - 100.0) <= 0.25, f"🚨 RUPTURA SUMA: P_max+P_mid+P_low={suma_pct}% != 100%"
+    
+    # Invarianza de desglose de P_mid: P_mid_total == P_mid_empate + P_mid_rival
+    assert macro["total_p_mid"] == (macro["total_p_mid_empate"] + macro["total_p_mid_rival"])
+    
+    # Verificar en la tabla meso (cada jornada)
+    for j in data["jornadas"]:
+        if j.get("partidos"):
+            assert "masa_cobertura_pct" in j
+            assert "n_p_max" in j
+            assert "n_p_mid" in j
+            assert "n_p_low" in j
+            assert "n_p_mid_empate" in j
+            assert "n_p_mid_rival" in j
+            assert (j["n_p_max"] + j["n_p_mid"] + j["n_p_low"]) == j["total_partidos"]
