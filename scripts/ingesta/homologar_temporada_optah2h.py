@@ -43,6 +43,10 @@ Pilares legislados por [ARCH-1.4.39]
    * el payload de captura `fixtures_snapshots.matches_json` (vehículo de despacho del Visor),
    con paridad bit-a-bit garantizada por RELECTURA de la 3NF y sellado `fill-if-absent`
    (idempotencia y cero sobreescritura del contrato de captura de 7 campos).
+   * `--forzar` (llave maestra de sobreescritura, Orden Ejecutiva del Director): SUSPENDE la ley
+     `fill-if-absent` y fuerza la sincronización del JSON de captura con la verdad fáctica NUEVA de
+     la 3NF — sobreescritura destructiva de las 7 claves, campo por campo, e idempotente (valor que
+     ya coincide ⇒ cero escritura).
 
 Axiomas operativos
 ------------------
@@ -79,6 +83,7 @@ Uso:
     python -m scripts.ingesta.homologar_temporada_optah2h                 # J1..J10 (90 fixtures)
     python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 7 --json
     python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 1-9 --congelar-cache
+    python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 1-11 --forzar  # sobreescritura forzada
     python -m scripts.ingesta.homologar_temporada_optah2h --permitir-red  # sensor FotMob/Opta
 """
 from __future__ import annotations
@@ -971,11 +976,16 @@ def homologar(
     ruta_cache: str = RUTA_CACHE_OPTA_DEFAULT,
     permitir_red: bool = False,
     dry_run: bool = False,
+    forzar: bool = False,
 ) -> Dict[str, Any]:
     """Ejecuta la homologación integral (Pilares 1..4) y retorna el parte de certificación.
 
     Toda la matemática se delega a los planos sellados: el puente `[ARCH-1.6.11]` para la 3NF y
     la MISMA función de sellado canónica de la utilidad de poblado para la captura del Visor.
+
+    `forzar=True` (llave maestra de sobreescritura): la captura `fixtures_snapshots.matches_json`
+    deja de preservar P′ preexistente y se sincroniza campo por campo con la relectura bit-idéntica
+    de la 3NF. Cero matemática nueva: sólo se propaga la verdad fáctica ya sellada.
     """
     from scripts.utilidades.poblar_temporada_completa_backtesting import (
         _leer_suficiencia_3nf,
@@ -1033,6 +1043,7 @@ def homologar(
         "jornadas": [int(j) for j in jornadas],
         "liga_id": int(liga_id),
         "dry_run": bool(dry_run),
+        "forzar": bool(forzar),
         "partidos_consumados_3nf": len(partidos),
         "fixtures_homologados": len(items),
         "opta": {
@@ -1059,7 +1070,9 @@ def homologar(
     valores = _leer_valores_3nf(gateway, ids)
     suficiencias = _leer_suficiencia_3nf(gateway, ids)
     with gateway.write_transaction() as tx:
-        captura = _sellar_p_prima_en_capturas(tx, int(liga_id), list(jornadas), valores, suficiencias)
+        captura = _sellar_p_prima_en_capturas(
+            tx, int(liga_id), list(jornadas), valores, suficiencias, forzar=forzar
+        )
     parte["escritura"] = {
         "modo": "produccion",
         "3nf_procesados": puente.get("procesados", 0),
@@ -1116,6 +1129,8 @@ def _imprimir_parte(parte: Dict[str, Any]) -> None:
     print(f"  · fixtures_snapshots.matches_json : P′ selladas={capturas.get('selladas')} "
           f"preservadas={capturas.get('preservadas')} · S(I) selladas={capturas.get('suficiencia_selladas')} "
           f"preservadas={capturas.get('suficiencia_preservadas')}")
+    print(f"  · LEY DE SELLADO DE LA CAPTURA : {capturas.get('ley', 'fill-if-absent')}"
+          f"{'  ⚠️  SOBREESCRITURA FORZADA (--forzar)' if parte.get('forzar') else ''}")
     if capturas.get("por_jornada"):
         for jornada, fila in sorted(capturas["por_jornada"].items()):
             print(
@@ -1143,6 +1158,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--congelar-cache", action="store_true",
         help="[Pilar 2 · E3] descarga el sensor y CONGELA la caché Opta declarada; termina sin sellar",
     )
+    analizador.add_argument(
+        "--forzar", action="store_true",
+        help="llave maestra de sobreescritura: SUSPENDE el `fill-if-absent` y sincroniza el JSON de "
+             "captura con la verdad fáctica nueva de la 3NF (7 claves, destructivo e idempotente)",
+    )
     analizador.add_argument("--dry-run", action="store_true", help="proyecta y certifica sin escribir")
     analizador.add_argument("--json", action="store_true", help="emite el parte completo en JSON")
     argumentos = analizador.parse_args(argv)
@@ -1157,14 +1177,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         print(json.dumps(parte_congelacion, ensure_ascii=False, indent=2, default=str))
         return 0
-    logger.info("Homologación %s en jornadas %s (liga %s, dry_run=%s)",
-                COMPETENCIA_CANONICA, jornadas, argumentos.liga_id, argumentos.dry_run)
+    logger.info("Homologación %s en jornadas %s (liga %s, dry_run=%s, forzar=%s)",
+                COMPETENCIA_CANONICA, jornadas, argumentos.liga_id, argumentos.dry_run,
+                argumentos.forzar)
     parte = homologar(
         jornadas=jornadas,
         liga_id=int(argumentos.liga_id),
         ruta_cache=argumentos.cache,
         permitir_red=bool(argumentos.permitir_red),
         dry_run=bool(argumentos.dry_run),
+        forzar=bool(argumentos.forzar),
     )
     if argumentos.json:
         print(json.dumps(parte, ensure_ascii=False, indent=2, default=str))

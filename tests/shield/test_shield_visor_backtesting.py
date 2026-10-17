@@ -297,3 +297,60 @@ def test_invarianza_clasificacion_triada_estocastica_pmax_pmid_plow():
             assert "n_p_mid_empate" in j
             assert "n_p_mid_rival" in j
             assert (j["n_p_max"] + j["n_p_mid"] + j["n_p_low"]) == j["total_partidos"]
+
+
+def test_juez_7_pintado_triada_y_entrega_del_activo():
+    """
+    [LN-QBE-100 · Decreto VAR-2026-LOBOTOMIA-RESCATE-A §T2]:
+    El vértice consumado que colorea la casilla del desenlace real se ancla al campo SERVIDO
+    `clasificacion_triada` (P_MAX verde / P_MID cian / P_LOW rojo) —no a una derivación local del
+    pintor— con degradación explícita al rango del ranking P′ para payloads legados. La pastilla
+    propia `badge-triada` de la columna de postura porta rótulo y tríada cromática exactos, sin
+    re-introducir la pastilla derogada `badge-fiduciario` (veto del Juez 4). El activo del pintor
+    viaja al navegador sin caché obsoleta (la plantilla lo cache-bustea como al CSS).
+    """
+    import re
+    from pathlib import Path
+
+    js = Path("src/web/static/js/app.js").read_text(encoding="utf-8")
+    html = Path("src/web/templates/index.html").read_text(encoding="utf-8")
+
+    # 1) Anclaje al campo servido por la bóveda + degradación legada al rango P′ (cero segunda verdad).
+    assert "const triadaFiduciaria = (p.clasificacion_triada && MAPA_CLASE_TRIADA[p.clasificacion_triada])" in js
+    assert 'rankReal === 0 ? "P_MAX" : rankReal === 1 ? "P_MID" : "P_LOW"' in js
+    assert "const claseResultado = MAPA_CLASE_TRIADA[triadaFiduciaria];" in js
+    assert "const badgeTriadaHtml = MAPA_BADGE_TRIADA[triadaFiduciaria];" in js
+
+    # 2) Mapa explícito vértice -> clase de colorimetría (vértice desconocido NO degrada en silencio).
+    for vertice, clase in (
+        ("P_MAX", "box-resultado-fav"),
+        ("P_MID", "box-resultado-emp"),
+        ("P_LOW", "box-resultado-dog"),
+    ):
+        assert f'{vertice}: "{clase}"' in js, f"Falta {vertice} en el mapa de clases de la triada."
+
+    # 3) Pastilla PROPIA con rótulos exactos (nunca la pastilla fiduciaria derogada).
+    assert 'class="badge-triada badge-fav"' in js and "🎯 ACIERTO P_MAX" in js
+    assert 'class="badge-triada badge-emp"' in js and "🛡️ RESCATE P_MID" in js
+    assert 'class="badge-triada badge-dog"' in js and "💀 RUPTURA P_LOW" in js
+    assert "badge-fiduciario" not in js
+
+    # 4) Tríada cromática exacta (P_MID comparte el azul de la caja de empate vigente).
+    for fondo, borde, texto in (
+        ("#065F46", "#10B981", "#34D399"),
+        ("#0C4A6E", "#0EA5E9", "#38BDF8"),
+        ("#7F1D1D", "#DC2626", "#F87171"),
+    ):
+        assert f"background:{fondo}; border:1px solid {borde}; color:{texto};" in js, (
+            f"Tríada cromática incompleta: {fondo}/{borde}/{texto}"
+        )
+
+    # 5) Inyección en la columna de postura de la franja inferior de Nivel 3.
+    assert '<div class="footer-col-postura">${badgePostura}' in js
+    assert "${badgeTriadaHtml}</div>" in js
+
+    # 6) Entrega del activo: la plantilla cache-bustea el JS (misma práctica que theme.css).
+    assert re.search(r'/static/js/app\.js\?v=[^"]+"', html), (
+        "El pintor se sirve sin cache-buster: el navegador puede exhibir JS obsoleto."
+    )
+

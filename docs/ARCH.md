@@ -1445,6 +1445,15 @@ def sincronizar_progol_pipeline_completo(
 * **Invarianza de Rectificación:** Al inyectar las métricas homólogas en encuentros con disparidad jerárquica demostrada (ej. Puebla vs. Toluca en J7), el motor debe rectificar el sesgo ciego y asignar el favoritismo soberano al equipo futbolísticamente superior ($P_{\text{fav}}' \ge 50.0\%$).
 * **[SHIELD]:** `tests/shield/test_shield_historical_homologation.py`
 
+### [ARCH-1.4.41] Contrato Único de Escala xG y Extirpación de la Escala Artificial en la Ingesta [ARCH-PILLAR] [GOVERNANCE-01]
+* **Axioma de Escala Única:** En el contrato de ingesta, las claves `xg` y `xga` son **acumulados de temporada** ($\Sigma$ sobre los partidos jugados), jamás tasas por partido. La tasa canónica que consume el motor soberano se deriva **siempre** por división del acumulado entre los partidos jugados: $xG_{\text{rate}} = xg_{\text{total}} / PJ$.
+* **Prohibición Terminante de Escala Artificial:** Queda prohibido todo conmutador heurístico que intente deducir la escala del propio número (p. ej. la forma `xg_total > 5.0`). Una magnitud adimensional no se clasifica por su valor: la procedencia del dato es única y la fija el productor (daemon de ingesta y homologador histórico Opta/H2H).
+* **Consecuencia Fiduciaria:** Con trayectoria acumulada única, un registro de temporada temprana ($PJ$ bajo, acumulado $\le 5.0$) deja de leerse como tasa por partido, erradicando la sobre-amplificación de intensidad en las primeras jornadas.
+* **Custodia Documental:** La plantilla madre de varianza (`docs/DIRGEN_VARIANCE_REQUEST_TEMPLATE.md`) es de solo lectura; toda ficha nueva vive en `docs/variances/VAR_{ID}.md` (cláusula §4.2-A de `docs/GOVERNANCE.md`).
+* **[SHIELD]:** `tests/shield/test_shield_unified_ingestion_and_xg_scale.py`
+* **Estado del Sello (2026-10-16):** ✅ **VIGENTE Y MATERIALIZADO** — por **Dictamen del Director (Opción A aprobada)** se erradicó el conmutador `> 5.0` del núcleo (`src/core/sovereign_pipeline.py` L221/228/235/242, diff `4 4` = exactamente las 4 líneas del dictamen) y se declaró el **contrato de unidad (xG Acumulado Total)** en `docs/DIRGEN_VAULT.md` `[VAULT-CORE-005]`; **paridad `src == vault` verificada**. Se re-unificaron las fixtures selladas y el auditor de pureza (×`PJ`, tasas preservadas bit a bit) y se ejecutó la **Llave Maestra** `homologar_temporada_optah2h --jornadas 1-11 --forzar` (17 capturas re-selladas: J4-J8, la ventana del shim; paridad captura↔3NF 99 idénticas / 0 divergentes). **Escudo: 341 passed / 0 failed / 0 skipped.** Expediente: `docs/variances/VAR-2026-10-16-ESCALA-XG.md` (§9, resolución y evidencia).
+
+
 
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`

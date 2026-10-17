@@ -217,8 +217,9 @@ def certificar_volumen_1():
 
     # Caso 2: Datos suficientes (Temporada madura, PJ >= 3)
     match_suficiente = {
-        "home_team_stats": {"pj": 8, "gf": 14, "gc": 8, "xg": 1.65},
-        "away_team_stats": {"pj": 8, "gf": 9, "gc": 12, "xg": 1.10}
+        # [ARCH-1.4.41] Contrato de unidad: "xg" ACUMULADO de temporada (1.65 = 13.2/8; 1.10 = 8.8/8).
+        "home_team_stats": {"pj": 8, "gf": 14, "gc": 8, "xg": 13.2},
+        "away_team_stats": {"pj": 8, "gf": 9, "gc": 12, "xg": 8.8}
     }
     suf_1 = evaluar_suficiencia_informativa(match_suficiente)
     salida_1 = generar_distribucion_soberana("TEST-SUF", match_suficiente)
@@ -256,8 +257,9 @@ def certificar_volumen_1():
     banner_prueba(7, "End-to-End Pipeline Soberano con Datos Reales (J10 Toluca vs Atlas)", "Sección 6.25 (Página 109)")
     
     toluca_atlas_input = {
-        "home_team_stats": {"pj": 9, "gf": 20, "gc": 9, "xg": 1.95},   # Toluca (Líder)
-        "away_team_stats": {"pj": 9, "gf": 13, "gc": 15, "xg": 1.15},  # Atlas
+        # [ARCH-1.4.41] Contrato de unidad: "xg" ACUMULADO de temporada (1.95 = 17.55/9; 1.15 = 10.35/9).
+        "home_team_stats": {"pj": 9, "gf": 20, "gc": 9, "xg": 17.55},   # Toluca (Líder)
+        "away_team_stats": {"pj": 9, "gf": 13, "gc": 15, "xg": 10.35},  # Atlas
         "delta_alt_metros": 1500.0,  # Toluca (2,660m) vs Atlas (1,560m)
         "delta_descanso_dias": 1.0,
         "q_mod_h": 1.0,

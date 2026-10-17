@@ -3276,11 +3276,24 @@ function mostrarMicroJornadaBacktesting(idx) {
             .map(x => x.clave);
         const favQbeClave = clavesPorPRima[0];
         const rankReal = clavesPorPRima.indexOf(p.resultado_real);
-        const claseResultado = rankReal === 0
-            ? "box-resultado-fav"
-            : rankReal === 1
-                ? "box-resultado-emp"
-                : "box-resultado-dog";
+        // [LN-QBE-100 · Decreto VAR-2026-LOBOTOMIA-RESCATE-A] FUENTE DE VERDAD ÚNICA: el vértice
+        // consumado lo dicta la jerarquía estocástica SERVIDA por la bóveda (`clasificacion_triada`
+        // = P_MAX / P_MID / P_LOW), no una derivación local del pintor. Un payload legado sin el
+        // campo `clasificacion_triada` degrada al rango del ranking P′ (equivalencia estricta ya
+        // legislada: 0 ≡ P_MAX, 1 ≡ P_MID, 2 ≡ P_LOW) ⇒ cero segunda verdad paralela y cero
+        // etiqueta inventada ([GOVERNANCE-01]).
+        // [LN-QBE-100 · Decreto VAR-2026-LOBOTOMIA-RESCATE-A §T2] Mapa explícito vértice → clase de
+        // colorimetría de la casilla. Un vértice desconocido NO degrada en silencio a un color
+        // inventado: se re-resuelve por el rango real del desenlace en el ranking P′.
+        const MAPA_CLASE_TRIADA = {
+            P_MAX: "box-resultado-fav",
+            P_MID: "box-resultado-emp",
+            P_LOW: "box-resultado-dog",
+        };
+        const triadaFiduciaria = (p.clasificacion_triada && MAPA_CLASE_TRIADA[p.clasificacion_triada])
+            ? p.clasificacion_triada
+            : (rankReal === 0 ? "P_MAX" : rankReal === 1 ? "P_MID" : "P_LOW");
+        const claseResultado = MAPA_CLASE_TRIADA[triadaFiduciaria];
         // [ARCH-1.4.38 · Decreto VAR-2026-EGO-CONTRARIAN-AUDIT] Marcador factual del FAVORITO DEL
         // MERCADO: base gris inferior en la(s) casilla(s) que cotizan el máximo del consenso
         // desmarcado q_mkt (contrato plano del DTO, VAR-UI-01 aprobada). Empate técnico de mercado
@@ -3303,6 +3316,16 @@ function mostrarMicroJornadaBacktesting(idx) {
         const badgePostura = favQbeClave === favMktClave
             ? '<span class="badge-postura badge-consenso" style="background:#1E293B; border:1px solid #334155; color:#94A3B8; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🤝 Consenso</span>'
             : '<span class="badge-postura badge-contrarian" style="background:#1E1B4B; border:1px solid #6366F1; color:#A5B4FC; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">⚡ Contrarian</span>';
+        // [LN-QBE-100 · Decreto VAR-2026-LOBOTOMIA-RESCATE-A] Píldora del vértice consumado: rótulo y
+        // colorimetría EXACTOS del vértice que la jerarquía estocástica declaró consumado por el
+        // resultado de la cancha (verde P_MAX / azul P_MID / rojo P_LOW). Clase propia `badge-triada`
+        // para no re-introducir la pastilla fiduciaria derogada (veto del Juez 4 del Shield).
+        const MAPA_BADGE_TRIADA = {
+            P_MAX: '<span class="badge-triada badge-fav" style="background:#065F46; border:1px solid #10B981; color:#34D399; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🎯 ACIERTO P_MAX</span>',
+            P_MID: '<span class="badge-triada badge-emp" style="background:#0C4A6E; border:1px solid #0EA5E9; color:#38BDF8; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🛡️ RESCATE P_MID</span>',
+            P_LOW: '<span class="badge-triada badge-dog" style="background:#7F1D1D; border:1px solid #DC2626; color:#F87171; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">💀 RUPTURA P_LOW</span>',
+        };
+        const badgeTriadaHtml = MAPA_BADGE_TRIADA[triadaFiduciaria];
         // Columna central: Brier Score individual + Alpha del partido
         // Alpha_i = (1 − BS_QBE / BS_MKT) · 100 (guarda anti-división por cero: BS_MKT = 0 ⇒ 0%).
         const bsQbeRaw = Number(p.brier_qbe || 0);
@@ -3352,7 +3375,7 @@ function mostrarMicroJornadaBacktesting(idx) {
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
             <div class="micro-partido-footer-v2">
-                <div class="footer-col-postura">${badgePostura}</div>
+                <div class="footer-col-postura">${badgePostura}<span style="display:inline-block; width:6px;"></span>${badgeTriadaHtml}</div>
                 <div class="footer-col-brier">
                     Brier: Q-BE <span style="color:#F8FAFC;">${bsQbe}</span>
                     · Mkt <span style="color:#F8FAFC;">${bsMkt}</span>

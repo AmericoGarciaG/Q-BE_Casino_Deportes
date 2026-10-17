@@ -203,6 +203,8 @@
 | `[ARCH-1.4.39]` | ARCH | `docs/ARCH.md` | Motor de Homologación Histórica Opta/H2H y Reconstrucción Progresiva [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.41]` | ARCH | `docs/ARCH.md` | Contrato Único de Escala xG y Extirpación de la Escala Artificial en la Ingesta [ARCH-PILLAR] | SELLADO |
+
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
 > `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`

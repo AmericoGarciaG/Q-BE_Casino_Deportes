@@ -218,28 +218,28 @@ def derivar_factores_estructurales(raw_match_data: Dict[str, Any], mu_liga: floa
     # 1. Ataque Local (Tasa por partido)
     gf_h_per_game = float(h.get("gf", 10)) / pj_h
     xg_total_h = float(h.get("xg", 0.0) or 0.0)
-    xg_h_per_game = (xg_total_h / pj_h) if xg_total_h > 5.0 else (xg_total_h or gf_h_per_game)
+    xg_h_per_game = (xg_total_h / pj_h) if xg_total_h > 0.0 else gf_h_per_game
     att_h_rate = (0.65 * xg_h_per_game) + (0.35 * gf_h_per_game)
     A_home = math.log(max(0.2, att_h_rate) / mu_base_equipo)
 
     # 2. Defensa Visita (Tasa por partido)
     gc_a_per_game = float(a.get("gc", 12)) / pj_a
     xga_total_a = float(a.get("xga", 0.0) or 0.0)
-    xga_a_per_game = (xga_total_a / pj_a) if xga_total_a > 5.0 else (xga_total_a or gc_a_per_game)
+    xga_a_per_game = (xga_total_a / pj_a) if xga_total_a > 0.0 else gc_a_per_game
     def_a_rate = (0.65 * xga_a_per_game) + (0.35 * gc_a_per_game)
     D_away = -math.log(max(0.2, def_a_rate) / mu_base_equipo)
 
     # 3. Ataque Visita
     gf_a_per_game = float(a.get("gf", 7)) / pj_a
     xg_total_a = float(a.get("xg", 0.0) or 0.0)
-    xg_a_per_game = (xg_total_a / pj_a) if xg_total_a > 5.0 else (xg_total_a or gf_a_per_game)
+    xg_a_per_game = (xg_total_a / pj_a) if xg_total_a > 0.0 else gf_a_per_game
     att_a_rate = (0.65 * xg_a_per_game) + (0.35 * gf_a_per_game)
     A_away = math.log(max(0.2, att_a_rate) / mu_base_equipo)
 
     # 4. Defensa Local
     gc_h_per_game = float(h.get("gc", 10)) / pj_h
     xga_total_h = float(h.get("xga", 0.0) or 0.0)
-    xga_h_per_game = (xga_total_h / pj_h) if xga_total_h > 5.0 else (xga_total_h or gc_h_per_game)
+    xga_h_per_game = (xga_total_h / pj_h) if xga_total_h > 0.0 else gc_h_per_game
     def_h_rate = (0.65 * xga_h_per_game) + (0.35 * gc_h_per_game)
     D_home = -math.log(max(0.2, def_h_rate) / mu_base_equipo)
 

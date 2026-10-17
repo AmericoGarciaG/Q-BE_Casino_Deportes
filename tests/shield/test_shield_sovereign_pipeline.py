@@ -35,8 +35,10 @@ def test_pipeline_soberano_caso_puebla_atlante():
     Certifica que P(Puebla) se contenga a un realista 54%-60%, desterrando el 78.3%.
     """
     datos_puebla_atlante = {
-        "home_team_stats": {"pj": 8, "gf": 10, "gc": 10, "xg": 1.46, "xga": 1.29},
-        "away_team_stats": {"pj": 8, "gf": 7, "gc": 12, "xg": 1.07, "xga": 1.52}
+        # [ARCH-1.4.41] Contrato de unidad canónico: "xg"/"xga" son ACUMULADOS TOTALES de temporada.
+        # Tasa preservada: xg 11.68/8 = 1.46 · xga 10.32/8 = 1.29 · xg 8.56/8 = 1.07 · xga 12.16/8 = 1.52.
+        "home_team_stats": {"pj": 8, "gf": 10, "gc": 10, "xg": 11.68, "xga": 10.32},
+        "away_team_stats": {"pj": 8, "gf": 7, "gc": 12, "xg": 8.56, "xga": 12.16}
     }
 
     assert evaluar_suficiencia_informativa(datos_puebla_atlante) is True

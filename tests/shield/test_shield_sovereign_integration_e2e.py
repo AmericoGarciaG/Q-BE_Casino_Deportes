@@ -46,11 +46,13 @@ def test_integracion_e2e_persistencia_distribucion_real():
             tx.add(m)
 
     # Payload fáctico representativo
+    # [ARCH-1.4.41] Contrato de unidad canónico: "xg"/"xga" son ACUMULADOS TOTALES de temporada
+    # (tasas preservadas: 11.68/8 = 1.46 · 10.32/8 = 1.29 · 8.56/8 = 1.07 · 12.16/8 = 1.52).
     datos_partido = {
         "match_id": match_id,
         "competition_id": comp_id,
-        "home_team_stats": {"pj": 8, "gf": 10, "gc": 10, "xg": 1.46, "xga": 1.29},
-        "away_team_stats": {"pj": 8, "gf": 7, "gc": 12, "xg": 1.07, "xga": 1.52}
+        "home_team_stats": {"pj": 8, "gf": 10, "gc": 10, "xg": 11.68, "xga": 10.32},
+        "away_team_stats": {"pj": 8, "gf": 7, "gc": 12, "xg": 8.56, "xga": 12.16}
     }
 
     # 2. Ejecución del servicio de integración

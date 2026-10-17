@@ -639,6 +639,11 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
         # consumados en SQLite; cada fixture recibe sus últimos 5 enfrentamientos directos.
         historial_consumado = _precargar_historial_consumado_sqlite(tx, league.id)
 
+        # [VAR-2026-J7-HOMOLOGACION §6.4 · E4 — Decreto del Director] Pilar 4: la salida del motor se
+        # ACOPIA aquí y jamás se escribe en vuelo sobre el contrato de captura. El sellado efectivo
+        # ocurre por `fill-if-absent` al persistir el snapshot (precedencia: corte sellado > motor).
+        p_prima_motor: Dict[str, Dict[str, Any]] = {}
+
         for r in range(10, 18):
             fixtures_r = datos["fixtures_por_jornada"].get(r, [])
             for f in fixtures_r:
@@ -667,22 +672,31 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
                         mu_liga=mu_efectivo,
                         gamma_home_base=0.15
                     )
-                    f["p_local"] = dist_out.p_local
-                    f["p_empate"] = dist_out.p_empate
-                    f["p_visitante"] = dist_out.p_visitante
-                    f["lambda_home"] = dist_out.lambda_home
-                    f["lambda_away"] = dist_out.lambda_away
-                    f["phi_lead2_home"] = dist_out.phi_lead2_home
                     # [Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2] Sello de suficiencia
                     # fáctica S(I) ∈ {0, 1} transcrito *verbatim* de la traza forense del motor
                     # (0 = Prior Fiduciario declarado). Amplía el contrato de captura a 7 campos: sin
                     # este sello ningún consumidor —el auditor incluido— puede distinguir ignorancia
                     # declarada de divergencia de mercado.
-                    f["suficiencia_S_I"] = (
+                    s_i_motor = (
                         int(dist_out.audit_trace.suficiencia_S_I)
                         if hasattr(dist_out, "audit_trace") and hasattr(dist_out.audit_trace, "suficiencia_S_I")
                         else (0 if dist_out.p_local == 0.3333 else 1)
                     )
+                    salida_motor = {
+                        "p_local": dist_out.p_local,
+                        "p_empate": dist_out.p_empate,
+                        "p_visitante": dist_out.p_visitante,
+                        "lambda_home": dist_out.lambda_home,
+                        "lambda_away": dist_out.lambda_away,
+                        "phi_lead2_home": dist_out.phi_lead2_home,
+                        "suficiencia_S_I": s_i_motor,
+                    }
+                    # Sólo se acopia lo AUSENTE: un campo ya publicado en la captura no se recalcula.
+                    pendientes = {
+                        clave: valor for clave, valor in salida_motor.items() if f.get(clave) is None
+                    }
+                    if pendientes:
+                        p_prima_motor[f["id_partido"]] = pendientes
                 except Exception as ex_dist:
                     logger.warning(f"No se pudo generar distribución para {f['id_partido']}: {ex_dist}")
 
@@ -719,6 +733,15 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
 
                 snap_fix.matches_json = fixtures_r
                 snap_fix.updated_at = ahora
+
+            # [VAR-2026-J7-HOMOLOGACION §6.4 · E4 — Decreto del Director] Cierre de la cadena del
+            # Pilar 4 con precedencia estricta `corte sellado (previos) > motor`: lo ya publicado
+            # permanece INTACTO y el motor sólo SELLA los campos ausentes de una captura virgen.
+            # Cero matemática, cero constantes, cero rutas de motor: sólo preservación de campos.
+            for f in fixtures_r:
+                for clave, valor in p_prima_motor.get(f.get("id_partido"), {}).items():
+                    if f.get(clave) is None:
+                        f[clave] = valor
 
         # Sincronizar Entidades 3NF Match
         for r in range(10, 18):

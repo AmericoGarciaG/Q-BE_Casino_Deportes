@@ -32,7 +32,10 @@ Axiomas operativos
    y `persistir_cuotas_en_fixtures_3nf` (enriquecimiento de huecos con procedencia declarada
    `betexplorer`, cero cuotas prestadas a casas locales).
 5. Idempotente y no destructivo: P′ y cuotas se sellan SOLO si el fixture no los porta; un marcador
-   ya registrado se preserva; una segunda pasada escribe cero.
+   ya registrado se preserva; una segunda pasada escribe cero. Excepción legislada por Orden
+   Ejecutiva del Director (llave maestra de sobreescritura): `--forzar` SUSPENDE la ley
+   `fill-if-absent` sobre el contrato de captura P′ (7 claves) y lo sincroniza campo por campo con la
+   verdad fáctica nueva de la 3NF — sigue siendo idempotente: si el valor ya coincide, cero escritura.
 6. Contrato de captura ampliado por Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2: además de
    las 6 claves numéricas de P′, el fixture sella el séptimo campo `suficiencia_S_I` ∈ {0, 1}
    transcrito *verbatim* de la traza sellada (`audit_trace_json` del puente) y también `fill-if-absent`:
@@ -43,6 +46,7 @@ Uso:
     python -m scripts.utilidades.poblar_temporada_completa_backtesting --dry-run
     python -m scripts.utilidades.poblar_temporada_completa_backtesting --offline-html scratch/betexplorer_results_raw.html
     python -m scripts.utilidades.poblar_temporada_completa_backtesting --jornadas 1-9 --json
+    python -m scripts.utilidades.poblar_temporada_completa_backtesting --jornadas 1-11 --forzar
 """
 from __future__ import annotations
 
@@ -108,6 +112,10 @@ CLAVES_CAPTURA_P_PRIMA: Tuple[str, ...] = (
     "phi_lead2_home",
 )
 CLAVE_SUFICIENCIA_SI = "suficiencia_S_I"
+# Ley de sellado del contrato de captura: por defecto `fill-if-absent` POR CAMPO; la llave maestra
+# `--forzar` (Orden Ejecutiva del Director) la suspende y sincroniza el JSON con la verdad de la 3NF.
+LEY_SELLADO_FILL_IF_ABSENT = "fill-if-absent"
+LEY_SELLADO_FORZADO = "overwrite-forzado (--forzar)"
 RANGO_JORNADAS_DEFAULT = "1-9"
 MU_LIGA_DEFAULT = 2.65
 GAMMA_HOME_DEFAULT = 0.15
@@ -374,6 +382,7 @@ def _sellar_p_prima_en_capturas(
     valores: Dict[str, Dict[str, float]],
     suficiencias: Optional[Dict[str, int]] = None,
     simular: bool = False,
+    forzar: bool = False,
 ) -> Dict[str, Any]:
     """Sella en `fixtures_snapshots.matches_json` la captura de P′ y el sello de suficiencia S(I).
 
@@ -384,6 +393,13 @@ def _sellar_p_prima_en_capturas(
     [VAR-2026-J7-HOMOLOGACION §6.5 · E5] La unidad del `fill-if-absent` es el CAMPO, no el fixture:
     un contrato mutilado (p. ej. `suficiencia_S_I` presente y P′ ausente) se COMPLETA en las claves
     ausentes en lugar de preservarse a medias — las claves ya selladas jamás se sobreescriben.
+
+    `--forzar` (llave maestra de sobreescritura ordenada por el Director): cuando `forzar=True` la ley
+    `fill-if-absent` se SUSPENDE y la captura se sincroniza con la verdad fáctica NUEVA de la 3NF —
+    sobreescritura destructiva de las 7 claves del contrato, una por una. Cero invención: sólo se
+    escribe lo que la 3NF porta; un campo sin valor nuevo en la 3NF no se borra ni se fabrica. La
+    idempotencia se preserva intacta: si el valor capturado YA coincide, no hay escritura (una segunda
+    pasada forzada escribe cero).
     """
     reporte: Dict[str, Any] = {
         "selladas": 0,
@@ -394,6 +410,8 @@ def _sellar_p_prima_en_capturas(
         "suficiencia_preservadas": 0,
         "sin_suficiencia": [],
         "por_jornada": {},
+        "forzar": bool(forzar),
+        "ley": LEY_SELLADO_FORZADO if forzar else LEY_SELLADO_FILL_IF_ABSENT,
     }
     suficiencias = suficiencias or {}
     for jornada in jornadas:
@@ -423,23 +441,32 @@ def _sellar_p_prima_en_capturas(
                 # las claves ausentes; las ya selladas jamás se sobreescriben.
                 completadas = 0
                 for clave, valor in valores_fila.items():
-                    if fx.get(clave) is None:
-                        fx[clave] = valor
-                        completadas += 1
+                    # [--forzar] sobreescritura destructiva de la clave; sin el flag, `fill-if-absent`
+                    # por campo. En ambos regímenes: si el valor capturado YA coincide, cero escritura.
+                    if forzar or fx.get(clave) is None:
+                        if fx.get(clave) != valor:
+                            fx[clave] = valor
+                            completadas += 1
                 if completadas:
                     reporte["selladas"] += 1
                     selladas_jornada += 1
                 else:
                     reporte["preservadas"] += 1
-            # Sello de suficiencia S(I): campo independiente, `fill-if-absent` y transcripción literal.
-            if fx.get(CLAVE_SUFICIENCIA_SI) is not None:
-                reporte["suficiencia_preservadas"] += 1
-            elif id_partido in suficiencias:
-                fx[CLAVE_SUFICIENCIA_SI] = int(suficiencias[id_partido])
+            # Sello de suficiencia S(I): campo independiente, `fill-if-absent` (o sobreescritura bajo
+            # `--forzar`) y transcripción literal de la traza sellada — cero invención de S(I).
+            si_capturado = fx.get(CLAVE_SUFICIENCIA_SI)
+            si_sellado = int(suficiencias[id_partido]) if id_partido in suficiencias else None
+            if si_sellado is None:
+                if si_capturado is None:
+                    reporte["sin_suficiencia"].append(id_partido)
+                else:
+                    reporte["suficiencia_preservadas"] += 1
+            elif (forzar or si_capturado is None) and si_capturado != si_sellado:
+                fx[CLAVE_SUFICIENCIA_SI] = si_sellado
                 reporte["suficiencia_selladas"] += 1
                 suficiente_jornada += 1
             else:
-                reporte["sin_suficiencia"].append(id_partido)
+                reporte["suficiencia_preservadas"] += 1
         if (selladas_jornada or suficiente_jornada) and not simular:
             snapshot.matches_json = fixtures
         reporte["por_jornada"][int(jornada)] = {
@@ -513,9 +540,11 @@ def _imprimir_reporte(reporte: Dict[str, Any]) -> None:
           f"incompletas={len(cuo['cuotas_incompletas'])}")
     print(f"4) DISTRIBUCIONES P′ `sovereign_distributions`: procesados={dist['procesados']} "
           f"exitosos={dist['exitosos']} errores={len(dist['errores'])}")
-    print(f"5) CAPTURA P′ EN SNAPSHOT (fill-if-absent): selladas={dis['selladas']} "
+    print(f"5) CAPTURA P′ EN SNAPSHOT (ley: {dis.get('ley', LEY_SELLADO_FILL_IF_ABSENT)}): "
+          f"selladas={dis['selladas']} "
           f"preservadas={dis['preservadas']} sin_valor={len(dis['sin_valor'])}")
-    print(f"6) SELLO DE SUFICIENCIA S(I) ∈ {{0, 1}} (fill-if-absent, transcripción literal): "
+    print(f"6) SELLO DE SUFICIENCIA S(I) ∈ {{0, 1}} (ley: {dis.get('ley', LEY_SELLADO_FILL_IF_ABSENT)}, "
+          f"transcripción literal): "
           f"selladas={dis.get('suficiencia_selladas', 0)} "
           f"preservadas={dis.get('suficiencia_preservadas', 0)} "
           f"sin_sello={len(dis.get('sin_suficiencia', []))}")
@@ -554,6 +583,10 @@ def _parser() -> argparse.ArgumentParser:
                         help="Evidencia local de la fuente (cero red): ruta a un HTML capturado.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Proyecta el poblado completo sin escribir en la bóveda.")
+    parser.add_argument("--forzar", action="store_true",
+                        help="Llave maestra de sobreescritura: SUSPENDE el `fill-if-absent` y sincroniza "
+                             "las 7 claves del contrato de captura P′ con la verdad nueva de la 3NF "
+                             "(destructivo por campo e idempotente: valor igual ⇒ cero escritura).")
     parser.add_argument("--json", action="store_true",
                         help="Emite el reporte máquina (JSON) por stdout en lugar de la bitácora.")
     return parser
@@ -566,6 +599,7 @@ def ejecutar(argv: Optional[List[str]] = None) -> int:
     gobierna el orden transaccional y la trazabilidad.
     """
     args = _parser().parse_args(argv)
+    forzar = bool(args.forzar)
     jornadas = _parsear_rango_jornadas(args.jornadas)
     if not jornadas:
         print("❌ [ABORTO] Rango de jornadas vacío: nada que poblar.")
@@ -625,7 +659,7 @@ def ejecutar(argv: Optional[List[str]] = None) -> int:
             marcadores = rellenar_marcadores_3nf(sesion, args.liga_id, canonico, simular=True)
             cuotas = persistir_cuotas_en_fixtures_3nf(sesion, args.liga_id, canonico, simular=True)
             captura_p = _sellar_p_prima_en_capturas(
-                sesion, args.liga_id, jornadas, valores, suficiencias, simular=True
+                sesion, args.liga_id, jornadas, valores, suficiencias, simular=True, forzar=forzar
             )
         distribuciones: Dict[str, Any] = {"procesados": len(items), "exitosos": len(valores), "errores": []}
     else:
@@ -642,7 +676,7 @@ def ejecutar(argv: Optional[List[str]] = None) -> int:
         # [PARIDAD 3NF <-> SNAPSHOT] La captura del fixture porta EXACTAMENTE los números sellados.
         with gateway.write_transaction() as tx:
             captura_p = _sellar_p_prima_en_capturas(
-                tx, args.liga_id, jornadas, valores, suficiencias, simular=False
+                tx, args.liga_id, jornadas, valores, suficiencias, simular=False, forzar=forzar
             )
 
     con_evidencia = sum(1 for item in items if evaluar_suficiencia_informativa(item))

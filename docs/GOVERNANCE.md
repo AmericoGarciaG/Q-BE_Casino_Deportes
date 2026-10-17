@@ -165,6 +165,10 @@ Para equilibrar la agilidad en la capa de presentación con el rigor extremo en 
 ### 4.2 Protocolo Anti-Bandazos (Single-Strike Constraint) [GOVERNANCE] [ALGO-PROTECTED]
 En componentes bajo `[DIRGEN-STRICT]`, queda estrictamente prohibido el ensayo y error iterativo autónomo. Ante el primer fallo de compilación, aserción rota o excepción en tiempo de ejecución, el Constructor tiene la **PROHIBICIÓN ABSOLUTA de intentar parches a ciegas**. Debe detenerse de inmediato (Alto al Fuego) y emitir el artefacto `DIRGEN_VARIANCE_REQUEST.md` detallando coordenadas, traceback, diagnóstico causal, abanico de 2 alternativas evaluadas y diff propuesto, esperando resolución de la Dirección.
 
+### 4.2-A Custodia de la Plantilla Madre de Varianza [GOVERNANCE] [ALGO-PROTECTED]
+`docs/DIRGEN_VARIANCE_REQUEST_TEMPLATE.md` es la plantilla madre de solo lectura. Queda prohibido sobreescribirla o borrarla. Toda nueva varianza debe crearse en `docs/variances/VAR_{ID}.md`.
+
+
 ### 4.2-B Prohibición Estricta de Pruebas Interactivas en Navegador por IA [GOVERNANCE]
 * **Mandato Operativo:** Queda estrictamente prohibida la ejecución de pruebas interactivas en navegador mediante subagentes de IA para validar flujos de producción. La validación se canaliza obligatoriamente mediante sondas HTTP/consola independientes y la suite en `tests/shield/`.
 
