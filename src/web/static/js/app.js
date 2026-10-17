@@ -3342,6 +3342,32 @@ function mostrarMicroJornadaBacktesting(idx) {
             ? ((pPrimaPorClave[favQbeClave] + pPrimaPorClave[clavesPorPRima[1]]) * 100).toFixed(1)
             : Number(masaDto).toFixed(1);
         const triadaProv = [p.r_max, p.r_mid, p.r_low].filter(Boolean).join(" ≥ ");
+        // [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064] Micro-HUD soberano de la tarjeta: tira de
+        // semáforos de salud de insumos (OPTA · SEDE · H2H · EPIST), badge del driver principal y
+        // acceso al desglose forense de 44 variables. El pintor NO deriva nada: consume el bloque
+        // `atribucion_factorial` servido por el endpoint. Payload legado o `disponible=false`
+        // degrada a gris NEUTRO (cero semáforo inventado, [GOVERNANCE-01]).
+        const atribucion = p.atribucion_factorial || null;
+        const semaforosHud = (atribucion && atribucion.semaforos) || {};
+        const tiraSemaforos = ["opta", "sede", "h2h", "epist"].map(clave => {
+            const estado = semaforosHud[clave] || "NEUTRO";
+            const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
+            return `<span class="hud-semaforo" data-semaforo="${clave.toUpperCase()}" ` +
+                `data-estado="${estado}" title="${clave.toUpperCase()}: ${estado}" ` +
+                `style="color:${color};">● ${clave.toUpperCase()}</span>`;
+        }).join("");
+        const driverPrincipal = atribucion && atribucion.driver_principal
+            ? atribucion.driver_principal
+            : null;
+        const textoDriver = driverPrincipal && driverPrincipal.etiqueta
+            ? driverPrincipal.etiqueta
+            : "⚪ Sin driver (atribución no disponible)";
+        const microHud = `
+            <div class="bt-micro-hud">
+                <div class="hud-tira-semaforos">${tiraSemaforos}</div>
+                <span class="badge-driver-principal" title="Driver principal: argmax |Δ_k| de la descomposición logarítmica">${textoDriver}</span>
+                <button class="btn-ver-44-vars" data-partido-id="${p.id_partido || ""}" title="Inspección forense del vector de 44 variables">🔬 44 Variables</button>
+            </div>`;
         const casillas = [
             { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
             { titulo: "X EMPATE", clave: "EMPATE", p: p.p_empate, q: p.q_empate, o: momios.E },
@@ -3371,9 +3397,10 @@ function mostrarMicroJornadaBacktesting(idx) {
         return `
         <div class="bt-micro-row">
             <div class="bt-micro-equipo">${escudo(p.local_escudo_url)}<span>${p.local}</span></div>
-            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}</div>
+            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}${_badgeProcedenciaHtml(p.origen_captura)}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
+            ${microHud}
             <div class="micro-partido-footer-v2">
                 <div class="footer-col-postura">${badgePostura}<span style="display:inline-block; width:6px;"></span>${badgeTriadaHtml}</div>
                 <div class="footer-col-brier">
@@ -3407,4 +3434,270 @@ function mostrarMicroJornadaBacktesting(idx) {
             · Alpha ${Number(jornada.alpha_calibracion_pct || 0).toFixed(2)}%
         </div>
         ${bloques}`;
+
+    // [DES-QBE-064] Acceso al desglose forense: cada tarjeta abre el modal del partido.
+    contenedor.querySelectorAll(".btn-ver-44-vars").forEach(btn => {
+        btn.addEventListener("click", () => abrirModal44Variables(btn.getAttribute("data-partido-id")));
+    });
 }
+
+/* ==========================================================================
+   [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064] MODAL FORENSE DE 44 VARIABLES
+   Régimen [DBBD-FUNGIBLE]: el pintor sólo transcribe el bloque servido por el
+   endpoint (`atribucion_factorial`). Cero derivación local, cero cifra inventada:
+   la evidencia ausente se declara `SIN EVIDENCIA` tal como la bóveda la publica.
+   ========================================================================== */
+const COLORES_SEMAFORO_SALUD = {
+    VERDE: "#10B981",
+    AMARILLO: "#F59E0B",
+    ROJO: "#EF4444",
+    NEUTRO: "#94A3B8",
+};
+
+/* ==========================================================================
+   [LN-QBE-102 / ARCH-1.4.43 / DES-QBE-065] SELLO DE PROCEDENCIA DE LA EVIDENCIA
+   Régimen [DBBD-FUNGIBLE]. Única fuente de verdad de los dos rótulos legislados:
+   `EN_VIVO` ⇒ captura en ventanilla (blindada por `LIVE_PROTECTION_LOCK`);
+   cualquier otro valor (incluido `null`) ⇒ reconstrucción histórica. Regla de
+   honestidad visual: el badge nunca se pinta en verde ni simula ventanilla.
+   ========================================================================== */
+const PROCEDENCIA_CAPTURA_EN_VIVO = "EN_VIVO";
+const ETIQUETAS_PROCEDENCIA = {
+    vivo: "🔴 EN VIVO",
+    historico: "🏛️ HISTÓRICO",
+};
+
+function _claseProcedencia(origen) {
+    return origen === PROCEDENCIA_CAPTURA_EN_VIVO ? "badge-procedencia-vivo" : "badge-procedencia-hist";
+}
+
+function _textoProcedencia(origen) {
+    return origen === PROCEDENCIA_CAPTURA_EN_VIVO
+        ? ETIQUETAS_PROCEDENCIA.vivo
+        : ETIQUETAS_PROCEDENCIA.historico;
+}
+
+/** Devuelve el badge como nodo: el texto se inyecta con `textContent` (cero `innerHTML`). */
+function _badgeProcedencia(origen) {
+    const badge = document.createElement("span");
+    badge.className = `badge-procedencia ${_claseProcedencia(origen)}`;
+    badge.textContent = _textoProcedencia(origen);
+    badge.title = origen === PROCEDENCIA_CAPTURA_EN_VIVO
+        ? "Evidencia capturada en ventanilla · blindada contra sobreescritura histórica [LN-QBE-102]"
+        : "Evidencia reconstruida con posterioridad · no blindada [LN-QBE-102]";
+    return badge;
+}
+
+/** Variante en cadena para las plantillas de la parrilla: sólo constantes literales. */
+function _badgeProcedenciaHtml(origen) {
+    return `<span class="badge-procedencia ${_claseProcedencia(origen)}">${_textoProcedencia(origen)}</span>`;
+}
+
+const ETIQUETAS_SEMAFORO_44 = {
+    opta: "OPTA",
+    sede: "SEDE",
+    h2h: "H2H",
+    epist: "EPIST",
+    ctx: "CTX",
+};
+
+const COLORES_ESTADO_44 = {
+    // [LN-QBE-102 / DES-QBE-065] `EVALUADO` = insumo fáctico publicado y consumido por el motor
+    // (iluminación verde). Los tres estados preexistentes conservan su colorimetría sellada.
+    EVALUADO: "#10B981",
+    VALIDADO: "#10B981",
+    DERIVADO: "#38BDF8",
+    "SIN EVIDENCIA": "#94A3B8",
+};
+
+function _partidoBacktestingCache(idPartido) {
+    const jornadas = (backtestingReportCache && backtestingReportCache.jornadas) || [];
+    for (const jornada of jornadas) {
+        for (const partido of (jornada.partidos || [])) {
+            if (String(partido.id_partido) === String(idPartido)) return { partido, jornada };
+        }
+    }
+    return null;
+}
+
+function _valor44(valor) {
+    if (valor === null || valor === undefined) return '<span style="color:#475569;">—</span>';
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero.toFixed(2) : String(valor);
+}
+
+function _delta44(valor) {
+    if (valor === null || valor === undefined) return '<span style="color:#475569;">—</span>';
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) return String(valor);
+    const color = numero >= 0 ? "#10B981" : "#EF4444";
+    return `<span style="color:${color}; font-family:monospace;">${numero >= 0 ? "+" : ""}${numero.toFixed(4)}</span>`;
+}
+
+function _bloqueSemaforos44(semaforos) {
+    return Object.keys(ETIQUETAS_SEMAFORO_44).map(clave => {
+        const estado = (semaforos && semaforos[clave]) || "NEUTRO";
+        const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
+        return `<span class="vars44-semaforo" data-semaforo="${ETIQUETAS_SEMAFORO_44[clave]}" ` +
+            `data-estado="${estado}" style="color:${color};">● ${ETIQUETAS_SEMAFORO_44[clave]} ` +
+            `<strong>${estado}</strong></span>`;
+    }).join("");
+}
+
+function _tablaDimension44(dimension) {
+    const filas = (dimension.variables || []).map(variable => {
+        const colorEstado = COLORES_ESTADO_44[variable.estado] || "#94A3B8";
+        return `
+            <tr>
+                <td class="vars44-col-id">${variable.id}</td>
+                <td class="vars44-col-variable">${variable.variable}</td>
+                <td class="vars44-col-num">${_valor44(variable.local)}</td>
+                <td class="vars44-col-num">${_valor44(variable.visita)}</td>
+                <td class="vars44-col-num">${_valor44(variable.z_score)}</td>
+                <td class="vars44-col-origen">${variable.origen || "—"}</td>
+                <td class="vars44-col-estado" style="color:${colorEstado};">${variable.estado || "—"}</td>
+                <td class="vars44-col-impacto">${variable.impacto || "—"}</td>
+            </tr>`;
+    }).join("");
+    return `
+        <details class="vars44-dimension">
+            <summary>
+                <span class="vars44-dim-titulo">${dimension.titulo || dimension.dimension}</span>
+                <span class="vars44-dim-conteo">${dimension.conteo} variables · ${dimension.dimension}</span>
+            </summary>
+            <table class="vars44-tabla">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Variable</th>
+                        <th>Local</th>
+                        <th>Visita</th>
+                        <th>Z-Score</th>
+                        <th>Origen</th>
+                        <th>Estado</th>
+                        <th>Impacto</th>
+                    </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </details>`;
+}
+
+function abrirModal44Variables(idPartido) {
+    const modal = document.getElementById("modal-44-variables");
+    const cuerpo = document.getElementById("vars44-cuerpo");
+    const titulo = document.getElementById("vars44-titulo");
+    if (!modal || !cuerpo) return;
+
+    const hallado = _partidoBacktestingCache(idPartido);
+    if (!hallado) {
+        if (titulo) titulo.textContent = "⚪ Partido no localizado en el reporte de calibración";
+        const origenHuerfano = document.getElementById("vars44-origen");
+        if (origenHuerfano) origenHuerfano.textContent = "";
+        cuerpo.innerHTML = `
+            <div class="vars44-aviso">
+                Sin evidencia en caché para el partido <strong>${idPartido || "—"}</strong>.
+                Recargue el reporte de backtesting antes de abrir la inspección forense.
+            </div>`;
+        modal.style.display = "block";
+        return;
+    }
+
+    const partido = hallado.partido;
+    const jornada = hallado.jornada;
+    if (titulo) {
+        titulo.textContent = `🔬 ${partido.local} vs ${partido.visitante} · Jornada ${jornada.jornada} · ${partido.marcador || "—"}`;
+    }
+
+    const atribucion = partido.atribucion_factorial || null;
+    const variables44 = (atribucion && atribucion.variables_44) || null;
+    const dimensiones = (variables44 && variables44.dimensiones) || [];
+    const descomposicion = (atribucion && atribucion.descomposicion_log) || {};
+    const driver = (atribucion && atribucion.driver_principal) || null;
+    const disponible = Boolean(atribucion && atribucion.disponible);
+
+    // [LN-QBE-102 / DES-QBE-065] Sub-rayado de procedencia: el sello lo publica el endpoint
+    // (casilla micro o bloque de atribución). Ausente ⇒ se declara "no publicado"; jamás se
+    // asume ventanilla. El nodo se inyecta con `textContent`, cero `innerHTML` con datos de red.
+    const origenCaptura = partido.origen_captura || (atribucion && atribucion.origen_captura) || null;
+    const subrayadoOrigen = document.getElementById("vars44-origen");
+    if (subrayadoOrigen) {
+        subrayadoOrigen.textContent = "";
+        subrayadoOrigen.appendChild(_badgeProcedencia(origenCaptura));
+        const sello = document.createElement("span");
+        sello.className = "vars44-origen-sello";
+        sello.textContent = origenCaptura
+            ? `sello: ${origenCaptura}`
+            : "sello no publicado (traza legada)";
+        subrayadoOrigen.appendChild(sello);
+    }
+
+    // Honestidad de degradación ([GOVERNANCE-01]): sin factores persistidos la atribución se
+    // declara NEUTRA; el catálogo se pinta igual, sin fabricar una sola cifra.
+    const aviso = disponible
+        ? `<div class="vars44-aviso vars44-aviso-ok">
+                ✅ Atribución disponible · origen de factores:
+                <strong>${atribucion.origen_factores || "—"}</strong> · driver principal:
+                <strong>${driver && driver.etiqueta ? driver.etiqueta : "—"}</strong>
+           </div>`
+        : `<div class="vars44-aviso">
+                ⚪ Atribución NEUTRA: la bóveda no publicó el vector de factores de entrada de este
+                partido (<code>disponible = false</code>). El catálogo se exhibe sin fabricar cifras.
+           </div>`;
+
+    const filasDescomposicion = [
+        ["Δ Ofensiva", descomposicion.delta_ofensiva],
+        ["Δ Defensiva", descomposicion.delta_defensiva],
+        ["Δ Contexto", descomposicion.delta_contexto],
+        ["Δ Neto ≡ ln(λ_H/λ_A)", descomposicion.delta_neto_total],
+        ["Residuo no atribuido", descomposicion.residuo_no_atribuido],
+    ].map(([etiqueta, valor]) => `
+        <tr>
+            <td class="vars44-col-variable">${etiqueta}</td>
+            <td class="vars44-col-num">${_delta44(valor)}</td>
+        </tr>`).join("");
+
+    const total = (variables44 && variables44.total_variables) || 0;
+    cuerpo.innerHTML = `
+        ${aviso}
+        <div class="vars44-grid">
+            <div class="vars44-panel">
+                <div class="vars44-panel-titulo">Descomposición logarítmica</div>
+                <table class="vars44-tabla vars44-tabla-descomposicion">
+                    <thead><tr><th>Componente</th><th>Δ (log)</th></tr></thead>
+                    <tbody>${filasDescomposicion}</tbody>
+                </table>
+            </div>
+            <div class="vars44-panel">
+                <div class="vars44-panel-titulo">Semáforos de salud de datos</div>
+                <div class="vars44-semaforos">${_bloqueSemaforos44(atribucion && atribucion.semaforos)}</div>
+                <div class="vars44-panel-titulo" style="margin-top:14px;">Catálogo forense</div>
+                <div class="vars44-resumen">
+                    <strong>${total}</strong> variables en <strong>${dimensiones.length}</strong>
+                    dimensiones canónicas.
+                </div>
+            </div>
+        </div>
+        <div class="vars44-acordeon">
+            ${dimensiones.length
+                ? dimensiones.map(_tablaDimension44).join("")
+                : `<div class="vars44-aviso">⚪ El endpoint no publicó el catálogo de 44 variables de este partido.</div>`}
+        </div>`;
+
+    modal.style.display = "block";
+}
+
+function cerrarModal44Variables() {
+    const modal = document.getElementById("modal-44-variables");
+    if (modal) modal.style.display = "none";
+}
+
+window.abrirModal44Variables = abrirModal44Variables;
+window.cerrarModal44Variables = cerrarModal44Variables;
+
+// [DES-QBE-064] Cierre por tecla `Escape`, mismo contrato que el botón `Cerrar`.
+document.addEventListener("keydown", evento => {
+    if (evento.key !== "Escape") return;
+    const modal = document.getElementById("modal-44-variables");
+    if (modal && modal.style.display === "block") cerrarModal44Variables();
+});

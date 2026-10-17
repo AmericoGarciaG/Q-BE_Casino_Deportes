@@ -141,6 +141,91 @@ class IngestionExtractRequest(BaseModel):
     imagen_path: Optional[str] = None
 
 
+# ── [ARCH-1.4.42 / LN-QBE-101] DTO DE INSPECCIÓN DE ATRIBUCIÓN FACTORIAL ──────
+class AtribucionSemaforosOut(BaseModel):
+    """[LN-QBE-101].P.3 — Las cinco luces de salud fáctica de los insumos."""
+
+    model_config = ConfigDict(extra="ignore")
+    opta: str = "NEUTRO"
+    sede: str = "NEUTRO"
+    h2h: str = "NEUTRO"
+    epist: str = "NEUTRO"
+    ctx: str = "NEUTRO"
+
+
+class AtribucionDriverOut(BaseModel):
+    """[LN-QBE-101].P.2 — `Driver* = argmax |Δ_k|` con desempate canónico."""
+
+    model_config = ConfigDict(extra="ignore")
+    dimension: str = "NEUTRO"
+    magnitud: float = 0.0
+    favorece: str = "NEUTRO"
+    etiqueta: str = ""
+    valor_firmado: float = 0.0
+
+
+class AtribucionDescomposicionOut(BaseModel):
+    """[LN-QBE-101].P.1 — Descomposición aditiva exacta de `Δη = ln(λ_H/λ_A)`."""
+
+    model_config = ConfigDict(extra="ignore")
+    delta_ofensiva: Optional[float] = None
+    delta_defensiva: Optional[float] = None
+    delta_contexto: Optional[float] = None
+    delta_neto_total: Optional[float] = None
+    delta_ofensiva_cruda: Optional[float] = None
+    delta_defensiva_cruda: Optional[float] = None
+    delta_ln_lambda: Optional[float] = None
+    residuo_no_atribuido: Optional[float] = None
+
+
+class AtribucionVariableOut(BaseModel):
+    """[LN-QBE-101].P.4 — Renglón forense del catálogo (evidencia ausente ⇒ `None`)."""
+
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    variable: str
+    local: Optional[float] = None
+    visita: Optional[float] = None
+    z_score: Optional[float] = None
+    origen: str = "SIN EVIDENCIA"
+    estado: str = "SIN EVIDENCIA"
+    impacto: str = ""
+    nota: str = ""
+
+
+class AtribucionDimensionOut(BaseModel):
+    """[LN-QBE-101].P.4 — Dimensión canónica del catálogo (𝒯_Vol … 𝒯_Cls)."""
+
+    model_config = ConfigDict(extra="ignore")
+    dimension: str
+    titulo: str = ""
+    conteo: int = 0
+    variables: List[AtribucionVariableOut] = Field(default_factory=list)
+
+
+class Catalogo44Out(BaseModel):
+    """[LN-QBE-101].P.4 — Partición normativa 12 dimensiones × 44 variables."""
+
+    model_config = ConfigDict(extra="ignore")
+    total_variables: int = 44
+    dimensiones: List[AtribucionDimensionOut] = Field(default_factory=list)
+
+
+class AtribucionFactorialOut(BaseModel):
+    """[ARCH-1.4.42] Bloque completo de auditoría factorial de un partido."""
+
+    model_config = ConfigDict(extra="ignore")
+    disponible: bool = False
+    origen_factores: str = "sin_traza"
+    # [LN-QBE-102] Sello de procedencia de la evidencia: "EN_VIVO" | "HISTORICO_RECONSTRUIDO".
+    # `None` ⇒ traza legada sin sello (la ausencia no se interpreta como captura histórica).
+    origen_captura: Optional[str] = None
+    descomposicion_log: AtribucionDescomposicionOut = Field(default_factory=AtribucionDescomposicionOut)
+    driver_principal: AtribucionDriverOut = Field(default_factory=AtribucionDriverOut)
+    semaforos: AtribucionSemaforosOut = Field(default_factory=AtribucionSemaforosOut)
+    variables_44: Catalogo44Out = Field(default_factory=Catalogo44Out)
+
+
 # ── [ARCH-1.4.38 / LN-QBE-100] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL) ─────
 class CalibrationMatchOut(BaseModel):
     """
@@ -173,6 +258,9 @@ class CalibrationMatchOut(BaseModel):
     # [LN-QBE-100 · Axioma del Prior de Mercado (Cold Start Resolution)] Sello de suficiencia
     # fáctica S(I) del partido: 0 = ignorancia declarada ⇒ P′ fue sustituida por q_mkt (Cold Start).
     suficiencia_S_I: Optional[int] = None
+    # [LN-QBE-102] Sello de procedencia de la evidencia que sostiene P′: "EN_VIVO" (captura en
+    # ventanilla, blindada por el candado) | "HISTORICO_RECONSTRUIDO" (reconstrucción posterior).
+    origen_captura: Optional[str] = None
     # [ARCH-1.4.38 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² ordenados por
     # probabilidad fiduciaria descendente (P_max ≥ P_mid ≥ P_low) y vértice consumado en cancha.
     r_max: Optional[Literal["LOCAL", "EMPATE", "VISITANTE"]] = None
@@ -181,6 +269,8 @@ class CalibrationMatchOut(BaseModel):
     clasificacion_triada: Optional[Literal["P_MAX", "P_MID", "P_LOW"]] = None
     masa_cobertura_pct: Optional[float] = None
     p_low_ruptura_pct: Optional[float] = None
+    # [ARCH-1.4.42] Micro-HUD de atribución factorial + DTO de inspección de 44 variables.
+    atribucion_factorial: Optional[AtribucionFactorialOut] = None
 
 
 class CalibrationJornadaOut(BaseModel):

@@ -1408,6 +1408,55 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-101] Motor de Atribución Factorial y Telemetría de Integridad de Insumos
+
+* **Ω (Resumen):** Descompone analíticamente el diferencial log-lineal de intensidades $\Delta \eta = \ln(\lambda_H / \lambda_A)$ en sus tres vectores de fuerza componentes (Ofensiva, Defensiva, Sede/Contexto), identifica el Driver Principal que movió la masa hacia $P_{\max}$, audita la completitud fáctica de insumos mediante 5 semáforos fiduciarios, y estructura la taxonomía de 44 variables fácticas (Nivel 1) agrupadas en 12 dimensiones para inspección forense.
+* **I (Input):** Factores estructurales del partido: $A_H, D_A, A_A, D_H, C_H, C_A$, $\bar{\gamma}_{\text{home}}$, $\lambda_H, \lambda_A$, $\Delta_{\text{epist}}$, métricas fácticas de entrada y corte $N-1$.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Descomposición Aditiva Exacta en Espacio Logarítmico:**
+     $$\Delta \eta = \ln\left(\frac{\lambda_H}{\lambda_A}\right) = \underbrace{(A_H - D_A)}_{\Delta \text{Ofensiva}} + \underbrace{(D_H - A_A)}_{\Delta \text{Defensiva}} + \underbrace{(\bar{\gamma}_{\text{home}} + C_H - C_A)}_{\Delta \text{Contexto/Sede}}$$
+     Garantiza la conservación de energía: $\Delta \text{Ofensiva} + \Delta \text{Defensiva} + \Delta \text{Contexto} \equiv \ln(\lambda_H) - \ln(\lambda_A)$.
+     * **Cláusula de Amortiguamiento Canónico (`[VAULT-CORE-001]`):** los factores $A_H, D_A, A_A, D_H$ se reciben **crudos** (pre-damping) y la descomposición se ejecuta sobre su imagen canónica $\kappa_{net} \cdot \tanh(\cdot / \kappa_{net})$ con $\kappa_{net} = 0.2500$ absoluto, exactamente como los consume `estimar_intensidades_loglineal`. Sin esta cláusula, la suma factorial no reproduciría $\ln(\lambda_H/\lambda_A)$ y se violaría la conservación aditiva. Cero margen creativo: se delega en la función sellada del Libro de Constantes.
+     * **Cláusula de Contexto:** $C_H = \ln(\max(0.90, \min(1.05, Q_{\text{mod},H})))$ y $C_A$ análogo, espejo de la formulación canónica Sección 4.9. El término $\bar{\gamma}_{\text{home}}$ absorbe la localía efectiva (base + bono de plaza + altitud + descanso), que es la única familia de términos no atribuible a los equipos.
+  2. **Resolución del Driver Principal (Core Force Driver):**
+     Determina $\text{Driver}^* = \arg\max_{k \in \{\text{Ofensiva, Defensiva, Contexto}\}} |\Delta_k|$.
+     - Si $\Delta_{\text{Driver}} > 0 \implies$ Impulsa a Local ($P_{\text{local}}$).
+     - Si $\Delta_{\text{Driver}} < 0 \implies$ Impulsa a Visitante ($P_{\text{visita}}$).
+     - Desempate determinista: orden fijo `OFENSIVA → DEFENSIVA → CONTEXTO` (reproducibilidad estricta del Juez).
+  3. **Lógica de los 5 Semáforos de Salud Fáctica (Data Health):**
+     - `OPTA`: 🟢 $xG_{\text{Opta}} > 0$ real | 🟡 Calibrado $1.05 \cdot GF$ | 🔴 $S(\mathcal{I}) = 0$.
+     - `SEDE`: 🟢 $PJ_{\text{sede}} \ge 3$ (Gate GSL-3D abierto) | 🟡 $1 \le PJ < 3$ | 🔴 $PJ = 0$.
+     - `H2H`: 🟢 5 partidos ($\tau = 540\text{d}$) | 🟡 1 a 4 partidos | ⚪ Zero-H2H ($w_{\text{H2H}} = 0$).
+     - `EPIST`: 🟢 $\Delta_{\text{epist}} \le 0.03$ (Consenso) | 🟡 $0.03 < \Delta \le 0.12$ (Fricción) | 🔴 $\Delta > 0.12$ (Ruptura).
+     - `CTX`: 🟢 $Q_{\text{mod}} = 1.00$ | 🟡 Shock leve / fatiga | 🔴 Shock severo ($Q_{\text{mod}} \le 0.93$).
+     * **Cláusula de Degradación Honesta:** la ausencia de evidencia jamás se maquilla. `SEDE` evalúa el mínimo bilateral de $PJ$ (gate GSL-3D exige solidez de ambas plazas); `H2H` sin enfrentamientos emite ⚪ NEUTRO conforme a la Ley Zero-H2H `[LN-QBE-020-B]`; `CTX` sin modulador publicado se lee $Q_{\text{mod}} = 1.00$ (ningún shock registrado).
+  4. **Taxonomía de 44 Variables:** Estructura un diccionario inmutable de 12 dimensiones ($\mathcal{T}_{\text{Vol}}$ a $\mathcal{T}_{\text{Cls}}$) conteniendo el valor fáctico local/visita, procedencia y estado. La partición canónica es la del dossier normativo (`docs/QBE_RESEARCH_DOSSIER.md` §3): Volumen Territorial (4), Calidad de Remate (5), Defensa (5), Portería (3), Balón Parado y Penales (4), Disciplina (3), Shocks de Plantilla/Contexto (4), Trayectoria (4), Cronometría (4), Banca/Profundidad (2), Memoria Longitudinal/H2H (4) y Cierre de Partido (2) $= 44$.
+* **O (Output):** `FactorAttributionResult(descomposicion, driver_principal, semaforos, variables_44_dict)`.
+* **Φ (Transición):** Hacia `[ARCH-1.4.42]` y endpoint `/api/markets/backtesting/calibration-report`.
+* **[SHIELD]:** `tests/shield/test_shield_factor_attribution_and_telemetry.py`
+
+---
+
+### ID: [LN-QBE-102] Axioma de Protección de la Evidencia en Vivo, Sello de Procedencia y Telemetría de Insumos Fácticos
+
+**Régimen:** `[DIRGEN-STRICT]` en el candado transaccional y en el empaquetado forense del núcleo · `[DBBD-FUNGIBLE]` en la exhibición del sello.
+**Base de Gobierno:** `[LN-QBE-101]` (atribución factorial) · `[ARCH-1.4.43]` (persistencia y DTOs) · `[DES-QBE-065]` (badge de procedencia).
+
+* **I (Input):** `raw_match_data` (registro fáctico del partido) + el sello de procedencia $\omega = \texttt{origen\_captura} \in \{\text{EN\_VIVO}, \text{HISTORICO\_RECONSTRUIDO}\}$ declarado por la ruta invocante (no inferido del payload).
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Axioma 1 — Inmutabilidad de la Evidencia en Vivo (`LIVE_PROTECTION_LOCK`):** una distribución capturada en ventanilla es evidencia primaria y **no puede ser sobreescrita** por una reconstrucción histórica posterior:
+     $$\text{lock}(r,\omega)=\begin{cases}\textbf{VETADO} & r.\omega=\text{EN\_VIVO}\ \wedge\ \omega=\text{HISTORICO\_RECONSTRUIDO}\\ \textbf{PERMITIDO} & \text{en cualquier otro caso}\end{cases}$$
+     La relación es **estrictamente asimétrica**: `EN_VIVO → EN_VIVO` (re-captura de la misma evidencia) y `HISTORICO_RECONSTRUIDO → EN_VIVO` (ascenso de calidad de evidencia) **sí** escriben; sólo la **degradación de procedencia** queda vetada. El candado se evalúa **dentro de la misma transacción** (`gw.write_transaction`) leyendo la fila antes de asignar atributos, y se contabiliza en la clave aditiva `protegidos` del retorno.
+  2. **Axioma 1-bis — Excepción del Hecho Consumado:** bajo blindaje se permite **una única** escritura, la de los marcadores oficiales en la tabla `matches` (`score_home`, `score_away`, `status = "FINISHED"`), porque el resultado oficial no altera la probabilidad calculada ni la evidencia capturada. Ningún otro campo de `sovereign_distributions` se toca.
+  3. **Axioma 2 — Sello de Procedencia Único:** `origen_captura` viaja dentro de `audit_trace_json` y es la **única** fuente de verdad de la procedencia. El default canónico del puente de persistencia es `HISTORICO_RECONSTRUIDO` (**Regla de Menor Privilegio**: sólo un demonio de captura viva declara `EN_VIVO` explícitamente). Un registro sin la clave se lee `HISTORICO_RECONSTRUIDO`; **prohibido el backfill** de sellos en vivo sobre datos pasados.
+  4. **Axioma 3 — Telemetría de Insumos Fácticos (`insumos_factivados`):** el generador empaqueta en la traza forense las magnitudes **efectivamente consumidas** por la matemática: tasas canónicas `xg_local_rate`/`xg_visita_rate`/`xga_*`/`gc_*` (acumulado ÷ PJ, `[ARCH-1.4.41]`), `sot_*`/`sota_*`/`poss_*`, `pj_sede_*` (`[LN-QBE-038]`), `h2h_conteo` (ventana $\tau = 540\text{d}$), `q_mod_h`/`q_mod_a`, `delta_alt_metros`, `delta_descanso_dias` y `xg_es_real_opta`. **Cero invención:** un insumo no publicado se declara `None`; el paquete se emite también en la rama de ignorancia $S(\mathcal{I}) = 0$.
+  5. **Axioma 4 — Activación de las Ocho Variables Vivas:** cuando `insumos_factivados` está presente, el catálogo de 44 variables enciende `V01` (posesión), `V05` (xG/PJ), `V06` (SoT), `V10` (xGA/PJ con respaldo GC/PJ), `V11` (SoTA), `V27` (ΔDías), `V28` (ΔAltitud) y `V39` (ventana H2H) con el **valor fáctico** y estado `EVALUADO`; los semáforos `OPTA`/`SEDE`/`H2H`/`CTX` se pronuncian sobre el insumo publicado en lugar de degradar por omisión. Sin el paquete, la ruta heredada (`SIN EVIDENCIA` / `NEUTRO`) permanece **byte-idéntica**.
+* **O (Output):** `StochasticAuditTrace(origen_captura, timestamp_captura, insumos_factivados, …)` · bloque `atribucion_factorial` con `origen_captura` y las 8 variables en `EVALUADO` · retorno del sincronizador `{procesados, exitosos, protegidos, errores}`.
+* **Φ (Transición):** Hacia `[ARCH-1.4.43]`, `[DES-QBE-065]` y el endpoint `/api/markets/backtesting/calibration-report`.
+* **[SHIELD]:** `tests/shield/test_shield_live_lock_and_input_telemetry.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,

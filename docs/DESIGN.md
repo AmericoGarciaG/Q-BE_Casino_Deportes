@@ -612,6 +612,33 @@
   - Extremo Derecho: Botón `📋 Copiar Ticket` y botón destacado `🎟️ Comprar Boleto` (congelamiento de cuotas y cambio de estado a `✔ Boleto Registrado`).
   - Barra de Control: Badge dinámico `#badge-boletos-comprados` (`🎟️ Comprados: N ($XX.XX MXN)`).
 
+### [DES-QBE-064] Geometría del Micro-HUD de Tarjeta y Modal Forense de 44 Variables [UX-MANDATE]
+* **Micro-HUD en Tarjeta de Parrilla:**
+  - Ubicado en el cuadrante centro-izquierdo de cada tarjeta (debajo de los escudos y junto a los momios 1X2).
+  - Tira de semáforos compacta: `● OPTA  ● SEDE  ● H2H  ● EPIST` con colorimetría Dark Fintech (`🟢 #10B981`, `🟡 #F59E0B`, `🔴 #EF4444`, `⚪ #94A3B8`).
+  - Badge de Driver Principal: `.badge-driver-principal` (borde Slate 700, texto Cian `#38BDF8`).
+  - Botón de acceso a desglose: `.btn-ver-44-vars` con texto `🔬 44 Variables`.
+* **Modal de Inspección Forense (`#modal-44-variables`):**
+  - Ancho `max-width: 980px`, fondo `#0F172A`, borde `1px solid #334155`.
+  - Acordeón de 12 dimensiones canónicas con tabla de 7 columnas: Variable, Local, Visita, Z-Score, Origen, Estado, Impacto.
+  - Cierre mediante botón `Cerrar` o tecla `Escape`.
+* **Sub-rayado de Procedencia en el Modal (`#vars44-origen`):** línea secundaria del encabezado del modal que declara la procedencia de la evidencia inspeccionada, poblada por `app.js` desde `atribucion.origen_captura`:
+  - `EN_VIVO` ⇒ `🔴 EN VIVO — evidencia capturada en ventanilla (blindada contra sobreescritura)`, con el badge `.badge-procedencia-vivo`.
+  - `HISTORICO_RECONSTRUIDO` o ausente ⇒ `🏛️ HISTÓRICO — reconstrucción posterior (no blindada)`, con el badge `.badge-procedencia-hist`.
+  - Regla de honestidad visual: el badge nunca se pinta en verde ni simula ventanilla; la ausencia de sello se exhibe como histórico.
+
+### [DES-QBE-065] Badge de Procedencia de la Evidencia e Iluminación de las Ocho Variables Vivas [UX-MANDATE]
+* **Objetivo:** hacer visible, sin ambigüedad y en Dark Fintech, **de dónde viene** la evidencia inspeccionada y **qué insumos fácticos** están encendidos, de modo que el operador no confunda una reconstrucción histórica con una captura de ventanilla.
+* **Badge de Procedencia (`_badgeProcedencia(origen)`, `app.js`):**
+  - `origen === "EN_VIVO"` ⇒ `🔴 EN VIVO` con la clase `.badge-procedencia-vivo` (`background: rgba(239, 68, 68, 0.14); border: 1px solid #EF4444; color: #FCA5A5;`).
+  - Cualquier otro valor (o `null`/`undefined`) ⇒ `🏛️ HISTÓRICO` con la clase `.badge-procedencia-hist` (`background: rgba(148, 163, 184, 0.14); border: 1px solid #64748B; color: #CBD5E1;`).
+  - Geometría común: `display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;`.
+  - Ubicación: junto al título del partido en la tarjeta de parrilla y en el sub-rayado del modal (`#vars44-origen`). Sin `innerHTML` con datos de red: el texto se construye con `textContent`/`createElement`.
+* **Iluminación de las Ocho Variables Vivas:** el estado `EVALUADO` se incorpora a `COLORES_ESTADO_44` como **verde activo** (`🟢 #10B981`), distinto de `CALIBRADO` (ámbar `#F59E0B`), `SIN EVIDENCIA` (rojo `#EF4444`) y `NEUTRO` (pizarra `#94A3B8`). Con `insumos_factivados` presente, el catálogo enciende `V01`, `V05`, `V06`, `V10`, `V11`, `V27`, `V28` y `V39` en `EVALUADO` con **valor fáctico tipado y con unidades** (`"53.5%"`, `"1.60"`, `"5"`, `"2660m"`, `"+3.0 d"`, `"5 partidos"`); sin el paquete, la celda permanece en `SIN EVIDENCIA` (cero invención).
+* **Criterio de aceptación:** `tests/shield/test_shield_live_lock_and_input_telemetry.py` certifica la presencia del badge, de las dos clases CSS y de las cuatro entradas de `COLORES_ESTADO_44`; el DTO `AtribucionFactorialOut.origen_captura` transporta el sello hasta la vista.
+
+
+
 
 ---
 

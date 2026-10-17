@@ -1,0 +1,723 @@
+# -*- coding: utf-8 -*-
+"""
+🏆 Q-BE SOVEREIGN ENGINE — ATRIBUCIÓN FACTORIAL Y TELEMETRÍA DE INTEGRIDAD DE INSUMOS
+[LN-QBE-101] / [ARCH-1.4.42] · Base de Gobierno: Kybern Framework v12.0 · [DIRGEN-STRICT]
+
+Descomposición aditiva EXACTA del diferencial log-lineal de intensidades:
+
+    Δη = ln(λ_H / λ_A) = (A_H − D_A) + (D_H − A_A) + (γ̄_home + C_H − C_A)
+                         └ Ofensiva ┘  └ Defensiva ┘  └   Contexto/Sede   ┘
+
+Cláusula de Amortiguamiento Canónico [VAULT-CORE-001]: los factores llegan CRUDOS
+(pre-damping) desde `derivar_factores_estructurales`; la descomposición opera sobre su imagen
+canónica κ_net · tanh(A / κ_net) con κ_net = 0.2500, exactamente como los consume
+`estimar_intensidades_loglineal`. Sin esa cláusula la suma factorial no reproduciría ln(λ_H/λ_A)
+y se violaría la conservación de energía legislada. Cero margen creativo: se delega en la función
+sellada del Libro de Constantes (`aplicar_damping_hiperbolico`), jamás se reimplementa.
+
+El vector CRUDO se conserva en las claves `*_cruda` como evidencia forense (cero maquillaje).
+
+Pureza funcional [GOVERNANCE-01]: sin I/O, sin red, sin SQLAlchemy, sin imports de src.storage.
+"""
+
+import math
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from src.core.intensity_canonical_loglink import aplicar_damping_hiperbolico
+
+# ── Gobernanza de los cinco semáforos [LN-QBE-101].P.3 ─────────────────────────────────────────
+VERDE = "VERDE"
+AMARILLO = "AMARILLO"
+ROJO = "ROJO"
+NEUTRO = "NEUTRO"
+
+UMBRAL_EPIST_CONSENSO = 0.0300   # 🟢 Consenso (banda baja de fricción)
+UMBRAL_EPIST_RUPTURA = 0.1200   # 🔴 frontera de cuarentena fiduciaria [LN-QBE-070-B]
+UMBRAL_Q_MOD_SEVERO = 0.9300    # 🔴 shock severo
+PJ_SEDE_GATE_GSL3D = 3          # gate de suficiencia de sede ([LN-QBE-038])
+H2H_VENTANA_NORMATIVA = 5       # ventana longitudinal normativa (τ = 540 d)
+
+# Precedencia canónica del desempate del driver (reproducibilidad estricta del Juez).
+ORDEN_DIMENSIONES_DRIVER: Tuple[str, ...] = ("OFENSIVA", "DEFENSIVA", "CONTEXTO")
+
+
+def _num(valor: Any, defecto: Optional[float] = None) -> Optional[float]:
+    """Lectura numérica honesta: `None`/texto no convertible ⇒ `defecto` (jamás se inventa)."""
+    if valor is None or isinstance(valor, bool):
+        return defecto
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return defecto
+    if math.isnan(numero) or math.isinf(numero):
+        return defecto
+    return numero
+
+
+def _amortiguar(factor: Any) -> float:
+    """[VAULT-CORE-001] Imagen canónica κ_net · tanh(A / κ_net), κ_net = 0.2500 absoluto."""
+    numero = _num(factor, 0.0)
+    return aplicar_damping_hiperbolico(numero if numero is not None else 0.0)
+
+
+def calcular_atribucion_loglineal(
+    A_h: Any,
+    D_a: Any,
+    A_a: Any,
+    D_h: Any,
+    gamma_home: Any = 0.0,
+    C_h: Any = 0.0,
+    C_a: Any = 0.0,
+    lambda_h: Any = None,
+    lambda_a: Any = None,
+) -> Dict[str, Optional[float]]:
+    """[LN-QBE-101].P.1 — Descomposición aditiva exacta del diferencial log-lineal.
+
+    `C_h` / `C_a` se reciben EN ESPACIO LOGARÍTMICO (espejo de `C = ln(q_mod_clamped)` de la
+    Sección 4.9); `gamma_home` es la localía efectiva (γ̄_base + Δγ_plaza + altitud + descanso).
+    Las intensidades `λ_H`, `λ_A` son opcionales: si se publican habilitan la cláusula de
+    auditoría `delta_ln_lambda` y el `residuo_no_atribuido`.
+
+    Conservación garantizada por construcción: `delta_neto_total` ES la suma de las tres
+    componentes canónicas; el residuo sólo puede ser ruido de redondeo de las λ persistidas.
+    """
+    a_h = _amortiguar(A_h)
+    d_a = _amortiguar(D_a)
+    a_a = _amortiguar(A_a)
+    d_h = _amortiguar(D_h)
+
+    delta_ofensiva = a_h - d_a
+    delta_defensiva = d_h - a_a
+    delta_contexto = (
+        (_num(gamma_home, 0.0) or 0.0)
+        + (_num(C_h, 0.0) or 0.0)
+        - (_num(C_a, 0.0) or 0.0)
+    )
+    delta_neto_total = delta_ofensiva + delta_defensiva + delta_contexto
+
+    lh = _num(lambda_h)
+    la = _num(lambda_a)
+    delta_ln_lambda: Optional[float] = None
+    residuo: Optional[float] = None
+    if lh is not None and la is not None and lh > 0.0 and la > 0.0:
+        delta_ln_lambda = math.log(lh / la)
+        residuo = delta_ln_lambda - delta_neto_total
+
+    redondear = lambda x: None if x is None else round(float(x), 6)
+    return {
+        "delta_ofensiva": redondear(delta_ofensiva),
+        "delta_defensiva": redondear(delta_defensiva),
+        "delta_contexto": redondear(delta_contexto),
+        "delta_neto_total": redondear(delta_neto_total),
+        "delta_ofensiva_cruda": redondear((_num(A_h, 0.0) or 0.0) - (_num(D_a, 0.0) or 0.0)),
+        "delta_defensiva_cruda": redondear((_num(D_h, 0.0) or 0.0) - (_num(A_a, 0.0) or 0.0)),
+        "delta_ln_lambda": redondear(delta_ln_lambda),
+        "residuo_no_atribuido": redondear(residuo),
+    }
+
+# ── [LN-QBE-101].P.2 — Resolución determinista del Driver Principal ───────────────────────────
+_CLAVES_DRIVER: Dict[str, str] = {
+    "OFENSIVA": "delta_ofensiva",
+    "DEFENSIVA": "delta_defensiva",
+    "CONTEXTO": "delta_contexto",
+}
+_GLIFOS_DRIVER: Dict[str, str] = {
+    "OFENSIVA": "⚡",
+    "DEFENSIVA": "🛡️",
+    "CONTEXTO": "🏟️",
+}
+_NOMBRES_DRIVER: Dict[str, str] = {
+    "OFENSIVA": "Ofensiva",
+    "DEFENSIVA": "Defensiva",
+    "CONTEXTO": "Sede/Contexto",
+}
+
+
+def resolver_driver_principal(descomposicion: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """[LN-QBE-101].P.2 — `Driver* = argmax |Δ_k|` con desempate por precedencia canónica.
+
+    Signo positivo ⇒ la fuerza impulsa al LOCAL; negativo ⇒ impulsa al VISITANTE.
+    Fuerzas nulas ⇒ `NEUTRO` declarado (jamás se disfraza un driver inexistente).
+    """
+    valores: Dict[str, float] = {}
+    for dimension in ORDEN_DIMENSIONES_DRIVER:
+        clave = _CLAVES_DRIVER[dimension]
+        valores[dimension] = _num((descomposicion or {}).get(clave), 0.0) or 0.0
+
+    elegida = ORDEN_DIMENSIONES_DRIVER[0]
+    magnitud = abs(valores[elegida])
+    for dimension in ORDEN_DIMENSIONES_DRIVER[1:]:
+        candidata = abs(valores[dimension])
+        if candidata > magnitud:  # comparación estricta ⇒ el empate conserva la precedencia
+            elegida, magnitud = dimension, candidata
+
+    valor = valores[elegida]
+    if magnitud <= 0.0:
+        return {
+            "dimension": NEUTRO,
+            "magnitud": 0.0,
+            "favorece": NEUTRO,
+            "etiqueta": "⚪ Sin driver (fuerzas nulas)",
+            "valor_firmado": 0.0,
+        }
+
+    favorece = "LOCAL" if valor > 0.0 else "VISITANTE"
+    bando = "Local" if valor > 0.0 else "Visita"
+    return {
+        "dimension": elegida,
+        "magnitud": round(magnitud, 6),
+        "favorece": favorece,
+        "etiqueta": f"{_GLIFOS_DRIVER[elegida]} {_NOMBRES_DRIVER[elegida]} {bando} (+{magnitud:.2f})",
+        "valor_firmado": round(valor, 6),
+    }
+
+
+# ── [LN-QBE-101].P.3 — Los cinco semáforos de salud fáctica ───────────────────────────────────
+def evaluar_semaforos_salud_datos(
+    xg_disponible: bool = False,
+    xg_calibrado: bool = False,
+    pj_sede_local: Any = 0,
+    pj_sede_visita: Any = 0,
+    h2h_partidos_conteo: Any = 0,
+    delta_epist: Any = 0.0,
+    q_mod: Any = 1.0,
+    suficiencia_S_I: Any = 1,
+) -> Dict[str, str]:
+    """[LN-QBE-101].P.3 — Auditoría de completitud de insumos (degradación honesta).
+
+    * `opta`   : 🟢 xG Opta real · 🟡 calibrado 1.05·GF · 🔴 sin fuente.
+    * `sede`   : evalúa el MÍNIMO bilateral de PJ (el gate GSL-3D exige solidez de ambas plazas).
+    * `h2h`    : 🟢 5 enfrentamientos (τ = 540 d) · 🟡 1–4 · ⚪ Zero-H2H [LN-QBE-020-B].
+    * `epist`  : 🟢 Δ ≤ 0.03 · 🟡 0.03 < Δ ≤ 0.12 · 🔴 Δ > 0.12 (cuarentena fiduciaria).
+    * `ctx`    : 🟢 Q_mod = 1.00 · 🟡 shock leve · 🔴 Q_mod ≤ 0.93 (shock severo).
+    """
+    if xg_disponible:
+        opta = VERDE
+    elif xg_calibrado:
+        opta = AMARILLO
+    else:
+        opta = ROJO
+    if not xg_disponible and (_num(suficiencia_S_I, 1) or 0) == 0:
+        opta = ROJO
+
+    pj_local = int(_num(pj_sede_local, 0.0) or 0.0)
+    pj_visita = int(_num(pj_sede_visita, 0.0) or 0.0)
+    pj_bilateral = min(pj_local, pj_visita)
+    if pj_bilateral >= PJ_SEDE_GATE_GSL3D:
+        sede = VERDE
+    elif pj_bilateral >= 1:
+        sede = AMARILLO
+    else:
+        sede = ROJO
+
+    duelos = int(_num(h2h_partidos_conteo, 0.0) or 0.0)
+    if duelos >= H2H_VENTANA_NORMATIVA:
+        h2h = VERDE
+    elif duelos >= 1:
+        h2h = AMARILLO
+    else:
+        h2h = NEUTRO
+
+    discrepancia = abs(_num(delta_epist, 0.0) or 0.0)
+    if discrepancia <= UMBRAL_EPIST_CONSENSO:
+        epist = VERDE
+    elif discrepancia <= UMBRAL_EPIST_RUPTURA:
+        epist = AMARILLO
+    else:
+        epist = ROJO
+
+    modulador = _num(q_mod, 1.0)
+    if modulador is None:
+        modulador = 1.0
+    if 0.9950 <= modulador <= 1.0050:
+        ctx = VERDE
+    elif modulador <= UMBRAL_Q_MOD_SEVERO:
+        ctx = ROJO
+    else:
+        ctx = AMARILLO
+
+    return {"opta": opta, "sede": sede, "h2h": h2h, "epist": epist, "ctx": ctx}
+
+
+# ── [LN-QBE-101].P.4 — Taxonomía normativa de 44 variables (dossier §3) ────────────────────────
+# Partición canónica INMUTABLE: 12 dimensiones, 44 variables, cero duplicados.
+# Cada renglón declara su espacio de Hilbert (H_att / H_def / H_ctx) de forma explícita:
+# la señal directora es xG/90' (ataque) y xGA/90' (defensa); contexto, shocks, disciplina,
+# cronometría y memoria longitudinal viven en H_ctx ([LN-QBE-039], [ARCH-1.4.33]).
+DIMENSIONES_CANONICAS: Tuple[Tuple[str, str], ...] = (
+    ("𝒯_Vol", "Volumen Territorial"),
+    ("𝒯_Rem", "Calidad de Remate"),
+    ("𝒯_Def", "Defensa"),
+    ("𝒯_Por", "Portería"),
+    ("𝒯_Bal", "Balón Parado y Penales"),
+    ("𝒯_Dis", "Disciplina"),
+    ("𝒯_Shk", "Shocks de Plantilla/Contexto"),
+    ("𝒯_Tra", "Trayectoria"),
+    ("𝒯_Cro", "Cronometría"),
+    ("𝒯_Ban", "Banca/Profundidad"),
+    ("𝒯_H2H", "Memoria Longitudinal/H2H"),
+    ("𝒯_Cls", "Cierre de Partido"),
+)
+
+# (id, nombre, dimensión, claves fácticas, modo, origen, espacio)
+_CATALOGO_44: Tuple[Tuple[str, str, str, Tuple[str, ...], str, str, str], ...] = (
+    # 𝒯_Vol — Volumen Territorial (4)
+    ("V01", "Posesión efectiva (%)", "𝒯_Vol", ("possession", "possession_pct", "posesion"), "directo", "OPTA", "H_att"),
+    ("V02", "Toques en área rival", "𝒯_Vol", ("opp_box_touches", "toques_area_rival"), "directo", "OPTA", "H_att"),
+    ("V03", "Pases progresivos completados", "𝒯_Vol", ("progressive_passes", "pases_progresivos"), "directo", "OPTA", "H_att"),
+    ("V04", "Entradas al último tercio", "𝒯_Vol", ("final_third_entries", "entradas_ultimo_tercio"), "directo", "OPTA", "H_att"),
+    # 𝒯_Rem — Calidad de Remate (5)
+    ("V05", "xG por partido (ancla npxG)", "𝒯_Rem", ("npxg", "xg"), "tasa", "OPTA", "H_att"),
+    ("V06", "Tiros a puerta (SoT)", "𝒯_Rem", ("sot", "shots_on_target"), "directo", "OPTA", "H_att"),
+    ("V07", "xG a puerta (xGOT)", "𝒯_Rem", ("xgot",), "directo", "OPTA", "H_att"),
+    ("V08", "Grandes oportunidades creadas", "𝒯_Rem", ("big_chances_created", "bc_created"), "directo", "OPTA", "H_att"),
+    ("V09", "Grandes oportunidades falladas", "𝒯_Rem", ("big_chances_missed", "bc_missed"), "directo", "OPTA", "H_att"),
+    # 𝒯_Def — Defensa (5)
+    ("V10", "xGA por partido (ancla defensiva)", "𝒯_Def", ("xga",), "tasa", "OPTA", "H_def"),
+    ("V11", "Tiros a puerta concedidos (SoTA)", "𝒯_Def", ("sota", "shots_on_target_against"), "directo", "OPTA", "H_def"),
+    ("V12", "PPDA", "𝒯_Def", ("ppda",), "directo", "OPTA", "H_def"),
+    ("V13", "Intercepciones/recuperaciones tercio medio", "𝒯_Def", ("mid_third_recoveries", "interceptions_mid"), "directo", "OPTA", "H_def"),
+    ("V14", "Grandes oportunidades concedidas", "𝒯_Def", ("big_chances_conceded", "bc_conceded"), "directo", "OPTA", "H_def"),
+    # 𝒯_Por — Portería (3)
+    ("V15", "Goles prevenidos (xGOT − GC)", "𝒯_Por", ("goals_prevented", "goles_prevenidos"), "directo", "OPTA", "H_def"),
+    ("V16", "Porcentaje de atajadas", "𝒯_Por", ("save_pct", "atajadas_pct"), "directo", "OPTA", "H_def"),
+    ("V17", "Salidas exitosas por alto", "𝒯_Por", ("high_claims", "salidas_altas"), "directo", "OPTA", "H_def"),
+    # 𝒯_Bal — Balón Parado y Penales (4)
+    ("V18", "xG a balón parado", "𝒯_Bal", ("xg_setpiece",), "directo", "OPTA", "H_att"),
+    ("V19", "xGA a balón parado", "𝒯_Bal", ("xga_setpiece",), "directo", "OPTA", "H_def"),
+    ("V20", "Tiros de esquina a favor", "𝒯_Bal", ("corners", "tiros_esquina"), "directo", "OPTA", "H_att"),
+    ("V21", "Tasa histórica de penales a favor", "𝒯_Bal", ("penalty_rate", "penales_tasa"), "directo", "OPTA", "H_att"),
+    # 𝒯_Dis — Disciplina (3)
+    ("V22", "Faltas en tercio defensivo", "𝒯_Dis", ("fouls_def_third", "faltas_tercio_def"), "directo", "OPTA", "H_def"),
+    ("V23", "Tarjetas amarillas promedio", "𝒯_Dis", ("yellow_cards", "amarillas"), "directo", "OPTA", "H_ctx"),
+    ("V24", "Índice de riesgo de expulsión", "𝒯_Dis", ("red_card_risk", "riesgo_expulsion"), "directo", "OPTA", "H_ctx"),
+    # 𝒯_Shk — Shocks de Plantilla/Contexto (4)
+    ("V25", "Impacto xG de bajas ofensivas", "𝒯_Shk", ("injury_att_impact", "bajas_xg"), "directo", "Q-BE", "H_ctx"),
+    ("V26", "Impacto xGA de bajas defensivas", "𝒯_Shk", ("injury_def_impact", "bajas_xga"), "directo", "Q-BE", "H_ctx"),
+    ("V27", "Diferencial de descanso (ΔDías)", "𝒯_Shk", ("delta_descanso_dias",), "contexto", "FIXTURE", "H_ctx"),
+    ("V28", "Factor de altitud fisiológica (ΔAltitud+)", "𝒯_Shk", ("delta_alt_metros",), "contexto_local", "FIXTURE", "H_ctx"),
+    # 𝒯_Tra — Trayectoria (4)
+    ("V29", "Diferencial de puntos recientes (5P)", "𝒯_Tra", ("pts_last5", "pts_5p", "puntos_recientes"), "directo", "Q-BE", "H_att"),
+    ("V30", "Pendiente de xG", "𝒯_Tra", ("xg_trend", "pendiente_xg"), "directo", "Q-BE", "H_att"),
+    ("V31", "Pendiente de xGA", "𝒯_Tra", ("xga_trend", "pendiente_xga"), "directo", "Q-BE", "H_def"),
+    ("V32", "Diferencial de puntos esperados (xPTS)", "𝒯_Tra", ("xpts", "xpts_diff"), "directo", "OPTA", "H_ctx"),
+    # 𝒯_Cro — Cronometría (4)
+    ("V33", "Ratio xG 1T vs 2T", "𝒯_Cro", ("xg_ratio_ht", "xg_1t_2t"), "directo", "OPTA", "H_att"),
+    ("V34", "Ratio xGA 1T vs 2T", "𝒯_Cro", ("xga_ratio_ht", "xga_1t_2t"), "directo", "OPTA", "H_def"),
+    ("V35", "Goles tempranos anotados (0–15')", "𝒯_Cro", ("early_goals_for", "goles_tempranos"), "directo", "OPTA", "H_att"),
+    ("V36", "Goles tempranos concedidos (0–15')", "𝒯_Cro", ("early_goals_against",), "directo", "OPTA", "H_def"),
+    # 𝒯_Ban — Banca/Profundidad (2)
+    ("V37", "Impacto xG promedio de suplentes", "𝒯_Ban", ("bench_xg", "suplentes_xg"), "directo", "OPTA", "H_ctx"),
+    ("V38", "Índice de rotación del XI", "𝒯_Ban", ("rotation_index", "rotacion_xi"), "directo", "OPTA", "H_ctx"),
+    # 𝒯_H2H — Memoria Longitudinal/H2H (4)
+    ("V39", "Victorias en los últimos cinco H2H", "𝒯_H2H", ("h2h_wins",), "h2h_victorias", "Q-BE", "H_ctx"),
+    ("V40", "Diferencial de goles en H2H reciente", "𝒯_H2H", ("h2h_gd",), "h2h_diferencia", "Q-BE", "H_ctx"),
+    ("V41", "Resistencia del visitante en esa sede", "𝒯_H2H", ("resistencia_sede_visita",), "contexto_local_inverso", "Q-BE", "H_ctx"),
+    ("V42", "xG promedio a favor en H2H", "𝒯_H2H", ("h2h_xg",), "h2h_xg", "Q-BE", "H_ctx"),
+    # 𝒯_Cls — Cierre de Partido (2)
+    ("V43", "xG generado en minutos 80–90+", "𝒯_Cls", ("xg_late", "xg_80_90"), "directo", "OPTA", "H_att"),
+    ("V44", "xGA concedido en minutos 80–90+", "𝒯_Cls", ("xga_late", "xga_80_90"), "directo", "OPTA", "H_def"),
+)
+
+_ESTADO_VALIDADO = "VALIDADO"
+_ESTADO_DERIVADO = "DERIVADO"
+_ESTADO_SIN_EVIDENCIA = "SIN EVIDENCIA"
+_ESTADO_EVALUADO = "EVALUADO"   # [LN-QBE-102] El insumo publicado SÍ fue consumido por el motor.
+
+# ── [LN-QBE-102] Tabla de transcripción tipada de los insumos telemetrizados ────────────────────
+# (clave_local, clave_visita, formato): traduce el número REALMENTE consumido por el pipeline a la
+# celda forense del catálogo de 44 variables. `clave_visita = None` ⇒ magnitud de contexto (no
+# bilateral): se declara en la columna `local` y la visita permanece `None` (cero fabricación).
+_FORMATO_INSUMO: Dict[str, Tuple[str, Optional[str], str]] = {
+    "V01": ("poss_local", "poss_visita", "pct"),        # Posesión media
+    "V05": ("xg_local_rate", "xg_visita_rate", "num2"),  # xG por partido (ancla acumulado / PJ)
+    "V06": ("sot_local", "sot_visita", "num0"),          # Tiros a puerta por partido
+    "V10": ("xga_local_rate", "xga_visita_rate", "num2"),  # xGA por partido
+    "V11": ("sota_local", "sota_visita", "num0"),        # Tiros a puerta recibidos por partido
+    "V27": ("delta_descanso_dias", None, "dias"),        # Δ descanso REALMENTE aplicado al modelo
+    "V28": ("delta_alt_metros", None, "metros"),         # Δ altitud REALMENTE aplicado al modelo
+    "V39": ("h2h_conteo", None, "partidos"),             # Duelos leídos dentro de la ventana τ
+}
+
+
+def _insumos_factivados(datos: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-102] Paquete de telemetría fáctica publicado por el generador (`{}` si ausente).
+
+    Se admiten las dos ubicaciones canónicas: la raíz del payload y la traza persistida
+    (`audit_trace_json`). La ausencia NO es evidencia de nada: simplemente desactiva la iluminación.
+    """
+    candidato = datos.get("insumos_factivados")
+    if isinstance(candidato, dict) and candidato:
+        return candidato
+    trace = datos.get("audit_trace") or datos.get("trace")
+    if isinstance(trace, dict):
+        candidato = trace.get("insumos_factivados")
+        if isinstance(candidato, dict) and candidato:
+            return candidato
+    return {}
+
+
+def _formatear_insumo(valor: Any, formato: str) -> Optional[str]:
+    """Transcribe la magnitud consumida a la celda forense tipada (unidades declaradas, sin redondeo ciego)."""
+    numero = _num(valor)
+    if numero is None:
+        return None
+    if formato == "pct":
+        return f"{numero:.1f}%"
+    if formato == "num2":
+        return f"{numero:.2f}"
+    if formato == "num0":
+        return f"{numero:.0f}"
+    if formato == "metros":
+        return f"{numero:.0f}m"
+    if formato == "dias":
+        return f"{numero:+.1f} d"
+    if formato == "partidos":
+        return f"{int(round(numero))} partidos"
+    return f"{numero:.2f}"
+
+
+def _bloque_equipo(datos: Dict[str, Any], lado: str) -> Dict[str, Any]:
+    """Bloque fáctico del club (`home_team_stats` / `home_split_stats`, sin fabricar claves)."""
+    for clave in (f"{lado}_team_stats", f"{lado}_split_stats", f"{lado}_stats"):
+        bloque = datos.get(clave)
+        if isinstance(bloque, dict):
+            return bloque
+    return {}
+
+
+def _leer_clave(bloque: Any, claves: Sequence[str]) -> Optional[float]:
+    """Primera clave publicada con valor numérico legible; `None` si no hay evidencia."""
+    if not isinstance(bloque, dict):
+        return None
+    for clave in claves:
+        if clave in bloque:
+            valor = _num(bloque.get(clave))
+            if valor is not None:
+                return valor
+    return None
+
+
+def _valor_tasa(bloque: Dict[str, Any], claves: Sequence[str]) -> Optional[float]:
+    """[ARCH-1.4.41] Tasa canónica = acumulado / PJ (o tasa precomputada ya publicada).
+
+    Sin PJ publicado y sin tasa explícita el valor es `None`: jamás se adivina la escala.
+    """
+    precomputada = _leer_clave(bloque, tuple(f"{clave}_rate" for clave in claves))
+    if precomputada is not None:
+        return precomputada
+    acumulado = _leer_clave(bloque, claves)
+    pj = _num(bloque.get("pj"))
+    if acumulado is None or not pj or pj <= 0.0:
+        return None
+    return acumulado / pj
+
+
+def _h2h_secuencia(datos: Dict[str, Any]) -> List[Any]:
+    secuencia = datos.get("h2h_matches")
+    if isinstance(secuencia, (list, tuple)):
+        return list(secuencia)
+    return []
+
+
+def _campo_partido(partido: Any, nombre: str) -> Any:
+    if isinstance(partido, dict):
+        return partido.get(nombre)
+    return getattr(partido, nombre, None)
+
+
+def _resumen_h2h(secuencia: Sequence[Any]) -> Dict[str, Optional[float]]:
+    """Resumen empírico H2H en la perspectiva del club local del fixture evaluado.
+
+    Se transcriben únicamente los campos publicados (`goles_local` / `goles_visita`); los
+    enfrentamientos sin marcador legible no aportan cifra (cero fabricación).
+    """
+    victorias_local = 0
+    victorias_visita = 0
+    gf_local = 0.0
+    gf_visita = 0.0
+    xg_local: List[float] = []
+    xg_visita: List[float] = []
+    leidos = 0
+
+    for partido in secuencia:
+        gl = _num(_campo_partido(partido, "goles_local"))
+        gv = _num(_campo_partido(partido, "goles_visita"))
+        if gl is not None and gv is not None:
+            leidos += 1
+            gf_local += gl
+            gf_visita += gv
+            if gl > gv:
+                victorias_local += 1
+            elif gv > gl:
+                victorias_visita += 1
+        xl = _num(_campo_partido(partido, "xg_local"))
+        xv = _num(_campo_partido(partido, "xg_visita"))
+        if xl is not None and xv is not None:
+            xg_local.append(xl)
+            xg_visita.append(xv)
+
+    return {
+        "partidos": float(len(secuencia)),
+        "leidos": float(leidos),
+        "victorias_local": float(victorias_local),
+        "victorias_visita": float(victorias_visita),
+        "diferencia_goles": (gf_local - gf_visita) if leidos else None,
+        "xg_local": (sum(xg_local) / len(xg_local)) if xg_local else None,
+        "xg_visita": (sum(xg_visita) / len(xg_visita)) if xg_visita else None,
+    }
+
+
+def _valor_variable(
+    modo: str,
+    claves: Sequence[str],
+    datos: Dict[str, Any],
+    bloque_local: Dict[str, Any],
+    bloque_visita: Dict[str, Any],
+    h2h: Dict[str, Optional[float]],
+) -> Tuple[Optional[float], Optional[float]]:
+    """Resuelve el par (local, visita) de una variable del catálogo sin inventar cifras."""
+    if modo == "directo":
+        return _leer_clave(bloque_local, claves), _leer_clave(bloque_visita, claves)
+    if modo == "tasa":
+        return _valor_tasa(bloque_local, claves), _valor_tasa(bloque_visita, claves)
+    if modo == "contexto":
+        valor = _leer_clave(datos, claves)
+        return valor, (None if valor is None else -valor)
+    if modo == "contexto_local":
+        return _leer_clave(datos, claves), None
+    if modo == "contexto_local_inverso":
+        return None, _leer_clave(datos, claves)
+
+    victorias_local = h2h["victorias_local"] if h2h["leidos"] else None
+    victorias_visita = h2h["victorias_visita"] if h2h["leidos"] else None
+    if modo == "h2h_victorias":
+        explicito_local = _leer_clave(datos, ("h2h_wins_local",))
+        explicito_visita = _leer_clave(datos, ("h2h_wins_visita",))
+        return (
+            explicito_local if explicito_local is not None else victorias_local,
+            explicito_visita if explicito_visita is not None else victorias_visita,
+        )
+    if modo == "h2h_diferencia":
+        diferencia = h2h["diferencia_goles"]
+        explicito_local = _leer_clave(datos, ("h2h_gd_local",))
+        explicito_visita = _leer_clave(datos, ("h2h_gd_visita",))
+        return (
+            explicito_local if explicito_local is not None else diferencia,
+            explicito_visita if explicito_visita is not None else (None if diferencia is None else -diferencia),
+        )
+    if modo == "h2h_xg":
+        return h2h["xg_local"], h2h["xg_visita"]
+    return None, None
+
+
+def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """[LN-QBE-101].P.4 — Taxonomía forense de 44 variables en 12 dimensiones canónicas.
+
+    Cada renglón exhibe `local` / `visita` / `z_score` / `origen` / `estado` / `impacto`.
+    La ausencia de evidencia se declara `SIN EVIDENCIA` con valor `None`; jamás se rellena.
+    """
+    datos: Dict[str, Any] = datos_partido if isinstance(datos_partido, dict) else {}
+    bloque_local = _bloque_equipo(datos, "home")
+    bloque_visita = _bloque_equipo(datos, "away")
+    h2h = _resumen_h2h(_h2h_secuencia(datos))
+    z_scores = datos.get("z_scores") if isinstance(datos.get("z_scores"), dict) else {}
+
+    acumuladas: Dict[str, List[Dict[str, Any]]] = {dimension: [] for dimension, _ in DIMENSIONES_CANONICAS}
+    insumos = _insumos_factivados(datos)
+    for identificador, nombre, dimension, claves, modo, origen, espacio in _CATALOGO_44:
+        # [LN-QBE-102] Precedencia de la telemetría: si el motor consumió el insumo, la celda se
+        # enciende en `EVALUADO` con la magnitud tipada. Si no lo publicó, la ruta heredada decide.
+        receta = _FORMATO_INSUMO.get(identificador) if insumos else None
+        if receta is not None:
+            clave_local, clave_visita, formato = receta
+            local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
+            visita_insumo = (
+                _formatear_insumo(insumos.get(clave_visita), formato) if clave_visita else None
+            )
+            if local_insumo is not None or visita_insumo is not None:
+                acumuladas[dimension].append({
+                    "id": identificador,
+                    "variable": nombre,
+                    "local": local_insumo,
+                    "visita": visita_insumo,
+                    "z_score": _num(z_scores.get(identificador)),
+                    "origen": origen,
+                    "estado": _ESTADO_EVALUADO,
+                    "impacto": espacio,
+                    "nota": "Insumo consumido por el pipeline [LN-QBE-102]",
+                })
+                continue
+
+        local, visita = _valor_variable(modo, claves, datos, bloque_local, bloque_visita, h2h)
+        sin_evidencia = local is None and visita is None
+        if sin_evidencia:
+            estado = _ESTADO_SIN_EVIDENCIA
+        elif origen == "Q-BE":
+            estado = _ESTADO_DERIVADO
+        else:
+            estado = _ESTADO_VALIDADO
+        acumuladas[dimension].append({
+            "id": identificador,
+            "variable": nombre,
+            "local": None if local is None else round(float(local), 4),
+            "visita": None if visita is None else round(float(visita), 4),
+            "z_score": _num(z_scores.get(identificador)),
+            "origen": origen if not sin_evidencia else _ESTADO_SIN_EVIDENCIA,
+            "estado": estado,
+            "impacto": espacio,
+            "nota": "Ancla canónica acumulado / PJ [ARCH-1.4.41]" if modo == "tasa" else "",
+        })
+
+
+    dimensiones = [
+        {
+            "dimension": dimension,
+            "titulo": titulo,
+            "conteo": len(acumuladas[dimension]),
+            "variables": acumuladas[dimension],
+        }
+        for dimension, titulo in DIMENSIONES_CANONICAS
+    ]
+    return {
+        "total_variables": len(_CATALOGO_44),
+        "dimensiones": dimensiones,
+    }
+
+
+# ── [LN-QBE-101].P.5 — Orquestador del bloque `atribucion_factorial` (contrato del endpoint) ──
+def _primero(*valores: Any) -> Any:
+    for valor in valores:
+        if valor is not None:
+            return valor
+    return None
+
+
+def _gamma_efectivo(
+    A_h: Any, D_a: Any, A_a: Any, D_h: Any, lambda_h: Any, lambda_a: Any, C_h: float, C_a: float
+) -> float:
+    """Localía efectiva implícita en las λ publicadas (γ̄_base + Δγ_plaza + altitud + descanso).
+
+    Si las intensidades no se publican, se declara 0.0 (sin evidencia ⇒ sin efecto atribuido).
+    """
+    lh = _num(lambda_h)
+    la = _num(lambda_a)
+    if lh is None or la is None or lh <= 0.0 or la <= 0.0:
+        return 0.0
+    equipos = (_amortiguar(A_h) - _amortiguar(D_a)) + (_amortiguar(D_h) - _amortiguar(A_a))
+    return math.log(lh / la) - equipos - C_h + C_a
+
+
+def construir_atribucion_factorial(datos_partido: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """[LN-QBE-101].P.5 — Ensambla el bloque de auditoría que consume la consola forense.
+
+    Fuentes únicas admitidas: el payload fáctico del partido y su `audit_trace_json` persistido.
+    Cualquier insumo ausente degrada a `None` / `NEUTRO` / `SIN EVIDENCIA`; cero fabricación.
+    """
+    datos: Dict[str, Any] = datos_partido if isinstance(datos_partido, dict) else {}
+    trace = datos.get("audit_trace") or datos.get("trace") or {}
+    if not isinstance(trace, dict):
+        trace = {}
+    factores = datos.get("factores") or trace.get("factores_entrada") or {}
+    if not isinstance(factores, dict):
+        factores = {}
+    intensidades = datos.get("intensidades") or trace.get("intensidades") or {}
+    if not isinstance(intensidades, dict):
+        intensidades = {}
+
+    A_h = _primero(factores.get("A_H"), factores.get("A_home"), factores.get("a_h"))
+    D_a = _primero(factores.get("D_A"), factores.get("D_away"), factores.get("d_a"))
+    A_a = _primero(factores.get("A_A"), factores.get("A_away"), factores.get("a_a"))
+    D_h = _primero(factores.get("D_H"), factores.get("D_home"), factores.get("d_h"))
+    lambda_h = _primero(
+        intensidades.get("lambda_H"), intensidades.get("lambda_home"),
+        intensidades.get("lambda_h"), intensidades.get("home"), datos.get("lambda_home"),
+    )
+    lambda_a = _primero(
+        intensidades.get("lambda_A"), intensidades.get("lambda_away"),
+        intensidades.get("lambda_a"), intensidades.get("away"), datos.get("lambda_away"),
+    )
+
+    q_mod = trace.get("q_mod") if isinstance(trace.get("q_mod"), dict) else {}
+    q_home = _primero(q_mod.get("home"), trace.get("q_mod_home"), datos.get("q_mod_home"))
+    q_away = _primero(q_mod.get("away"), trace.get("q_mod_away"), datos.get("q_mod_away"))
+    C_h = math.log(q_home) if _num(q_home, 0.0) and float(q_home) > 0.0 else 0.0
+    C_a = math.log(q_away) if _num(q_away, 0.0) and float(q_away) > 0.0 else 0.0
+
+    gamma_home = _primero(datos.get("gamma_home"), trace.get("gamma_home"))
+    if gamma_home is None:
+        gamma_home = _gamma_efectivo(A_h, D_a, A_a, D_h, lambda_h, lambda_a, C_h, C_a)
+
+    disponible = all(_num(valor) is not None for valor in (A_h, D_a, A_a, D_h))
+    if disponible:
+        descomposicion = calcular_atribucion_loglineal(
+            A_h, D_a, A_a, D_h, gamma_home, C_h, C_a, lambda_h, lambda_a
+        )
+    else:
+        descomposicion = {
+            "delta_ofensiva": None,
+            "delta_defensiva": None,
+            "delta_contexto": None,
+            "delta_neto_total": None,
+            "delta_ofensiva_cruda": None,
+            "delta_defensiva_cruda": None,
+            "delta_ln_lambda": None,
+            "residuo_no_atribuido": None,
+        }
+
+    split_local = _bloque_equipo(datos, "home")
+    split_visita = _bloque_equipo(datos, "away")
+    h2h_leidos = _num(_primero(trace.get("h2h_partidos"), datos.get("h2h_partidos")))
+    if h2h_leidos is None:
+        h2h_leidos = _resumen_h2h(_h2h_secuencia(datos))["leidos"]
+
+    flag_xg = _primero(trace.get("xg_disponible"), datos.get("xg_disponible"))
+    flag_xg_calibrado = _primero(trace.get("xg_calibrado"), datos.get("xg_calibrado"))
+
+    # ── [LN-QBE-102] La telemetría fáctica manda sobre la degradación por omisión ──────────────
+    # Si el pipeline publicó el insumo, el semáforo se pronuncia sobre el número REALMENTE
+    # consumido. `_primero` garantiza que sin paquete telemetrizado (dict vacío) nada cambia.
+    insumos = _insumos_factivados(datos)
+    if insumos.get("xg_es_real_opta") is True:
+        flag_xg = True
+        flag_xg_calibrado = False
+    if _num(insumos.get("h2h_conteo")) is not None:
+        h2h_leidos = _num(insumos.get("h2h_conteo"))
+
+    semaforos = evaluar_semaforos_salud_datos(
+        xg_disponible=bool(flag_xg),
+        xg_calibrado=bool(flag_xg_calibrado),
+        pj_sede_local=_primero(insumos.get("pj_sede_local"), split_local.get("pj"), split_local.get("pj_sede"), 0),
+        pj_sede_visita=_primero(insumos.get("pj_sede_visita"), split_visita.get("pj"), split_visita.get("pj_sede"), 0),
+        h2h_partidos_conteo=h2h_leidos or 0,
+        delta_epist=_primero(trace.get("discrepancia_epist"), trace.get("delta_epist"), datos.get("delta_epist"), 0.0),
+        q_mod=min(
+            _num(_primero(insumos.get("q_mod_h"), q_home), 1.0) or 1.0,
+            _num(_primero(insumos.get("q_mod_a"), q_away), 1.0) or 1.0,
+        ),
+        suficiencia_S_I=_primero(trace.get("suficiencia_S_I"), trace.get("S_I"), datos.get("S_I"), 1),
+    )
+    # Degradación honesta de la procedencia: la AUSENCIA de un metadato no es evidencia de
+    # insuficiencia. Sin sello de procedencia xG, sin splits y sin Q_mod persistidos, la luz
+    # correspondiente se declara NEUTRO (sin veredicto) en vez de acusar un rojo inexistente.
+    # [LN-QBE-102] Con telemetría publicada NUNCA se neutraliza: el insumo ya es evidencia.
+    if not insumos:
+        if flag_xg is None and flag_xg_calibrado is None:
+            semaforos["opta"] = NEUTRO
+        if not split_local and not split_visita:
+            semaforos["sede"] = NEUTRO
+        if q_home is None and q_away is None:
+            semaforos["ctx"] = NEUTRO
+        if not disponible and not trace:
+            semaforos = {"opta": NEUTRO, "sede": NEUTRO, "h2h": NEUTRO, "epist": NEUTRO, "ctx": NEUTRO}
+
+    return {
+        "disponible": disponible,
+        "origen_factores": trace.get("origen_factores") or ("analitico_base" if disponible else "sin_traza"),
+        "origen_captura": _primero(datos.get("origen_captura"), trace.get("origen_captura")),
+        "descomposicion_log": descomposicion,
+        "driver_principal": resolver_driver_principal(descomposicion),
+        "semaforos": semaforos,
+        "variables_44": estructurar_catalogo_44_variables(datos),
+    }
+

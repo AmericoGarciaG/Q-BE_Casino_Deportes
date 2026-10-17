@@ -633,7 +633,7 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
 
         # Inyección Soberana en todas las jornadas (J10 a J17)
         standings_map = {s["equipo"]: s for s in datos["standings_viva"]}
-        from src.core.sovereign_pipeline import generar_distribucion_soberana
+        from src.core.sovereign_pipeline import ORIGEN_CAPTURA_EN_VIVO, generar_distribucion_soberana
 
         # [ARCH-1.6.13-C] Memoria H2H fáctica: precarga única de los marcadores oficiales
         # consumados en SQLite; cada fixture recibe sus últimos 5 enfrentamientos directos.
@@ -670,7 +670,12 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
                         match_id=f["id_partido"],
                         raw_match_data=raw_match_data,
                         mu_liga=mu_efectivo,
-                        gamma_home_base=0.15
+                        gamma_home_base=0.15,
+                        # [LN-QBE-102 / ARCH-1.4.43] EL DEMONIO DE CAPTURA VIVA ES EL ÚNICO
+                        # SUJETO QUE DECLARA `EN_VIVO`. Este sello viaja en la traza forense
+                        # junto a `insumos_factivados` y habilita el candado en la 3NF: ninguna
+                        # reconstrucción histórica podrá sobreescribir esta evidencia.
+                        origen_captura=ORIGEN_CAPTURA_EN_VIVO,
                     )
                     # [Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2] Sello de suficiencia
                     # fáctica S(I) ∈ {0, 1} transcrito *verbatim* de la traza forense del motor

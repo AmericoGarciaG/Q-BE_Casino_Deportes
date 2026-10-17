@@ -1375,6 +1375,93 @@ def _soberanas_por_id(session: Session) -> Dict[str, Tuple[float, float, float]]
     }
 
 
+def _trazas_soberanas_por_id(session: Session) -> Dict[str, Dict[str, Any]]:
+    """
+    [ARCH-1.4.42] Traza forense por partido desde `sovereign_distributions`.
+
+    Devuelve `{id_partido: {audit_trace, lambda_home, lambda_away, delta_epist}}` para que el
+    motor de atribución factorial transcriba `factores_entrada` / `intensidades` / `Δ_epist`
+    sin tocar la red ni recalcular la matemática soberana. Una fila sin traza aporta sólo sus
+    intensidades publicadas: cero fabricación de factores [GOVERNANCE-01].
+    """
+    indice: Dict[str, Dict[str, Any]] = {}
+    for fila in session.query(SovereignDistribution).all():
+        traza = fila.audit_trace_json if isinstance(fila.audit_trace_json, dict) else {}
+        indice[str(fila.match_id)] = {
+            "audit_trace": traza,
+            "lambda_home": fila.lambda_home,
+            "lambda_away": fila.lambda_away,
+            "delta_epist": fila.epistemic_delta,
+        }
+    return indice
+
+
+def _origen_captura_de_traza(fila: Optional[Dict[str, Any]]) -> Optional[str]:
+    """[LN-QBE-102] Sello de procedencia publicado por la traza soberana (`None` si no lo porta).
+
+    La ausencia NO se interpreta como captura histórica: una traza legada (`origen_captura`
+    inexistente) se declara `None` y la UI omite el badge en vez de acusar una procedencia falsa.
+    """
+    if not isinstance(fila, dict):
+        return None
+    traza = fila.get("audit_trace")
+    if not isinstance(traza, dict):
+        return None
+    origen = traza.get("origen_captura")
+    return str(origen) if origen else None
+
+
+def _datos_partido_para_atribucion(
+    traza: Optional[Dict[str, Any]],
+    fixture: Optional[Dict[str, Any]],
+    suficiencia_s_i: Optional[int],
+) -> Dict[str, Any]:
+    """
+    [ARCH-1.4.42] Ensambla el payload fáctico del motor de atribución factorial.
+
+    La traza soberana aporta factores/intensidades/Δ_epist; el fixture aporta únicamente los
+    bloques que realmente porta (splits de sede, ventana H2H, localía efectiva). No se consulta
+    la tabla de posiciones vivas: en un partido histórico sus agregados serían FUTURO respecto
+    del instante de cálculo (look-ahead) y corromperían la auditoría.
+    """
+    datos: Dict[str, Any] = dict(traza or {})
+    if isinstance(fixture, dict):
+        for clave in (
+            "home_team_stats",
+            "away_team_stats",
+            "home_split_stats",
+            "away_split_stats",
+            "h2h_matches",
+            "h2h_partidos",
+            "gamma_home",
+            "xg_disponible",
+            "xg_calibrado",
+            "q_mod_home",
+            "q_mod_away",
+            # [LN-QBE-102] Telemetría de insumos y sello de procedencia (candado en vivo).
+            "insumos_factivados",
+            "origen_captura",
+        ):
+            if fixture.get(clave) is not None:
+                datos[clave] = fixture[clave]
+    if suficiencia_s_i is not None:
+        datos.setdefault("S_I", suficiencia_s_i)
+    return datos
+
+
+def _atribucion_factorial_del_partido(
+    traza: Optional[Dict[str, Any]],
+    fixture: Optional[Dict[str, Any]],
+    suficiencia_s_i: Optional[int],
+) -> Dict[str, Any]:
+    """[ARCH-1.4.42] Bloque `atribucion_factorial` de la casilla micro (motor puro)."""
+    from src.core.sovereign.factor_attribution import construir_atribucion_factorial
+
+    return construir_atribucion_factorial(
+        _datos_partido_para_atribucion(traza, fixture, suficiencia_s_i)
+    )
+
+
 def _p_prima_del_fixture(fx: Dict[str, Any]) -> Optional[Tuple[float, float, float]]:
     """[ARCH-1.4.38] P' sellada en la captura congelada; `None` si la bóveda no la porta."""
     try:
@@ -1476,6 +1563,8 @@ def _construir_reporte_calibracion(
 
     fixtures = _fixtures_snapshot_indexados(session, league_id)
     soberanas = _soberanas_por_id(session)
+    # [ARCH-1.4.42] Trazas forenses para la atribución factorial (una sola consulta, cero N+1).
+    trazas_soberanas = _trazas_soberanas_por_id(session)
 
     micro_por_jornada: Dict[int, List[Dict[str, Any]]] = {}
     registros_qbe: Dict[int, List[Dict[str, Any]]] = {}
@@ -1609,6 +1698,9 @@ def _construir_reporte_calibracion(
             # [LN-QBE-100] Sello de suficiencia S(I) del contrato de captura (fixture legado sin
             # el campo ⇒ `None` ⇒ 1: la ausencia de señal no degrada el partido).
             "suficiencia_S_I": suficiencia_s_i,
+            # [LN-QBE-102] Sello de procedencia de la evidencia (badge de la casilla micro).
+            "origen_captura": _origen_captura_de_traza(trazas_soberanas.get(id_partido))
+            or (fixture or {}).get("origen_captura"),
             # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² sellados por
             # partido (R_(1) ≥ R_(2) ≥ R_(3)) y vértice que consumó el resultado de la cancha.
             "r_max": r_max,
@@ -1618,6 +1710,10 @@ def _construir_reporte_calibracion(
             # Masa individual de cobertura = (P_max + P_mid) · 100 ≡ (1 − P_low) · 100.
             "masa_cobertura_pct": round((p_max_val + p_mid_val) * 100.0, 2),
             "p_low_ruptura_pct": round(p_low_val * 100.0, 2),
+            # [ARCH-1.4.42] Micro-HUD de atribución factorial + DTO forense de 44 variables.
+            "atribucion_factorial": _atribucion_factorial_del_partido(
+                trazas_soberanas.get(id_partido), fixture, suficiencia_s_i
+            ),
         })
         registros_qbe.setdefault(jornada, []).append(registro_qbe)
         registros_mkt.setdefault(jornada, []).append(registro_mkt)

@@ -833,6 +833,32 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=2026QBE_V5"></script>
+    <!-- MODAL: INSPECCIÓN FORENSE DE 44 VARIABLES [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064]
+         Régimen DBBD-FUNGIBLE. El cuerpo `#vars44-cuerpo` lo hidrata app.js
+         (`abrirModal44Variables`) transcribiendo el bloque `atribucion_factorial`
+         servido por `/api/markets/backtesting/calibration-report`. Cierre por
+         botón `Cerrar` o tecla `Escape`. -->
+    <div id="modal-44-variables" class="modal-overlay" style="display: none;">
+        <div class="modal-content vars44-modal" style="max-width: 980px; width: 96%; max-height: 90vh; overflow-y: auto; background: #0F172A; border: 1px solid #334155; border-radius: 12px; padding: 22px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);">
+            <div class="vars44-cabecera">
+                <div>
+                    <h3 id="vars44-titulo" class="vars44-titulo">🔬 Inspección forense · 44 variables</h3>
+                    <span class="vars44-subtitulo">
+                        Descomposición Δη = ln(λ_H/λ_A) ≡ Δ Ofensiva + Δ Defensiva + Δ Contexto ·
+                        catálogo canónico del dossier §3 en 12 dimensiones · [LN-QBE-101]
+                    </span>
+                    <!-- [LN-QBE-102 / DES-QBE-065] Sello de procedencia de la evidencia.
+                         Lo hidrata `abrirModal44Variables` con `createElement`/`textContent`:
+                         `🔴 EN VIVO` ⇒ ventanilla blindada · `🏛️ HISTÓRICO` ⇒ reconstrucción. -->
+                    <span id="vars44-origen" class="vars44-origen"></span>
+                </div>
+                <button type="button" class="btn-cerrar-44" onclick="cerrarModal44Variables()">Cerrar</button>
+            </div>
+            <div id="vars44-cuerpo"></div>
+        </div>
+    </div>
+
+
+    <script src="/static/js/app.js?v=2026QBE_V6"></script>
 </body>
 </html>

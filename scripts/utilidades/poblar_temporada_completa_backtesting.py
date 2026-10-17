@@ -66,7 +66,11 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 # Planos sellados: matemática y sincronización (cero reimplementación).
-from src.core.sovereign_pipeline import evaluar_suficiencia_informativa, generar_distribucion_soberana
+from src.core.sovereign_pipeline import (
+    ORIGEN_CAPTURA_HISTORICO,
+    evaluar_suficiencia_informativa,
+    generar_distribucion_soberana,
+)
 from src.storage.distribution_sync import sincronizar_distribuciones_soberanas_partidos
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import (
@@ -668,7 +672,11 @@ def ejecutar(argv: Optional[List[str]] = None) -> int:
             marcadores = rellenar_marcadores_3nf(tx, args.liga_id, canonico, simular=False)
             cuotas = persistir_cuotas_en_fixtures_3nf(tx, args.liga_id, canonico, simular=False)
         # [ARCH-1.6.11] Puente sellado: genera y sella P′ en `sovereign_distributions`.
-        distribuciones = sincronizar_distribuciones_soberanas_partidos(items, gateway=gateway)
+        # [LN-QBE-102 / ARCH-1.4.43] Menor Privilegio explícito: este lote RECONSTRUYE historia
+        # (jamás captura en ventanilla) ⇒ jamás podrá sobreescribir una fila `EN_VIVO`.
+        distribuciones = sincronizar_distribuciones_soberanas_partidos(
+            items, gateway=gateway, origen_captura=ORIGEN_CAPTURA_HISTORICO
+        )
         valores = _leer_valores_3nf(gateway, ids)
         # [Decreto `VAR-2026-PREFLIGHT-LEGITIMATE-ENVELOPE` §1.2] Séptimo campo: el sello S(I) se relee
         # de la traza sellada del puente (transcripción literal, cero invención) y se captura junto a P′.

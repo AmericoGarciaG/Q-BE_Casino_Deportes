@@ -1453,7 +1453,37 @@ def sincronizar_progol_pipeline_completo(
 * **[SHIELD]:** `tests/shield/test_shield_unified_ingestion_and_xg_scale.py`
 * **Estado del Sello (2026-10-16):** ✅ **VIGENTE Y MATERIALIZADO** — por **Dictamen del Director (Opción A aprobada)** se erradicó el conmutador `> 5.0` del núcleo (`src/core/sovereign_pipeline.py` L221/228/235/242, diff `4 4` = exactamente las 4 líneas del dictamen) y se declaró el **contrato de unidad (xG Acumulado Total)** en `docs/DIRGEN_VAULT.md` `[VAULT-CORE-005]`; **paridad `src == vault` verificada**. Se re-unificaron las fixtures selladas y el auditor de pureza (×`PJ`, tasas preservadas bit a bit) y se ejecutó la **Llave Maestra** `homologar_temporada_optah2h --jornadas 1-11 --forzar` (17 capturas re-selladas: J4-J8, la ventana del shim; paridad captura↔3NF 99 idénticas / 0 divergentes). **Escudo: 341 passed / 0 failed / 0 skipped.** Expediente: `docs/variances/VAR-2026-10-16-ESCALA-XG.md` (§9, resolución y evidencia).
 
+### [ARCH-1.4.42] Micro-HUD de Atribución Factorial y DTO de Inspección de 44 Variables [ARCH-PILLAR]
+* **Ubicación del Motor:** `src/core/sovereign/factor_attribution.py` (Módulo funcional puro, sin dependencias de base de datos ni red).
+* **Integración REST:** El endpoint `GET /api/markets/backtesting/calibration-report` enriquece cada objeto de partido en `jornadas[].partidos[]` con el bloque:
+  ```json
+  "atribucion_factorial": {
+    "semaforos": {
+      "opta": "VERDE", "sede": "VERDE", "h2h": "AMARILLO", "epist": "VERDE", "ctx": "VERDE"
+    },
+    "driver_principal": {
+      "dimension": "OFENSIVA", "magnitud": 0.4215, "favorece": "VISITANTE", "etiqueta": "⚡ Ofensiva Visita (+0.42)"
+    },
+    "descomposicion_log": {
+      "delta_ofensiva": -0.4215, "delta_defensiva": -0.1120, "delta_contexto": 0.1500, "delta_neto_total": -0.3835
+    },
+    "variables_44": { /* Desglose por las 12 dimensiones canónicas */ }
+  }
+  ```
+* **Procedencia Fáctica (Cero Invención):** los factores `(A_H, D_A, A_A, D_H)` y las intensidades `(λ_H, λ_A)` se transcriben de `sovereign_distributions.audit_trace_json` (`factores_entrada` / `intensidades`); `Δ_epist` de `discrepancia_epist`; el sello `S(I)` del contrato de captura `suficiencia_S_I`; los splits de sede y el conteo H2H del fixture cuando los porta. Un partido sin traza soberana **no fabrica factores**: el bloque publica la degradación honesta correspondiente (`[GOVERNANCE-01]`).
+* **Pureza y Rendimiento:** `O(1)` por partido, sin I/O, sin red, sin SQLAlchemy; reutiliza `aplicar_damping_hiperbolico` de `[VAULT-CORE-001]` (κ_net = 0.2500) para que la suma factorial conserve exactamente `ln(λ_H/λ_A)`.
+* **[SHIELD]:** `tests/shield/test_shield_factor_attribution_and_telemetry.py`
 
+### [ARCH-1.4.43] Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR]
+* **Ubicación Canónica:** `src/storage/distribution_sync.py` (candado `LIVE_PROTECTION_LOCK` + sello) · `src/core/sovereign_pipeline.py` (`[VAULT-CORE-005]`, telemetría `insumos_factivados`) · `src/models/web_schemas.py` (`CalibrationMatchOut`, `AtribucionFactorialOut`) · `src/web/routes/markets.py` (propagación por partido).
+* **Régimen:** `[HÍBRIDO DUAL-TRACK]` — el candado transaccional y el empaquetado forense son `[DIRGEN-STRICT]` (cero margen creativo: sólo se **añaden** claves aditivas, jamás se altera la matemática sellada); la propagación y la exhibición son `[DBBD-FUNGIBLE]`.
+* **Regla de Menor Privilegio (default seguro):** `sincronizar_distribuciones_soberanas(..., origen_captura="HISTORICO_RECONSTRUIDO")`. Sólo el demonio de captura viva (`scripts/daemons/centinela_deportivo.py`) declara `origen_captura="EN_VIVO"` de forma explícita; los dos lotes de reconstrucción (`scripts/ingesta/homologar_temporada_optah2h.py`, `scripts/utilidades/poblar_temporada_completa_backtesting.py`) lo declaran también explícitamente para que su intención quede escrita en el código y no dependa del default.
+* **Contrato `LIVE_PROTECTION_LOCK` (evaluado dentro de `gw.write_transaction`):** si la fila existente publica `audit_trace_json["origen_captura"] == "EN_VIVO"` y la escritura entrante declara `"HISTORICO_RECONSTRUIDO"`, la actualización de `sovereign_distributions` **no se ejecuta** (la fila conserva bit a bit `p_local/p_empate/p_visitante`, `lambda_*`, `phi_lead2_*` y `audit_trace_json`). Bajo blindaje se permite **una única** mutación: los marcadores oficiales `matches.score_home`, `matches.score_away` y `matches.status = "FINISHED"`.
+* **Contrato de Retorno (aditivo, cero ruptura):** `{"procesados": int, "exitosos": int, "protegidos": int, "errores": [str]}`. `protegidos` cuenta los vetos efectivos; `exitosos` excluye a los protegidos. Los consumidores previos que sólo leen `procesados`/`exitosos`/`errores` siguen operando sin cambios.
+* **DTOs (Opción A aprobada por la Tríada):** `CalibrationMatchOut` y `AtribucionFactorialOut` reciben `origen_captura: Optional[str] = None` (compatible hacia atrás: `None` = sello no publicado). `markets.py` propaga por partido el sello leído de `audit_trace_json` y el paquete `insumos_factivados` desde la traza hacia `_datos_partido_para_atribucion`.
+* **Honestidad Retrospectiva (V-6, sin backfill):** las filas históricas sin la clave se leen como `HISTORICO_RECONSTRUIDO`; **prohibido** reescribirlas con un sello `EN_VIVO` retroactivo.
+* **Cero Mocks en Producción:** el Juez construye un gateway de memoria (`sqlite://`) con `Base.metadata.create_all`; ninguna ruta de producción importa dobles de prueba (`[GOVERNANCE-01]`).
+* **[SHIELD]:** `tests/shield/test_shield_live_lock_and_input_telemetry.py`
 
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`

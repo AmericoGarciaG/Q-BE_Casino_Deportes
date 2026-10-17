@@ -9,22 +9,68 @@ import logging
 from typing import Dict, Any, List, Optional
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import Competition, Match, SovereignDistribution
-from src.core.sovereign_pipeline import generar_distribucion_soberana
+from src.core.sovereign_pipeline import (
+    generar_distribucion_soberana,
+    ORIGEN_CAPTURA_EN_VIVO,
+    ORIGEN_CAPTURA_HISTORICO,
+)
 
 logger = logging.getLogger("DistributionSync")
 
 
+def _candado_blindado(origen_previo: str, origen_entrante: str) -> bool:
+    """[LN-QBE-102] `LIVE_PROTECTION_LOCK`: veta únicamente la DEGRADACIÓN de procedencia.
+
+    Relación estrictamente asimétrica: una reconstrucción histórica jamás sobreescribe evidencia
+    capturada en ventanilla; en cambio `EN_VIVO -> EN_VIVO` (re-captura) y
+    `HISTORICO_RECONSTRUIDO -> EN_VIVO` (ascenso de calidad de evidencia) sí escriben.
+    """
+    return (
+        origen_previo == ORIGEN_CAPTURA_EN_VIVO
+        and origen_entrante == ORIGEN_CAPTURA_HISTORICO
+    )
+
+
+def _actualizar_marcador_oficial(session, match_id: str, item: Dict[str, Any]) -> bool:
+    """[LN-QBE-102] Excepción del Hecho Consumado bajo blindaje.
+
+    La única mutación autorizada sobre una distribución blindada es la del resultado oficial en
+    la tabla `matches` (`score_home`, `score_away`, `status = "FINISHED"`): el hecho consumado no
+    altera la probabilidad calculada ni la evidencia capturada en ventanilla.
+    """
+    marcador_local = item.get("score_home")
+    marcador_visita = item.get("score_away")
+    if not isinstance(marcador_local, int) or isinstance(marcador_local, bool):
+        return False
+    if not isinstance(marcador_visita, int) or isinstance(marcador_visita, bool):
+        return False
+    partido = session.query(Match).filter(Match.id == match_id).first()
+    if partido is None:
+        return False
+    partido.score_home = marcador_local
+    partido.score_away = marcador_visita
+    partido.status = "FINISHED"
+    return True
+
+
 def sincronizar_distribuciones_soberanas_partidos(
     partidos_datos: List[Dict[str, Any]],
-    gateway: Optional[PersistenceGateway] = None
+    gateway: Optional[PersistenceGateway] = None,
+    origen_captura: str = ORIGEN_CAPTURA_HISTORICO
 ) -> Dict[str, Any]:
     """
     [ARCH-1.6.11] Ejecuta la generación y persistencia transaccional atómica
     de distribuciones soberanas sobre la tabla 3NF 'sovereign_distributions'.
+
+    [LN-QBE-102] `origen_captura` es el sello de procedencia de la evidencia. La Regla de Menor
+    Privilegio sella el default en 'HISTORICO_RECONSTRUIDO': sólo un demonio de captura viva
+    declara 'EN_VIVO' de forma explícita. Bajo `LIVE_PROTECTION_LOCK`, una reconstrucción
+    histórica jamás sobreescribe una distribución capturada en ventanilla (ver `protegidos`).
     """
     gw = gateway or PersistenceGateway()
     procesados = 0
     exitosos = 0
+    protegidos = 0
     errores = []
 
     for item in partidos_datos:
@@ -56,12 +102,14 @@ def sincronizar_distribuciones_soberanas_partidos(
                 delta_alt_metros=float(item.get("delta_alt_metros", 0.0) or 0.0),
                 delta_descanso_dias=float(item.get("delta_descanso_dias", 0.0) or 0.0),
                 q_mod_h=float(item.get("q_mod_h", 1.0) or 1.0),
-                q_mod_a=float(item.get("q_mod_a", 1.0) or 1.0)
+                q_mod_a=float(item.get("q_mod_a", 1.0) or 1.0),
+                origen_captura=origen_captura
             )
 
             # 3. Persistencia atómica en la tabla 3NF 'sovereign_distributions'
             trace_dict = dist_out.audit_trace.model_dump()
             epist_delta = float(trace_dict.get("intensidades", {}).get("ratio", 0.0) or 0.0)
+            blindado = False
 
             with gw.write_transaction() as tx:
                 dist_rec = tx.query(SovereignDistribution).filter(
@@ -84,19 +132,36 @@ def sincronizar_distribuciones_soberanas_partidos(
                     )
                     tx.add(dist_rec)
                 else:
-                    dist_rec.model_version = "v13.0-DIRGEN"
-                    dist_rec.p_local = dist_out.p_local
-                    dist_rec.p_empate = dist_out.p_empate
-                    dist_rec.p_visitante = dist_out.p_visitante
-                    dist_rec.lambda_home = dist_out.lambda_home
-                    dist_rec.lambda_away = dist_out.lambda_away
-                    dist_rec.phi_lead2_home = dist_out.phi_lead2_home
-                    dist_rec.phi_lead2_away = dist_out.phi_lead2_away
-                    dist_rec.epistemic_delta = epist_delta
-                    dist_rec.audit_trace_json = trace_dict
+                    # [LN-QBE-102] `LIVE_PROTECTION_LOCK`: se evalúa DENTRO de la transacción,
+                    # leyendo el sello de la fila existente antes de asignar un solo atributo.
+                    traza_previa = dist_rec.audit_trace_json if isinstance(dist_rec.audit_trace_json, dict) else {}
+                    origen_previo = traza_previa.get("origen_captura") or ORIGEN_CAPTURA_HISTORICO
+                    blindado = _candado_blindado(origen_previo, origen_captura)
 
-            exitosos += 1
-            logger.info(f"✅ [SOVEREIGN PERSISTED] Distribución guardada en SQLite para {match_id}: ({dist_out.p_local:.4f}, {dist_out.p_empate:.4f}, {dist_out.p_visitante:.4f})")
+                    if blindado:
+                        # Excepción del Hecho Consumado: sólo el marcador oficial de `matches`.
+                        _actualizar_marcador_oficial(tx, match_id, item)
+                    else:
+                        dist_rec.model_version = "v13.0-DIRGEN"
+                        dist_rec.p_local = dist_out.p_local
+                        dist_rec.p_empate = dist_out.p_empate
+                        dist_rec.p_visitante = dist_out.p_visitante
+                        dist_rec.lambda_home = dist_out.lambda_home
+                        dist_rec.lambda_away = dist_out.lambda_away
+                        dist_rec.phi_lead2_home = dist_out.phi_lead2_home
+                        dist_rec.phi_lead2_away = dist_out.phi_lead2_away
+                        dist_rec.epistemic_delta = epist_delta
+                        dist_rec.audit_trace_json = trace_dict
+
+            if blindado:
+                protegidos += 1
+                logger.warning(
+                    f"🔒 [LIVE_PROTECTION_LOCK] Evidencia EN_VIVO preservada para {match_id}: "
+                    f"la reconstrucción histórica NO sobreescribió la distribución capturada."
+                )
+            else:
+                exitosos += 1
+                logger.info(f"✅ [SOVEREIGN PERSISTED] Distribución guardada en SQLite para {match_id}: ({dist_out.p_local:.4f}, {dist_out.p_empate:.4f}, {dist_out.p_visitante:.4f})")
 
         except Exception as ex:
             logger.error(f"❌ Error sincronizando distribución para {match_id}: {ex}")
@@ -105,5 +170,6 @@ def sincronizar_distribuciones_soberanas_partidos(
     return {
         "procesados": procesados,
         "exitosos": exitosos,
+        "protegidos": protegidos,
         "errores": errores
     }

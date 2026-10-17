@@ -994,6 +994,7 @@ def homologar(
         _proyectar_valores,
         _sellar_p_prima_en_capturas,
     )
+    from src.core.sovereign_pipeline import ORIGEN_CAPTURA_HISTORICO
     from src.storage.distribution_sync import sincronizar_distribuciones_soberanas_partidos
 
     gateway = PersistenceGateway()
@@ -1065,7 +1066,12 @@ def homologar(
         parte["escritura"] = {"modo": "dry-run", "3nf_exitosos": 0, "capturas_selladas": 0}
         return parte
 
-    puente = sincronizar_distribuciones_soberanas_partidos(items, gateway=gateway)
+    # [LN-QBE-102 / ARCH-1.4.43] Regla de Menor Privilegio escrita en el código: esta cadena es
+    # una RECONSTRUCCIÓN posterior, jamás una captura de ventanilla. El candado
+    # `LIVE_PROTECTION_LOCK` vetará cualquier intento de sobreescribir evidencia `EN_VIVO`.
+    puente = sincronizar_distribuciones_soberanas_partidos(
+        items, gateway=gateway, origen_captura=ORIGEN_CAPTURA_HISTORICO
+    )
     ids = [str(item["match_id"]) for item in items]
     valores = _leer_valores_3nf(gateway, ids)
     suficiencias = _leer_suficiencia_3nf(gateway, ids)

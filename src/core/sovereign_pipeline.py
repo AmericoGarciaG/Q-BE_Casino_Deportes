@@ -63,6 +63,124 @@ def _tasa_por_sede(bloque: Dict[str, Any], clave: str, tasa_general: float, pj_g
     return float(bloque.get(clave, respaldo)) / pj_sede
 
 
+# [LN-QBE-102] Sellos de procedencia de la evidencia (Regla de Menor Privilegio [ARCH-1.4.43]):
+# sólo un demonio de captura en vivo declara EN_VIVO; toda reconstrucción histórica declara
+# HISTORICO_RECONSTRUIDO, que es además el default de todos los llamadores existentes.
+ORIGEN_CAPTURA_EN_VIVO = "EN_VIVO"
+ORIGEN_CAPTURA_HISTORICO = "HISTORICO_RECONSTRUIDO"
+
+
+def _bloque_factico(raw_match_data: Dict[str, Any], clave: str) -> Dict[str, Any]:
+    """[LN-QBE-102] Bloque fáctico del club; `{}` si la fuente no lo publica (cero fabricación)."""
+    bloque = raw_match_data.get(clave)
+    return bloque if isinstance(bloque, dict) else {}
+
+
+def _tasa_insumo(bloque: Dict[str, Any], clave: str) -> Optional[float]:
+    """[ARCH-1.4.41] Tasa canónica = acumulado / PJ; `None` si la fuente no publica el insumo."""
+    precomputada = bloque.get(f"{clave}_rate")
+    if isinstance(precomputada, (int, float)) and not isinstance(precomputada, bool):
+        return round(float(precomputada), 4)
+    acumulado = bloque.get(clave)
+    if not isinstance(acumulado, (int, float)) or isinstance(acumulado, bool):
+        return None
+    pj = bloque.get("pj")
+    if not isinstance(pj, (int, float)) or isinstance(pj, bool) or float(pj) <= 0.0:
+        return None
+    return round(float(acumulado) / float(pj), 4)
+
+
+def _magnitud_insumo(fuente: Dict[str, Any], claves: Tuple[str, ...]) -> Optional[float]:
+    """[LN-QBE-102] Primera clave publicada con magnitud legible; jamás una conversión inventada."""
+    for clave in claves:
+        valor = fuente.get(clave)
+        if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+            return float(valor)
+    return None
+
+
+def _conteo_h2h(raw_match_data: Dict[str, Any]) -> int:
+    """[LN-QBE-102] Ventana H2H publicada: conteo explícito o longitud de la secuencia."""
+    for clave in ("h2h_conteo", "h2h_partidos"):
+        valor = raw_match_data.get(clave)
+        if isinstance(valor, int) and not isinstance(valor, bool):
+            return max(0, valor)
+    secuencia = raw_match_data.get("h2h_matches")
+    return len(secuencia) if isinstance(secuencia, (list, tuple)) else 0
+
+
+def _sello_opta(raw_match_data: Dict[str, Any], xg_es_real_opta: Optional[bool]) -> bool:
+    """[LN-QBE-102] Sello de procedencia Opta: parámetro explícito, flag publicado o `False`."""
+    if isinstance(xg_es_real_opta, bool):
+        return xg_es_real_opta
+    for clave in ("xg_es_real_opta", "es_real_opta", "xg_disponible"):
+        valor = raw_match_data.get(clave)
+        if isinstance(valor, bool):
+            return valor
+    return False
+
+
+def _contexto_efectivo(explicito: float, raw_match_data: Dict[str, Any], clave: str) -> float:
+    """[LN-QBE-102] Parámetro contextual efectivo: explícito si es distinto de 0.0; si no, el publicado."""
+    if explicito:
+        return float(explicito)
+    publicado = raw_match_data.get(clave)
+    if isinstance(publicado, (int, float)) and not isinstance(publicado, bool):
+        return float(publicado)
+    return 0.0
+
+
+def _empaquetar_insumos_factivados(
+    raw_match_data: Dict[str, Any],
+    delta_alt_metros: float,
+    delta_descanso_dias: float,
+    q_mod_h: float,
+    q_mod_a: float,
+    xg_es_real_opta: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """[LN-QBE-102] Telemetría fáctica de los insumos consumidos por el generador soberano.
+
+    Cada clave es la magnitud REALMENTE usada por la matemática (tasas canónicas [ARCH-1.4.41],
+    splits de sede [LN-QBE-038] y parámetros contextuales efectivos). `None` = no publicado.
+    """
+    local = _bloque_factico(raw_match_data, "home_team_stats")
+    visita = _bloque_factico(raw_match_data, "away_team_stats")
+    split_local = _bloque_factico(raw_match_data, "home_split_stats")
+    split_visita = _bloque_factico(raw_match_data, "away_split_stats")
+    gc_local_rate = _tasa_insumo(local, "gc")
+    gc_visita_rate = _tasa_insumo(visita, "gc")
+    xga_local_rate = _tasa_insumo(local, "xga") or gc_local_rate
+    xga_visita_rate = _tasa_insumo(visita, "xga") or gc_visita_rate
+    pj_sede_local = _magnitud_insumo(raw_match_data, ("pj_sede_local",))
+    pj_sede_visita = _magnitud_insumo(raw_match_data, ("pj_sede_visita",))
+    if pj_sede_local is None:
+        pj_sede_local = _magnitud_insumo(split_local, ("pj",))
+    if pj_sede_visita is None:
+        pj_sede_visita = _magnitud_insumo(split_visita, ("pj",))
+    return {
+        "xg_local_rate": _tasa_insumo(local, "xg"),
+        "xg_visita_rate": _tasa_insumo(visita, "xg"),
+        "xga_local_rate": xga_local_rate,
+        "xga_visita_rate": xga_visita_rate,
+        "gc_local_rate": gc_local_rate,
+        "gc_visita_rate": gc_visita_rate,
+        "sot_local": _magnitud_insumo(local, ("sot", "shots_on_target")),
+        "sot_visita": _magnitud_insumo(visita, ("sot", "shots_on_target")),
+        "sota_local": _magnitud_insumo(local, ("sota", "shots_on_target_against")),
+        "sota_visita": _magnitud_insumo(visita, ("sota", "shots_on_target_against")),
+        "poss_local": _magnitud_insumo(local, ("possession", "possession_pct", "posesion")),
+        "poss_visita": _magnitud_insumo(visita, ("possession", "possession_pct", "posesion")),
+        "pj_sede_local": int(pj_sede_local) if pj_sede_local is not None else 0,
+        "pj_sede_visita": int(pj_sede_visita) if pj_sede_visita is not None else 0,
+        "h2h_conteo": _conteo_h2h(raw_match_data),
+        "q_mod_h": round(float(q_mod_h), 4),
+        "q_mod_a": round(float(q_mod_a), 4),
+        "delta_alt_metros": round(float(delta_alt_metros), 4),
+        "delta_descanso_dias": round(float(delta_descanso_dias), 4),
+        "xg_es_real_opta": _sello_opta(raw_match_data, xg_es_real_opta),
+    }
+
+
 class StochasticAuditTrace(BaseModel):
     """Traza forense inmutable de la generación de la distribución soberana."""
     match_id: str
@@ -84,6 +202,19 @@ class StochasticAuditTrace(BaseModel):
     kernel_h2h_empirico: Dict[str, float] = Field(
         default_factory=dict,
         description="Símplex empírico Δ² del Generador C; vacío bajo la Ley Zero-H2H [LN-QBE-020-B] (w_H2H = 0.0, w_Liga = 1.0).",
+    )
+    # --- [LN-QBE-102] Sello de procedencia y telemetría fáctica (aditivo, cero ruptura) ---
+    origen_captura: str = Field(
+        default=ORIGEN_CAPTURA_HISTORICO,
+        description="Sello de procedencia de la evidencia: 'EN_VIVO' | 'HISTORICO_RECONSTRUIDO' [LN-QBE-102].",
+    )
+    timestamp_captura: Optional[str] = Field(
+        default=None,
+        description="Instante ISO-8601 (UTC) de la captura en vivo; `None` si la ruta no lo publica [LN-QBE-102].",
+    )
+    insumos_factivados: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Telemetría fáctica de los insumos consumidos (tasas canónicas [ARCH-1.4.41], SoT, PJ de sede [LN-QBE-038], ventana H2H) [LN-QBE-102].",
     )
 
 
@@ -344,12 +475,24 @@ def generar_distribucion_soberana(
     delta_descanso_dias: float = 0.0,
     q_mod_h: float = 1.0,
     q_mod_a: float = 1.0,
-    rho: float = -0.05
+    rho: float = -0.05,
+    origen_captura: str = ORIGEN_CAPTURA_HISTORICO,
+    timestamp_captura: Optional[str] = None,
+    xg_es_real_opta: Optional[bool] = None
 ) -> SovereignDistributionOutput:
     """
     [TRATADO VOLUMEN I] Generador Soberano Universal de la Distribución del Partido.
     Pipeline completo: Datos -> S(I) -> Factores -> Intensidades acotadas -> Dixon-Coles 2D -> André -> Simplex.
     """
+    # 0. [LN-QBE-102] Contexto fáctico EFECTIVO: el parámetro explícito manda; en su default
+    #    canónico (0.0) se adopta la magnitud publicada por el registro, de modo que la matemática
+    #    y la telemetría `insumos_factivados` declaren EXACTAMENTE el mismo número (cero maquillaje).
+    delta_alt_efectivo = _contexto_efectivo(delta_alt_metros, raw_match_data, "delta_alt_metros")
+    delta_descanso_efectivo = _contexto_efectivo(delta_descanso_dias, raw_match_data, "delta_descanso_dias")
+    insumos_factivados = _empaquetar_insumos_factivados(
+        raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta
+    )
+
     # 1. Comprobación de Suficiencia Fáctica S(I_i)
     if not evaluar_suficiencia_informativa(raw_match_data):
         trace_insuf = StochasticAuditTrace(
@@ -359,7 +502,10 @@ def generar_distribucion_soberana(
             intensidades={"lambda_h": 1.325, "lambda_a": 1.325},
             distribucion_simplex={"p_1": 0.3333, "p_X": 0.3333, "p_2": 0.3334},
             phi_lead2={"phi_h": 0.0, "phi_a": 0.0},
-            matriz_resumen={}
+            matriz_resumen={},
+            origen_captura=origen_captura,
+            timestamp_captura=timestamp_captura,
+            insumos_factivados=insumos_factivados
         )
         return SovereignDistributionOutput(
             match_id=match_id,
@@ -380,8 +526,8 @@ def generar_distribucion_soberana(
         A_home=A_h, D_away=D_a,
         A_away=A_a, D_home=D_h,
         mu_liga=mu_liga, gamma_home_base=gamma_home_base,
-        delta_alt_metros=delta_alt_metros,
-        delta_descanso_dias=delta_descanso_dias,
+        delta_alt_metros=delta_alt_efectivo,
+        delta_descanso_dias=delta_descanso_efectivo,
         q_mod_h=q_mod_h, q_mod_a=q_mod_a,
         home_team_slug=raw_match_data.get("home_team_slug")
     )
@@ -416,7 +562,10 @@ def generar_distribucion_soberana(
         matriz_resumen={"0_0": round(matriz_2d[0][0], 4), "1_0": round(matriz_2d[1][0], 4), "1_1": round(matriz_2d[1][1], 4)},
         origen_factores=origen_factores,
         discrepancia_epist=delta_epist,
-        kernel_h2h_empirico=kernel_h2h
+        kernel_h2h_empirico=kernel_h2h,
+        origen_captura=origen_captura,
+        timestamp_captura=timestamp_captura,
+        insumos_factivados=insumos_factivados
     )
 
     return SovereignDistributionOutput(

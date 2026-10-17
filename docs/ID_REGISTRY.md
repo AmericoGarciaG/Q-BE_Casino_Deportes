@@ -204,6 +204,13 @@
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.41]` | ARCH | `docs/ARCH.md` | Contrato Único de Escala xG y Extirpación de la Escala Artificial en la Ingesta [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-101]` | LOGIC | `docs/LOGIC.md` | Motor de Atribución Factorial y Telemetría de Integridad de Insumos | SELLADO |
+| `[ARCH-1.4.42]` | ARCH | `docs/ARCH.md` | Micro-HUD de Atribución Factorial y DTO de Inspección de 44 Variables | SELLADO |
+| `[DES-QBE-064]` | DESIGN | `docs/DESIGN.md` | Geometría del Micro-HUD de Tarjeta y Modal Forense de 44 Variables | SELLADO |
+| `[LN-QBE-102]` | LOGIC | `docs/LOGIC.md` | Axioma de Protección de la Evidencia en Vivo, Sello de Procedencia y Telemetría de Insumos Fácticos | SELLADO |
+| `[ARCH-1.4.43]` | ARCH | `docs/ARCH.md` | Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR] | SELLADO |
+| `[DES-QBE-065]` | DESIGN | `docs/DESIGN.md` | Badge de Procedencia de la Evidencia e Iluminación de las Ocho Variables Vivas | SELLADO |
+
 
 
 > **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
