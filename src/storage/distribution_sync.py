@@ -6,16 +6,42 @@ Base de Gobierno: Kybern Framework v12.0 / Tratado Volumen I
 """
 
 import logging
+import math
 from typing import Dict, Any, List, Optional
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import Competition, Match, SovereignDistribution
 from src.core.sovereign_pipeline import (
     generar_distribucion_soberana,
+    DELTA_EPISTEMICO_SIN_EVIDENCIA,
     ORIGEN_CAPTURA_EN_VIVO,
     ORIGEN_CAPTURA_HISTORICO,
 )
 
 logger = logging.getLogger("DistributionSync")
+
+
+def _delta_epistemico_publicado(dist_out: Any, trace_dict: Dict[str, Any]) -> float:
+    """
+    [LN-QBE-104] Δ_epist(∞) persistido en `sovereign_distributions.epistemic_delta`.
+
+    La columna deja de espejar el `ratio` λ_max/λ_min de `intensidades` (evidencia 3NF sellada
+    [LN-QBE-102], que permanece intacta en la traza) y publica la discrepancia REAL entre el
+    Generador A (Poisson paramétrico) y el Generador C (kernel H2H): max_k |P_A(k) − P_C(k)|.
+
+    Orden de lectura: contrato de salida → traza forense → piso de ignorancia declarada R-1.
+    El valor se acota a [0, 1] porque Δ(∞) vive en el símplex Δ²; un `None` heredado o un tipo
+    no numérico JAMÁS se maquilla con 0.0 (se declara la ignorancia 0.02 del Contrato R-1).
+    """
+    for candidato in (
+        getattr(dist_out, "epistemic_delta", None),
+        trace_dict.get("epistemic_delta"),
+    ):
+        if isinstance(candidato, bool) or not isinstance(candidato, (int, float)):
+            continue
+        valor = float(candidato)
+        if math.isfinite(valor):
+            return min(1.0, max(0.0, valor))
+    return DELTA_EPISTEMICO_SIN_EVIDENCIA
 
 
 def _candado_blindado(origen_previo: str, origen_entrante: str) -> bool:
@@ -108,7 +134,9 @@ def sincronizar_distribuciones_soberanas_partidos(
 
             # 3. Persistencia atómica en la tabla 3NF 'sovereign_distributions'
             trace_dict = dist_out.audit_trace.model_dump()
-            epist_delta = float(trace_dict.get("intensidades", {}).get("ratio", 0.0) or 0.0)
+            # [LN-QBE-104] Δ_epist(∞) REAL (Generador A vs Generador C); el `ratio` λ_max/λ_min deja
+            # de transcribirse como discrepancia epistémica (sigue siendo evidencia 3NF en la traza).
+            epist_delta = _delta_epistemico_publicado(dist_out, trace_dict)
             blindado = False
 
             with gw.write_transaction() as tx:

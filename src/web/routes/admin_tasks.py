@@ -101,24 +101,42 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
         "descripcion": "Pre-vuelo diagnóstico de coherencia relacional (solo lectura)",
         "comandos": [["scripts", "auditoria", "auditar_coherencia_cartelera.py"]],
     },
+    # ── [ARCH-1.4.12-C] ENMIENDA 2026-10-17: EJECUTORES DE HOMOLOGACIÓN Y AUDITORÍA E2E ──────
+    # Reconstrucción fáctica integral (Opta xG + Kernel H2H), auditoría de calibración de punta a
+    # punta y extracción del dataset de investigación. Los tres scripts declaran todos sus
+    # argumentos con default: son invocables sin parámetros adicionales desde el cockpit.
+    # `homologar_temporada_optah2h` se despacha SIN `--forzar` (menor privilegio, ley `fill-if-absent`):
+    # reconstruye lo ausente y JAMÁS sobreescribe evidencia ya sellada.
+    "homologar_temporada_optah2h": {
+        "descripcion": "Reconstrucción integral Opta xG + H2H (temporada completa J1-J17)",
+        "comandos": [["scripts", "ingesta", "homologar_temporada_optah2h.py"]],
+    },
+    "auditar_pipeline_backtesting": {
+        "descripcion": "Auditoría E2E del pipeline de calibración y backtesting",
+        "comandos": [["scripts", "auditoria", "auditar_pipeline_end_to_end_backtesting.py"]],
+    },
+    "exportar_dataset_investigacion": {
+        "descripcion": "Extracción del dataset de investigación a CSV (data/output/)",
+        "comandos": [["scripts", "utilidades", "exportar_dataset_investigacion.py"]],
+    },
     "cadena_pre_jornada": {
         "descripcion": "Secuencia pre-jornada: Deportivo ➔ Mercado ➔ Pre-Vuelo de Coherencia",
-        "comandos": [
-            ["scripts", "daemons", "centinela_deportivo.py"],
-            ["scripts", "daemons", "centinela_mercado.py"],
-            ["scripts", "auditoria", "auditar_coherencia_cartelera.py"],
-        ],
+        "pasos": ("centinela_deportivo", "centinela_mercado", "auditar_coherencia_cartelera"),
     },
     "cadena_post_jornada": {
-        "descripcion": "Secuencia post-jornada: Histórico BetExplorer ➔ Pre-Vuelo de Coherencia",
-        "comandos": [
-            ["scripts", "ingesta", "ingestar_historico_betexplorer.py"],
-            ["scripts", "auditoria", "auditar_coherencia_cartelera.py"],
-        ],
+        "descripcion": (
+            "Secuencia post-jornada: Histórico BetExplorer ➔ Homologación Opta+H2H ➔ Pre-Vuelo de "
+            "Coherencia (Tríada de Cierre [ARCH-1.4.12-C])"
+        ),
+        "pasos": (
+            "ingestar_historico_betexplorer",
+            "homologar_temporada_optah2h",
+            "auditar_coherencia_cartelera",
+        ),
     },
     "cadena_progol": {
         "descripcion": "Secuencia de quiniela: Centinela Progol (concurso vigente)",
-        "comandos": [["scripts", "daemons", "centinela_progol.py"]],
+        "pasos": ("centinela_progol",),
     },
     "auditar_pureza_vol1": {
         "descripcion": "Auditoría de pureza matemática del Tratado I (7/7 tests)",
@@ -143,10 +161,54 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# ── [ARCH-1.4.12-C] MATERIALIZACIÓN DERIVADA DE LAS CADENAS TEMPORALES ─────────
+# Fuente única de verdad: cada cadena declara sus `pasos` como identificadores certificados.
+# Sus `comandos` NO se transcriben a mano: se materializan aquí desde la whitelist, y un guardián
+# fail-loud aborta el import si un paso no está certificado o si su comando no es atómico
+# ([GOVERNANCE-01]: cero duplicación, cero cadenas fantasma).
+def _materializar_cadenas(tareas: Dict[str, Dict[str, Any]]) -> None:
+    """Deriva los `comandos` de cada cadena a partir de sus `pasos` certificados."""
+    for identificador, especificacion in tareas.items():
+        pasos = especificacion.get("pasos")
+        if not pasos:
+            continue
+        comandos: List[List[str]] = []
+        for paso in pasos:
+            subespecificacion = tareas.get(paso)
+            if subespecificacion is None:
+                raise RuntimeError(
+                    f"🚨 [ARCH-1.4.12-C] Cadena '{identificador}' referencia el paso '{paso}', "
+                    "que no está en la whitelist certificada."
+                )
+            subcomandos = subespecificacion.get("comandos") or []
+            if len(subcomandos) != 1:
+                raise RuntimeError(
+                    f"🚨 [ARCH-1.4.12-C] El paso '{paso}' de la cadena '{identificador}' debe ser "
+                    f"un ejecutor atómico (1 comando); publica {len(subcomandos)}."
+                )
+            comandos.append(list(subcomandos[0]))
+        especificacion["comandos"] = comandos
+
+
+_materializar_cadenas(TAREAS_PERMITIDAS)
+
+# Vistas derivadas de la MISMA whitelist: el cockpit y The Shield las consumen sin duplicar estado.
+CADENAS_TAREAS: Dict[str, List[str]] = {
+    identificador: list(especificacion["pasos"])
+    for identificador, especificacion in TAREAS_PERMITIDAS.items()
+    if especificacion.get("pasos")
+}
+COMANDOS_TAREAS: Dict[str, List[List[str]]] = {
+    identificador: [list(comando) for comando in especificacion.get("comandos") or []]
+    for identificador, especificacion in TAREAS_PERMITIDAS.items()
+}
+
 # ── [ARCH-1.4.28] MODOS DE DESPACHO Y PUENTE INTEGRADO (CAPA 5) ───────────────
 # La whitelist de [ARCH-1.4.12] (9 tareas) se amplió a 10 con la purga total in-process sellada
-# por [ARCH-1.4.29] y a 15 con los dos sensores individuales y las tres cadenas temporales
-# homologadas de [ARCH-1.4.12-C]; ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
+# por [ARCH-1.4.29], a 15 con los dos sensores individuales y las tres cadenas temporales
+# homologadas de [ARCH-1.4.12-C], y a 18 con los tres ejecutores de la Enmienda 2026-10-17
+# (`homologar_temporada_optah2h`, `auditar_pipeline_backtesting`, `exportar_dataset_investigacion`);
+# ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
 # sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
 # hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.
 MODO_DESPACHO_SUBPROCESS = "subprocess"

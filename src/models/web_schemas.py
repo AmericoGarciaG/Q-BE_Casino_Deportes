@@ -179,14 +179,25 @@ class AtribucionDescomposicionOut(BaseModel):
 
 
 class AtribucionVariableOut(BaseModel):
-    """[LN-QBE-101].P.4 — Renglón forense del catálogo (evidencia ausente ⇒ `None`)."""
+    """[LN-QBE-101].P.4 — Renglón forense del catálogo (evidencia ausente ⇒ `None`).
+
+    [ARCH-1.4.42-B] La celda puede portar unidad (`'+0.0 d'`, `'2660m'`, `'0 partidos'`, `'54.2%'`)
+    o magnitud pura. `str` precede a `float` en el `Union`: Pydantic V2 preserva el tipo exacto y
+    ninguna cadena con unidad se fuerza a flotante (erradica el `ResponseValidationError` → HTTP 500).
+    """
 
     model_config = ConfigDict(extra="ignore")
     id: str
     variable: str
-    local: Optional[float] = None
-    visita: Optional[float] = None
-    z_score: Optional[float] = None
+    local: Optional[Union[str, float]] = Field(
+        default=None, description="Valor formateado con unidad (ej. '53.5%', '+0.0 d') o float puro"
+    )
+    visita: Optional[Union[str, float]] = Field(
+        default=None, description="Valor formateado con unidad o float puro"
+    )
+    z_score: Optional[Union[str, float]] = Field(
+        default=None, description="Z-score formateado o float puro"
+    )
     origen: str = "SIN EVIDENCIA"
     estado: str = "SIN EVIDENCIA"
     impacto: str = ""

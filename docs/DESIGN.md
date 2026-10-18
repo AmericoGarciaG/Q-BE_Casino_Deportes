@@ -637,7 +637,34 @@
 * **Iluminación de las Ocho Variables Vivas:** el estado `EVALUADO` se incorpora a `COLORES_ESTADO_44` como **verde activo** (`🟢 #10B981`), distinto de `CALIBRADO` (ámbar `#F59E0B`), `SIN EVIDENCIA` (rojo `#EF4444`) y `NEUTRO` (pizarra `#94A3B8`). Con `insumos_factivados` presente, el catálogo enciende `V01`, `V05`, `V06`, `V10`, `V11`, `V27`, `V28` y `V39` en `EVALUADO` con **valor fáctico tipado y con unidades** (`"53.5%"`, `"1.60"`, `"5"`, `"2660m"`, `"+3.0 d"`, `"5 partidos"`); sin el paquete, la celda permanece en `SIN EVIDENCIA` (cero invención).
 * **Criterio de aceptación:** `tests/shield/test_shield_live_lock_and_input_telemetry.py` certifica la presencia del badge, de las dos clases CSS y de las cuatro entradas de `COLORES_ESTADO_44`; el DTO `AtribucionFactorialOut.origen_captura` transporta el sello hasta la vista.
 
+### [DES-QBE-066] Acordeón Bicolor del Catálogo Forense: Dimensiones con Datos vs. Dimensiones en Fase 6 [UX-MANDATE]
+* **Objetivo:** que el operador distinga de un vistazo, en el modal `#modal-44-variables`, entre una dimensión **con evidencia evaluada** y una dimensión **vacía por ausencia de fuente** (fase 6 = sin datos), sin agregar cifras ni estados que el servidor no haya publicado.
+* **Insumo único:** la telemetría dimensional servida por `[LN-QBE-103]` (`total_variables`, `variables_evaluadas`, `tiene_datos`). El cliente **no cuenta filas**: transcribe los contadores del bloque `atribucion_factorial.variables_44`.
+* **Colorimetría bicolor (Dark Fintech):**
+  - Dimensión con datos ⇒ `details.vars44-dimension.dim-con-datos`: borde izquierdo `3px solid #10B981`, título `#10B981` y badge `.badge-dim.badge-dim-evaluada` (`background: rgba(16, 185, 129, 0.14); border: 1px solid #10B981; color: #6EE7B7;`).
+  - Dimensión en fase 6 ⇒ `details.vars44-dimension.dim-fase6`: borde izquierdo `3px solid #475569`, título `#94A3B8` y badge `.badge-dim.badge-dim-fase6` (`background: rgba(71, 85, 105, 0.18); border: 1px solid #475569; color: #CBD5E1;`).
+  - Geometría común del badge: `display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;`.
+* **Etiquetas:** `n/m evaluadas` cuando `tiene_datos === true`, `SIN EVALUAR` cuando es `false`. Cero porcentajes derivados en el cliente; el conteo y el total llegan servidos y se validan con `Number.isFinite` antes de pintarse.
+* **Blindaje de presentación:** el badge se construye con `createElement` + `textContent` (nunca `innerHTML` con datos de red); el rótulo de la dimensión sigue el contrato previo de `[DES-QBE-064]` (12 dimensiones, tabla de 7 columnas, ID canónico).
+* **Criterio de aceptación:** `tests/shield/test_shield_opta_flag_and_accordion_telemetry.py` certifica las cuatro clases CSS (`.dim-con-datos`, `.dim-fase6`, `.badge-dim-evaluada`, `.badge-dim-fase6`), los colores legislados y la construcción sin `innerHTML`.
 
+
+
+
+### [DES-QBE-067] Badge `SIN EVALUAR` y Filtro Anti-Cuarentena de la Cartelera de Calibración [UX-MANDATE]
+* **Objetivo:** (a) que el acordeón forense no finga medición cuando una dimensión no tiene una sola variable evaluada, y (b) que el operador pueda excluir de la vitrina de calibración los partidos vetados por discrepancia epistémica ($\text{EPIST} = 🔴$, `[LN-QBE-070-B]`) **sin** corromper el reporte de backtesting.
+* **Insumo único:** el bloque `atribucion_factorial.variables_44` servido por `[LN-QBE-103]` (badge) y el reporte `/api/markets/backtesting/*` ya materializado en `backtestingReportCache` (filtro). El cliente **no cuenta filas ni recalcula probabilidades**: transcribe contadores y re-agrega desde enteros.
+* **Contrato del badge (`[GOVERNANCE-01]` — cero maquillaje):**
+  - `tiene_datos === true` ⇒ `n/m evaluadas` + `.badge-dim-evaluada` (verde `#10B981`).
+  - `tiene_datos === false` ⇒ **`SIN EVALUAR`** + `.badge-dim-fase6` (gris `#475569`). Prohibido `0/0 evaluadas`: finge una medición que no existió.
+  - Construcción con `createElement` + `textContent`; `innerHTML` con datos de red está vetado. Los contadores se validan con `Number.isFinite` antes de pintarse.
+* **Filtro anti-cuarentena (`#chk-excluir-vetados`):**
+  - **Definición de vetado:** `atribucion_factorial.semaforos.epist === "ROJO"`. Único criterio, sin heurísticas paralelas.
+  - **Presentación pura:** `backtestingReportCache` es **inmutable**; el filtro opera sobre una proyección (`Array.prototype.filter`) y re-deriva los KPI desde los **conteos enteros** del subconjunto (aciertos/fallos/nulos), respetando la convención servidora de `masa_cobertura_pct` (suma de tercios redondeados).
+  - **Declaración del universo efectivo:** `#bt-estado` rotula cuántos partidos se excluyeron; cero exclusión silenciosa.
+  - **Idempotencia estricta:** con `0` vetados el filtro es inerte y manda el agregado servido (cifra idéntica al estado sin filtro).
+  - **Reversible:** desmarcar restaura el agregado original sin recargar ni re-consultar el endpoint.
+* **Criterio de aceptación:** `tests/shield/test_shield_ensemble_fusion_and_ui_sync.py` (inversiones 5 y 6) certifica la presencia del control, la inmutabilidad del cache, la re-derivación por conteos y el rótulo `SIN EVALUAR` con su clase CSS.
 
 
 ---

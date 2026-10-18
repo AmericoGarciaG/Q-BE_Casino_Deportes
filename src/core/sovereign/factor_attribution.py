@@ -54,6 +54,21 @@ def _num(valor: Any, defecto: Optional[float] = None) -> Optional[float]:
     return numero
 
 
+def _es_certificado(valor: Any) -> bool:
+    """[ARCH-1.4.44] Lectura estricta del sello `xg_es_real_opta` (True/1/"true" ⇒ certificado).
+
+    Cualquier otra forma —`False`, `0`, `None`, texto vacío o ausente— NO certifica métrica Opta
+    real: la procedencia se declara honestamente como no certificada (`[GOVERNANCE-01]`).
+    """
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, (int, float)):
+        return float(valor) == 1.0
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("true", "1", "si", "sí", "yes")
+    return False
+
+
 def _amortiguar(factor: Any) -> float:
     """[VAULT-CORE-001] Imagen canónica κ_net · tanh(A / κ_net), κ_net = 0.2500 absoluto."""
     numero = _num(factor, 0.0)
@@ -182,22 +197,36 @@ def evaluar_semaforos_salud_datos(
     delta_epist: Any = 0.0,
     q_mod: Any = 1.0,
     suficiencia_S_I: Any = 1,
+    xg_es_real_opta: Any = None,
+    xg_metricas_publicadas: Any = None,
 ) -> Dict[str, str]:
     """[LN-QBE-101].P.3 — Auditoría de completitud de insumos (degradación honesta).
 
-    * `opta`   : 🟢 xG Opta real · 🟡 calibrado 1.05·GF · 🔴 sin fuente.
+    * `opta`   : 🟢 sello `xg_es_real_opta` certificado · 🟡 métrica xG publicada sin certificación
+                 Opta (o respaldo calibrado 1.05·GF) · 🔴 sin métrica que juzgar.
     * `sede`   : evalúa el MÍNIMO bilateral de PJ (el gate GSL-3D exige solidez de ambas plazas).
     * `h2h`    : 🟢 5 enfrentamientos (τ = 540 d) · 🟡 1–4 · ⚪ Zero-H2H [LN-QBE-020-B].
     * `epist`  : 🟢 Δ ≤ 0.03 · 🟡 0.03 < Δ ≤ 0.12 · 🔴 Δ > 0.12 (cuarentena fiduciaria).
     * `ctx`    : 🟢 Q_mod = 1.00 · 🟡 shock leve · 🔴 Q_mod ≤ 0.93 (shock severo).
+
+    [ARCH-1.4.44] Tri-estado de la procedencia Opta: el ROJO deja de acusar evidencia existente.
+    Un llamador que no declara el sello (`xg_es_real_opta is None`) conserva el contrato heredado
+    (`xg_disponible ⇒ VERDE`); todo productor que SÍ declara el sello —el homologador siempre lo
+    estampa— sólo obtiene verde con certificación positiva. La ignorancia canónica S(I) = 0 sigue
+    degradando a ROJO mientras no exista certificación Opta real.
     """
-    if xg_disponible:
+    sello_declarado = xg_es_real_opta is not None
+    certificado = _es_certificado(xg_es_real_opta) or (not sello_declarado and bool(xg_disponible))
+    metrica_publicada = (
+        bool(xg_disponible) or bool(xg_calibrado) or _es_certificado(xg_metricas_publicadas)
+    )
+    if certificado and metrica_publicada:
         opta = VERDE
-    elif xg_calibrado:
+    elif metrica_publicada:
         opta = AMARILLO
     else:
         opta = ROJO
-    if not xg_disponible and (_num(suficiencia_S_I, 1) or 0) == 0:
+    if not certificado and (_num(suficiencia_S_I, 1) or 0) == 0:
         opta = ROJO
 
     pj_local = int(_num(pj_sede_local, 0.0) or 0.0)
@@ -338,6 +367,72 @@ _FORMATO_INSUMO: Dict[str, Tuple[str, Optional[str], str]] = {
     "V28": ("delta_alt_metros", None, "metros"),         # Δ altitud REALMENTE aplicado al modelo
     "V39": ("h2h_conteo", None, "partidos"),             # Duelos leídos dentro de la ventana τ
 }
+
+# ── [ARCH-1.4.44] Respaldo declarado del Axioma 4 (cero fabricación de xGA) ────────────────────
+# Si el generador publicó `gc_*_rate` (goles recibidos por partido) sin `xga_*_rate`, la celda V10
+# transcribe el respaldo REALMENTE consumido y lo declara en su nota forense. Nunca se sustituye
+# una métrica ausente por un valor inventado: sólo se exhibe el insumo que el motor sí consumió.
+_RESPALDO_INSUMO: Dict[str, Tuple[Tuple[str, str], str, str]] = {
+    "V10": (
+        ("gc_local_rate", "gc_visita_rate"),
+        "num2",
+        "Respaldo GC/PJ (xGA no publicado) · Axioma 4 [ARCH-1.4.44]",
+    ),
+}
+
+
+def _celda_telemetria(
+    identificador: str,
+    nombre: str,
+    origen: str,
+    espacio: str,
+    z_scores: Dict[str, Any],
+    insumos: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """[LN-QBE-102] Celda `EVALUADO` de un insumo consumido (o `None` si no se publicó).
+
+    Precedencia: insumo primario declarado en `_FORMATO_INSUMO`; si no llegó, el respaldo
+    legislado de `_RESPALDO_INSUMO` (Axioma 4) se transcribe declarando su origen en la nota.
+    """
+    receta = _FORMATO_INSUMO.get(identificador)
+    if receta is not None:
+        clave_local, clave_visita, formato = receta
+        local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
+        visita_insumo = (
+            _formatear_insumo(insumos.get(clave_visita), formato) if clave_visita else None
+        )
+        if local_insumo is not None or visita_insumo is not None:
+            return {
+                "id": identificador,
+                "variable": nombre,
+                "local": local_insumo,
+                "visita": visita_insumo,
+                "z_score": _num(z_scores.get(identificador)),
+                "origen": origen,
+                "estado": _ESTADO_EVALUADO,
+                "impacto": espacio,
+                "nota": "Insumo consumido por el pipeline [LN-QBE-102]",
+            }
+
+    respaldo = _RESPALDO_INSUMO.get(identificador)
+    if respaldo is None:
+        return None
+    (clave_local, clave_visita), formato, nota = respaldo
+    local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
+    visita_insumo = _formatear_insumo(insumos.get(clave_visita), formato)
+    if local_insumo is None and visita_insumo is None:
+        return None
+    return {
+        "id": identificador,
+        "variable": nombre,
+        "local": local_insumo,
+        "visita": visita_insumo,
+        "z_score": _num(z_scores.get(identificador)),
+        "origen": origen,
+        "estado": _ESTADO_EVALUADO,
+        "impacto": espacio,
+        "nota": nota,
+    }
 
 
 def _insumos_factivados(datos: Dict[str, Any]) -> Dict[str, Any]:
@@ -528,26 +623,10 @@ def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = 
     for identificador, nombre, dimension, claves, modo, origen, espacio in _CATALOGO_44:
         # [LN-QBE-102] Precedencia de la telemetría: si el motor consumió el insumo, la celda se
         # enciende en `EVALUADO` con la magnitud tipada. Si no lo publicó, la ruta heredada decide.
-        receta = _FORMATO_INSUMO.get(identificador) if insumos else None
-        if receta is not None:
-            clave_local, clave_visita, formato = receta
-            local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
-            visita_insumo = (
-                _formatear_insumo(insumos.get(clave_visita), formato) if clave_visita else None
-            )
-            if local_insumo is not None or visita_insumo is not None:
-                acumuladas[dimension].append({
-                    "id": identificador,
-                    "variable": nombre,
-                    "local": local_insumo,
-                    "visita": visita_insumo,
-                    "z_score": _num(z_scores.get(identificador)),
-                    "origen": origen,
-                    "estado": _ESTADO_EVALUADO,
-                    "impacto": espacio,
-                    "nota": "Insumo consumido por el pipeline [LN-QBE-102]",
-                })
-                continue
+        celda = _celda_telemetria(identificador, nombre, origen, espacio, z_scores, insumos)
+        if celda is not None:
+            acumuladas[dimension].append(celda)
+            continue
 
         local, visita = _valor_variable(modo, claves, datos, bloque_local, bloque_visita, h2h)
         sin_evidencia = local is None and visita is None
@@ -570,17 +649,23 @@ def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = 
         })
 
 
-    dimensiones = [
-        {
+    dimensiones = []
+    for dimension, titulo in DIMENSIONES_CANONICAS:
+        filas = acumuladas[dimension]
+        # [DES-QBE-066] Telemetría dimensional servida: el acordeón bicolor jamás cuenta filas.
+        evaluadas = sum(1 for fila in filas if fila.get("estado") == _ESTADO_EVALUADO)
+        dimensiones.append({
             "dimension": dimension,
             "titulo": titulo,
-            "conteo": len(acumuladas[dimension]),
-            "variables": acumuladas[dimension],
-        }
-        for dimension, titulo in DIMENSIONES_CANONICAS
-    ]
+            "conteo": len(filas),
+            "total_variables": len(filas),
+            "variables_evaluadas": evaluadas,
+            "tiene_datos": evaluadas > 0,
+            "variables": filas,
+        })
     return {
         "total_variables": len(_CATALOGO_44),
+        "total_evaluadas": sum(dimension["variables_evaluadas"] for dimension in dimensiones),
         "dimensiones": dimensiones,
     }
 
@@ -678,9 +763,24 @@ def construir_atribucion_factorial(datos_partido: Optional[Dict[str, Any]] = Non
     # Si el pipeline publicó el insumo, el semáforo se pronuncia sobre el número REALMENTE
     # consumido. `_primero` garantiza que sin paquete telemetrizado (dict vacío) nada cambia.
     insumos = _insumos_factivados(datos)
-    if insumos.get("xg_es_real_opta") is True:
+    # [ARCH-1.4.44] Sello de procedencia Opta: se admite en el paquete de insumos, en la traza o en
+    # la raíz del `raw_match_data` sellado por el homologador. `None` con paquete publicado ⇒ se
+    # declara `False` (exige certificación); sin paquete ni sello ⇒ contrato heredado intacto.
+    sello_opta = _primero(
+        insumos.get("xg_es_real_opta"),
+        trace.get("xg_es_real_opta"),
+        datos.get("xg_es_real_opta"),
+    )
+    sello_declarado = bool(insumos) or sello_opta is not None
+    metricas_xg_publicadas = any(
+        _num(insumos.get(clave)) is not None
+        for clave in ("xg_local_rate", "xg_visita_rate")
+    )
+    if _es_certificado(sello_opta):
         flag_xg = True
         flag_xg_calibrado = False
+    elif metricas_xg_publicadas and flag_xg is None:
+        flag_xg = True
     if _num(insumos.get("h2h_conteo")) is not None:
         h2h_leidos = _num(insumos.get("h2h_conteo"))
 
@@ -696,6 +796,8 @@ def construir_atribucion_factorial(datos_partido: Optional[Dict[str, Any]] = Non
             _num(_primero(insumos.get("q_mod_a"), q_away), 1.0) or 1.0,
         ),
         suficiencia_S_I=_primero(trace.get("suficiencia_S_I"), trace.get("S_I"), datos.get("S_I"), 1),
+        xg_es_real_opta=(sello_opta if sello_opta is not None else (False if sello_declarado else None)),
+        xg_metricas_publicadas=metricas_xg_publicadas,
     )
     # Degradación honesta de la procedencia: la AUSENCIA de un metadato no es evidencia de
     # insuficiencia. Sin sello de procedencia xG, sin splits y sin Q_mod persistidos, la luz

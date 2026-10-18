@@ -1221,6 +1221,25 @@ table.fintech-table {
 }
 .bt-kpi-sub { font-size: 7.8pt; color: var(--text-slate); }
 .bt-estado { font-size: 8.2pt; color: var(--text-muted); margin-top: 10px; }
+/* [LN-QBE-104 · DES-QBE-067] Filtro anti-cuarentena de la cartelera de calibración. */
+.bt-filtro-vetados {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 8.4pt;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+.bt-filtro-vetados input[type="checkbox"] {
+    accent-color: #EF4444;
+    cursor: pointer;
+}
+.bt-filtro-vetados input[type="checkbox"]:checked + span {
+    color: #F87171;
+    font-weight: 600;
+}
 .bt-table { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
 .bt-table th {
     text-align: left;
@@ -1461,7 +1480,34 @@ table.fintech-table {
 }
 .vars44-dimension summary::-webkit-details-marker { display: none; }
 .vars44-dim-titulo { color: #38BDF8; font-weight: 700; font-size: 9pt; }
+.vars44-dim-meta { display: inline-flex; align-items: center; gap: 8px; }
 .vars44-dim-conteo { color: #64748B; font-size: 8pt; }
+/* [DES-QBE-066] Acordeón bicolor: dimensión con evidencia evaluada vs. dimensión en fase 6. */
+.vars44-dimension.dim-con-datos { border-left: 3px solid #10B981; }
+.vars44-dimension.dim-con-datos .vars44-dim-titulo { color: #10B981; }
+.vars44-dimension.dim-fase6 { border-left: 3px solid #475569; }
+.vars44-dimension.dim-fase6 .vars44-dim-titulo { color: #94A3B8; }
+.badge-dim {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.badge-dim.badge-dim-evaluada {
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid #10B981;
+    color: #6EE7B7;
+}
+.badge-dim.badge-dim-fase6 {
+    background: rgba(71, 85, 105, 0.18);
+    border: 1px solid #475569;
+    color: #CBD5E1;
+}
 .vars44-tabla { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; }
 .vars44-tabla th {
     text-align: left;

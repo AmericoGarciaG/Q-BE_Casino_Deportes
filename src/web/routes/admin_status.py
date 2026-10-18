@@ -31,7 +31,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.storage.gateway import PersistenceGateway
-from src.storage.models import FixtureSnapshot, League, Slate
+from src.storage.models import (
+    FixtureSnapshot,
+    League,
+    Match,
+    Slate,
+    SovereignDistribution,
+)
 from src.storage.sync_service import (
     _fixture_operable_en_ventanilla,
     resolver_jornada_actual_dinamica,
@@ -53,6 +59,18 @@ UMBRAL_STALENESS_MIN = 150
 # [ARCH-1.4.12-C] Identificadores certificados de las cadenas temporales homologadas.
 TAREA_CADENA_PRE_JORNADA = "cadena_pre_jornada"
 TAREA_CADENA_PROGOL = "cadena_progol"
+
+# [ARCH-1.4.12-C] Enmienda 2026-10-17: auditoría de homologación factual. La luz es ADITIVA: las
+# cuatro dimensiones originales de [ARCH-1.4.12-B] conservan su contrato. Un partido concluido sin
+# `insumos_factivados` en su traza soberana (traza legada o ausente) está pendiente de homologar; por
+# encima del umbral la recomendación sugiere la tarea certificada de reconstrucción integral.
+TAREA_HOMOLOGACION_OPTA = "homologar_temporada_optah2h"
+UMBRAL_HOMOLOGACION_PENDIENTE = 5
+MOTIVO_HOMOLOGACION_PENDIENTE = (
+    "Existen partidos concluidos pendientes de homologación factual. "
+    "Ejecutar Cadena Post-Jornada o Homologación Opta."
+)
+ESTADOS_PARTIDO_CONCLUIDO: Tuple[str, ...] = ("FINISHED", "FINALIZADO")
 
 # Vocabulario del semáforo: los VALORES son los del canon [ARCH-1.4.34]; `_dimension` los valida
 # contra `GLIFO_NIVEL` (cualquier literal ajeno revienta de inmediato: cero invención).
@@ -92,7 +110,7 @@ class AccionRecomendada(BaseModel):
 
 
 class ReporteDeriva(BaseModel):
-    """[ARCH-1.4.12-B] Contrato REST del semáforo de cuatro luces (solo lectura)."""
+    """[ARCH-1.4.12-B] Contrato REST del semáforo (cuatro luces + homologación [ARCH-1.4.12-C])."""
     regimen: str = "SOLO_LECTURA"
     evaluado_en_utc: str
     jornada_activa: Optional[int] = None
@@ -101,6 +119,7 @@ class ReporteDeriva(BaseModel):
     status_deportivo: EstadoDimension
     status_progol: EstadoDimension
     status_integridad: EstadoDimension
+    status_homologacion: EstadoDimension
     accion_recomendada: AccionRecomendada
 
 def _canon_sonda() -> Dict[str, Any]:
@@ -301,12 +320,79 @@ def _status_integridad(fixtures: Sequence[Dict[str, Any]]) -> EstadoDimension:
     return _dimension(nivel, detalle, float(conteo[NIVEL_DISCREPANCIA]))
 
 
-def _accion_recomendada(dimensiones: Dict[str, EstadoDimension]) -> AccionRecomendada:
+def _status_homologacion(session: Session) -> Tuple[EstadoDimension, int]:
+    """
+    [ARCH-1.4.12-C] Luz de homologación factual: partidos CONCLUIDOS cuya traza soberana no publica
+    `insumos_factivados` (traza legada de [ARCH-1.4.39] o distribución inexistente).
+
+    Solo lectura: la sonda no repara nada; publica el rezago y su magnitud para que el Director
+    despache `homologar_temporada_optah2h` desde el cockpit. Devuelve la luz y el conteo de pendientes
+    (el conteo alimenta la recomendación sin re-consultar la bóveda).
+    """
+    filas = (
+        session.query(Match.id, SovereignDistribution.audit_trace_json)
+        .outerjoin(SovereignDistribution, SovereignDistribution.match_id == Match.id)
+        .filter(Match.status.in_(ESTADOS_PARTIDO_CONCLUIDO))
+        .all()
+    )
+    if not filas:
+        return (
+            _dimension(
+                NIVEL_SIN_VEREDICTO,
+                "La bóveda no registra partidos concluidos: homologación no exigible (cero invención).",
+            ),
+            0,
+        )
+
+    pendientes: List[str] = []
+    for identificador, traza in filas:
+        insumos = traza.get("insumos_factivados") if isinstance(traza, dict) else None
+        if not isinstance(insumos, dict) or not insumos:
+            pendientes.append(str(identificador))
+
+    total = len(filas)
+    if len(pendientes) > UMBRAL_HOMOLOGACION_PENDIENTE:
+        muestra = ", ".join(sorted(pendientes)[:3]) + ("…" if len(pendientes) > 3 else "")
+        return (
+            _dimension(
+                NIVEL_DISCREPANCIA,
+                f"{len(pendientes)} de {total} partido(s) concluido(s) sin insumos fácticos "
+                f"homologados, por encima del umbral {UMBRAL_HOMOLOGACION_PENDIENTE} ({muestra}): "
+                "la temporada debe re-homologarse.",
+                float(len(pendientes)),
+            ),
+            len(pendientes),
+        )
+    if pendientes:
+        return (
+            _dimension(
+                NIVEL_ADVERTENCIA,
+                f"{len(pendientes)} de {total} partido(s) concluido(s) sin insumos fácticos "
+                f"homologados (umbral {UMBRAL_HOMOLOGACION_PENDIENTE}): rezago tolerable, "
+                "subsanable con la Cadena Post-Jornada.",
+                float(len(pendientes)),
+            ),
+            len(pendientes),
+        )
+    return (
+        _dimension(
+            NIVEL_CONFORME,
+            f"{total} partido(s) concluido(s) con insumos fácticos homologados en su traza soberana.",
+            0.0,
+        ),
+        0,
+    )
+
+
+def _accion_recomendada(
+    dimensiones: Dict[str, EstadoDimension], homologacion_pendiente: int = 0
+) -> AccionRecomendada:
     """
     [ARCH-1.4.12-B / ARCH-1.4.12-C] Traduce la deriva observada en UNA acción certificada:
       * Dos o más dimensiones de jornada en 🔴 ⇒ `cadena_pre_jornada` (reparación integral).
       * Una sola dimensión de jornada en 🔴 ⇒ su ejecutor individual.
       * Deriva exclusiva de quiniela ⇒ `cadena_progol`.
+      * Rezago de homologación por encima del umbral (sin otra deriva) ⇒ `homologar_temporada_optah2h`.
       * Cero deriva ⇒ sin acción (`task_id = None`).
     """
     deriva = [
@@ -314,11 +400,26 @@ def _accion_recomendada(dimensiones: Dict[str, EstadoDimension]) -> AccionRecome
         for dimension in ("deportivo", "mercado", "integridad", "progol")
         if dimensiones[dimension].nivel == NIVEL_DISCREPANCIA
     ]
+    homologacion_exigible = homologacion_pendiente > UMBRAL_HOMOLOGACION_PENDIENTE
     if not deriva:
+        if not homologacion_exigible:
+            return AccionRecomendada(
+                task_id=None,
+                motivo="Cero deriva: las cuatro luces del semáforo están al día.",
+                deriva=[],
+            )
+        from src.web.routes.admin_tasks import TAREAS_PERMITIDAS
+
+        if TAREA_HOMOLOGACION_OPTA in TAREAS_PERMITIDAS:
+            return AccionRecomendada(
+                task_id=TAREA_HOMOLOGACION_OPTA,
+                motivo=MOTIVO_HOMOLOGACION_PENDIENTE,
+                deriva=["homologacion"],
+            )
         return AccionRecomendada(
             task_id=None,
-            motivo="Cero deriva: las cuatro luces del semáforo están al día.",
-            deriva=[],
+            motivo=f"Deriva sin ejecutor certificado en la whitelist: {MOTIVO_HOMOLOGACION_PENDIENTE}",
+            deriva=["homologacion"],
         )
     deriva_jornada = [d for d in DIMENSIONES_JORNADA if d in deriva]
     if len(deriva_jornada) >= 2:
@@ -329,6 +430,8 @@ def _accion_recomendada(dimensiones: Dict[str, EstadoDimension]) -> AccionRecome
         tarea = DIMENSION_A_TAREA["progol"]
 
     motivo = " · ".join(f"{d}: {dimensiones[d].detalle}" for d in deriva)
+    if homologacion_exigible:
+        motivo = f"{motivo} · {MOTIVO_HOMOLOGACION_PENDIENTE}"
     from src.web.routes.admin_tasks import TAREAS_PERMITIDAS
     if tarea not in TAREAS_PERMITIDAS:
         return AccionRecomendada(
@@ -374,7 +477,7 @@ def _fixtures_jornada(
     summary="[ARCH-1.4.12-B] Semáforo de deriva y frescura de fuentes (solo lectura)",
 )
 def consultar_deriva_centro_control() -> ReporteDeriva:
-    """Sonda read-only del Centro de Control: cuatro luces + acción recomendada."""
+    """Sonda read-only del Centro de Control: cuatro luces + homologación + acción recomendada."""
     gateway = PersistenceGateway()
     with gateway.read_session() as session:
         liga = _liga_3nf(session)
@@ -386,6 +489,7 @@ def consultar_deriva_centro_control() -> ReporteDeriva:
             "progol": _status_progol(session),
             "integridad": _status_integridad(fixtures),
         }
+        status_homologacion, homologacion_pendiente = _status_homologacion(session)
         liga_id = liga.id if liga else None
 
     return ReporteDeriva(
@@ -396,5 +500,15 @@ def consultar_deriva_centro_control() -> ReporteDeriva:
         status_deportivo=dimensiones["deportivo"],
         status_progol=dimensiones["progol"],
         status_integridad=dimensiones["integridad"],
-        accion_recomendada=_accion_recomendada(dimensiones),
+        status_homologacion=status_homologacion,
+        accion_recomendada=_accion_recomendada(dimensiones, homologacion_pendiente),
     )
+
+
+def auditar_deriva_sistema() -> Dict[str, Any]:
+    """
+    [ARCH-1.4.12-C] Fachada programática del semáforo: publica el MISMO veredicto que el contrato
+    REST `GET /api/admin/status/drift` como diccionario plano, sin abrir un segundo camino de
+    lectura ni reimplementar sonda alguna ([GOVERNANCE-01]).
+    """
+    return consultar_deriva_centro_control().model_dump()

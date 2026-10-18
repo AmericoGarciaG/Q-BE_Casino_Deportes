@@ -575,6 +575,21 @@ def _h2h_desde_historial(
     return sorted(duelos.values(), key=lambda d: d["dias_antiguedad"])[:limite]
 
 
+def _memoria_h2h_unificada(
+    sesion, league_id: int, fecha_ref: datetime, local: str, visitante: str
+) -> List[Dict[str, Any]]:
+    """[ARCH-1.4.44] Memoria H2H de la ruta VIVA servida por el proveedor unificado.
+
+    El proveedor fusiona la bóveda 3NF (marcador oficial consumado) con el corpus longitudinal
+    congelado (`h2h_corpus_v1`), aplicando futuro-ceguera estricta respecto del kickoff y el puente
+    de identidad `teams` (nombre de exhibición ⇄ slug canónico). Ley Zero-H2H intacta: sin
+    evidencia verificable devuelve lista vacía, jamás un duelo sintético.
+    """
+    from src.core.sovereign.h2h_provider import obtener_h2h_unificado
+
+    return obtener_h2h_unificado(sesion, local, visitante, fecha_ref, league_id=int(league_id))
+
+
 def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FOTMOB_ID, mu_liga: Optional[float] = None) -> None:
     gateway = PersistenceGateway()
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -635,9 +650,9 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
         standings_map = {s["equipo"]: s for s in datos["standings_viva"]}
         from src.core.sovereign_pipeline import ORIGEN_CAPTURA_EN_VIVO, generar_distribucion_soberana
 
-        # [ARCH-1.6.13-C] Memoria H2H fáctica: precarga única de los marcadores oficiales
-        # consumados en SQLite; cada fixture recibe sus últimos 5 enfrentamientos directos.
-        historial_consumado = _precargar_historial_consumado_sqlite(tx, league.id)
+        # [ARCH-1.4.44] Memoria H2H fáctica: la resuelve el proveedor unificado por fixture
+        # (`_memoria_h2h_unificada`), que precarga la bóveda 3NF internamente y añade el corpus
+        # longitudinal congelado. Sin precarga redundante en el bucle de captura.
 
         # [VAR-2026-J7-HOMOLOGACION §6.4 · E4 — Decreto del Director] Pilar 4: la salida del motor se
         # ACOPIA aquí y jamás se escribe en vuelo sobre el contrato de captura. El sellado efectivo
@@ -662,8 +677,8 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
                         "home_split_stats": h_st.get("home_split_stats") or {},
                         "away_split_stats": a_st.get("away_split_stats") or {},
                         "home_team_slug": f.get("home_team_slug") or obtener_slug_club(f["local"]),
-                        "h2h_matches": _h2h_desde_historial(
-                            historial_consumado, f["local"], f["visitante"], fecha_ref
+                        "h2h_matches": _memoria_h2h_unificada(
+                            tx, league.id, fecha_ref, f["local"], f["visitante"]
                         ),
                     }
                     dist_out = generar_distribucion_soberana(

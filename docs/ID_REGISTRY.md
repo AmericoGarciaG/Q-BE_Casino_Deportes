@@ -34,6 +34,8 @@
 | `[LN-QBE-030]` | LOGIC | `docs/LOGIC.md` | Métricas Sintéticas de Control y Peligro ($FCF, E_{\text{att}}$) | SELLADO |
 | `[LN-QBE-035]` | LOGIC | `docs/LOGIC.md` | Fórmulas de Derivación Opta y Tokens de Marcador | SELLADO |
 | `[LN-QBE-040]` | LOGIC | `docs/LOGIC.md` | Matriz Poisson Bivariada (6x6) con Calibración Opta xG | SELLADO |
+| `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
+| `[LN-QBE-040-C]` | LOGIC | `docs/LOGIC.md` | Parámetro de Correlación Táctica Bivariada ($\rho$) en Partidos de Baja Anotación | SELLADO |
 | `[LN-QBE-050]` | LOGIC | `docs/LOGIC.md` | Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$) | SELLADO |
 | `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-060]` | LOGIC | `docs/LOGIC.md` | Evaluador Determinista del Catálogo y Triple Candado Fáctico | SELLADO |
@@ -57,21 +59,28 @@
 | `[LN-QBE-036]` | LOGIC | `docs/LOGIC.md` | Operador de Contracción Bayesiana de Forma Reciente (10 Partidos) | SELLADO |
 | `[LN-QBE-065]` | LOGIC | `docs/LOGIC.md` | Filtro de Descarte Temprano de Ineficiencia (+EV Gate) | SELLADO |
 | `[LN-QBE-071]` | LOGIC | `docs/LOGIC.md` | Algoritmo de Escalamiento a Piso de Ventanilla ($2.00 MXN) | SELLADO |
+| `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal de la Familia R | SELLADO |
 | `[LN-QBE-072]` | LOGIC | `docs/LOGIC.md` | Modelo Estocástico Combinatorio de Resiliencia 3^K y Trinidad de Certeza | SELLADO |
 | `[LN-QBE-025]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates y Preservación de Estado Inter-Jornadas | SELLADO |
+| `[LN-QBE-025-B]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting Fiduciario) | SELLADO |
 | `[LN-QBE-037]` | LOGIC | `docs/LOGIC.md` | Algoritmo de Detección de Sesgo Popular en Quinielas Progol | SELLADO |
 | `[LN-QBE-038]` | LOGIC | `docs/LOGIC.md` | Modelo de Desempeño Específico de Sede (Home/Away Splits) y Fortaleza de Plaza | SELLADO |
+| `[LN-QBE-039]` | LOGIC | `docs/LOGIC.md` | Motor de Ortogonalización Residual y Factores Latentes Tridimensionales (GSL-3D) | SELLADO |
 | `[LN-QBE-073]` | LOGIC | `docs/LOGIC.md` | Algoritmo del Slider Dinámico de Certeza (Risk Dial) | SELLADO |
 | `[LN-QBE-074]` | LOGIC | `docs/LOGIC.md` | Optimizador de Quinielas Progol por Presupuesto | SELLADO |
 | `[LN-QBE-075]` | LOGIC | `docs/LOGIC.md` | Ingesta Fáctica de Concursos Progol y Resiliencia Multi-Torneo | SELLADO |
 | `[LN-QBE-076]` | LOGIC | `docs/LOGIC.md` | Arbitraje Sintético de Mejor Combinación Multi-Operador | SELLADO |
 | `[LN-QBE-077]` | LOGIC | `docs/LOGIC.md` | Ecuación de Decisión: Pago Anticipado (+PA) vs. Cuota Nominal Pura | SELLADO |
+| `[LN-QBE-077-B]` | LOGIC | `docs/LOGIC.md` | Teorema de Aceleración Asintótica y Partición de Capital con Cobertura Activa (V = δ > 0) | SELLADO |
+| `[LN-QBE-077-C]` | LOGIC | `docs/LOGIC.md` | Techo de Viabilidad Analítica δ_max y Umbral de Breakeven θ* | SELLADO |
+| `[LN-QBE-077-D]` | LOGIC | `docs/LOGIC.md` | Dutching Isorrendimiento de Doble Cosecha (δ*) | SELLADO |
 | `[LN-QBE-070-E]` | LOGIC | `docs/LOGIC.md` | Prorrateo Resiliente de Hard-Caps con Respeto al Piso de Ventanilla | SELLADO |
 | `[LN-QBE-078]` | LOGIC | `docs/LOGIC.md` | Cuantificación Transparente del Veto Fiduciario (Descartes QBE-00) | SELLADO |
 | `[LN-QBE-079]` | LOGIC | `docs/LOGIC.md` | Operador de Contracción Fiduciaria Baricéntrica (Barycentric Dirichlet Shrinkage) | SELLADO |
 | `[LN-QBE-081]` | LOGIC | `docs/LOGIC.md` | Probabilidad Efectiva de Éxito de la Posición (P_éxito') y Ordenamiento Lexicográfico | SELLADO |
 | `[LN-QBE-082]` | LOGIC | `docs/LOGIC.md` | Principio de Asignación Monótona de Capital | SELLADO |
 | `[LN-QBE-083]` | LOGIC | `docs/LOGIC.md` | Formalización de la Tetralogía de Escenarios de Liquidación | SELLADO |
+| `[LN-QBE-083-B]` | LOGIC | `docs/LOGIC.md` | Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas | SELLADO |
 | `[LN-QBE-084]` | LOGIC | `docs/LOGIC.md` | El Operador Canónico de Selección por Masa Acumulada P' en Progol | SELLADO |
 | `[LN-QBE-085]` | LOGIC | `docs/LOGIC.md` | Cobertura Binaria Óptima (\|S_i\| ≤ 2) y Construcción del Espacio Restringido | SELLADO |
 | `[LN-QBE-086]` | LOGIC | `docs/LOGIC.md` | Descenso por Distancia de Hamming hacia Premios Menores (L ∈ {13, 12, 11, 10}) | SELLADO |
@@ -85,13 +94,20 @@
 | `[LN-QBE-095]` | LOGIC | `docs/LOGIC.md` | Guardas Léxicas de Identidad de Género y Categoría (Femenil, Filiales, Sub-20) | SELLADO |
 | `[LN-QBE-096]` | LOGIC | `docs/LOGIC.md` | Coordinador Orquestador Atómico del Ciclo de Vida de Datos (Data Nexus Bus) | SELLADO |
 | `[LN-QBE-097]` | LOGIC | `docs/LOGIC.md` | Puente de Despacho Unificado entre Rutas Web y el Data Nexus Bus | SELLADO |
+| `[LN-QBE-098]` | LOGIC | `docs/LOGIC.md` | Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-099]` | LOGIC | `docs/LOGIC.md` | Registro Fiduciario de Congelamiento de Boletos (Paper Trading & Audit Ledger) [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-100]` | LOGIC | `docs/LOGIC.md` | Motor de Calibración Factual de Temporada y Evaluación Multicategórica de Brier | SELLADO |
+| `[LN-QBE-101]` | LOGIC | `docs/LOGIC.md` | Motor de Atribución Factorial y Telemetría de Integridad de Insumos | SELLADO |
+| `[LN-QBE-102]` | LOGIC | `docs/LOGIC.md` | Axioma de Protección de la Evidencia en Vivo, Sello de Procedencia y Telemetría de Insumos Fácticos | SELLADO |
+| `[LN-QBE-103]` | LOGIC | `docs/LOGIC.md` | Proveedor Soberano de Memoria H2H con Corpus Congelado, Certificación Tri-Estado de la Procedencia Opta y Telemetría Dimensional | SELLADO |
+| `[LN-QBE-104]` | LOGIC | `docs/LOGIC.md` | Fusión Convexa del Símplex Soberano (Poisson ∪ Kernel H2H) y Persistencia de la Δ_epist Real | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.4]` | ARCH | `docs/ARCH.md` | GeminiCognitiveGateway y Ledger Contable de Inferencia [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.0]` | ARCH | `docs/ARCH.md` | Inversión de Carga Neuro-Simbólica (FotMob Primary Sensor) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.1]` | ARCH | `docs/ARCH.md` | Resiliencia Defensiva del Scraper de Mercado [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
-| `[ARCH-1.4.1-B]` | ARCH | `docs/ARCH.md` | Sensor de Estados Temporales Fácticos (Live vs Finished en FotMob) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.1-B]` | ARCH | `docs/ARCH.md` | Sensor de Estados Temporales Fácticos (Live vs. Finished en FotMob) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.2]` | ARCH | `docs/ARCH.md` | Pipeline de Ingesta Soberana de Tabla de Posiciones (Liga MX FMF) [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
 | `[ARCH-1.4.3]` | ARCH | `docs/ARCH.md` | Motor de Extracción Focalizada de Cuotas Caliente.mx [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.4.4]` | ARCH | `docs/ARCH.md` | Ingesta Estructurada de Forma (5P) vía FotMob Next.js (__NEXT_DATA__) [ARCH-PILLAR] | SELLADO |
@@ -113,7 +129,6 @@
 | `[ARCH-1.4.13]` | ARCH | `docs/ARCH.md` | Guarda de Resiliencia ante Base de Datos Vacía en Live Board [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.0]` | ARCH | `docs/ARCH.md` | Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.0-B]` | ARCH | `docs/ARCH.md` | Aislamiento de Persistencia del Canal Gateway en The Shield [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
-| `[ARCH-1.5.0-B-Δ1]` | ARCH | `docs/ARCH.md` | Deuda Técnica: Unificación de Motores de Persistencia y Retiro de database.py | ABIERTO |
 | `[ARCH-1.5.1]` | ARCH | `docs/ARCH.md` | Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT] | SELLADO |
 | `[ARCH-1.5.2]` | ARCH | `docs/ARCH.md` | Persistencia Local en Base de Datos SQLite [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.3]` | ARCH | `docs/ARCH.md` | Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
@@ -141,7 +156,7 @@
 | `[ARCH-1.6.8]` | ARCH | `docs/ARCH.md` | Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE] | SELLADO |
 | `[ARCH-1.6.13]` | ARCH | `docs/ARCH.md` | Motor de Ingesta Total de Temporada y Reconstrucción Histórica [DIRGEN-SEALED] [GOVERNANCE-01] | SELLADO |
 | `[ARCH-1.6.13-B]` | ARCH | `docs/ARCH.md` | Unicidad Estricta de Encuentros Reprogramados [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.6.13-C]` | ARCH | `docs/ARCH.md` | Extracción de Tablas Desagregadas por Sede e Inyección H2H en Centinela Deportivo | SELLADO |
+| `[ARCH-1.6.13-C]` | ARCH | `docs/ARCH.md` | Extracción de Tablas Desagregadas por Sede e Inyección H2H en Centinela Deportivo [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.15]` | ARCH | `docs/ARCH.md` | Resolución Dinámica de Jornada Activa en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.15-B]` | ARCH | `docs/ARCH.md` | Desacoplamiento Cronológico en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.16]` | ARCH | `docs/ARCH.md` | Política de Depuración y Archivado de Sondas Temporales [ARCH-PILLAR] | SELLADO |
@@ -151,9 +166,12 @@
 | `[ARCH-1.5.10-B]` | ARCH | `docs/ARCH.md` | Bóveda de Emblemas de Operadores Oficiales y Anti-Hotlinking [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.17]` | ARCH | `docs/ARCH.md` | Resiliencia de Sensores ante Acordeones de Fechas Calendario (Betway) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.15-C]` | ARCH | `docs/ARCH.md` | Apertura Dinámica de Jornada en Live Board (sync_service.py) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.22]` | ARCH | `docs/ARCH.md` | Materialización del Ensemble Convexo y del Puente de Δ_epist Real (`sovereign_pipeline.py`, `distribution_sync.py`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.12]` | ARCH | `docs/ARCH.md` | Aprovisionador JIT de Ligas y Bóveda Soberana de Activos de Clubes (`src/normalization/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.9]` | ARCH | `docs/ARCH.md` | Herencia Dinámica de la Cláusula de Pago Anticipado en Boletos [BIZ-LOGIC] | SELLADO |
 | `[ARCH-1.4.16]` | ARCH | `docs/ARCH.md` | Contrato de Atribución Unívoca de Operador en Boletos [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.16-B]` | ARCH | `docs/ARCH.md` | Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.5]` | ARCH | `docs/ARCH.md` | Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.18]` | ARCH | `docs/ARCH.md` | Resiliencia de Navegación de Torneo en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.17]` | ARCH | `docs/ARCH.md` | Contrato de la Distribución Fiduciaria Contraída en el Pipeline de Cartera [ARCH-PILLAR] | SELLADO |
@@ -172,60 +190,25 @@
 | `[ARCH-1.4.28]` | ARCH | `docs/ARCH.md` | Adaptador de Despacho Web y Telemetría del Centro de Control [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.29]` | ARCH | `docs/ARCH.md` | Purga Total In-Process de la Bóveda 3NF (Centro de Control) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.30]` | ARCH | `docs/ARCH.md` | Módulo Funcional SimplexMorphology y Controlador UI de Masa Γ [ARCH-PILLAR] | SELLADO |
-
-| `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
-
-| `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
-| `[ARCH-1.4.16-B]` | ARCH | `docs/ARCH.md` | Contrato de Horario Fáctico y Rótulo de Cobertura en el Resumen de Asignación [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-083-B]` | LOGIC | `docs/LOGIC.md` | Unificación Honesta del Rótulo de Ausencia de Cobertura en Estrategias Directas | SELLADO |
-| `[LN-QBE-098]` | LOGIC | `docs/LOGIC.md` | Radiografía Forense Determinista y Comparador de Probabilidades sin LLM [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.31]` | ARCH | `docs/ARCH.md` | Suspensión de Inferencia LLM en Inspección y Contrato de Radiografía Forense [ARCH-PILLAR] | SELLADO |
-| `[DES-QBE-063]` | DESIGN | `docs/DESIGN.md` | Diseño de la Radiografía Forense: Barras Duales Apiladas, Radiografía Estructural y Cero Estrellas [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-099]` | LOGIC  | `docs/LOGIC.md` | Registro Fiduciario de Congelamiento de Boletos (Paper Trading) | SELLADO |
-| `[ARCH-1.4.32]`| ARCH   | `docs/ARCH.md`  | Contenedor de Acciones de Tarjeta y Congelamiento de Cuotas     | SELLADO |
-| `[LN-QBE-039]` | LOGIC | `docs/LOGIC.md` | Motor de Ortogonalización Residual y Factores Latentes Tridimensionales (GSL-3D) | SELLADO |
+| `[ARCH-1.4.32]` | ARCH | `docs/ARCH.md` | Contenedor de Acciones de Tarjeta y Congelamiento de Cuotas [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.33]` | ARCH | `docs/ARCH.md` | Contenedor de Factores Latentes Tridimensionales y Motor GSL-3D [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-071-B]` | LOGIC | `docs/LOGIC.md` | Piso Estructural Bivariado ($4.00 MXN) y Cobertura Universal Familia R | SELLADO |
-| `[LN-QBE-040-B]` | LOGIC | `docs/LOGIC.md` | Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia) | SELLADO |
-| `[LN-QBE-040-C]` | LOGIC | `docs/LOGIC.md` | Parámetro de Correlación Táctica Bivariada ($\rho$) en Partidos de Baja Anotación | SELLADO |
-| `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-025-B]` | LOGIC | `docs/LOGIC.md` | Conmutador de Slates, Cartera Vacía y Liquidación Real (Backtesting) | SELLADO |
+| `[ARCH-1.4.34]` | ARCH | `docs/ARCH.md` | Sonda Diagnóstica de Coherencia Relacional y Pre-Vuelo del Constructor (CLI Auditor) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.35]` | ARCH | `docs/ARCH.md` | Contrato de Cartera Vacía y Conmutador de Slates en Mesa de Apuestas [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.36]` | ARCH | `docs/ARCH.md` | Sensor de Ingesta Histórica BetExplorer y Cortes Progresivos Anti-Leakage [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-077-B]` | LOGIC | `docs/LOGIC.md` | Teorema de Aceleración Asintótica y Partición de Capital con Cobertura Activa (V = δ > 0) | SELLADO |
-| `[LN-QBE-077-C]` | LOGIC | `docs/LOGIC.md` | Techo de Viabilidad Analítica δ_max y Umbral de Breakeven θ* | SELLADO |
-| `[LN-QBE-077-D]` | LOGIC | `docs/LOGIC.md` | Dutching Isorrendimiento de Doble Cosecha (δ*) | SELLADO |
 | `[ARCH-1.4.37]` | ARCH | `docs/ARCH.md` | Parámetro de Cobertura Dinámica δ en el Pipeline de Cartera y DTOs [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-100]` | LOGIC | `docs/LOGIC.md` | Motor de Calibración Factual de Temporada y Evaluación Multicategórica de Brier | SELLADO |
 | `[ARCH-1.4.38]` | ARCH | `docs/ARCH.md` | Endpoint de Calibración Histórica y Visor de Backtesting [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.39]` | ARCH | `docs/ARCH.md` | Motor de Homologación Histórica Opta/H2H y Reconstrucción Progresiva [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.41]` | ARCH | `docs/ARCH.md` | Contrato Único de Escala xG y Extirpación de la Escala Artificial en la Ingesta [ARCH-PILLAR] | SELLADO |
-| `[LN-QBE-101]` | LOGIC | `docs/LOGIC.md` | Motor de Atribución Factorial y Telemetría de Integridad de Insumos | SELLADO |
-| `[ARCH-1.4.42]` | ARCH | `docs/ARCH.md` | Micro-HUD de Atribución Factorial y DTO de Inspección de 44 Variables | SELLADO |
-| `[DES-QBE-064]` | DESIGN | `docs/DESIGN.md` | Geometría del Micro-HUD de Tarjeta y Modal Forense de 44 Variables | SELLADO |
-| `[LN-QBE-102]` | LOGIC | `docs/LOGIC.md` | Axioma de Protección de la Evidencia en Vivo, Sello de Procedencia y Telemetría de Insumos Fácticos | SELLADO |
+| `[ARCH-1.4.39]` | ARCH | `docs/ARCH.md` | Motor de Homologación Histórica Opta/H2H y Reconstrucción Progresiva [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
+| `[ARCH-1.4.41]` | ARCH | `docs/ARCH.md` | Contrato Único de Escala xG y Extirpación de la Escala Artificial en la Ingesta [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
+| `[ARCH-1.4.42]` | ARCH | `docs/ARCH.md` | Micro-HUD de Atribución Factorial y DTO de Inspección de 44 Variables [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.42-B]` | ARCH | `docs/ARCH.md` | Tolerancia de Tipos de Insumo con Unidades en DTO de Variables (44V) [ANTI-BUG] | SELLADO |
 | `[ARCH-1.4.43]` | ARCH | `docs/ARCH.md` | Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR] | SELLADO |
-| `[DES-QBE-065]` | DESIGN | `docs/DESIGN.md` | Badge de Procedencia de la Evidencia e Iluminación de las Ocho Variables Vivas | SELLADO |
-
-
-
-> **Trazabilidad de registro (VAR-2026-LIVE-AUDIT-J11 — V-3, ratificada por Dictamen del Director):**
-> `[LN-QBE-071-B]` y `[LN-QBE-040-B]` son las **enmiendas selladas** de los nodos `[LN-QBE-071]`
-> (piso de ventanilla) y `[LN-QBE-040]` (matriz Poisson bivariada), respectivamente. Su cuerpo
-> normativo vigente es la cláusula `.3` de `[LN-QBE-071]` (piso bivariado $2 \times \$2.00 = \$4.00$
-> MXN y cobertura universal de las familias H1/H2/R1/R2, Juez
-> `tests/shield/test_shield_portfolio_integrity_and_floor.py`) y el techo conjunto anti-resonancia
-> legislado en `[LN-QBE-040]`/`[LN-QBE-039]`. **Pendiente LIQUIDADO** (Directiva Maestra de
-> Saneamiento Legislativo y Centinela Diagnóstico de Cartelera, 2026-10-11): ambos nodos publican
-> hoy encabezado canónico propio (`### ID:`) en `docs/LOGIC.md` con el texto normativo dictado por la
-> Dirección, por lo que su anclaje ya no depende de la lista `RESERVADOS` de
-> `reconciliar_registro_legislativo.py`: el reconciliador los lee **nativamente** del Libro.
-
-
+| `[ARCH-1.4.44]` | ARCH | `docs/ARCH.md` | Proveedor H2H Unificado de Corpus Congelado, Sello Opta de Origen y Telemetría Dimensional del Acordeón Forense [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
+| `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---
 
@@ -246,6 +229,10 @@
 | `VAR-2026-TRIAJE-R-BIPOLAR` | Juez Invariante 1 colisiona con admisibilidad de R en BIPOLARIDAD_TERRITORIAL | Ratificada ALT-1+ALT-2: derogada admisibilidad de Familia R en Bipolaridad por Invariante VIII-37 (riesgo > 33%) y extendidas guardas en portfolio_math.py | RATIFICADO |
 | `VAR-2026-TRIAJE-R-BIPOLAR-II` | Caso #4 de test_shield_portfolio_math.py huérfano por derogación de R en Bipolaridad | Ratificada ALT-A: migración de caso positivo a PARIDAD_CIEGA (0.334/0.333/0.333) y cerrojo negativo bipolar en QBE-00 | RATIFICADO |
 | `VAR-2026-COLD-START-PRIOR` | Juez 1 vacío por DTO sin S(I) y colisión de variables ql | Ratificada Opción A Holística: S(I)=0 en DTO, sustitución de P' por q_mkt pre-clasificación, rótulo visual COLD START | RATIFICADO |
+| `VAR-2026-10-17-H2H-SIMPLEX` | Desborde de 1 ulp en el símplex de `[LN-QBE-020-C]` (`p_k = 1.0000000000000002`) al procesar ventanas H2H multi-duelo con barrido de un solo desenlace (numeradores naíf vs denominador con `sum()` compensado de CPython ≥ 3.12) | Ratificada ALT-A: numeradores acumulados con el mismo `sum()` del denominador sobre sub-listas por desenlace (κ, τ_deep, pesos y fórmula `p_k = w_k/W` intactos) + Juez de clausura `test_h2h_simplex_clausura_barrido`; homologación `exitosos=99 errores=0` · ver `docs/DIRGEN_VARIANCE_REQUEST_H2H_SIMPLEX.md` | RESUELTO |
+| `VAR-2026-10-17-H2H-FUSION` | El borrador de diseño citaba `[ARCH-1.6.15]` para el ensemble convexo (identificador SELLADO a Apertura Dinámica de Jornada en Live Board, con sufijo `-C` ocupado por la frontera del sensor en `[ARCH-1.6.21]`) y el puente persistía `epistemic_delta = intensidades.ratio` (magnitud de tasas, no discrepancia) | Ratificada ALT-C + E-2 + E-3: nodo propio `[ARCH-1.6.22]`, mezcla convexa $w_{H2H}=\min(0.25, 0.05N)$ sobre el símplex publicado y persistencia de $\Delta_{epist}(\infty)=\max_k|P_A-P_C|$ (contrato de salida → traza → piso R-1 0.02, acotado a [0,1], sin backfill); Shield `test_shield_ensemble_fusion_and_ui_sync.py` · ver `docs/variances/VAR-2026-10-17-H2H-FUSION.md` | RATIFICADO |
+
+
 
 ---
 

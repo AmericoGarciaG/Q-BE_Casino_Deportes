@@ -80,7 +80,7 @@ calibrado (nunca se mezclan fuentes dentro de una misma acumulación).
 
 Uso:
     python -m scripts.ingesta.homologar_temporada_optah2h --dry-run
-    python -m scripts.ingesta.homologar_temporada_optah2h                 # J1..J10 (90 fixtures)
+    python -m scripts.ingesta.homologar_temporada_optah2h                 # J1..J17 (temporada completa)
     python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 7 --json
     python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 1-9 --congelar-cache
     python -m scripts.ingesta.homologar_temporada_optah2h --jornadas 1-11 --forzar  # sobreescritura forzada
@@ -112,7 +112,7 @@ logger = logging.getLogger("HomologarTemporadaOptaH2H")
 # ─── Constantes legisladas ───────────────────────────────────────────────────────────────────
 COMPETENCIA_CANONICA = "MEX_LIGAMX"
 LIGA_ID_CANONICA = 1
-RANGO_JORNADAS_DEFAULT = "1-10"
+RANGO_JORNADAS_DEFAULT = "1-17"
 MU_LIGA_DEFAULT = 2.65
 GAMMA_HOME_DEFAULT = 0.15
 RUTA_CACHE_OPTA_DEFAULT = os.path.join("data", "cache_optaxg_liga_mx_2026.json")
@@ -131,6 +131,22 @@ PROCEDENCIA_CALIBRADA = "calibrado_gf"
 ETIQUETA_FUENTE_CACHE = (
     "sensor_fotmob_shotmap_optaxg · fuente D-ii ratificada (Decreto VAR-2026-J7-HOMOLOGACION §3)"
 )
+# [ARCH-1.4.44] Taxonomía cerrada de la procedencia xG: SÓLO las fuentes fácticas certifican
+# métrica Opta real. El respaldo `calibrado_gf` (1.05·GF) declara una estimación, jamás un dato.
+PROCEDENCIAS_OPTA_REALES = frozenset(
+    (PROCEDENCIA_CACHE, PROCEDENCIA_TELEMETRIA, PROCEDENCIA_SENSOR)
+)
+
+
+def es_procedencia_opta_real(procedencia: Any) -> bool:
+    """`True` sólo si la procedencia declarada pertenece a la taxonomía fáctica FotMob/Opta.
+
+    El respaldo calibrado (`calibrado_gf`), el vacío, `None` y cualquier etiqueta desconocida se
+    declaran NO reales: cero promoción de una estimación a métrica certificada.
+    """
+    if not isinstance(procedencia, str):
+        return False
+    return procedencia.strip().lower() in PROCEDENCIAS_OPTA_REALES
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -783,19 +799,18 @@ def _memoria_h2h(
 ) -> List[Dict[str, Any]]:
     """Últimos enfrentamientos oficiales entre ambos clubes, ciegos al futuro del kickoff.
 
-    Reutilización íntegra de los planos sellados [ARCH-1.6.13-C]:
-    `_precargar_historial_consumado_sqlite` (marcadores oficiales de la bóveda) +
-    `_historial_future_blind` (recorte `fecha < kickoff`: anti-fuga en backfill histórico) +
-    `_h2h_desde_historial` (últimos 5 duelos con `dias_antiguedad` fáctica; la ponderación
-    profunda τ_deep = 540 d la aplica aguas abajo el propio kernel).
+    [ARCH-1.4.44] Delegación íntegra en el proveedor unificado `h2h_provider`, que fusiona las dos
+    autoridades legisladas: la bóveda 3NF (`_historial_future_blind`, marcador oficial) y el corpus
+    longitudinal congelado (`h2h_corpus_v1`) que el diseño monotorneo de `matches` hace
+    inalcanzable. El puente de identidad (`teams`) canonicaliza nombres de exhibición y slugs antes
+    de cruzar. La ponderación profunda τ_deep = 540 d sigue siendo competencia del kernel
+    `[LN-QBE-020-C]`; aquí sólo se recupera evidencia, nunca se fabrica (Ley Zero-H2H).
     """
     if fecha_ref is None:
         return []
-    from scripts.daemons.centinela_deportivo import _h2h_desde_historial
-    from scripts.utilidades.poblar_temporada_completa_backtesting import _historial_future_blind
+    from src.core.sovereign.h2h_provider import obtener_h2h_unificado
 
-    historial = _historial_future_blind(sesion, int(league_id), fecha_ref)
-    return _h2h_desde_historial(historial, str(local), str(visitante), fecha_ref)
+    return obtener_h2h_unificado(sesion, local, visitante, fecha_ref, league_id=int(league_id))
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -905,6 +920,13 @@ def _vector_homologo(
         "away_split_stats": a_split,
         "home_team_slug": local,
         "h2h_matches": h2h,
+        # [ARCH-1.4.44] Sello de procedencia Opta REAL: exige certificación bilateral de la
+        # taxonomía fáctica FotMob/Opta. Una sola plaza calibrada degrada el sello a `False`
+        # (nunca se promedia un dato con una estimación presentándolos como métrica real).
+        "xg_es_real_opta": bool(
+            es_procedencia_opta_real(proc_h) and es_procedencia_opta_real(proc_a)
+        ),
+        "h2h_conteo": len(h2h),
     }
     traza: Dict[str, Any] = {
         "id_partido": id_partido,
@@ -925,7 +947,11 @@ def _vector_homologo(
         "xg_visita": a_st.get("xg"),
         "procedencia_xg_local": proc_h,
         "procedencia_xg_visita": proc_a,
+        "xg_es_real_opta": bool(
+            es_procedencia_opta_real(proc_h) and es_procedencia_opta_real(proc_a)
+        ),
         "h2h_duelos": len(h2h),
+        "h2h_conteo": len(h2h),
     }
     # [ARCH-1.4.39] Invariante del Pilar 1: PJ_casa + PJ_gira ≡ PJ_corte (por club, por corte).
     traza["invariante_sede"] = all(
@@ -1156,7 +1182,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     analizador = argparse.ArgumentParser(
         description="[ARCH-1.4.39] Homologación histórica integral de temporada (Opta xG + Kernel H2H)."
     )
-    analizador.add_argument("--jornadas", default=RANGO_JORNADAS_DEFAULT, help="rango explícito (ej. '1-10')")
+    analizador.add_argument("--jornadas", default=RANGO_JORNADAS_DEFAULT, help="rango explícito (ej. '1-17')")
     analizador.add_argument("--liga-id", type=int, default=LIGA_ID_CANONICA, help="liga de la captura")
     analizador.add_argument("--cache", default=RUTA_CACHE_OPTA_DEFAULT, help="ruta de la caché Opta")
     analizador.add_argument("--permitir-red", action="store_true", help="habilita el sensor FotMob/Opta")

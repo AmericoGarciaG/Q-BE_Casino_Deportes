@@ -829,6 +829,90 @@ def generar_distribucion_soberana(
    queda suprimida — el insumo publicado **es** evidencia.
 
 
+### Adenda protocolaria `[LN-QBE-104]` — Ley de Fusión Convexa del Símplex Soberano
+
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]` (matemática pura)  
+**Firma:** SHA256-VAULT-CORE-005-LN-QBE-104-CONVEX-SIMPLEX-FUSION
+
+**Alcance:** delta aditivo sobre el orquestador sellado. Dixon-Coles, el operador de André y
+`estimar_intensidades_loglineal` permanecen **bit-idénticos**; lo que se legisla es una operación
+NUEVA sobre el símplex $\Delta^2$: la mezcla convexa del Generador A (Poisson paramétrico) con el
+Generador C (kernel H2H empírico). Hasta esta adenda el kernel se calculaba únicamente para
+`Δ_epist` y **nunca** tocaba el símplex publicado: el ensemble era una promesa sin materialización.
+
+```python
+# [LN-QBE-104] Ley de mezcla convexa del símplex soberano (Generador A ∪ Generador C).
+PESO_H2H_POR_DUELO = 0.05
+PESO_H2H_TOPE = 0.25
+DELTA_EPISTEMICO_SIN_EVIDENCIA = 0.02
+
+
+def calcular_peso_h2h(n_duelos: int) -> float:
+    """[LN-QBE-104] w_H2H = min(0.25, N · 0.05); N = 0 ⇒ 0.0 (identidad)."""
+    try:
+        duelos = int(n_duelos or 0)
+    except (TypeError, ValueError):
+        duelos = 0
+    return min(PESO_H2H_TOPE, max(0, duelos) * PESO_H2H_POR_DUELO)
+
+
+def fusionar_simplex_con_h2h(
+    distribucion_parametrica: Dict[str, float],
+    kernel: Optional[Any] = None,
+    n_duelos: int = 0,
+) -> Dict[str, float]:
+    """[LN-QBE-104] P_hib(k) = w_Liga·P_A(k) + w_H2H·P_C(k); Δ_epist(∞) = max_k |P_A(k) − P_C(k)|."""
+    p_local = float(distribucion_parametrica["p_local"])
+    p_empate = float(distribucion_parametrica["p_empate"])
+    p_visitante = float(distribucion_parametrica["p_visitante"])
+
+    peso_h2h = calcular_peso_h2h(n_duelos) if kernel is not None else 0.0
+    if kernel is None or peso_h2h <= 0.0:
+        return {
+            "p_local": p_local,
+            "p_empate": p_empate,
+            "p_visitante": p_visitante,
+            "peso_h2h": 0.0,
+            "peso_liga": 1.0,
+            "delta_epist": DELTA_EPISTEMICO_SIN_EVIDENCIA,
+        }
+
+    q_local = float(kernel.p_local)
+    q_empate = float(kernel.p_empate)
+    q_visita = float(kernel.p_visita)
+    peso_liga = 1.0 - peso_h2h
+
+    delta_epist = max(
+        abs(p_local - q_local),
+        abs(p_empate - q_empate),
+        abs(p_visitante - q_visita),
+    )
+    return {
+        "p_local": peso_liga * p_local + peso_h2h * q_local,
+        "p_empate": peso_liga * p_empate + peso_h2h * q_empate,
+        "p_visitante": peso_liga * p_visitante + peso_h2h * q_visita,
+        "peso_h2h": peso_h2h,
+        "peso_liga": peso_liga,
+        "delta_epist": delta_epist,
+    }
+```
+
+**Invariantes sellados por esta adenda (custodiados por
+`tests/shield/test_shield_ensemble_fusion_and_ui_sync.py`):**
+
+1. **Cierre del símplex:** $\sum_k P_{hib}(k) = 1$ en aritmética exacta (error de redondeo $\le 10^{-16}$).
+2. **Acotamiento por componente:** $\min(P_A(k), P_C(k)) \le P_{hib}(k) \le \max(P_A(k), P_C(k))$.
+3. **Tope fiduciario:** $w_{H2H} \le 0.25$ para todo $N$; ley monótona no decreciente en $N$.
+4. **Identidad Zero-H2H:** $N = 0$ o `kernel=None` $\Rightarrow P_{hib} = P_A$ y $\Delta = 0.02$ (piso R-1).
+5. **Métrica:** $\Delta(\infty) = \max_k |P_A(k) - P_C(k)|$ acota la TVD sellada ($\text{TVD} \le \Delta(\infty)$);
+   la TVD de `[LN-QBE-020-C]` sigue publicada como `discrepancia_epist`, sin derogación.
+6. **Una sola instancia del Generador C** alimenta discrepancia y fusión (una invocación por partido).
+7. **Las intensidades λ no se tocan:** la fusión opera sobre el símplex, nunca sobre el espacio de tasas;
+   `intensidades.ratio` conserva el valor sellado por `[LN-QBE-102]`.
+
+
+
 ---
 
 ## [VAULT-DATA-002] Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`)
@@ -900,7 +984,10 @@ def sincronizar_distribuciones_soberanas_partidos(
 
             # 3. Persistencia atómica en la tabla 3NF 'sovereign_distributions'
             trace_dict = dist_out.audit_trace.model_dump()
-            epist_delta = float(trace_dict.get("intensidades", {}).get("ratio", 0.0) or 0.0)
+            # [LN-QBE-104] Δ_epist(∞) REAL de la fusión convexa (norma infinito sobre Δ²), NO el
+            # `ratio` λ_max/λ_min de tasas: el puente lee contrato de salida → traza forense → piso
+            # de ignorancia R-1, acotando a [0, 1]. El `ratio` permanece intacto en `intensidades`.
+            epist_delta = _delta_epistemico_publicado(dist_out, trace_dict)
 
             with gw.write_transaction() as tx:
                 dist_rec = tx.query(SovereignDistribution).filter(
@@ -991,11 +1078,56 @@ def _candado_blindado(origen_previo: str, origen_entrante: str) -> bool:
 **Contrato de salida del puente (ampliado):** `{"procesados", "exitosos", "protegidos", "errores"}`.
 `protegidos` cuenta los vetos efectivos del candado — es la métrica de auditoría de la protección;
 un veto **no** es un error: el marcador oficial se actualiza y la probabilidad de ventanilla se preserva.
+### Adenda protocolaria `[LN-QBE-104]` — Persistencia de la Δ_epist Real
+
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]` (magnitud persistida) · `[DBBD-FUNGIBLE]` (presentación)  
+**Firma:** SHA256-VAULT-DATA-002-LN-QBE-104-EPISTEMIC-DELTA-REAL
+
+**Alcance:** delta correctivo sobre el bloque sellado (línea 903 pre-enmienda). El `upsert`, el
+`LIVE_PROTECTION_LOCK` y la generación matemática quedan **intactos**: lo único que cambia es la
+MAGNITUD que se escribe en la columna `sovereign_distributions.epistemic_delta`. Antes espejaba el
+`ratio` $\lambda_{\max}/\lambda_{\min}$ —una magnitud de tasas sin relación con la discrepancia
+entre generadores—; ahora publica $\Delta_{epist}(\infty) = \max_k |P_A(k) - P_C(k)|$ calculada en
+la fusión convexa `[LN-QBE-104]`. Cero backfill: las filas históricas no se reescriben.
+
+```python
+def _delta_epistemico_publicado(dist_out: Any, trace_dict: Dict[str, Any]) -> float:
+    """
+    [LN-QBE-104] Δ_epist(∞) persistido en `sovereign_distributions.epistemic_delta`.
+
+    Orden de lectura: contrato de salida → traza forense → piso de ignorancia declarada R-1.
+    El valor se acota a [0, 1] porque Δ(∞) vive en el símplex Δ²; un `None` heredado o un tipo
+    no numérico JAMÁS se maquilla con 0.0 (se declara la ignorancia 0.02 del Contrato R-1).
+    """
+    for candidato in (
+        getattr(dist_out, "epistemic_delta", None),
+        trace_dict.get("epistemic_delta"),
+    ):
+        if isinstance(candidato, bool) or not isinstance(candidato, (int, float)):
+            continue
+        valor = float(candidato)
+        if math.isfinite(valor):
+            return min(1.0, max(0.0, valor))
+    return DELTA_EPISTEMICO_SIN_EVIDENCIA
+```
+
+**Invariantes sellados por esta adenda (custodiados por
+`tests/shield/test_shield_ensemble_fusion_and_ui_sync.py`):**
+
+1. **Precedencia de la verdad:** el contrato de salida (`dist_out.epistemic_delta`) gana a la traza;
+   sólo si falta se lee `audit_trace_json["epistemic_delta"]`; sólo si ambos faltan se declara 0.02.
+2. **Acotamiento:** $\Delta(\infty) \in [0, 1]$ por construcción (vive en $\Delta^2$); un valor fuera
+   de rango se recorta, no se descarta.
+3. **Cero maquillaje:** `bool`, `None`, `str` u objetos no numéricos degradan al piso R-1 — jamás a 0.0.
+4. **Intactidad de la evidencia sellada:** `intensidades.ratio` sigue en la traza 3NF con el mismo
+   `round(lh / la, 2)` de `[LN-QBE-102]`; deja de ser la fuente de `epistemic_delta`, no desaparece.
 
 
 
 
 ---
+
 
 ## [VAULT-CORE-006] Modulador Adaptativo del Slider de Certeza en Espacio 3^K (`src/core/risk_dial_modulator.py`)
 **Estado:** `[CANON EN FORJA — REVISIÓN 2]` (Fase 4: erradicación del factor mágico `0.70`)  

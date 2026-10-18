@@ -90,6 +90,64 @@ def test_ln_qbe_020_c_h2h_temporal_decay_kernel():
         calcular_matriz_h2h_empirica([])
 
 
+def test_h2h_simplex_clausura_barrido():
+    """[VAR-2026-10-17-H2H-SIMPLEX · ALT-A] Cierre exacto del símplex ante un barrido de desenlace.
+
+    Cerrojo de regresión: el kernel acumulaba el denominador `W = sum(pesos)` con la suma
+    COMPENSADA de CPython ≥ 3.12 y los numeradores con `+=` naíf. Cuando un solo desenlace absorbe
+    la ventana (barrido), el numerador debe ser idénticamente igual a `W`; con algoritmos distintos
+    difería en 1 ulp ⇒ `p_k = 1.0000000000000002` ⇒ `H2HKernelResult.Field(le=1.0)` rechazaba la
+    matriz y el fixture quedaba sin distribución soberana (3 fixtures de LIGAMX-J6/J7).
+
+    Las antigüedades de este Juez son exactamente las que reproducen el desborde:
+    `sum(pesos) = 3.1971793144097447` vs acumulación naíf `3.197179314409745`.
+    """
+    from src.core.sovereign.h2h_kernel import calcular_matriz_h2h_empirica
+
+    dias = [30, 120, 210, 380]
+
+    def _ventana(goles_local: int, goles_visita: int):
+        return [
+            {"goles_local": goles_local, "goles_visita": goles_visita, "dias_antiguedad": d}
+            for d in dias
+        ]
+
+    # Caso A — barrido de victoria local: P(local) == 1.0 EXACTO (no 0.9999999999999999).
+    res_local = calcular_matriz_h2h_empirica(_ventana(2, 0))
+    assert res_local.p_local == 1.0, f"Desborde/degradación del símplex: {res_local.p_local!r}"
+    assert res_local.p_empate == 0.0
+    assert res_local.p_visita == 0.0
+    assert res_local.suma_probabilidades == 1.0, (
+        f"La suma de masa del barrido debe ser 1.0 exacto: {res_local.suma_probabilidades!r}"
+    )
+
+    # Caso B — barrido de victoria visitante (LIGAMX-J6-05: 0-2 / 0-1 / 1-2 / 0-2).
+    res_visita = calcular_matriz_h2h_empirica(_ventana(0, 2))
+    assert res_visita.p_visita == 1.0, f"Desborde del símplex en visita: {res_visita.p_visita!r}"
+    assert res_visita.suma_probabilidades == 1.0
+
+    # Caso C — barrido de empates.
+    res_empate = calcular_matriz_h2h_empirica(_ventana(1, 1))
+    assert res_empate.p_empate == 1.0, f"Desborde del símplex en empate: {res_empate.p_empate!r}"
+    assert res_empate.suma_probabilidades == 1.0
+
+    # Caso D — ventana mixta: ninguna coordenada puede exceder el símplex y la suma cierra.
+    mixta = [
+        {"goles_local": 2, "goles_visita": 1, "dias_antiguedad": dias[0]},
+        {"goles_local": 0, "goles_visita": 1, "dias_antiguedad": dias[1]},
+        {"goles_local": 1, "goles_visita": 1, "dias_antiguedad": dias[2]},
+        {"goles_local": 3, "goles_visita": 0, "dias_antiguedad": dias[3]},
+    ]
+    res_mixta = calcular_matriz_h2h_empirica(mixta)
+    for etiqueta, valor in (
+        ("p_local", res_mixta.p_local),
+        ("p_empate", res_mixta.p_empate),
+        ("p_visita", res_mixta.p_visita),
+    ):
+        assert 0.0 <= valor <= 1.0, f"[LN-QBE-020-C] {etiqueta} fuera del símplex: {valor!r}"
+    assert abs(res_mixta.suma_probabilidades - 1.0) <= 1e-12
+
+
 def test_arch_1_4_26_core_pure_function_isolation():
     """Audita que los módulos en src/core/sovereign/ no importen librerías de DB ni red."""
     import ast
@@ -191,9 +249,11 @@ def test_ln_qbe_036_wired_into_sovereign_pipeline():
 def test_ln_qbe_020_c_wired_delta_epist_and_zero_h2h_law():
     """[LN-QBE-020-C] conectado: el kernel H2H alimenta Δ_epist; sin evidencia rige la Ley Zero-H2H.
 
-    Se certifica además el alcance legislado: Δ_epist se **deriva y publica** (insumo de calibración
-    futura `[LN-QBE-040]`), pero el símplex Poisson paramétrico NO se fusiona silenciosamente con el
-    kernel empírico en este Sprint (toda fusión exige Decreto + enmienda de este Juez).
+    Se certifica además el alcance legislado por el **Decreto de Fusión Convexa `[LN-QBE-104]`**:
+    Δ_epist se **deriva y publica** (insumo de calibración futura `[LN-QBE-040]`) y el símplex Poisson
+    paramétrico SÍ se mezcla con el kernel empírico bajo la ley w_H2H = min(0.25, N·0.05). Este Juez
+    certifica la ESTRUCTURA de la mezcla (cierre del símplex, acotamiento por componente, tope del peso
+    y coherencia Δ(∞) ≥ TVD), jamás la igualdad pre-fusión que el Sprint 3 congeló — enmienda E-2.
     """
     from src.core.sovereign_pipeline import (
         derivar_discrepancia_epistemica,
@@ -228,8 +288,41 @@ def test_ln_qbe_020_c_wired_delta_epist_and_zero_h2h_law():
     assert kernel["p_local"] > kernel["p_visita"], "El kernel H2H debe reflejar el dominio local."
     assert abs(kernel["p_local"] + kernel["p_empate"] + kernel["p_visita"] - 1.0) <= 1e-4
 
-    # Alcance gobernado: la evidencia H2H NO muta el símplex paramétrico de este Sprint.
-    assert salida_con_h2h.p_local == pytest.approx(salida_sin_h2h.p_local, abs=1e-12)
-    assert salida_con_h2h.p_empate == pytest.approx(salida_sin_h2h.p_empate, abs=1e-12)
-    assert salida_con_h2h.p_visitante == pytest.approx(salida_sin_h2h.p_visitante, abs=1e-12)
+    # [LN-QBE-104] Decreto de Fusión Convexa (Generador A ∪ Generador C): la evidencia H2H SÍ mezcla el
+    # símplex publicado con w_H2H = min(0.25, N·0.05). Enmienda E-2: se certifica la ESTRUCTURA de la
+    # mezcla, no la igualdad pre-fusión congelada por el Sprint 3.
+    peso_h2h = kernel["peso_h2h"]
+    assert 0.0 < peso_h2h <= 0.25, "w_H2H debe saturar en el tope fiduciario 0.25."
+    assert peso_h2h == pytest.approx(min(0.25, len(_H2H_DOMINIO_LOCAL) * 0.05), abs=1e-12)
+    assert kernel["peso_liga"] == pytest.approx(1.0 - peso_h2h, abs=1e-12)
+
+    # 1) Cierre del símplex: una combinación convexa habita Δ².
+    suma_hibrida = salida_con_h2h.p_local + salida_con_h2h.p_empate + salida_con_h2h.p_visitante
+    assert abs(suma_hibrida - 1.0) <= 1e-12, f"El símplex híbrido no cierra: Σ = {suma_hibrida!r}"
+
+    # 2) Acotamiento por componente: min(P_A, P_C) ≤ P_hib ≤ max(P_A, P_C).
+    pares = (
+        ("p_local", salida_con_h2h.p_local, salida_sin_h2h.p_local, kernel["p_local"]),
+        ("p_empate", salida_con_h2h.p_empate, salida_sin_h2h.p_empate, kernel["p_empate"]),
+        ("p_visitante", salida_con_h2h.p_visitante, salida_sin_h2h.p_visitante, kernel["p_visita"]),
+    )
+    for etiqueta, hibrida, poisson_pura, empirica in pares:
+        assert min(poisson_pura, empirica) - 1e-12 <= hibrida <= max(poisson_pura, empirica) + 1e-12, (
+            f"P_hib({etiqueta}) = {hibrida!r} se sale del intervalo convexo "
+            f"[{min(poisson_pura, empirica)!r}, {max(poisson_pura, empirica)!r}]."
+        )
+    # 3) La mezcla NO es la identidad: con evidencia y N ≥ 1 el kernel desplaza el símplex publicado.
+    assert salida_con_h2h.p_local != pytest.approx(salida_sin_h2h.p_local, abs=1e-12)
+
+    # 4) [LN-QBE-104] Δ_epist(∞) = max_k |P_A − P_C| y ACOTA por arriba a la TVD [LN-QBE-020-C].
+    delta_infinito = salida_con_h2h.epistemic_delta
+    esperado_infinito = max(
+        abs(salida_sin_h2h.p_local - kernel["p_local"]),
+        abs(salida_sin_h2h.p_empate - kernel["p_empate"]),
+        abs(salida_sin_h2h.p_visitante - kernel["p_visita"]),
+    )
+    assert delta_infinito == pytest.approx(esperado_infinito, abs=1e-6)
+    assert 0.0 < delta_infinito <= 1.0
+    assert delta_epist <= delta_infinito + 1e-6, "La TVD jamás puede exceder la norma infinito."
+    assert salida_con_h2h.audit_trace.epistemic_delta == pytest.approx(delta_infinito, abs=1e-12)
 

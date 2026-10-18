@@ -34,8 +34,8 @@ def test_arch_1_4_28_admin_tasks_whitelist_and_coordinator_wiring():
     assert "cadena_pre_jornada" in TAREAS_PERMITIDAS
     assert "cadena_post_jornada" in TAREAS_PERMITIDAS
     assert "cadena_progol" in TAREAS_PERMITIDAS
-    assert len(TAREAS_PERMITIDAS) == 15, (
-        "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 15 tareas certificadas."
+    assert len(TAREAS_PERMITIDAS) == 18, (
+        "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 18 tareas certificadas."
     )
 
     # Auditar AST de admin_tasks.py para confirmar cableado del coordinador

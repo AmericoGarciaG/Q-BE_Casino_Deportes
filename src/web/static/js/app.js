@@ -3095,11 +3095,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // ── [LN-QBE-100 / ARCH-1.4.38] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL DE TEMPORADA) ──
 let backtestingReportCache = null;
+// [LN-QBE-104 · DES-QBE-067] Último universo EFECTIVO pintado (payload servido tras el filtro
+// anti-cuarentena). La caché `backtestingReportCache` permanece intacta: el filtro es de
+// presentación y jamás muta la evidencia recibida de la bóveda.
+let backtestingUniversoActual = null;
 
 function initVisorBacktesting() {
     const tab = document.getElementById("tab-visor-backtesting");
     if (tab) {
         tab.addEventListener("click", cargarVisorBacktesting);
+    }
+    // [LN-QBE-104] `#chk-excluir-vetados`: conmutador del filtro anti-cuarentena. Cero refetch:
+    // se re-pinta desde la caché ya certificada (idempotente y sin tráfico adicional).
+    const casillaVetados = document.getElementById("chk-excluir-vetados");
+    if (casillaVetados) {
+        casillaVetados.addEventListener("change", _pintarVisorBacktesting);
     }
 }
 
@@ -3126,20 +3136,7 @@ async function cargarVisorBacktesting() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         backtestingReportCache = data;
-        const resumen = data.resumen_temporada || {};
-        pintarResumenBacktesting(resumen);
-        pintarMesoBacktesting(data.jornadas || [], resumen);
-        if (estado) {
-            const jornadasAuditadas = (resumen.jornadas_auditadas || []).map(j => `J${j}`).join(" · ");
-            estado.textContent = `Lectura certificada · ${resumen.total_partidos || 0} partidos concluidos ` +
-                `auditados contra la bóveda 3NF` +
-                (jornadasAuditadas ? ` (${jornadasAuditadas})` : "") +
-                ` · Brier Q-BE ${Number(resumen.brier_score_qbe || 0).toFixed(4)} vs Mkt ` +
-                `${Number(resumen.brier_score_mercado || 0).toFixed(4)} · Alpha ` +
-                `${Number(resumen.alpha_calibracion_pct || 0) >= 0 ? "+" : ""}` +
-                `${Number(resumen.alpha_calibracion_pct || 0).toFixed(2)}% ` +
-                "(solo lectura: cero escritura, cero mocks).";
-        }
+        _pintarVisorBacktesting();
     } catch (e) {
         if (estado) {
             estado.textContent = `⚠️ Bóveda no legible: ${e.message}. Cero cifras se muestran sin respaldo.`;
@@ -3148,6 +3145,233 @@ async function cargarVisorBacktesting() {
             "Sin lectura factual disponible.</td></tr>";
     }
 }
+
+// ── [LN-QBE-104 · DES-QBE-067] FILTRO ANTI-CUARENTENA DE LA CARTELERA ─────────────────────────
+// El semáforo EPIST lo publica el endpoint de atribución factorial [ARCH-1.4.42]:
+// 🟢 Δ ≤ 0.03 · 🟡 0.03 < Δ ≤ 0.12 · 🔴 Δ > 0.12 (Cuarentena Fiduciaria [LN-QBE-070-B]).
+// Un partido vetado NO recibe capital de la cartera; exhibirlo como acierto/fallo de Q-BE
+// sobreestima la calibración con evidencia que el motor ya declaró inservible. El filtro es de
+// PRESENTACIÓN (`[GOVERNANCE-01]`: cero cifras maquilladas, cero mutación de la bóveda).
+const SEMAFORO_EPIST_VETO = "ROJO";
+const VERTICES_TRIADA_BACKTESTING = ["P_MAX", "P_MID", "P_LOW"];
+
+function _partidoVetadoBacktesting(partido) {
+    const atribucion = partido && partido.atribucion_factorial;
+    const semaforos = atribucion && atribucion.semaforos;
+    return Boolean(semaforos && semaforos.epist === SEMAFORO_EPIST_VETO);
+}
+
+/**
+ * [LN-QBE-100 · VAR-2026-LOBOTOMIA-RESCATE-A] Vértice del símplex Δ² consumado por el resultado.
+ * Fuente de verdad única: el vértice SERVIDO por la bóveda (`clasificacion_triada`). Un payload
+ * legado sin el campo degrada al rango del desenlace en el ranking P′ (0 ≡ P_MAX · 1 ≡ P_MID ·
+ * 2 ≡ P_LOW): cero segunda verdad paralela y cero etiqueta inventada.
+ */
+function _verticeConsumadoBacktesting(partido) {
+    if (partido && VERTICES_TRIADA_BACKTESTING.includes(partido.clasificacion_triada)) {
+        return partido.clasificacion_triada;
+    }
+    const clavesPorPRima = ["LOCAL", "EMPATE", "VISITANTE"]
+        .map((clave, orden) => ({
+            clave,
+            p: Number(partido ? partido[`p_${clave.toLowerCase()}`] : 0) || 0,
+            orden,
+        }))
+        .sort((a, b) => (b.p - a.p) || (a.orden - b.orden))
+        .map(x => x.clave);
+    const rangoReal = clavesPorPRima.indexOf(partido ? partido.resultado_real : null);
+    return rangoReal === 0 ? "P_MAX" : rangoReal === 1 ? "P_MID" : "P_LOW";
+}
+
+/** Conteos enteros por vértice y procedencia del rescate secundario [LN-QBE-100]. */
+function _conteosTriadaBacktesting(partidos) {
+    const conteos = {
+        n_p_max: 0, n_p_mid: 0, n_p_low: 0, n_p_mid_empate: 0, n_p_mid_rival: 0,
+    };
+    (partidos || []).forEach(partido => {
+        const vertice = _verticeConsumadoBacktesting(partido);
+        if (vertice === "P_MAX") {
+            conteos.n_p_max += 1;
+            return;
+        }
+        if (vertice === "P_LOW") {
+            conteos.n_p_low += 1;
+            return;
+        }
+        conteos.n_p_mid += 1;
+        // Rescate por empate ⟺ el vértice medio era el empate (`r_mid === "EMPATE"`) y el empate
+        // se consumó; en cualquier otro caso el rescate lo aportó el rival del vértice medio.
+        if (partido.resultado_real === "EMPATE" && partido.r_mid === "EMPATE") {
+            conteos.n_p_mid_empate += 1;
+        } else {
+            conteos.n_p_mid_rival += 1;
+        }
+    });
+    return conteos;
+}
+
+/**
+ * Réplica exacta de `calcular_brier_multicategorico` [LN-QBE-100] sobre el subconjunto exhibido:
+ * BS = (1/3N) · Σ_i Σ_k (p_ik − y_ik)² con normalización 3N y redondeo a 4 decimales. `prefijo`
+ * selecciona el generador: "p_" = P′ de Q-BE · "q_" = consenso del mercado.
+ */
+function _brierBacktesting(partidos, prefijo) {
+    let sumaError = 0;
+    let evaluados = 0;
+    (partidos || []).forEach(partido => {
+        const probabilidades = ["local", "empate", "visitante"]
+            .map(clave => Number(partido[`${prefijo}${clave}`]));
+        if (!probabilidades.every(Number.isFinite)) return;
+        const indiceReal = ["LOCAL", "EMPATE", "VISITANTE"]
+            .indexOf(String(partido.resultado_real || "").toUpperCase());
+        if (indiceReal < 0) return;
+        probabilidades.forEach((p, indice) => {
+            sumaError += (p - (indice === indiceReal ? 1 : 0)) ** 2;
+        });
+        evaluados += 1;
+    });
+    if (!evaluados) return 0;
+    return Math.round((sumaError / (3 * evaluados)) * 10000) / 10000;
+}
+
+/** Alpha de Calibración = (1 − BS_QBE / BS_MKT) × 100 con guarda de cero [LN-QBE-100]. */
+function _alphaBacktesting(brierQbe, brierMercado) {
+    if (!(brierMercado > 0)) return 0;
+    return Math.round((1 - (brierQbe / brierMercado)) * 100 * 100) / 100;
+}
+
+/**
+ * [LN-QBE-104] Agregado de la triada desde los CONTEOS ENTEROS del universo efectivo. Sirve tanto
+ * a la temporada como a una jornada suelta: las claves `n_*` (meso) y `total_*` (macro) se pueblan
+ * con el mismo hecho, de modo que la cartelera nunca reconcilia dos verdades distintas.
+ */
+function _agregadoTriadaBacktesting(partidos) {
+    const universo = partidos || [];
+    const total = universo.length;
+    const conteos = _conteosTriadaBacktesting(universo);
+    const pct = n => (total ? Math.round((n / total) * 100 * 100) / 100 : 0);
+    const pctMax = pct(conteos.n_p_max);
+    const pctMid = pct(conteos.n_p_mid);
+    const pctLow = pct(conteos.n_p_low);
+    const aciertos = universo
+        .filter(p => p.tipo_resultado === "FAVORITO" || p.tipo_resultado === "EMPATE").length;
+    const brierQbe = _brierBacktesting(universo, "p_");
+    const brierMercado = _brierBacktesting(universo, "q_");
+    return {
+        total_partidos: total,
+        masa_cobertura_pct: Math.round((pctMax + pctMid) * 100) / 100,
+        p_max_aciertos_pct: pctMax,
+        p_mid_rescate_pct: pctMid,
+        p_low_ruptura_pct: pctLow,
+        pct_p_max: pctMax,
+        pct_p_mid: pctMid,
+        pct_p_low: pctLow,
+        n_p_max: conteos.n_p_max,
+        n_p_mid: conteos.n_p_mid,
+        n_p_low: conteos.n_p_low,
+        n_p_mid_empate: conteos.n_p_mid_empate,
+        n_p_mid_rival: conteos.n_p_mid_rival,
+        total_p_max: conteos.n_p_max,
+        total_p_mid: conteos.n_p_mid,
+        total_p_low: conteos.n_p_low,
+        total_p_mid_empate: conteos.n_p_mid_empate,
+        total_p_mid_rival: conteos.n_p_mid_rival,
+        aciertos_cobertura: aciertos,
+        tasa_cobertura_pct: pct(aciertos),
+        brier_score_qbe: brierQbe,
+        brier_score_mercado: brierMercado,
+        alpha_calibracion_pct: _alphaBacktesting(brierQbe, brierMercado),
+    };
+}
+
+
+/**
+ * [LN-QBE-104] Universo efectivo de la cartelera: payload íntegro (filtro inerte) o el subconjunto
+ * sin partidos en Cuarentena Fiduciaria, con TODOS sus agregados re-derivados de los conteos
+ * enteros del subconjunto. Jornadas sin ningún vetado se sirven tal cual (cero recálculo: la
+ * aritmética del servidor es la fuente de verdad y se respeta bit a bit).
+ */
+function _universoCalibracion() {
+    const payload = backtestingReportCache || {};
+    const resumenServido = payload.resumen_temporada || {};
+    const casilla = document.getElementById("chk-excluir-vetados");
+    const excluir = Boolean(casilla && casilla.checked);
+    let excluidos = 0;
+
+    const jornadas = (payload.jornadas || []).map(jornada => {
+        const partidosServidos = jornada.partidos || [];
+        if (!excluir) return jornada;
+        const partidos = partidosServidos.filter(partido => !_partidoVetadoBacktesting(partido));
+        const retirados = partidosServidos.length - partidos.length;
+        if (!retirados) return jornada;
+        excluidos += retirados;
+        return Object.assign({}, jornada, _agregadoTriadaBacktesting(partidos), {
+            jornada: jornada.jornada,
+            partidos,
+        });
+    });
+
+    const partidosEfectivos = [];
+    jornadas.forEach(jornada => {
+        (jornada.partidos || []).forEach(partido => partidosEfectivos.push(partido));
+    });
+
+    const filtroInerte = excluidos === 0;
+    return {
+        excluir,
+        excluidos,
+        filtroInerte,
+        jornadas,
+        totalServido: Number(resumenServido.total_partidos || 0),
+        // Con el filtro inerte manda el agregado servido (idempotencia estricta); con vetados
+        // retirados se publica el agregado del subconjunto, declarándolo en `#bt-estado`.
+        resumen: (excluir && !filtroInerte)
+            ? Object.assign({}, _agregadoTriadaBacktesting(partidosEfectivos), {
+                jornadas_auditadas: resumenServido.jornadas_auditadas || [],
+                partidos_pendientes_captura:
+                    Number(resumenServido.partidos_pendientes_captura || 0),
+                partidos_consolidados_servido: Number(resumenServido.total_partidos || 0),
+            })
+            : resumenServido,
+        resumenServido,
+    };
+}
+
+/** Declaración textual del universo leído: certificado (íntegro) o filtrado (anti-cuarentena). */
+function _estadoLecturaBacktesting(universo) {
+    const resumen = universo.resumen || {};
+    const jornadasAuditadas = (resumen.jornadas_auditadas || []).map(j => `J${j}`).join(" · ");
+    const auditoria = "auditados contra la bóveda 3NF" +
+        (jornadasAuditadas ? ` (${jornadasAuditadas})` : "");
+    const calibracion = `Brier Q-BE ${Number(resumen.brier_score_qbe || 0).toFixed(4)} vs Mkt ` +
+        `${Number(resumen.brier_score_mercado || 0).toFixed(4)} · Alpha ` +
+        `${Number(resumen.alpha_calibracion_pct || 0) >= 0 ? "+" : ""}` +
+        `${Number(resumen.alpha_calibracion_pct || 0).toFixed(2)}%`;
+    if (!universo.excluir) {
+        return `Lectura certificada · ${resumen.total_partidos || 0} partidos concluidos ` +
+            `${auditoria} · ${calibracion} (solo lectura: cero escritura, cero mocks).`;
+    }
+    if (universo.filtroInerte) {
+        return "Filtro anti-cuarentena activo sin efecto · 0 partidos vetados sobre " +
+            `${resumen.total_partidos || 0} partidos concluidos ${auditoria} · ${calibracion}.`;
+    }
+    return `Filtro anti-cuarentena activo · ${universo.excluidos} de ${universo.totalServido} ` +
+        "partidos concluidos excluidos por Cuarentena Fiduciaria (EPIST 🔴 · Δ_epist > 0.12) · " +
+        `universo efectivo: ${resumen.total_partidos || 0} partidos ${auditoria} · ${calibracion} ` +
+        "[LN-QBE-104].";
+}
+
+/** Re-pintado íntegro del visor desde la caché certificada (idempotente, cero refetch). */
+function _pintarVisorBacktesting() {
+    if (!backtestingReportCache) return;
+    const universo = _universoCalibracion();
+    backtestingUniversoActual = universo;
+    pintarResumenBacktesting(universo.resumen);
+    pintarMesoBacktesting(universo.jornadas, universo.resumen);
+    const estado = document.getElementById("bt-estado");
+    if (estado) estado.textContent = _estadoLecturaBacktesting(universo);
+}
+
 
 function pintarResumenBacktesting(resumen) {
     const set = (id, texto) => {
@@ -3241,7 +3465,10 @@ function pintarMesoBacktesting(jornadas, resumen) {
 
 function mostrarMicroJornadaBacktesting(idx) {
     const contenedor = document.getElementById("contenedor-micro-partidos");
-    const jornadas = (backtestingReportCache && backtestingReportCache.jornadas) || [];
+    // [LN-QBE-104] La parrilla micro consume el universo EFECTIVO (con el filtro anti-cuarentena
+    // ya aplicado): jamás se exhibe un partido que la tabla meso dejó de contar.
+    const jornadas = (backtestingUniversoActual && backtestingUniversoActual.jornadas) ||
+        (backtestingReportCache && backtestingReportCache.jornadas) || [];
     const jornada = jornadas[idx];
     if (!contenedor || !jornada) return;
 
@@ -3544,6 +3771,23 @@ function _bloqueSemaforos44(semaforos) {
     }).join("");
 }
 
+function _badgeDimension44(dimension) {
+    // [DES-QBE-066 / LN-QBE-104] Badge bicolor del acordeón forense. Construcción DOM pura: los
+    // contadores llegan servidos y se validan antes de pintarse; cero hidratación por marcado crudo.
+    // «EVALUADA» exige evidencia REALMENTE evaluada: `tiene_datos` por sí solo no basta. Una
+    // dimensión declarada sin una sola variable evaluada (o con denominador nulo) NO es un «0/0
+    // evaluadas» —que finge una medición— sino `SIN EVALUAR` ([GOVERNANCE-01]: cero maquillaje).
+    const evaluadas = Number(dimension && dimension.variables_evaluadas);
+    const total = Number(dimension && dimension.total_variables);
+    const coherente = Number.isFinite(evaluadas) && Number.isFinite(total) &&
+        total > 0 && evaluadas > 0 && evaluadas <= total;
+    const conDatos = Boolean(dimension && dimension.tiene_datos === true && coherente);
+    const badge = document.createElement("span");
+    badge.className = conDatos ? "badge-dim badge-dim-evaluada" : "badge-dim badge-dim-fase6";
+    badge.textContent = conDatos ? `${evaluadas}/${total} evaluadas` : "SIN EVALUAR";
+    return badge;
+}
+
 function _tablaDimension44(dimension) {
     const filas = (dimension.variables || []).map(variable => {
         const colorEstado = COLORES_ESTADO_44[variable.estado] || "#94A3B8";
@@ -3559,11 +3803,15 @@ function _tablaDimension44(dimension) {
                 <td class="vars44-col-impacto">${variable.impacto || "—"}</td>
             </tr>`;
     }).join("");
+    const indice = String(dimension && dimension.dimension ? dimension.dimension : "");
     return `
-        <details class="vars44-dimension">
+        <details class="vars44-dimension" data-dimension="${indice}">
             <summary>
                 <span class="vars44-dim-titulo">${dimension.titulo || dimension.dimension}</span>
-                <span class="vars44-dim-conteo">${dimension.conteo} variables · ${dimension.dimension}</span>
+                <span class="vars44-dim-meta">
+                    <span class="vars44-badge-slot" data-indice-badge="${indice}"></span>
+                    <span class="vars44-dim-conteo">${dimension.conteo} variables · ${dimension.dimension}</span>
+                </span>
             </summary>
             <table class="vars44-tabla">
                 <thead>
@@ -3581,6 +3829,27 @@ function _tablaDimension44(dimension) {
                 <tbody>${filas}</tbody>
             </table>
         </details>`;
+}
+
+function _hidratarBadgesDimension44(contenedor, dimensiones) {
+    // [DES-QBE-066] Clase bicolor + badge construidos en DOM sobre la geometría sellada de
+    // [DES-QBE-064]: la transcripción del bloque servido nunca se hidrata por `innerHTML`.
+    if (!contenedor) return;
+    const porIndice = {};
+    (dimensiones || []).forEach(dimension => {
+        if (dimension && dimension.dimension) porIndice[String(dimension.dimension)] = dimension;
+    });
+    contenedor.querySelectorAll(".vars44-badge-slot").forEach(ranura => {
+        const dimension = porIndice[ranura.dataset.indiceBadge];
+        if (!dimension) return;
+        ranura.replaceWith(_badgeDimension44(dimension));
+    });
+    contenedor.querySelectorAll("details.vars44-dimension").forEach(acordeon => {
+        const dimension = porIndice[acordeon.dataset.dimension];
+        const conDatos = Boolean(dimension && dimension.tiene_datos === true);
+        acordeon.classList.add(conDatos ? "dim-con-datos" : "dim-fase6");
+        acordeon.dataset.tieneDatos = String(conDatos);
+    });
 }
 
 function abrirModal44Variables(idPartido) {
@@ -3683,6 +3952,9 @@ function abrirModal44Variables(idPartido) {
                 ? dimensiones.map(_tablaDimension44).join("")
                 : `<div class="vars44-aviso">⚪ El endpoint no publicó el catálogo de 44 variables de este partido.</div>`}
         </div>`;
+
+    // [DES-QBE-066] Hidratación del badge bicolor: se pinta en DOM tras transcribir el bloque.
+    _hidratarBadgesDimension44(cuerpo, dimensiones);
 
     modal.style.display = "block";
 }

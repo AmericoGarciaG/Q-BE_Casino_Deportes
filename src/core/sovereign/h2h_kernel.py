@@ -90,17 +90,25 @@ def calcular_matriz_h2h_empirica(
             "evidencia insuficiente para derivar el símplex."
         )
 
-    masa_local = 0.0
-    masa_empate = 0.0
-    masa_visita = 0.0
+    # [LN-QBE-020-C] §P-3: p_k = w_k / W. El denominador W se acumula con `sum()` (suma
+    # COMPENSADA de CPython >= 3.12); los numeradores DEBEN usar el MISMO algoritmo o un barrido
+    # de desenlace único puede exceder el símplex en 1 ulp (`VAR-2026-10-17-H2H-SIMPLEX`, ALT-A
+    # ratificada por Dirección). Cero cambio de fórmula: κ, τ_deep y pesos quedan intactos.
+    pesos_local: List[float] = []
+    pesos_empate: List[float] = []
+    pesos_visita: List[float] = []
     for peso, partido in zip(pesos, partidos):
         goles_local, goles_visita = _marcador(partido)
         if goles_local > goles_visita:
-            masa_local += peso
+            pesos_local.append(peso)
         elif goles_local < goles_visita:
-            masa_visita += peso
+            pesos_visita.append(peso)
         else:
-            masa_empate += peso
+            pesos_empate.append(peso)
+
+    masa_local = sum(pesos_local)
+    masa_empate = sum(pesos_empate)
+    masa_visita = sum(pesos_visita)
 
     p_local = masa_local / peso_total_efectivo
     p_empate = masa_empate / peso_total_efectivo

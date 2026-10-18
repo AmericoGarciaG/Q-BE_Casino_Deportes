@@ -831,6 +831,23 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 > `[ARCH-1.6.20]`); los identificadores `[ARCH-1.4.11]` y `[ARCH-1.6.14]` permanecen **no asignados**
 > (cero reutilización). Juez Inmutable asociado: `tests/shield/test_shield_market_resolution_and_purge.py`.
 
+### [ARCH-1.6.22] Materialización del Ensemble Convexo y del Puente de Δ_epist Real (`src/core/sovereign_pipeline.py`, `src/storage/distribution_sync.py`) [ARCH-PILLAR]
+* **Defecto extirpado (evidencia fáctica 2026-10-17):** el kernel H2H empírico (`[LN-QBE-020-C]`) se calculaba en `generar_distribucion_soberana` **sólo** para derivar `Δ_epist`; el símplex publicado seguía siendo el Poisson puro del Generador A. El «ensemble» era una promesa documental, no un hecho materializado: el kernel no desplazaba una sola milésima la vitrina. En paralelo, `distribution_sync` persistía en `sovereign_distributions.epistemic_delta` el `ratio` $\lambda_{\max}/\lambda_{\min}$ —una magnitud de **tasas**—, de modo que la columna que el frontend consume como discrepancia epistémica contenía un número sin relación con la evidencia.
+* **Frontera de la corrección:** la matemática sellada (Dixon-Coles, operador de André, `estimar_intensidades_loglineal`) permanece **bit-idéntica**. Lo que se agrega es una operación NUEVA sobre el codominio: `fusionar_simplex_con_h2h()` mezcla convexamente $P_A$ con $P_C$ con peso $w_{H2H} = \min(0.25, N\cdot0.05)$ (`[VAULT-CORE-005]`, firma `SHA256-VAULT-CORE-005-LN-QBE-104-CONVEX-SIMPLEX-FUSION`).
+* **Un solo Generador C por partido:** la misma instancia del kernel alimenta la discrepancia (`discrepancia_epist`, TVD sellada) y la fusión. Cero doble invocación, cero doble fuente de verdad.
+* **Telemetría de la mezcla:** `StochasticAuditTrace` publica el símplex Poisson puro (`simplex_poisson`), `epistemic_delta` ($\Delta(\infty)$) y `kernel_h2h_empirico` enriquecido con `peso_h2h` / `peso_liga`; `SovereignDistributionOutput.epistemic_delta` es el canal canónico de salida.
+* **Puente honesto:** `_delta_epistemico_publicado()` en `src/storage/distribution_sync.py` lee `contrato de salida → traza forense → piso R-1 (0.02)`, acota a $[0,1]$ y **jamás** maquilla `None` con `0.0`. Sin backfill sobre filas históricas.
+* **Cartelera sincronizada:** `#chk-excluir-vetados` (filtro anti-cuarentena, presentación pura, re-deriva desde conteos enteros) y el badge `SIN EVALUAR` del acordeón forense (`[DES-QBE-067]`).
+* **[SHIELD]:** `tests/shield/test_shield_ensemble_fusion_and_ui_sync.py` — 6 inversiones (ley de mezcla, fusión convexa + ∞-norma, publicación en el pipeline, persistencia 3NF sin `ratio`, filtro anti-cuarentena, badge `SIN EVALUAR`).
+
+> **Trazabilidad de registro (VARIANCE-01) — Dictamen 2026-10-17:** `[ARCH-1.6.22]` se asigna por
+> `max(familia 1.6.x) + 1` sobre el registro completo (último sellado antes de esta sesión:
+> `[ARCH-1.6.21]`). El borrador de diseño citaba `[ARCH-1.6.15]` para el ensemble; ese identificador
+> está **sellado** a *Apertura Dinámica de Jornada en Live Board* y su sufijo `-C` a la frontera del
+> sensor de mercado (`[ARCH-1.6.21]`), por lo que se remapea a un nodo propio sin tocar un solo
+> carácter de los planos existentes. Varianza asociada: `docs/variances/VAR-2026-10-17-H2H-FUSION.md`.
+
+
 ### [ARCH-1.5.12] Aprovisionador JIT de Ligas y Bóveda Soberana de Activos de Clubes (`src/normalization/`) [ARCH-PILLAR]
 * **Paquete sellado:** `src/normalization/` — `__init__.py`, `gender_guards.py` (implementa `[LN-QBE-095]`), `temporal_disambiguator.py` (implementa `[LN-QBE-094]`), `entity_resolver.py` (jerga oficial → identidad), `asset_vault_service.py` y `league_provisioner.py`.
 * **Aprovisionador JIT:** `provisionar_competicion_y_clubes_jit(fotmob_league_id, league_name, country, clubes, session=None, mu_liga=None, season_id=None, season_year=None, season_name=None)` compone EXCLUSIVAMENTE APIs selladas: `registrar_liga_descubierta_si_no_existe()` (`[ARCH-1.4.21]`, *cero ligas zombis*), la convención 3NF `Competition.id = f"FOTMOB_{fotmob_league_id}"` y `macro_gamma_home = 0.15` (`[ARCH-1.5.1]` / `[ARCH-1.6.19-B]`), μ macro desde la propiedad gobernada `League.mu_liga` (`[LN-QBE-089]`) y la identidad categorizada de cada club (`[LN-QBE-095]`). El registro es **idempotente** (clave `fotmob_league_id` / `fotmob_team_id`) y **transaccional** (`write_transaction()` del Gateway, o la sesión del llamador si se provee).
@@ -1474,6 +1491,26 @@ def sincronizar_progol_pipeline_completo(
 * **Pureza y Rendimiento:** `O(1)` por partido, sin I/O, sin red, sin SQLAlchemy; reutiliza `aplicar_damping_hiperbolico` de `[VAULT-CORE-001]` (κ_net = 0.2500) para que la suma factorial conserve exactamente `ln(λ_H/λ_A)`.
 * **[SHIELD]:** `tests/shield/test_shield_factor_attribution_and_telemetry.py`
 
+### [ARCH-1.4.42-B] Tolerancia de Tipos de Insumo con Unidades en DTO de Variables (44V) [ANTI-BUG]
+* **Resolución del Contrato Pydantic:**
+  En `src/models/web_schemas.py`, el DTO `AtribucionVariableOut` —renglón forense del catálogo de 44
+  variables; NO se crea un DTO paralelo— define obligatoriamente:
+  ```python
+  local: Optional[Union[str, float]] = Field(default=None, description="Valor formateado con unidad (ej. '53.5%', '+0.0 d') o float puro")
+  visita: Optional[Union[str, float]] = Field(default=None, description="Valor formateado con unidad o float puro")
+  z_score: Optional[Union[str, float]] = Field(default=None, description="Z-score formateado o float puro")
+  ```
+  *Regla Estricta:* `str` debe preceder a `float` en la declaración del `Union` para impedir que Pydantic V2 intente parsear cadenas con unidades (`'+0.0 d'`, `'0m'`, `'0 partidos'`) como flotantes, erradicando los errores 500 de `ResponseValidationError`.
+* **Causa Raíz Erradicada:** la transcripción forense de `[LN-QBE-102]` emite SIEMPRE `str`
+  (`pct` → `"54.2%"`, `num2` → `"1.45"`, `metros` → `"2660m"`, `dias` → `"+0.0 d"`,
+  `partidos` → `"0 partidos"`); el DTO rígido `float` abortaba la serialización de
+  `GET /api/markets/backtesting/calibration-report` con HTTP 500 en todo partido que portara
+  `insumos_factivados`. Los jueces del motor puro no lo detectaban porque auditaban el dict, no la
+  frontera REST.
+* **Cero Alteración del Motor:** `src/core/sovereign/factor_attribution.py` permanece
+  `[DIRGEN-STRICT]` e intacto: la corrección vive exclusivamente en la aduana de serialización.
+* **[SHIELD]:** `tests/shield/test_shield_control_center_and_calibration_unblock.py`
+
 ### [ARCH-1.4.43] Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR]
 * **Ubicación Canónica:** `src/storage/distribution_sync.py` (candado `LIVE_PROTECTION_LOCK` + sello) · `src/core/sovereign_pipeline.py` (`[VAULT-CORE-005]`, telemetría `insumos_factivados`) · `src/models/web_schemas.py` (`CalibrationMatchOut`, `AtribucionFactorialOut`) · `src/web/routes/markets.py` (propagación por partido).
 * **Régimen:** `[HÍBRIDO DUAL-TRACK]` — el candado transaccional y el empaquetado forense son `[DIRGEN-STRICT]` (cero margen creativo: sólo se **añaden** claves aditivas, jamás se altera la matemática sellada); la propagación y la exhibición son `[DBBD-FUNGIBLE]`.
@@ -1484,6 +1521,19 @@ def sincronizar_progol_pipeline_completo(
 * **Honestidad Retrospectiva (V-6, sin backfill):** las filas históricas sin la clave se leen como `HISTORICO_RECONSTRUIDO`; **prohibido** reescribirlas con un sello `EN_VIVO` retroactivo.
 * **Cero Mocks en Producción:** el Juez construye un gateway de memoria (`sqlite://`) con `Base.metadata.create_all`; ninguna ruta de producción importa dobles de prueba (`[GOVERNANCE-01]`).
 * **[SHIELD]:** `tests/shield/test_shield_live_lock_and_input_telemetry.py`
+
+### [ARCH-1.4.44] Proveedor H2H Unificado de Corpus Congelado, Sello Opta de Origen y Telemetría Dimensional del Acordeón Forense [ARCH-PILLAR]
+* **Ubicación Canónica:** `src/core/sovereign/h2h_provider.py` (proveedor de solo lectura) · `scripts/ingesta/congelar_cache_h2h_liga_mx.py` (sellador OFFLINE del corpus) · `data/cache_h2h_liga_mx_2026.json` (artefacto `h2h_corpus_v1`) · `scripts/ingesta/homologar_temporada_optah2h.py` (sello `xg_es_real_opta` + delegación del Pilar 3) · `scripts/daemons/centinela_deportivo.py` (consumo del proveedor) · `src/core/sovereign/factor_attribution.py` (tri-estado OPTA + telemetría dimensional) · `src/web/static/js/app.js` + `src/web/static/css/theme.css` (acordeón bicolor).
+* **Régimen:** `[HÍBRIDO DUAL-TRACK]` — la extracción, la futuro-ceguera y la certificación de procedencia son `[DIRGEN-STRICT]` (cero margen creativo sobre `[LN-QBE-020-C]`); la exhibición del acordeón es `[DBBD-FUNGIBLE]`.
+* **Motivo arquitectónico:** la tabla `matches` es **monotorneo** (sólo la temporada activa), por lo que la ruta viva no puede contener duelos intra-temporada previos: el semáforo `H2H` nacía `NEUTRAL` por **ausencia estructural de fuente**, no por ausencia de evidencia en el mundo. El corpus congelado (temporadas `2025-2026` + `2024-2025`, sellado desde BetExplorer/FotMob) restituye la memoria longitudinal sin habilitar red en tiempo de ejecución.
+* **Contrato del proveedor:** `obtener_h2h_unificado(sesion, local_slug, away_slug, fecha_ref, *, league_id, limite=5, ruta_corpus=None) -> List[Dict[str, Any]]`. **Sólo lectura**: `json.load` del corpus + consulta a la bóveda; prohibido `requests`/`httpx`/`urllib`/`playwright`. Sin sesión (o sin bóveda disponible) el proveedor degrada al corpus congelado únicamente, jamás a cero por excepción silenciosa.
+* **Puente de identidad (defecto erradicado):** `_precargar_historial_consumado_sqlite` publica **nombres de exhibición**; los fixtures se identifican por **slug canónico**. El proveedor construye el índice `name`/`short_name` $\to$ `canonical_slug` desde `teams` y canonicaliza ambos flujos antes de comparar. La delegación previa (`slugs` contra `nombres`) devolvía `[]` por construcción.
+* **Deduplicación y precedencia:** clave `(fecha, slug_home, slug_visita)`; ante colisión gana la fila de la bóveda 3NF (evidencia sellada por el daemon) y el corpus sólo aporta lo ausente.
+* **Sello `xg_es_real_opta`:** el homologador publica en el `raw_match_data` y en la traza el booleano `1[π_H ∈ 𝒫_real] · 1[π_V ∈ 𝒫_real]`, con `𝒫_real = {cache_local, telemetria_3nf, sensor_fotmob, factual_mixto}`. `sovereign_pipeline._sello_opta` lo propaga a `insumos_factivados` sin cambios de contrato, de modo que el semáforo `OPTA` deja de acusar rojo sobre evidencia real.
+* **Telemetría dimensional (aditiva, cero ruptura):** `estructurar_catalogo_44_variables` añade por dimensión `total_variables`, `variables_evaluadas` y `tiene_datos`. La ruta heredada sin `insumos_factivados` permanece **byte-idéntica** en valores y estados: sólo se agregan contadores.
+* **Axioma 4 completado:** `V10` (`xGA/PJ`) enciende con `xga_*_rate`; si el generador no la publicó, se transcribe `gc_*_rate` como respaldo declarado en la `nota` (la degradación interna del plano sellado ya usa GC, `[ARCH-1.4.39]`).
+* **Alcance honesto:** los clubes sin historia en la máxima categoría dentro del corpus (caso `atlante`, ascendido) permanecen con 0 duelos y el semáforo `H2H` se declara `NEUTRAL` (Ley Zero-H2H). Extender el corpus no fabrica evidencia inexistente.
+* **[SHIELD]:** `tests/shield/test_shield_opta_flag_and_accordion_telemetry.py`
 
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`
@@ -1498,7 +1548,7 @@ def sincronizar_progol_pipeline_completo(
 * **Iconografía Universal (Anti-Descomposición OS) — Decreto `VAR-2026-DRIFT-STREAM-MAP`:** Queda estrictamente prohibido emplear emojis de banderas regionales como glifo de estado (p. ej. el par `U+1F1FE U+1F1EA`, que Windows descompone en los caracteres `Y` y `E`). Se utilizan exclusivamente glifos Unicode universales y neutros: `🟢` (Conforme), `🟡` (Advertencia), `🔴` (Discrepancia) y `⚪` (Sin Veredicto / En Espera); mientras el sondeo está en curso, cada luz puede exhibir `⏳`. Este Decreto **supersede** el glifo bandera del nivel `SIN_VEREDICTO` del canon `[ARCH-1.4.34]` (`GLIFO_NIVEL`) en sus cinco capas: canon CLI, legislación, adaptador REST (`admin_status.py`), plantilla (`index.html`) y cliente (`app.js`).
 * **[SHIELD]:** `tests/shield/test_shield_control_center_and_drift_detector.py`
 
-### [ARCH-1.4.12-C] Reestructuración de Cadenas de Ingesta Temporal en Centro de Control [ARCH-PILLAR]
+### [ARCH-1.4.12-C] Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR]
 * **Whitelist de Tareas Ampliada (`admin_tasks.py`):**  
   materialización canónica de whitelist (intérprete activo + ruta interna absoluta, cero shell):
   el despachador `_comando_absoluto` no admite la forma `-m`, por lo que la ruta de módulo se
@@ -1506,16 +1556,39 @@ def sincronizar_progol_pipeline_completo(
   son invocables sin parámetros adicionales.
   - `ingestar_historico_betexplorer`: `["scripts", "ingesta", "ingestar_historico_betexplorer.py"]`.
   - `auditar_coherencia_cartelera`: `["scripts", "auditoria", "auditar_coherencia_cartelera.py"]`.
-* **Las Tres Cadenas Temporales Homologadas:**
+* **Ampliación de Whitelist de Tareas Certificadas (Enmienda 2026-10-17):**
+  Se formalizan como tareas certificadas del Centro de Control:
+  - `homologar_temporada_optah2h`: `["scripts", "ingesta", "homologar_temporada_optah2h.py"]` (Reconstrucción integral Opta xG + H2H).
+  - `auditar_pipeline_backtesting`: `["scripts", "auditoria", "auditar_pipeline_end_to_end_backtesting.py"]` (Auditoría E2E de calibración).
+  - `exportar_dataset_investigacion`: `["scripts", "utilidades", "exportar_dataset_investigacion.py"]` (Extracción de dataset CSV).
+* **Las Tres Cadenas Temporales Homologadas (composición derivada):**
+  Cada cadena declara sus pasos en identificadores certificados (`pasos`) y sus `comandos` se
+  materializan desde la whitelist. `CADENAS_TAREAS` y `COMANDOS_TAREAS` son vistas **derivadas**
+  (cero duplicación, `[GOVERNANCE-01]`) y un guardián de importación *fail-loud* rechaza cualquier
+  cadena fantasma o paso fuera de la whitelist.
   - `cadena_pre_jornada`: `centinela_deportivo` $\to$ `centinela_mercado` $\to$ `auditar_coherencia_cartelera`.
-  - `cadena_post_jornada`: `ingestar_historico_betexplorer` $\to$ `auditar_coherencia_cartelera`.
+  - **La Cadena Post-Jornada Oficial (Tríada de Cierre):**
+    $$\text{ingestar\_historico\_betexplorer} \longrightarrow \mathbf{homologar\_temporada\_optah2h} \longrightarrow \text{auditar\_coherencia\_cartelera}$$
+    Garantiza que al capturar marcadores de fin de jornada, se ejecute de inmediato la homologación
+    fáctica de insumos antes de auditar la coherencia de la cartelera.
   - `cadena_progol`: `centinela_progol`.
-* **Cardinalidad Legislada de la Whitelist:** **15 tareas certificadas** (las 10 de [ARCH-1.4.29] + 2
-  ejecutores individuales + 3 cadenas temporales de esta Enmienda). Los jueces funcionales de
-  cardinalidad (`test_shield_purga_total_db.py`, `test_shield_sprint5_domain_reconnection.py`) quedan
-  **SUPERSEDIDOS** en su cifra exacta por esta Enmienda: la igualdad estricta se preserva (jamás
-  degrada a desigualdad laxa), sólo cambia la constante legislada.
-* **[SHIELD]:** `tests/shield/test_shield_control_center_and_drift_detector.py`
+* **Semáforo de Deriva con Auditoría de Homologación (`admin_status.py`):**
+  Quinta luz aditiva `status_homologacion`: audita los partidos concluidos (`FINISHED`/`FINALIZADO`)
+  cuya traza soberana no publica `insumos_factivados` (traza legada o ausente). Umbral legislado
+  `UMBRAL_HOMOLOGACION_PENDIENTE = 5`: por encima, la recomendación sugiere
+  `homologar_temporada_optah2h` con el motivo "Existen partidos concluidos pendientes de
+  homologación factual. Ejecutar Cadena Post-Jornada o Homologación Opta." La fachada de solo
+  lectura `auditar_deriva_sistema() -> dict` publica el mismo veredicto sin alterar el contrato REST
+  (`GET /api/admin/status/drift`, cuatro luces originales intactas).
+* **Despacho No Destructivo (Menor Privilegio):** `homologar_temporada_optah2h` se despacha sin
+  `--forzar` (ley `fill-if-absent`): reconstruye lo ausente sin sobreescribir evidencia ya sellada.
+  El re-sellado destructivo forzado permanece como facultad exclusiva del Director vía CLI.
+* **Cardinalidad Legislada de la Whitelist:** **18 tareas certificadas** (las 10 de [ARCH-1.4.29] + 2
+  ejecutores individuales + 3 cadenas temporales de la Enmienda original + 3 ejecutores de esta
+  Enmienda). Los jueces funcionales de cardinalidad (`test_shield_purga_total_db.py`,
+  `test_shield_sprint5_domain_reconnection.py`) se actualizan de 15 a 18: la igualdad estricta se
+  preserva (jamás degrada a desigualdad laxa), sólo cambia la constante legislada.
+* **[SHIELD]:** `tests/shield/test_shield_control_center_and_drift_detector.py` · `tests/shield/test_shield_control_center_and_calibration_unblock.py`
 
 
 ### [ARCH-1.6.20] Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR]

@@ -69,6 +69,11 @@ def test_invarianza_preservacion_fuerza_tigres_el_volcan():
     GSL-3D no debe desinflar ciegamente a todos los locales. Tigres en El Volcán
     posee un residuo genuino no explicado por su récord general (invicto 16 GF, 4 GC).
     Debe mantener p_local >= 0.4000 y lambda_H >= 1.35 xG frente a Toluca.
+
+    [VAR-2026-10-17-H2H-FUSION · ALT-C] El piso p_local ≥ 0.4000 se certifica sobre el GENERADOR A
+    (`audit_trace.simplex_poisson`), que es el objeto que la ortogonalización GSL-3D gobierna. El símplex
+    PUBLICADO es la mezcla convexa [LN-QBE-104] con w_H2H = min(0.25, N·0.05); este fixture publica H2H
+    adverso (Toluca ganó 2 de los 5 duelos recientes), por lo que sobre él rige la dominancia local.
     """
     raw_data_tigres_toluca = {
         "home_team_stats": {"pj": 10, "gf": 10, "gc": 13},  # Tigres General
@@ -94,9 +99,20 @@ def test_invarianza_preservacion_fuerza_tigres_el_volcan():
         gamma_home_base=0.15
     )
     
-    assert dist_out.p_local >= 0.4000, (
-        f"🚨 INJUSTICIA CON EL VOLCÁN: Tigres en casa cayó a p_local={dist_out.p_local:.4f}. "
+    # [VAR-2026-10-17-H2H-FUSION · ALT-C] Piso sobre el Generador A + dominancia sobre el publicado.
+    simplex_poisson = dict(dist_out.audit_trace.simplex_poisson)
+    assert simplex_poisson, "La traza debe publicar el símplex Poisson pre-fusión [LN-QBE-104]."
+    p_local_poisson = float(simplex_poisson["p_1"])
+    assert p_local_poisson >= 0.4000, (
+        f"🚨 INJUSTICIA CON EL VOLCÁN: Tigres en casa cayó a p_local(Poisson)={p_local_poisson:.4f}. "
         f"Debe conservar p_local >= 0.4000."
+    )
+    assert dist_out.p_local > dist_out.p_visitante, (
+        f"🚨 DOMINANCIA PERDIDA: el símplex híbrido publica p_local={dist_out.p_local:.4f} "
+        f"≤ p_visitante={dist_out.p_visitante:.4f}."
+    )
+    assert abs(dist_out.p_local + dist_out.p_empate + dist_out.p_visitante - 1.0) <= 1e-12, (
+        "La mezcla convexa debe habitar el símplex Δ²."
     )
     assert dist_out.lambda_home >= 1.35, (
         f"🚨 PERDIDA DE FUERZA EN EL VOLCÁN: Tigres proyecta lambda={dist_out.lambda_home} xG. "

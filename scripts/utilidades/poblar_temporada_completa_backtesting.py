@@ -79,6 +79,7 @@ from src.storage.models import (
     Match,
     SovereignDistribution,
     StandingSnapshot,
+    Team,
 )
 
 # Sensores sellados reutilizados (la matemática del corte y la memoria H2H viven ahí, no aquí).
@@ -181,6 +182,27 @@ def _corte_certificado(sesion, league_id: int, jornada: int) -> Dict[str, Dict[s
         for fila in snapshot.positions_json
         if isinstance(fila, dict) and fila.get("equipo")
     }
+
+
+def _catalogo_clubes_3nf(sesion, league_id: int) -> List[Dict[str, Any]]:
+    """Identidades publicadas por el catálogo `teams`: `name`, `short_name`, `canonical_slug`.
+
+    [ARCH-1.4.26] Viva aquí, no en `src/core/sovereign/`: el puente de identidad requiere el plano
+    ORM (`src.storage.models`), y los módulos del núcleo puro tienen prohibido importarlo. El
+    proveedor H2H `[ARCH-1.4.44]` consume esta lectura y aplica su propia normalización.
+    Lectura estrictamente pasiva: sin escrituras, sin flush y sin red.
+    """
+    if sesion is None:
+        return []
+    filas = sesion.query(Team).filter(Team.league_id == int(league_id)).all()
+    return [
+        {
+            "name": getattr(equipo, "name", None),
+            "short_name": getattr(equipo, "short_name", None),
+            "canonical_slug": getattr(equipo, "canonical_slug", None),
+        }
+        for equipo in filas
+    ]
 
 
 def _historial_future_blind(sesion, league_id: int, fecha_ref: Optional[datetime]) -> List[Dict[str, Any]]:

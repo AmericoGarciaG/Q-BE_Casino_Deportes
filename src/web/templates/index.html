@@ -653,6 +653,16 @@
                     </div>
                 </div>
 
+                <!-- [LN-QBE-104 · DES-QBE-067] FILTRO ANTI-CUARENTENA DE LA CARTELERA.
+                     El partido cuyo semáforo EPIST está en ROJO (Δ_epist(∞) > 0.12 ⇒ Cuarentena
+                     Fiduciaria [LN-QBE-070-B]) no recibe capital de la cartera: exhibirlo como
+                     acierto/fallo de Q-BE sobreestima la calibración con evidencia que el motor
+                     declaró inservible. El filtro es de PRESENTACIÓN: jamás reescribe la bóveda. -->
+                <label class="bt-filtro-vetados" for="chk-excluir-vetados">
+                    <input type="checkbox" id="chk-excluir-vetados">
+                    <span>Excluir partidos vetados (EPIST 🔴 · Δ_epist &gt; 0.12)</span>
+                </label>
+
                 <div id="bt-estado" class="bt-estado">Lectura pendiente: abre la pestaña para consultar la bóveda.</div>
             </div>
 
@@ -751,11 +761,12 @@
 
                 <!-- [ARCH-1.4.12-C] TRES CADENAS TEMPORALES HOMOLOGADAS (derogan el botón maestro
                      monolítico): pre-jornada (reparación integral Deportivo ➔ Mercado ➔ Pre-Vuelo),
-                     post-jornada (cierre factual Histórico BetExplorer ➔ Pre-Vuelo) y quiniela
-                     (concurso vigente). Toda cadena se despacha por la whitelist certificada. -->
+                     post-jornada (Tríada de Cierre: Histórico BetExplorer ➔ Homologación Opta+H2H ➔
+                     Pre-Vuelo) y quiniela (concurso vigente). Toda cadena se despacha por la
+                     whitelist certificada. -->
                 <div class="cc-master-bar">
                     <button id="btn-tarea-pre-jornada" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_pre_jornada')" title="Qué hace: Ejecuta en secuencia la cadena PRE-JORNADA certificada: Centinela Deportivo ➔ Centinela de Mercado ➔ Pre-Vuelo de Coherencia de Cartelera. Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas, tras una purga o cuando el semáforo detecte deriva deportiva/mercado/integridad.">🌅 Cadena Pre-Jornada · Deportivo ➔ Mercado ➔ Pre-Vuelo</button>
-                    <button id="btn-tarea-post-jornada" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_post_jornada')" title="Qué hace: Ejecuta la cadena POST-JORNADA certificada: Ingesta Histórica BetExplorer ➔ Pre-Vuelo de Coherencia de Cartelera. Cuándo usar: Al concluir la jornada, para sellar el histórico de cortes y verificar la coherencia relacional de la cartelera liquidada.">🌇 Cadena Post-Jornada · Histórico BetExplorer ➔ Pre-Vuelo</button>
+                    <button id="btn-tarea-post-jornada" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_post_jornada')" title="Qué hace: Ejecuta la cadena POST-JORNADA certificada (Tríada de Cierre [ARCH-1.4.12-C]): Ingesta Histórica BetExplorer ➔ Homologación Opta + H2H ➔ Pre-Vuelo de Coherencia de Cartelera. Cuándo usar: Al concluir la jornada, para sellar el histórico de cortes, homologar los insumos fácticos de cada partido y verificar la coherencia relacional de la cartelera liquidada.">🌇 Cadena Post-Jornada · BetExplorer ➔ Homologación ➔ Pre-Vuelo</button>
                     <button id="btn-tarea-progol" class="cc-btn-master" onclick="ejecutarTareaAdmin('cadena_progol')" title="Qué hace: Ejecuta la cadena de QUINIELA certificada: Centinela Progol (concurso oficial vigente de miloteria.mx). Cuándo usar: Cada semana al publicarse el concurso o cuando el semáforo detecte cierre vencido.">🎟️ Cadena Quiniela · Centinela Progol</button>
                     <span id="cc-estado" class="cc-badge cc-badge-idle">● En espera</span>
                 </div>
@@ -768,6 +779,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_mercado')" title="Qué hace: Escanea cuotas vivas en Caliente y Betway para la jornada activa, calculando arbitrajes y deltas. Cuándo usar: Previo a operar la Mesa de Apuestas.">💰 Centinela de Mercado · Caliente + Betway</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('centinela_progol')" title="Qué hace: Descarga el concurso oficial vigente de miloteria.mx (21 casillas). Cuándo usar: Cada semana al publicarse la nueva quiniela.">🎟️ Centinela Progol · Concurso #2353</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('ingestar_historico_betexplorer')" title="Qué hace: Reconstruye el histórico de cortes de jornada desde BetExplorer (marcadores y cuotas de cierre) para la paridad factual del backtesting. Cuándo usar: Tras concluir una jornada o al reconstruir la serie histórica de la temporada.">🛰️ Ingesta Histórica BetExplorer · Cortes de Jornada</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('homologar_temporada_optah2h')" title="Qué hace: Reconstruye los insumos fácticos oficiales de la temporada completa (J1 a J17): goles esperados Opta y kernel H2H, sellando la telemetría de cada partido concluido. Cuándo usar: Tras la ingesta histórica de BetExplorer, al cerrar una jornada o cuando el semáforo de homologación marque rezago. Se ejecuta sin --forzar: jamás sobreescribe evidencia ya sellada.">🧬 Homologación Opta + H2H · Temporada Completa</button>
                         </div>
                     </div>
 
@@ -777,6 +789,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('sincronizar_activos')" title="Qué hace: Descarga y cachea los escudos y logos oficiales de los clubes. Cuándo usar: Tras una purga o al incorporar clubes nuevos; es idempotente y no altera datos deportivos.">🖼️ Sincronizar Escudos y Logos</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')" title="Qué hace: Purga atómica de snapshots, partidos y estados en SQLite. Qué implica: Deja la base de datos en blanco (preserva ligas y equipos). Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo).">🧹 Purga Selectiva de Snapshots</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purga_total_db')" title="Qué hace: Purga TOTAL de la bóveda 3NF [ARCH-1.4.29] bajo una única Unit of Work: vacía las 15 tablas (ligas, equipos, partidos, snapshots, distribuciones soberanas, slates y bitácoras) preservando intacto el libro mayor de tokens llm_token_ledger. Qué implica: Deja la base virgen, sin catálogo alguno. Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo) y, si la quiniela quedó vacía, la cadena 'Quiniela'.">🧨 Purga Total de la Bóveda 3NF</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('exportar_dataset_investigacion')" title="Qué hace: Exporta el dataset de investigación de la temporada a CSV en data/output/ (una fila por partido con marcadores, cuotas de cierre, vector soberano e insumos fácticos). Cuándo usar: Para análisis externo o para congelar la evidencia de un experimento.">📤 Exportar Dataset de Investigación · CSV</button>
                         </div>
                     </div>
 
@@ -786,6 +799,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pureza_vol1')" title="Qué hace: Audita las invarianzas matemáticas del Tratado I (Poisson, André, Kelly). Cuándo usar: Antes de certificar cualquier cambio en src/core/.">📐 Pureza Matemática · Tratado I</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_cartera_shield')" title="Qué hace: Verifica las invarianzas financieras de cartera (hard caps 8% individual / 25% jornada, piso de boleto). Cuándo usar: Tras modificar reglas de capital o estrategias.">🔍 Invarianzas de Cartera · Shield</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_coherencia_cartelera')" title="Qué hace: Ejecuta el pre-vuelo diagnóstico de coherencia relacional de la cartelera activa (paridad de vector p, overround, piso/techo, coherencia Capa 0 y divergencia de mercado). Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas o cuando el semáforo marque integridad en rojo.">🧭 Coherencia de Cartelera · Pre-Vuelo</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pipeline_backtesting')" title="Qué hace: Audita de punta a punta el pipeline de calibración histórica (cortes anti-leakage, Brier multicategórico y paridad de la evidencia sellada). Cuándo usar: Antes de certificar cambios en el motor de calibración o al validar la temporada homologada.">🧪 Auditoría E2E · Pipeline de Backtesting</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('consultar_uso_llm')" title="Qué hace: Reporta el consumo de tokens y la salud del pool de llaves Gemini. Cuándo usar: Antes de lanzar la cadena de ingesta o ante errores de cuota.">🔑 Salud de Llaves Gemini y Tokens</button>
                         </div>
                     </div>

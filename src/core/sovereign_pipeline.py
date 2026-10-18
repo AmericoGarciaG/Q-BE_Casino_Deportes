@@ -10,6 +10,10 @@ Cableado de Capa 4 (Sprint 3 — erradicación de código muerto [H-16]):
 * `[LN-QBE-020-C]` Kernel H2H Empírico en Eje Localía → `src/core/sovereign/h2h_kernel.py`.
   Interviene en `generar_distribucion_soberana` SOLO cuando el registro publica `h2h_matches` no vacío,
   para derivar Δ_epist contra el consenso Poisson paramétrico (Ley Zero-H2H `[LN-QBE-020-B]` si está vacío).
+* `[LN-QBE-104]` Fusión Convexa del Símplex Soberano (Generador A ∪ Generador C) →
+  `fusionar_simplex_con_h2h`. Interviene con la MISMA evidencia: P_hib(k) = w_Liga·P_Poisson(k) +
+  w_H2H·P_H2H(k) con w_H2H = min(0.25, N·0.05) y Δ_epist(∞) = ‖P_Poisson − P_H2H‖_∞. Sin evidencia
+  la fusión degrada a la identidad (w_H2H = 0.0) y Δ_epist(∞) = 0.02 (ignorancia declarada R-1).
 * Regla de oro: si el registro NO publica estas fuentes, el motor permanece EXACTAMENTE igual
   (ruta analítica sellada `[LN-QBE-035-B]` y Δ_epist = 0.0). Cero invención, cero fabricación de datos.
 """
@@ -34,6 +38,17 @@ from src.core.sovereign.orthogonal_factor_engine import resolver_factores_latent
 # [LN-QBE-038] Peso de la fusión ponderada de sede (promedio general ↔ rendimiento en sede).
 # Sellado en el nodo legislativo: w_sede = 0.50. Sin splits publicados ⇒ se degrada a 0.0.
 W_SEDE = 0.50
+
+# [LN-QBE-104] Fusión Convexa del Símplex Soberano (Generador A ∪ Generador C).
+# Sellado en el nodo legislativo `docs/LOGIC.md` → `docs/DIRGEN_VAULT.md` [VAULT-CORE-005]:
+#   w_H2H = min(0.25, N · 0.05)   con N = enfrentamientos directos verificables
+#   w_Liga = 1 − w_H2H            (mezcla convexa: P_hib = w_Liga·P_A + w_H2H·P_C)
+#   Δ_epist(∞) = max_k |P_A(k) − P_C(k)| ∈ [0, 1]  (norma infinito sobre el símplex Δ²)
+# Sin evidencia H2H la fusión degrada a la identidad y la discrepancia se declara en el piso
+# fiduciario de ignorancia del Contrato R-1 (`[LN-QBE-070-C]`: delta_epist = 0.02).
+PESO_H2H_POR_DUELO = 0.05
+PESO_H2H_TOPE = 0.25
+DELTA_EPISTEMICO_SIN_EVIDENCIA = 0.02
 
 
 def _splits_de_sede_publicados(home_split: Any, away_split: Any) -> bool:
@@ -203,6 +218,15 @@ class StochasticAuditTrace(BaseModel):
         default_factory=dict,
         description="Símplex empírico Δ² del Generador C; vacío bajo la Ley Zero-H2H [LN-QBE-020-B] (w_H2H = 0.0, w_Liga = 1.0).",
     )
+    # --- [LN-QBE-104] Fusión Convexa del Símplex Soberano (aditivo, cero ruptura) ---
+    simplex_poisson: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Símplex paramétrico PURO del Generador A (pre-fusión) para auditoría de la mezcla [LN-QBE-104].",
+    )
+    epistemic_delta: float = Field(
+        default=DELTA_EPISTEMICO_SIN_EVIDENCIA,
+        description="Δ_epist(∞) = max_k |P_A(k) − P_C(k)|, norma infinito sobre el símplex Δ² [LN-QBE-104].",
+    )
     # --- [LN-QBE-102] Sello de procedencia y telemetría fáctica (aditivo, cero ruptura) ---
     origen_captura: str = Field(
         default=ORIGEN_CAPTURA_HISTORICO,
@@ -238,6 +262,14 @@ class SovereignDistributionOutput(BaseModel):
     origen_factores: str = Field(
         default="analitico_base",
         description="'analitico_base' [LN-QBE-035-B] o 'bayesiano_10p' [LN-QBE-036].",
+    )
+    # [LN-QBE-104] Δ_epist(∞) — discrepancia MÁXIMA por componente entre los dos generadores.
+    # Sustituye al ratio λ_max/λ_min como valor PERSISTIDO en `sovereign_distributions.epistemic_delta`:
+    # el ratio permanece en `intensidades` (evidencia 3NF sellada [LN-QBE-102]) pero jamás se publica
+    # como discrepancia epistémica. Sin evidencia H2H el piso es la ignorancia declarada R-1 (0.02).
+    epistemic_delta: float = Field(
+        default=DELTA_EPISTEMICO_SIN_EVIDENCIA,
+        description="Δ_epist(∞) ∈ [0,1] publicado al exterior: max_k |P_Poisson(k) − P_H2H(k)| [LN-QBE-104].",
     )
 
 
@@ -429,6 +461,7 @@ def derivar_discrepancia_epistemica(
     distribucion_parametrica: Dict[str, float],
     h2h_matches: Optional[Any] = None,
     tau_dias: float = TAU_H2H_DEEP,
+    kernel: Optional[Any] = None,
 ) -> Tuple[float, Dict[str, float]]:
     """
     [LN-QBE-020-C] Δ_epist — discrepancia entre el consenso Poisson paramétrico y el Kernel H2H empírico.
@@ -446,13 +479,19 @@ def derivar_discrepancia_epistemica(
     completa se pondera sin corte artificial por antigüedad (los partidos de 500 a 750 días
     conservan peso efectivo material, impidiendo el colapso falso a Δ_epist = 0.0).
 
+    [LN-QBE-104] `kernel` (aditivo, por defecto `None`) permite INYECTAR la instancia del Generador C
+    ya materializada por el orquestador: la fusión convexa y esta discrepancia consumen entonces
+    EXACTAMENTE la misma matriz (una sola invocación por partido, cero doble fuente de verdad).
+    Con `kernel=None` la resolución es idéntica a la ruta sellada [LN-QBE-020-C].
+
     Devuelve (Δ_epist, evidencia_del_Generador_C) para la traza forense.
     """
     partidos = list(h2h_matches or [])
     if not partidos:
         return 0.0, {"peso_h2h": 0.0, "peso_liga": 1.0}
 
-    kernel = calcular_matriz_h2h_empirica(partidos, tau_dias=tau_dias)
+    if kernel is None:
+        kernel = calcular_matriz_h2h_empirica(partidos, tau_dias=tau_dias)
     delta_epist = 0.5 * (
         abs(float(distribucion_parametrica["p_local"]) - kernel.p_local)
         + abs(float(distribucion_parametrica["p_empate"]) - kernel.p_empate)
@@ -463,6 +502,83 @@ def derivar_discrepancia_epistemica(
         "p_empate": round(kernel.p_empate, 6),
         "p_visita": round(kernel.p_visita, 6),
         "peso_total_efectivo": round(kernel.peso_total_efectivo, 6),
+    }
+
+
+def calcular_peso_h2h(n_duelos: int) -> float:
+    """
+    [LN-QBE-104] Peso convexo del Generador C: w_H2H = min(0.25, N · 0.05).
+
+    N es el número de enfrentamientos directos VERIFICABLES de la ventana sellada. La ley es monótona
+    (cada duelo adicional aporta 0.05) y satura en el tope fiduciario 0.25: a partir del quinto duelo
+    el kernel empírico NUNCA desplaza más de una cuarta parte del símplex paramétrico `[LN-QBE-035-B]`.
+    `N = 0` ⇒ w_H2H = 0.0 (identidad: la mezcla no toca el símplex Poisson).
+    """
+    try:
+        duelos = int(n_duelos or 0)
+    except (TypeError, ValueError):
+        duelos = 0
+    return min(PESO_H2H_TOPE, max(0, duelos) * PESO_H2H_POR_DUELO)
+
+
+def fusionar_simplex_con_h2h(
+    distribucion_parametrica: Dict[str, float],
+    kernel: Optional[Any] = None,
+    n_duelos: int = 0,
+) -> Dict[str, float]:
+    """
+    [LN-QBE-104] Fusión Convexa del Símplex Soberano (Generador A ∪ Generador C).
+
+    Ley de mezcla sellada en `[VAULT-CORE-005]`:
+        P_hib(k) = w_Liga · P_Poisson(k) + w_H2H · P_H2H(k),  w_Liga = 1 − w_H2H,
+        w_H2H = min(0.25, N · 0.05).
+    Al ser una combinación convexa de dos distribuciones de probabilidad, P_hib habita el mismo símplex
+    Δ² (Σ = 1 en aritmética exacta; error de redondeo ≤ 1e-16) y cada componente queda acotada entre
+    los dos generadores:  min(P_A, P_C) ≤ P_hib ≤ max(P_A, P_C).
+
+    Δ_epist se publica con la norma infinito sobre Δ² (`[VAULT-CORE-005]`):
+        Δ_epist(∞) = max_k |P_A(k) − P_C(k)| ∈ [0, 1].
+    Es la discrepancia MÁXIMA por componente — la cota de Kolmogorov —, que acota la variación total
+    por arriba (TVD ≤ Δ(∞)) y por tanto conserva el orden de la frontera τ_disp = 0.12 ya legislada.
+
+    Ley Zero-H2H ([LN-QBE-020-B]): sin kernel o con N = 0 la fusión es la IDENTIDAD (w_H2H = 0.0,
+    w_Liga = 1.0) y Δ_epist(∞) se declara en el piso de ignorancia del Contrato R-1
+    (DELTA_EPISTEMICO_SIN_EVIDENCIA = 0.02), jamás 0.0: ausencia de evidencia no es coincidencia.
+
+    Devuelve el símplex híbrido más su telemetría de mezcla (peso_h2h, peso_liga, delta_epist).
+    """
+    p_local = float(distribucion_parametrica["p_local"])
+    p_empate = float(distribucion_parametrica["p_empate"])
+    p_visitante = float(distribucion_parametrica["p_visitante"])
+
+    peso_h2h = calcular_peso_h2h(n_duelos) if kernel is not None else 0.0
+    if kernel is None or peso_h2h <= 0.0:
+        return {
+            "p_local": p_local,
+            "p_empate": p_empate,
+            "p_visitante": p_visitante,
+            "peso_h2h": 0.0,
+            "peso_liga": 1.0,
+            "delta_epist": DELTA_EPISTEMICO_SIN_EVIDENCIA,
+        }
+
+    q_local = float(kernel.p_local)
+    q_empate = float(kernel.p_empate)
+    q_visita = float(kernel.p_visita)
+    peso_liga = 1.0 - peso_h2h
+
+    delta_epist = max(
+        abs(p_local - q_local),
+        abs(p_empate - q_empate),
+        abs(p_visitante - q_visita),
+    )
+    return {
+        "p_local": peso_liga * p_local + peso_h2h * q_local,
+        "p_empate": peso_liga * p_empate + peso_h2h * q_empate,
+        "p_visitante": peso_liga * p_visitante + peso_h2h * q_visita,
+        "peso_h2h": peso_h2h,
+        "peso_liga": peso_liga,
+        "delta_epist": delta_epist,
     }
 
 
@@ -545,11 +661,38 @@ def generar_distribucion_soberana(
     # 7. [LN-QBE-020-C] Δ_epist: consenso Poisson paramétrico vs Kernel H2H empírico.
     #    Ley Zero-H2H ([LN-QBE-020-B]): sin enfrentamientos directos ⇒ w_H2H = 0.0, w_Liga = 1.0
     #    y Δ_epist = 0.0 (el kernel jamás se invoca con evidencia vacía).
+    #    [LN-QBE-104] Una SOLA instancia del Generador C alimenta la discrepancia y la fusión convexa:
+    #    ambos consumidores leen la MISMA matriz (cero doble invocación, cero doble fuente de verdad).
+    partidos_h2h = list(raw_match_data.get("h2h_matches") or [])
+    kernel_generador_c = (
+        calcular_matriz_h2h_empirica(partidos_h2h, tau_dias=TAU_H2H_DEEP) if partidos_h2h else None
+    )
     delta_epist, kernel_h2h = derivar_discrepancia_epistemica(
         {"p_local": p1, "p_empate": pX, "p_visitante": p2},
-        raw_match_data.get("h2h_matches"),
+        partidos_h2h,
         tau_dias=TAU_H2H_DEEP,
+        kernel=kernel_generador_c,
     )
+    s_poisson = {"p_1": p1, "p_X": pX, "p_2": p2}
+
+    # 7-bis. [LN-QBE-104] Fusión Convexa del Símplex Soberano (Generador A ∪ Generador C).
+    #    El símplex PUBLICADO —el que sostiene la Cláusula de André, el despacho de mesas y la
+    #    calibración— pasa a ser P_hib = w_Liga·P_A + w_H2H·P_C con w_H2H = min(0.25, N·0.05).
+    #    Las intensidades λ NO se tocan: `intensidades` conserva la evidencia 3NF sellada [LN-QBE-102]
+    #    (la fusión es una operación sobre el símplex Δ², no sobre el espacio de tasas).
+    fusion_h2h = fusionar_simplex_con_h2h(
+        {"p_local": p1, "p_empate": pX, "p_visitante": p2},
+        kernel=kernel_generador_c,
+        n_duelos=len(partidos_h2h),
+    )
+    p1, pX, p2 = fusion_h2h["p_local"], fusion_h2h["p_empate"], fusion_h2h["p_visitante"]
+    # Δ_epist(∞): norma infinito sobre Δ² — la discrepancia MÁXIMA por componente [VAULT-CORE-005].
+    delta_epist_infinito = fusion_h2h["delta_epist"]
+    if partidos_h2h:
+        # Telemetría de mezcla en la MISMA evidencia del Generador C (una sola fuente del peso).
+        kernel_h2h = dict(kernel_h2h)
+        kernel_h2h["peso_h2h"] = round(fusion_h2h["peso_h2h"], 6)
+        kernel_h2h["peso_liga"] = round(fusion_h2h["peso_liga"], 6)
 
     # 8. Consolidación de Traza Forense
     trace = StochasticAuditTrace(
@@ -565,7 +708,10 @@ def generar_distribucion_soberana(
         kernel_h2h_empirico=kernel_h2h,
         origen_captura=origen_captura,
         timestamp_captura=timestamp_captura,
-        insumos_factivados=insumos_factivados
+        insumos_factivados=insumos_factivados,
+        # [LN-QBE-104] Símplex paramétrico puro (Generador A) y Δ_epist(∞) de la fusión.
+        simplex_poisson=s_poisson,
+        epistemic_delta=delta_epist_infinito,
     )
 
     return SovereignDistributionOutput(
@@ -576,5 +722,6 @@ def generar_distribucion_soberana(
         es_operable=True,
         audit_trace=trace,
         delta_epist=delta_epist,
+        epistemic_delta=delta_epist_infinito,
         origen_factores=origen_factores
     )

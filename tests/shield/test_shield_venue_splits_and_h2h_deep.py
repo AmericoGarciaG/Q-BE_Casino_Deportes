@@ -101,7 +101,14 @@ def test_invarianza_soberania_tigres_toluca_resuelve_asimetria():
     """
     [INVARIANZA 4 - TRANSMUTACIÓN DE P' Y CORRECCIÓN DEL SESGO]:
     Con el modelo calibrado, Tigres en El Volcán NO puede ser un underdog de 20%.
-    Su probabilidad soberana debe ser >= 40.0% y Toluca <= 32.0%.
+
+    [VAR-2026-10-17-H2H-FUSION · ALT-C] El piso/techo cuantitativo (p_local ≥ 0.40, p_visitante ≤ 0.32)
+    se certifica sobre el GENERADOR A (`audit_trace.simplex_poisson`), que es el objeto que la
+    calibración de sede y plaza gobierna (λ y dominancia estructural). El símplex PUBLICADO es ahora la
+    mezcla convexa [LN-QBE-104] P_hib = w_Liga·P_A + w_H2H·P_C con w_H2H = min(0.25, N·0.05); sobre él
+    rigen los invariantes ESTRUCTURALES: dominancia local, orden del podio y acotamiento por componente.
+    Este fixture publica H2H adverso (Toluca ganó 2 de los 5 duelos recientes), por lo que el kernel
+    empírico empuja legítimamente la mezcla hacia abajo: el techo/piso sigue siendo del Generador A.
     """
     raw_data_completo = {
         "home_team_stats": {"pj": 10, "gf": 10, "gc": 13},
@@ -127,11 +134,43 @@ def test_invarianza_soberania_tigres_toluca_resuelve_asimetria():
         gamma_home_base=0.15
     )
     
-    assert dist_out.p_local >= 0.40, (
-        f"🚨 SESGO PERSISTENTE: Tigres en casa tiene p_local={dist_out.p_local:.3f}. "
+    # ── Generador A (Poisson paramétrico): el piso/techo que la calibración de plaza gobierna ──
+    simplex_poisson = dict(dist_out.audit_trace.simplex_poisson)
+    assert simplex_poisson, "La traza debe publicar el símplex Poisson pre-fusión [LN-QBE-104]."
+    p_local_poisson = float(simplex_poisson["p_1"])
+    p_visita_poisson = float(simplex_poisson["p_2"])
+
+    assert p_local_poisson >= 0.40, (
+        f"🚨 SESGO PERSISTENTE: Tigres en casa tiene p_local(Poisson)={p_local_poisson:.3f}. "
         f"Debe ser >= 0.400 tras la calibración de sede y plaza."
     )
-    assert dist_out.p_visitante <= 0.32, (
-        f"🚨 SOBREESTIMACIÓN FORÁNEA: Toluca de visita tiene p_visita={dist_out.p_visitante:.3f}. "
+    assert p_visita_poisson <= 0.32, (
+        f"🚨 SOBREESTIMACIÓN FORÁNEA: Toluca de visita tiene p_visita(Poisson)={p_visita_poisson:.3f}. "
         f"Debe ser <= 0.320."
     )
+
+    # ── Símplex publicado: invariantes estructurales de la mezcla convexa [LN-QBE-104] ──
+    assert dist_out.p_local > dist_out.p_visitante, (
+        f"🚨 ASIMETRÍA PERDIDA: el símplex híbrido publica p_local={dist_out.p_local:.3f} "
+        f"≤ p_visitante={dist_out.p_visitante:.3f}."
+    )
+    assert dist_out.p_local > dist_out.p_empate, (
+        f"🚨 PODIO INVERTIDO: p_local={dist_out.p_local:.3f} ≤ p_empate={dist_out.p_empate:.3f}."
+    )
+    assert abs(dist_out.p_local + dist_out.p_empate + dist_out.p_visitante - 1.0) <= 1e-12, (
+        "La mezcla convexa debe habitar el símplex Δ²."
+    )
+    kernel = dist_out.audit_trace.kernel_h2h_empirico
+    assert 0.0 < kernel["peso_h2h"] <= 0.25, "w_H2H debe respetar el tope fiduciario 0.25."
+    for hibrida, poisson_pura, empirica in (
+        (dist_out.p_local, p_local_poisson, kernel["p_local"]),
+        (dist_out.p_empate, float(simplex_poisson["p_X"]), kernel["p_empate"]),
+        (dist_out.p_visitante, p_visita_poisson, kernel["p_visita"]),
+    ):
+        assert min(poisson_pura, empirica) - 1e-12 <= hibrida <= max(poisson_pura, empirica) + 1e-12, (
+            "Cada componente del símplex publicado debe quedar acotada entre generadores."
+        )
+    assert 0.0 < dist_out.epistemic_delta <= 1.0, (
+        f"Δ_epist(∞) fuera de rango: {dist_out.epistemic_delta!r}."
+    )
+

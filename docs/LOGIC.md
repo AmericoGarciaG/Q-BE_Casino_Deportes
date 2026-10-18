@@ -1457,6 +1457,54 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-103] Proveedor Soberano de Memoria H2H con Corpus Congelado, Certificación Tri-Estado de la Procedencia Opta y Telemetría Dimensional
+
+**Régimen:** `[DIRGEN-STRICT]` en la extracción determinista, la futuro-ceguera y la certificación de procedencia · `[DBBD-FUNGIBLE]` en la exhibición bicolor del acordeón forense.
+**Base de Gobierno:** `[LN-QBE-020]` (κ-Decay) · `[LN-QBE-020-B]` (Ley Zero-H2H) · `[LN-QBE-020-C]` (kernel H2H empírico) · `[LN-QBE-101]` (atribución factorial) · `[LN-QBE-102]` (Axiomas 3 y 4) · `[ARCH-1.4.44]` (proveedor unificado) · `[DES-QBE-066]` (acordeón bicolor).
+
+* **I (Input):** la identidad del fixture $(s_L, s_V, f_{\text{ref}}, \ell)$ con $s_L, s_V$ slugs canónicos y $f_{\text{ref}}$ el kickoff; el **corpus congelado** `data/cache_h2h_liga_mx_2026.json` (esquema `h2h_corpus_v1`, sellado OFFLINE por `scripts/ingesta/congelar_cache_h2h_liga_mx.py` bajo `[ARCH-1.4.44]`); la bóveda 3NF (`fixtures_snapshots.matches_json` + catálogo `teams`); y el paquete `insumos_factivados` de la traza forense. **Cero red:** el proveedor no abre sockets, no dispara scraping y no consulta ningún origen externo.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Unificación de vestimenta de identidad (puente slug ↔ nombre).** Los marcadores de la bóveda viajan en **nombres de exhibición** (`Team.name`) mientras el contrato del kernel exige **slugs canónicos**; el proveedor canonicaliza ambos lados con el catálogo `teams` (`name`/`short_name` $\to$ `canonical_slug`) antes de comparar parejas. Sin este puente la comparación es vacía por construcción (defecto erradicado: 0 duelos reportados con evidencia presente).
+  2. **Futuro-ceguera estricta.** Sólo entra evidencia con $f_k < f_{\text{ref}}$ (anti-fuga en backfill histórico). Un duelo que empata o excede el kickoff queda excluido.
+  3. **Deduplicación determinista.** Clave $(\text{fecha}, s_H, s_V)$ con **precedencia de la bóveda** sobre el corpus: una misma fuente duplicada jamás infla el conteo ni la masa efectiva.
+  4. **Proyección al eje del fixture evaluado.** Los goles se leen en la perspectiva del club local evaluado: si el club fue visitante en el duelo histórico, los marcadores se intercambian.
+  5. **Selección de los cinco más recientes.** Se ordena por `dias_antiguedad` ascendente y se retienen $\le 5$; $\text{dias\_antiguedad} = \max(0, (f_{\text{ref}} - f_k).\text{días})$.
+  6. **Ponderación delegada (cero duplicación de plano).** La matriz se calcula con el kernel sellado `calcular_matriz_h2h_empirica` ($\tau_{\text{deep}} = 540\text{d}$, `[LN-QBE-020-C]`); el proveedor **no reimplementa** decaimiento ni normalización. Sin duelos $\Rightarrow$ lista vacía (Ley Zero-H2H `[LN-QBE-020-B]`): prohibido fabricar enfrentamientos.
+  7. **Certificación tri-estado de la procedencia Opta.** Con $\mathcal{P}_{real} = \{\texttt{cache\_local}, \texttt{telemetria\_3nf}, \texttt{sensor\_fotmob}, \texttt{factual\_mixto}\}$ (fuentes fácticas FotMob/Opta) se certifica
+     $$\texttt{xg\_es\_real\_opta} = \mathbb{1}\big[\pi_H \in \mathcal{P}_{real}\big] \cdot \mathbb{1}\big[\pi_V \in \mathcal{P}_{real}\big],$$
+     y el semáforo `OPTA` se pronuncia en tres estados honestos sobre el insumo publicado:
+     $$\text{opta} = \begin{cases} 🟢 & \texttt{flag} = 1 \\ 🟡 & \texttt{flag} = 0 \ \wedge\ (\texttt{xg\_local\_rate} \neq \varnothing \ \vee\ \texttt{xg\_visita\_rate} \neq \varnothing) \\ 🔴 & \text{en cualquier otro caso} \end{cases}$$
+     El estado 🟡 declara la verdad incómoda: hay métrica xG publicada, pero **no está certificada como Opta real bilateral** (al menos un club-corte degradó a calibrado). El rojo queda reservado a la ausencia de métrica.
+  8. **Telemetría dimensional del catálogo.** Cada una de las 12 dimensiones publica `total_variables`, `variables_evaluadas` (renglones con evidencia en local **o** visita) y `tiene_datos = 1[\text{variables\_evaluadas} > 0]`. Axioma 4 `[LN-QBE-102]`: `V10` enciende con `xga_*_rate` y, en su ausencia, con el **respaldo `gc_*_rate`** (ancla GC/PJ), declarándolo en la `nota` forense.
+* **O (Output):** `List[H2HDueloVivo]` con `{goles_local, goles_visita, dias_antiguedad, fecha, fuente}` en la perspectiva del local evaluado · sello `xg_es_real_opta: bool` en el `raw_match_data` y en la traza del homologador · `semaforos.opta` tri-estado · por dimensión `{total_variables, variables_evaluadas, tiene_datos}`.
+* **Φ (Transición):** Hacia `[ARCH-1.4.44]`, el homologador `scripts/ingesta/homologar_temporada_optah2h.py`, el daemon `scripts/daemons/centinela_deportivo.py`, `sovereign_pipeline.insumos_factivados` y el modal forense `[DES-QBE-066]`.
+* **[SHIELD]:** `tests/shield/test_shield_opta_flag_and_accordion_telemetry.py`
+
+### ID: [LN-QBE-104] Fusión Convexa del Símplex Soberano (Poisson ∪ Kernel H2H) y Persistencia de la Δ_epist Real
+
+**Régimen:** `[DIRGEN-STRICT]` en la ley de mezcla, en la métrica de discrepancia y en el puente de persistencia · `[DBBD-FUNGIBLE]` en la cartelera de calibración (badge + filtro anti-cuarentena).
+**Base de Gobierno:** `[LN-QBE-020-B]` (Ley Zero-H2H) · `[LN-QBE-020-C]` (kernel H2H empírico y TVD) · `[LN-QBE-102]` (evidencia 3NF sellada) · `[VAULT-CORE-005]` (ley de mezcla) · `[ARCH-1.6.22]` · `[DES-QBE-067]`.
+
+* **I (Input):** el símplex paramétrico del Generador A $P_A = (p_1, p_X, p_2)$ ya publicado por el orquestador · la instancia ÚNICA del Generador C $P_C = (q_1, q_X, q_2)$ (`calcular_matriz_h2h_empirica`, $\tau_{\text{deep}} = 540\text{d}$) · el número de duelos verificables $N$ de la ventana sellada.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Ley de mezcla convexa (`[VAULT-CORE-005]`):** con $w_{H2H} = \min(0.25, N \cdot 0.05)$ y $w_{Liga} = 1 - w_{H2H}$,
+     $$P_{hib}(k) = w_{Liga} \cdot P_A(k) + w_{H2H} \cdot P_C(k), \quad k \in \{1, X, 2\}.$$
+     Al ser una combinación convexa de dos distribuciones de probabilidad, $P_{hib}$ habita el mismo símplex $\Delta^2$ ($\sum_k P_{hib}(k) = 1$) y cada componente queda acotada entre los dos generadores: $\min(P_A(k), P_C(k)) \le P_{hib}(k) \le \max(P_A(k), P_C(k))$. El SÍMPLEX PUBLICADO —el que sostiene la Cláusula de André, el despacho de mesas y la calibración— es $P_{hib}$; el Poisson puro deja de ser la vitrina.
+  2. **Una sola fuente del Generador C:** la misma instancia del kernel alimenta la discrepancia y la fusión (una invocación por partido). Cero doble fuente de verdad.
+  3. **Métrica de discrepancia:** $\Delta_{epist}(\infty) = \max_k |P_A(k) - P_C(k)| \in [0, 1]$ (norma infinito sobre $\Delta^2$, cota de Kolmogorov), que acota por arriba la TVD sellada: $\text{TVD} \le \Delta(\infty)$. La TVD $\Delta_{epist}$ de `[LN-QBE-020-C]` **no se deroga**: sigue publicada en la traza como `discrepancia_epist`.
+  4. **Ley Zero-H2H:** $N = 0$ (o `kernel=None`) $\Rightarrow w_{H2H} = 0$, la fusión es la **identidad** y $\Delta_{epist}(\infty)$ se declara en el piso de ignorancia del Contrato R-1 (`DELTA_EPISTEMICO_SIN_EVIDENCIA = 0.02`), jamás $0.0$: ausencia de evidencia no es coincidencia.
+  5. **Persistencia honesta (`[VAULT-DATA-002]`):** `sovereign_distributions.epistemic_delta` deja de espejar el `ratio` $\lambda_{\max}/\lambda_{\min}$ —magnitud de tasas, sin relación con la evidencia— y persiste $\Delta_{epist}(\infty)$ con lectura `contrato de salida → traza forense → piso R-1` y acotamiento a $[0, 1]$. Un `None` heredado o un tipo no numérico NO se maquilla con $0.0$. El `ratio` permanece intacto en `intensidades` (`[LN-QBE-102]`: la evidencia 3NF no se reescribe). **Prohibido el backfill** sobre filas históricas.
+  6. **Cartelera anti-cuarentena (`[DES-QBE-067]`):** los partidos vetados ($\text{EPIST} = 🔴$, $\Delta_{epist} > 0.12$, `[LN-QBE-070-B]`) pueden excluirse de la vitrina de calibración mediante `#chk-excluir-vetados`. El filtro es de **PRESENTACIÓN**: re-deriva los agregados desde los **conteos enteros** del subconjunto, declara el universo efectivo en `#bt-estado` y **jamás** muta `backtestingReportCache`. Con $0$ vetados el filtro es inerte (idempotencia estricta: manda el agregado servido).
+  7. **Badge honesto (`[DES-QBE-067]`):** una dimensión del catálogo forense sin una sola variable evaluada NO exhibe `0/0 evaluadas` —que finge medición—, declara `SIN EVALUAR` (`[GOVERNANCE-01]`: cero maquillaje).
+* **O (Output):** `SovereignDistributionOutput` con el símplex HÍBRIDO (`p_local`, `p_empate`, `p_visitante`) y `epistemic_delta = Δ_epist(∞)` · `StochasticAuditTrace` con `simplex_poisson` (Generador A puro), `epistemic_delta` y `kernel_h2h_empirico` enriquecido con `peso_h2h`/`peso_liga` · fila 3NF con `epistemic_delta` real · cartelera con filtro anti-cuarentena y badge `SIN EVALUAR`.
+* **Φ (Transición):** Hacia `[ARCH-1.6.22]`, `[DES-QBE-067]`, el visor de backtesting (`/api/markets/backtesting/*`), la Cláusula de André y el despacho de mesas (ambos consumen el símplex publicado).
+* **[SHIELD]:** `tests/shield/test_shield_ensemble_fusion_and_ui_sync.py` · `tests/shield/test_shield_bayesian_form_and_h2h.py` (enmienda E-2: invariantes de mezcla) · `tests/shield/test_shield_venue_splits_and_h2h_deep.py` · `tests/shield/test_shield_gsl3d_orthogonal_engine.py`.
+
+---
+
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,
