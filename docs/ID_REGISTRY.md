@@ -101,6 +101,8 @@
 | `[LN-QBE-102]` | LOGIC | `docs/LOGIC.md` | Axioma de Protección de la Evidencia en Vivo, Sello de Procedencia y Telemetría de Insumos Fácticos | SELLADO |
 | `[LN-QBE-103]` | LOGIC | `docs/LOGIC.md` | Proveedor Soberano de Memoria H2H con Corpus Congelado, Certificación Tri-Estado de la Procedencia Opta y Telemetría Dimensional | SELLADO |
 | `[LN-QBE-104]` | LOGIC | `docs/LOGIC.md` | Fusión Convexa del Símplex Soberano (Poisson ∪ Kernel H2H) y Persistencia de la Δ_epist Real | SELLADO |
+| `[LN-QBE-105]` | LOGIC | `docs/LOGIC.md` | Consolidación Fáctica de la Dimensión Memoria Longitudinal (H2H) | SELLADO |
+| `[LN-QBE-106]` | LOGIC | `docs/LOGIC.md` | Pipeline Sandbox Autónomo y Modelado Relacional de Memoria H2H | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -204,6 +206,7 @@
 | `[ARCH-1.4.42-B]` | ARCH | `docs/ARCH.md` | Tolerancia de Tipos de Insumo con Unidades en DTO de Variables (44V) [ANTI-BUG] | SELLADO |
 | `[ARCH-1.4.43]` | ARCH | `docs/ARCH.md` | Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.44]` | ARCH | `docs/ARCH.md` | Proveedor H2H Unificado de Corpus Congelado, Sello Opta de Origen y Telemetría Dimensional del Acordeón Forense [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.45]` | ARCH | `docs/ARCH.md` | Arquitectura de Aislamiento Sandbox y Diagnóstico CLI-First [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |

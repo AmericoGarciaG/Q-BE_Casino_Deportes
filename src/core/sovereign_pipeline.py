@@ -145,6 +145,60 @@ def _contexto_efectivo(explicito: float, raw_match_data: Dict[str, Any], clave: 
     return 0.0
 
 
+# ── [LN-QBE-105] Agregación fáctica de la ventana H2H (V39/V40/V41 del catálogo forense) ──────
+SIN_ANTECEDENTES_SEDE = "Sin antecedentes locales"
+
+
+def _agregar_h2h_stats(h2h_matches: Any) -> Optional[Dict[str, str]]:
+    """`[LN-QBE-105]` Agregado fáctico de la ventana H2H desde la perspectiva del local evaluado.
+
+    Emite `record_general` (V39), `dif_goles` (V40) y `record_sede` (V41) sobre las filas
+    verificables (`goles_local`/`goles_visita` enteros). Sin duelos ⇒ `None`: la Ley Zero-H2H no
+    fabrica un récord 0-0-0 (ausencia de evidencia no es un empate). Sólo `es_local_sede is True`
+    acredita la sede evaluada; una fila histórica sin bandera no se cuenta (cero fabricación).
+    """
+    victorias = empates = derrotas = 0
+    diferencia = 0
+    visitante_victorias = visitante_empates = visitante_derrotas = 0
+    con_sede = 0
+    for fila in (h2h_matches or []):
+        if not isinstance(fila, dict):
+            continue
+        try:
+            goles_local = int(fila.get("goles_local"))
+            goles_visita = int(fila.get("goles_visita"))
+        except (TypeError, ValueError):
+            continue
+        diferencia += goles_local - goles_visita
+        if goles_local > goles_visita:
+            victorias += 1
+        elif goles_local == goles_visita:
+            empates += 1
+        else:
+            derrotas += 1
+        if fila.get("es_local_sede") is not True:
+            continue
+        con_sede += 1
+        if goles_visita > goles_local:
+            visitante_victorias += 1
+        elif goles_visita == goles_local:
+            visitante_empates += 1
+        else:
+            visitante_derrotas += 1
+
+    if victorias + empates + derrotas == 0:
+        return None
+    return {
+        "record_general": f"{victorias}V - {empates}E - {derrotas}D",
+        "dif_goles": "0" if diferencia == 0 else f"{diferencia:+d}",
+        "record_sede": (
+            f"{visitante_victorias}V - {visitante_empates}E - {visitante_derrotas}D (Visita)"
+            if con_sede
+            else SIN_ANTECEDENTES_SEDE
+        ),
+    }
+
+
 def _empaquetar_insumos_factivados(
     raw_match_data: Dict[str, Any],
     delta_alt_metros: float,
@@ -152,11 +206,14 @@ def _empaquetar_insumos_factivados(
     q_mod_h: float,
     q_mod_a: float,
     xg_es_real_opta: Optional[bool] = None,
+    h2h_stats: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """[LN-QBE-102] Telemetría fáctica de los insumos consumidos por el generador soberano.
 
     Cada clave es la magnitud REALMENTE usada por la matemática (tasas canónicas [ARCH-1.4.41],
     splits de sede [LN-QBE-038] y parámetros contextuales efectivos). `None` = no publicado.
+    `[LN-QBE-105]` `h2h_stats` se anexa de forma aditiva SÓLO cuando la ventana publicó duelos
+    verificables; en su ausencia la clave no existe y la ruta heredada de V39 queda intacta.
     """
     local = _bloque_factico(raw_match_data, "home_team_stats")
     visita = _bloque_factico(raw_match_data, "away_team_stats")
@@ -172,7 +229,7 @@ def _empaquetar_insumos_factivados(
         pj_sede_local = _magnitud_insumo(split_local, ("pj",))
     if pj_sede_visita is None:
         pj_sede_visita = _magnitud_insumo(split_visita, ("pj",))
-    return {
+    paquete: Dict[str, Any] = {
         "xg_local_rate": _tasa_insumo(local, "xg"),
         "xg_visita_rate": _tasa_insumo(visita, "xg"),
         "xga_local_rate": xga_local_rate,
@@ -194,6 +251,9 @@ def _empaquetar_insumos_factivados(
         "delta_descanso_dias": round(float(delta_descanso_dias), 4),
         "xg_es_real_opta": _sello_opta(raw_match_data, xg_es_real_opta),
     }
+    if h2h_stats is not None:
+        paquete["h2h_stats"] = dict(h2h_stats)
+    return paquete
 
 
 class StochasticAuditTrace(BaseModel):
@@ -606,7 +666,8 @@ def generar_distribucion_soberana(
     delta_alt_efectivo = _contexto_efectivo(delta_alt_metros, raw_match_data, "delta_alt_metros")
     delta_descanso_efectivo = _contexto_efectivo(delta_descanso_dias, raw_match_data, "delta_descanso_dias")
     insumos_factivados = _empaquetar_insumos_factivados(
-        raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta
+        raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta,
+        h2h_stats=_agregar_h2h_stats(raw_match_data.get("h2h_matches")),
     )
 
     # 1. Comprobación de Suficiencia Fáctica S(I_i)

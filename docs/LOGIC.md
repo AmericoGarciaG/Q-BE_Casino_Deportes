@@ -1502,6 +1502,55 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 ---
 
+### ID: [LN-QBE-105] Consolidación Fáctica de la Dimensión Memoria Longitudinal (H2H)
+
+* **Ω (Resumen):** Expande la ingesta del Kernel H2H para nutrir las variables V39, V40 y V41 del Catálogo Forense. Extrae el récord de victorias, el diferencial neto de goles históricos y aísla la resistencia específica del visitante en la sede evaluada, proveyendo al analista evidencia cuantitativa del peso del enfrentamiento directo sin alucinaciones.
+* **I (Input):** Lista de enfrentamientos históricos provista por `h2h_provider.py`, extendida con la bandera `es_local_sede: bool`.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Aprovisionamiento Extendido:** El motor H2H marca cada duelo histórico con `es_local_sede = True` si el `local_slug` evaluado fue el equipo local en dicho encuentro pasado.
+  2. **Agregación de V39 (Récord H2H):**
+     Calcula $W$ (victorias locales), $D$ (empates), $L$ (victorias visitantes) desde la perspectiva del equipo local evaluado. Se formatea como `"{W}V - {D}E - {L}D"`.
+  3. **Agregación de V40 (Diferencial $\Delta G$):**
+     $$\Delta G_{\text{H2H}} = \sum (GF_{\text{local\_evaluado}} - GC_{\text{local\_evaluado}})$$
+     Se formatea con signo `+` o `-` (ej. `"+2"` o `"-1"`).
+  4. **Agregación de V41 (Resistencia en Sede):**
+     Filtra los duelos donde `es_local_sede == True`. Calcula el récord del visitante ($W_{\text{vis}}, D_{\text{vis}}, L_{\text{vis}}$) y lo formatea como `"{W}V - {D}E - {L}D"`. Si no hay duelos en esa sede, emite `"Sin antecedentes locales"`.
+  5. **Variable V42 (xG Histórico):** Permanece explícitamente como `SIN EVIDENCIA` en espera de la Fase 6 (Deep Opta Cache).
+* **O (Output):** Bloque `h2h_stats` inyectado en `insumos_factivados`.
+* **Φ (Transición):** Hacia `factor_attribution.py` (V39, V40, V41).
+* **[SHIELD]:** `tests/shield/test_shield_h2h_dimension_population.py`
+
+**Enmiendas ratificadas por el Director (Dictamen 2026-10-17, Opción A):**
+1. **Punto de inyección:** `h2h_stats` se calcula en el paso 0 de `generar_distribucion_soberana` (antes del gate $S(\mathcal{I})$), de modo que el paquete `insumos_factivados` lo porta también en la rama de ignorancia (`[LN-QBE-102]`, Axioma 3).
+2. **Precedencia V39:** `h2h_stats` manda **cuando está presente**; en su ausencia la ruta heredada `_FORMATO_INSUMO["V39"] = ("h2h_conteo", None, "partidos")` permanece **byte-idéntica** (`"N partidos"`).
+3. **Columna de V41:** el récord del visitante en la sede se transcribe en la columna `local` de la celda forense con el sufijo declarativo `" (Visita)"` y `visita = None`; la celda mantiene `estado = EVALUADO`.
+4. **Alias de dimensión:** cada dimensión del catálogo publica de forma **aditiva** `nombre` (= `titulo`), conservando `dimension` y `titulo` (cero ruptura del DTO `[LN-QBE-101]`).
+5. **Cero de $\Delta G$:** cuando $\Delta G_{\text{H2H}} = 0$ se emite `"0"` (neutro, sin signo); en cualquier otro caso se emite con signo explícito `+`/`-`.
+6. **Bandera ausente:** un duelo sin `es_local_sede` (fila histórica previa a la re-sincronización) no acredita sede alguna; el filtro de V41 no lo cuenta y, sin duelos acreditados, V41 emite `"Sin antecedentes locales"`. Cero fabricación de sede.
+7. **Acordeón UI:** la reparación se materializa sobre la geometría sellada `[DES-QBE-064/066]` (`<details>` + hidratación dinámica `_badgeDimension44`), sin Bootstrap y sin rótulo literal en la plantilla del `summary`; `SIN EVALUAR` subsiste únicamente como fallback honesto de una dimensión con cero variables evaluadas (`[DES-QBE-067]`).
+
+### ID: [LN-QBE-106] Pipeline Sandbox Autónomo y Modelado Relacional de Memoria H2H
+
+* **Ω (Resumen):** Establece el protocolo de experimentación y validación desacoplada de la interfaz gráfica mediante pipelines autónomos en consola (CLI-First). Modela las variables de la Dimensión 11 bajo la taxonomía relacional: V39 como multiconjunto de resultados, V40 como magnitud diferencial con atribución explícita al bando beneficiario, y V41 como rendimiento condicionado a la sede, eliminando la asimetría artificial de columnas locales vacías.
+* **I (Input):** `match_id: str` o `jornada: int`, persistencia SQLite en modo lectura, caché histórica congelada `data/cache_h2h_liga_mx_2026.json`.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Aislamiento de Entorno:** El pipeline opera de punta a punta como función pura de solo lectura (`Read-Only`). Prohibido mutar `data/qbe_database.db`.
+  2. **Modelado Relacional Antisimétrico de V40 ($\Delta G$):**
+     $$\Delta G_{\text{local}} = \sum (GF_L - GC_L) \quad \Longleftrightarrow \quad \Delta G_{\text{visita}} = -\Delta G_{\text{local}}$$
+     - Si $\Delta G_{\text{local}} > 0 \implies$ Beneficiario: `LOCAL` con ventaja de $+\Delta G$ goles.
+     - Si $\Delta G_{\text{local}} < 0 \implies$ Beneficiario: `VISITANTE` con ventaja de $+|\Delta G|$ goles.
+     - Si $\Delta G_{\text{local}} = 0 \implies$ `EQUILIBRADO` (0 goles de diferencia).
+  3. **Ejecución y Contraste Estocástico Completo:**
+     - Resuelve la distribución Poisson Pura $\hat{P}_{\text{poisson}}$ y el Kernel H2H $\hat{P}_{\text{H2H}}$.
+     - Calcula la Discrepancia Epistémica Real $\Delta_{\text{epist}} = \max_k |P_{\text{poisson}}(k) - P_{\text{H2H}}(k)|$.
+     - Computa la Distribución Híbrida Soberana $\hat{P}_{\text{híbrida}}$ mediante la combinación convexa con $w_{\text{H2H}} = \min(0.25, N_{\text{H2H}} \cdot 0.05)$.
+     - Evalúa el cambio de convicción: $\Delta P = \hat{P}_{\text{híbrida}} - \hat{P}_{\text{poisson}}$.
+* **O (Output):** Reporte forense en consola con tablero ASCII de alta densidad y diccionario estructurado para pruebas (`--json`).
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_h2h_pipeline.py`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_h2h_pipeline.py`
+
+---
+
 
 ---
 

@@ -56,7 +56,9 @@ TAU_H2H_DIAS = TAU_H2H_DEEP           # [ARCH-1.6.13-C] vida media multianual (5
 FUENTE_BOVEDA = "boveda_3nf"
 FUENTE_CORPUS = "corpus_congelado"
 RUTA_CORPUS_H2H = Path(__file__).resolve().parents[3] / "data" / "cache_h2h_liga_mx_2026.json"
-CAMPOS_DUELO = ("goles_local", "goles_visita", "dias_antiguedad", "fecha", "fuente")
+CAMPOS_DUELO = (
+    "goles_local", "goles_visita", "dias_antiguedad", "fecha", "fuente", "es_local_sede"
+)
 
 
 
@@ -165,15 +167,27 @@ def _como_fecha(valor: Any) -> Optional[datetime]:
 
 
 def _duelo(
-    fecha: datetime, goles_local: int, goles_visita: int, fuente: str, fecha_ref: datetime
+    fecha: datetime,
+    goles_local: int,
+    goles_visita: int,
+    fuente: str,
+    fecha_ref: datetime,
+    es_local_sede: bool = False,
 ) -> Dict[str, Any]:
-    """Empaqueta un enfrentamiento consumado con su antigüedad fáctica (int, nunca negativo)."""
+    """Empaqueta un enfrentamiento consumado con su antigüedad fáctica (int, nunca negativo).
+
+    `[LN-QBE-105]` `es_local_sede` declara si el club local EVALUADO jugó en su propia sede en
+    ese duelo histórico. Es la única fuente de verdad de la localía: la proyección de perspectiva
+    de `goles_local`/`goles_visita` la destruye por diseño, de modo que la bandera debe capturarse
+    aquí, donde `casa` aún se conoce. `False` = sede no acreditada (cero fabricación).
+    """
     return {
         "goles_local": int(goles_local),
         "goles_visita": int(goles_visita),
         "dias_antiguedad": max(0, int((fecha_ref - fecha).days)),
         "fecha": fecha.strftime("%Y-%m-%d"),
         "fuente": fuente,
+        "es_local_sede": bool(es_local_sede),
     }
 
 
@@ -206,7 +220,10 @@ def _desde_corpus(
         goles_local = goles_casa if casa == local else goles_fuera
         goles_visita = goles_fuera if casa == local else goles_casa
         clave = (fecha.strftime("%Y-%m-%d"), casa, fuera)
-        duelos[clave] = _duelo(fecha, goles_local, goles_visita, FUENTE_CORPUS, fecha_ref)
+        duelos[clave] = _duelo(
+            fecha, goles_local, goles_visita, FUENTE_CORPUS, fecha_ref,
+            es_local_sede=(casa == local),
+        )
     return duelos
 
 
@@ -249,7 +266,10 @@ def _desde_boveda(
         goles_local = goles_casa if casa == local else goles_fuera
         goles_visita = goles_fuera if casa == local else goles_casa
         clave = (fecha.strftime("%Y-%m-%d"), casa, fuera)
-        duelos[clave] = _duelo(fecha, goles_local, goles_visita, FUENTE_BOVEDA, fecha_ref)
+        duelos[clave] = _duelo(
+            fecha, goles_local, goles_visita, FUENTE_BOVEDA, fecha_ref,
+            es_local_sede=(casa == local),
+        )
     return duelos
 
 
@@ -280,7 +300,8 @@ def obtener_h2h_unificado(
     -------
     Lista ordenada del duelo más reciente al más antiguo, cada fila con
     `goles_local`, `goles_visita` (perspectiva del local evaluado), `dias_antiguedad` (int ≥ 0),
-    `fecha` (`YYYY-MM-DD`) y `fuente` (`boveda_3nf` | `corpus_congelado`).
+    `fecha` (`YYYY-MM-DD`), `fuente` (`boveda_3nf` | `corpus_congelado`) y `es_local_sede`
+    (`True` si el local evaluado jugó en su propia sede en ese duelo histórico [`LN-QBE-105`]).
     Sin evidencia verificable ⇒ lista vacía (Ley Zero-H2H `[LN-QBE-020-B]`, cero fabricación).
     """
     fecha_kickoff = _como_fecha(fecha_ref)

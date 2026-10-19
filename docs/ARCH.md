@@ -1535,6 +1535,11 @@ def sincronizar_progol_pipeline_completo(
 * **Alcance honesto:** los clubes sin historia en la máxima categoría dentro del corpus (caso `atlante`, ascendido) permanecen con 0 duelos y el semáforo `H2H` se declara `NEUTRAL` (Ley Zero-H2H). Extender el corpus no fabrica evidencia inexistente.
 * **[SHIELD]:** `tests/shield/test_shield_opta_flag_and_accordion_telemetry.py`
 
+### [ARCH-1.4.45] Arquitectura de Aislamiento Sandbox y Diagnóstico CLI-First [ARCH-PILLAR]
+* **Ubicación Canónica:** `scripts/laboratorio/sandbox_h2h_pipeline.py`.
+* **Directiva de Aislamiento:** Módulo ejecutable CLI con soporte para banderas `--jornada [N]`, `--partido [ID]` y `--json`. Reutiliza los módulos matemáticos sellados (`h2h_provider.py`, `h2h_kernel.py`, `sovereign_pipeline.py`), garantizando que la lógica de consola sea idéntica a la del servidor central sin acoplamiento a FastAPI ni al DOM.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_h2h_pipeline.py`
+
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`
   - Operación pura de solo lectura (`Read-Only`) en tiempo real.

@@ -381,6 +381,46 @@ _RESPALDO_INSUMO: Dict[str, Tuple[Tuple[str, str], str, str]] = {
 }
 
 
+# ── [LN-QBE-105] Transcripción del bloque `h2h_stats` del pipeline a V39/V40/V41 ───────────────
+# El orquestador ya agregó la ventana desde la perspectiva del local evaluado; aquí sólo se
+# TRANSCRIBE la magnitud consumida, sin recalcular récords ni fabricar sede alguna. V42
+# (`h2h_xg`) queda fuera de este mapa: permanece `SIN EVIDENCIA` hasta la Fase 6.
+_CLAVES_H2H_STATS: Dict[str, Tuple[str, str]] = {
+    "V39": ("record_general", "Récord H2H del local evaluado (V-E-D) [LN-QBE-105]"),
+    "V40": ("dif_goles", "Diferencial acumulado de goles H2H Σ(GF−GC) [LN-QBE-105]"),
+    "V41": ("record_sede", "Récord del visitante en la sede evaluada [LN-QBE-105]"),
+}
+
+
+def _celda_h2h_stats(
+    identificador: str,
+    nombre: str,
+    origen: str,
+    espacio: str,
+    z_scores: Dict[str, Any],
+    estadisticas: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Celda `EVALUADO` de V39/V40/V41 a partir del agregado `h2h_stats` (`None` si no aplica)."""
+    receta = _CLAVES_H2H_STATS.get(identificador)
+    if receta is None:
+        return None
+    clave, nota = receta
+    valor = estadisticas.get(clave)
+    if not isinstance(valor, str) or not valor.strip():
+        return None
+    return {
+        "id": identificador,
+        "variable": nombre,
+        "local": valor.strip(),
+        "visita": None,
+        "z_score": _num(z_scores.get(identificador)),
+        "origen": origen,
+        "estado": _ESTADO_EVALUADO,
+        "impacto": espacio,
+        "nota": nota,
+    }
+
+
 def _celda_telemetria(
     identificador: str,
     nombre: str,
@@ -391,9 +431,18 @@ def _celda_telemetria(
 ) -> Optional[Dict[str, Any]]:
     """[LN-QBE-102] Celda `EVALUADO` de un insumo consumido (o `None` si no se publicó).
 
-    Precedencia: insumo primario declarado en `_FORMATO_INSUMO`; si no llegó, el respaldo
-    legislado de `_RESPALDO_INSUMO` (Axioma 4) se transcribe declarando su origen en la nota.
+    Precedencia: `[LN-QBE-105]` el bloque `h2h_stats` manda cuando está presente (V39/V40/V41);
+    si no llegó, rige la receta primaria de `_FORMATO_INSUMO` (ruta heredada byte-idéntica) y,
+    en su ausencia, el respaldo legislado de `_RESPALDO_INSUMO` (Axioma 4).
     """
+    estadisticas_h2h = insumos.get("h2h_stats")
+    if isinstance(estadisticas_h2h, dict):
+        celda_h2h = _celda_h2h_stats(
+            identificador, nombre, origen, espacio, z_scores, estadisticas_h2h
+        )
+        if celda_h2h is not None:
+            return celda_h2h
+
     receta = _FORMATO_INSUMO.get(identificador)
     if receta is not None:
         clave_local, clave_visita, formato = receta
@@ -657,6 +706,10 @@ def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = 
         dimensiones.append({
             "dimension": dimension,
             "titulo": titulo,
+            # [LN-QBE-105] Alias aditivo (`nombre` = `titulo`): los consumidores forenses pueden
+            # rotular la dimensión sin depender de la clave de exhibición. `dimension` y `titulo`
+            # permanecen intactos (cero ruptura del DTO [LN-QBE-101]).
+            "nombre": titulo,
             "conteo": len(filas),
             "total_variables": len(filas),
             "variables_evaluadas": evaluadas,

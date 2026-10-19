@@ -3846,7 +3846,11 @@ function _hidratarBadgesDimension44(contenedor, dimensiones) {
     });
     contenedor.querySelectorAll("details.vars44-dimension").forEach(acordeon => {
         const dimension = porIndice[acordeon.dataset.dimension];
-        const conDatos = Boolean(dimension && dimension.tiene_datos === true);
+        // [LN-QBE-105] Un solo criterio de verdad: el semáforo del acordeón se ilumina leyendo el
+        // badge YA hidratado (misma coherencia `evaluadas/total`), sin recalcular ni duplicar la
+        // regla. Un `tiene_datos` servido sin evidencia evaluada no enciende la dimensión.
+        const badge = acordeon.querySelector(".badge-dim");
+        const conDatos = Boolean(badge && badge.classList.contains("badge-dim-evaluada"));
         acordeon.classList.add(conDatos ? "dim-con-datos" : "dim-fase6");
         acordeon.dataset.tieneDatos = String(conDatos);
     });
