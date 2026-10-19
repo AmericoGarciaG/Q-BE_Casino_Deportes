@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 [LN-QBE-107] / [ARCH-1.4.46] SANDBOX DE RENTABILIDAD — SIMULADOR RETROSPECTIVO DEL FONDO.
+[LN-QBE-113] / [ARCH-1.4.52] VETO FIDUCIARIO SELECTIVO POR FAMILIA ESTRATÉGICA.
 
 Misión
 ------
@@ -14,7 +15,7 @@ Régimen: `[HÍBRIDO DUAL-TRACK]`
   ordenamiento lexicográfico, el sizing monótono y la partición dutching NO se reimplementan:
   se invocan VERBATIM desde `src.core.contracts.portfolio_math`.
 * `[DBBD-FUNGIBLE]`: composición del pipeline, CLI (`--bankroll` / `--modo` / `--jornadas` /
-  `--json`) y tablero ASCII.
+  `--sin-familia-r` / `--excluir` / `--json`) y tablero ASCII.
 
 Axiomas operativos
 ------------------
@@ -31,11 +32,18 @@ Axiomas operativos
 5. **Paridad declarada:** las familias con cobertura (H1/H2/R1/R2) se particionan con
    `calcular_dutching_v0` (ley V=0 uniforme de `[LN-QBE-070]`); la rama R2 del motor vivo usa
    ponderación inversa de probabilidad y esa divergencia se publica en el reporte.
+6. **Veto fiduciario selectivo (`[LN-QBE-113]`):** la exclusión intercepta el resultado del
+   triaje canónico DESPUÉS del triaje y ANTES del ordenamiento lexicográfico, del sizing monótono
+   y del dutching. El código vetado colapsa atómicamente a `QBE-00` / "Veto Fiduciario Selectivo"
+   con `alpha = 0.0`, no absorbe capital y se declara en `descartes` con `veto_fiduciario = True`.
+   Cero mutación de `portfolio_math`: el veto es orquestación, no aritmética.
 
 Uso:
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --bankroll 10000
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --modo plano
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --json
+    python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --sin-familia-r
+    python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --excluir QBE-C1,QBE-C2
 """
 from __future__ import annotations
 
@@ -95,6 +103,11 @@ ESCENARIOS_CANONICOS: Tuple[str, ...] = (
 ESTADOS_CON_MARCADOR = ("FINALIZADO", "FINISHED", "CONCLUIDO")
 MODOS_VALIDOS = ("compuesto", "plano")
 
+# ── [LN-QBE-113] Veto Fiduciario Selectivo ────────────────────────────────────────────────
+CODIGO_VETO_FIDUCIARIO = "QBE-00"
+NOMBRE_VETO_FIDUCIARIO = "Veto Fiduciario Selectivo"
+FAMILIA_R_CODIGOS: Tuple[str, ...] = ("QBE-R1", "QBE-R2")
+
 
 def _a_float(valor: Any, defecto: float = 0.0) -> float:
     """Coerción numérica defensiva: cero invención, sólo lectura tolerante."""
@@ -108,6 +121,21 @@ def _a_float(valor: Any, defecto: float = 0.0) -> float:
 
 def _marcador_valido(goles_local: Any, goles_visitante: Any) -> bool:
     return goles_local is not None and goles_visitante is not None
+
+
+def _normalizar_exclusiones(codigos: Optional[Sequence[str]]) -> Tuple[str, ...]:
+    """`[LN-QBE-113]` Normaliza la lista de veto: mayúsculas, sin vacíos, dedup y orden estable.
+
+    Cero inferencia: sólo se veta lo que el operador declara. La lista vacía es el estado neutro
+    (simulación íntegra, paridad exacta con la línea base de `[LN-QBE-107]`). El orden determinista
+    garantiza que el reporte y el tablero sean reproducibles bit a bit.
+    """
+    if not codigos:
+        return ()
+    normalizados = {
+        str(codigo).strip().upper() for codigo in codigos if str(codigo or "").strip()
+    }
+    return tuple(sorted(normalizados))
 
 
 def _familias_con_cobertura() -> Tuple[str, ...]:
@@ -343,14 +371,22 @@ def _cargar_jornada(sesion: Any, jornada: int) -> Dict[str, Any]:
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 # CONSTRUCCIÓN DE CARTERA ([LN-QBE-107] pasos 2-4) — triaje, sizing y partición de boletos
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-def _construir_cartera_jornada(cargado: Dict[str, Any], base_capital: float) -> Dict[str, Any]:
+def _construir_cartera_jornada(
+    cargado: Dict[str, Any],
+    base_capital: float,
+    excluir_estrategias: Sequence[str] = (),
+) -> Dict[str, Any]:
     """Construye y liquida la cartera de una jornada sobre la base de capital declarada.
 
     El pipeline reproduce el carril de Backtesting de la ventanilla (`[ARCH-1.4.35]`): triaje
-    canónico → contracción fiduciaria → ordenamiento lexicográfico → sizing monótono → dutching.
-    Cero fórmulas propias: todas las magnitudes provienen de `portfolio_math`.
+    canónico → **veto fiduciario selectivo (`[LN-QBE-113]`)** → contracción fiduciaria →
+    ordenamiento lexicográfico → sizing monótono → dutching. Cero fórmulas propias: todas las
+    magnitudes provienen de `portfolio_math`.
     """
     jornada = int(cargado["jornada"])
+    # Normalización defensiva en la frontera del veto (`[LN-QBE-113]`): idempotente, garantiza que
+    # un llamador directo con minúsculas o duplicados no anule silenciosamente la abstención.
+    vetos = frozenset(_normalizar_exclusiones(excluir_estrategias))
     candidatos: List[Dict[str, Any]] = []
     descartes: List[Dict[str, Any]] = []
 
@@ -409,13 +445,33 @@ def _construir_cartera_jornada(cargado: Dict[str, Any], base_capital: float) -> 
         }
 
         triaje = triaje_determinista_9_estrategias(payload, cuotas, gamma=GAMMA_BASE)
-        codigo = str(triaje.get("codigo") or "QBE-00").upper()
-        if codigo == "QBE-00":
-            descartes.append({
+        codigo_triaje = str(triaje.get("codigo") or CODIGO_VETO_FIDUCIARIO).upper()
+
+        # ── [LN-QBE-113] Intercepción PRE-dimensionamiento: veto fiduciario selectivo ──────
+        # El colapso a QBE-00 ocurre DESPUÉS del triaje canónico y ANTES del ordenamiento
+        # lexicográfico ([LN-QBE-081]) y de la asignación monótona de capital ([LN-QBE-082]):
+        # la posición vetada jamás absorbe capital y queda declarada en abstención fiduciaria.
+        vetada = bool(vetos) and codigo_triaje != CODIGO_VETO_FIDUCIARIO and codigo_triaje in vetos
+        if vetada:
+            triaje = {
+                **triaje,
+                "codigo": CODIGO_VETO_FIDUCIARIO,
+                "nombre": NOMBRE_VETO_FIDUCIARIO,
+                "alpha": 0.0,
+                "motivo": f"{NOMBRE_VETO_FIDUCIARIO}: {codigo_triaje} excluida de la jornada",
+            }
+
+        codigo = str(triaje.get("codigo") or CODIGO_VETO_FIDUCIARIO).upper()
+        if codigo == CODIGO_VETO_FIDUCIARIO:
+            descarte = {
                 "id_partido": mid, "partido": f"{local} vs {visitante}",
                 "motivo": triaje.get("motivo") or "Cuarentena / Sin Valor (QBE-00)",
                 "familia": codigo,
-            })
+            }
+            if vetada:
+                descarte["familia_vetada"] = codigo_triaje
+                descarte["veto_fiduciario"] = True
+            descartes.append(descarte)
             continue
 
         favorece_local = float(p_l) >= float(p_v)
@@ -423,6 +479,7 @@ def _construir_cartera_jornada(cargado: Dict[str, Any], base_capital: float) -> 
             "id_partido": mid,
             "partido": f"{local} vs {visitante}",
             "familia": codigo,
+            "estrategia_codigo": codigo,
             "familia_nombre": str(triaje.get("nombre") or ""),
             "alpha": round(_a_float(triaje.get("alpha")), 4),
             "prob_fav": round((float(p_l) if favorece_local else float(p_v)) * 100.0, 1),
@@ -540,6 +597,7 @@ def _dimensionar_y_liquidar(
             "id_partido": candidato["id_partido"],
             "partido": candidato["partido"],
             "familia": familia,
+            "estrategia_codigo": familia,
             "familia_nombre": candidato["familia_nombre"],
             "lado_ataque": lado,
             "prob_exito_efectiva": candidato["prob_exito_efectiva"],
@@ -580,6 +638,7 @@ def ejecutar_simulacion_rentabilidad(
     modo: str = "compuesto",
     jornadas_por_temporada: int = JORNADAS_POR_TEMPORADA,
     gateway: Any = None,
+    excluir_estrategias: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """`[LN-QBE-107]` Simula la trayectoria del fondo jornada a jornada y emite el tablero.
 
@@ -588,6 +647,11 @@ def ejecutar_simulacion_rentabilidad(
     constitucionales (8% individual / 25% de jornada) porque el sizing se delega a
     `asignar_capital_monotono_cartera`. El capital que no puede desplegarse con integridad de
     piso permanece líquido y se declara en `capital_no_desplegado`.
+
+    `[LN-QBE-113]`: `excluir_estrategias` es la lista de códigos sujetos a Veto Fiduciario
+    Selectivo. El veto intercepta el triaje antes del dimensionamiento, de modo que el capital
+    liberado se reasigna a las estrategias de alta convicción o queda líquido. La lista vacía
+    reproduce exactamente la línea base `[LN-QBE-107]`.
     """
     modo_norm = str(modo or "").strip().lower()
     if modo_norm not in MODOS_VALIDOS:
@@ -595,6 +659,8 @@ def ejecutar_simulacion_rentabilidad(
     base_inicial = round(float(bankroll_inicial), 2)
     if base_inicial <= 0.0:
         raise ValueError("El bankroll inicial debe ser estrictamente positivo.")
+
+    exclusiones = _normalizar_exclusiones(excluir_estrategias)
 
     jornadas_lista = sorted({int(j) for j in (jornadas if jornadas is not None else range(1, 12))})
     if not jornadas_lista:
@@ -612,7 +678,9 @@ def ejecutar_simulacion_rentabilidad(
         for jornada in jornadas_lista:
             base_dimensionamiento = bankroll if modo_norm == "compuesto" else base_inicial
             cargado = _cargar_jornada(sesion, jornada)
-            cartera = _construir_cartera_jornada(cargado, base_dimensionamiento)
+            cartera = _construir_cartera_jornada(
+                cargado, base_dimensionamiento, excluir_estrategias=exclusiones
+            )
 
             posiciones = cartera["posiciones"]
             inversion = round(_a_float(cartera["inversion_total"]), 2)
@@ -661,6 +729,7 @@ def ejecutar_simulacion_rentabilidad(
         descartes_totales=descartes_totales,
         capital_no_desplegado=capital_no_desplegado,
         jornadas_por_temporada=int(jornadas_por_temporada),
+        exclusiones_activas=exclusiones,
     )
 
 
@@ -674,6 +743,7 @@ def _consolidar_reporte(
     descartes_totales: int,
     capital_no_desplegado: float,
     jornadas_por_temporada: int,
+    exclusiones_activas: Sequence[str] = (),
 ) -> Dict[str, Any]:
     """Consolida curva, drawdown, tasa de preservación V=0 y proyección anualizada."""
     curva = [round(base_inicial, 2)] + [round(_a_float(j["bankroll_final"]), 2) for j in detalle]
@@ -736,6 +806,25 @@ def _consolidar_reporte(
     else:
         cagr = -100.0
 
+    # ── [LN-QBE-113] Trazabilidad del Veto Fiduciario Selectivo ───────────────────────────
+    exclusiones = tuple(exclusiones_activas or ())
+    vetos_aplicados = sum(
+        1 for jornada in detalle for descarte in jornada.get("descartes", [])
+        if descarte.get("veto_fiduciario")
+    )
+    nota_paridad = [
+        "Ventanilla retrospectiva: es_operable=True y delta_epist=0.02 (estratos legislados).",
+        "Familias con cobertura particionadas con calcular_dutching_v0 (ley V=0 uniforme).",
+        "R2: el motor vivo usa ponderación inversa; aquí rige [LN-QBE-070] para indemnidad total.",
+        "Pago Anticipado sólo se acredita con testigo fáctico (margen >= 2 o traza in-play).",
+        "Sin marcador oficial la posición es NO_LIQUIDABLE con capital devuelto: cero 0-0 fabricado.",
+    ]
+    if exclusiones:
+        nota_paridad.append(
+            f"Veto Fiduciario Selectivo [LN-QBE-113]: exclusión de "
+            f"{', '.join(exclusiones)} ({vetos_aplicados} abstenciones fiduciarias)."
+        )
+
     return {
         "status": "EXITO",
         "modo": modo,
@@ -761,6 +850,8 @@ def _consolidar_reporte(
         "curva_bankroll": curva,
         "resumen_coberturas": dict(resumen_coberturas),
         "tasa_preservacion_v0_pct": tasa_preservacion,
+        "exclusiones_activas": list(exclusiones),
+        "vetos_aplicados": int(vetos_aplicados),
         "proyeccion_anual": {
             "horizonte_jornadas": horizonte,
             "jornadas_operadas": total_operadas,
@@ -771,13 +862,7 @@ def _consolidar_reporte(
             "cagr_pct": cagr,
         },
         "jornadas_detalle": detalle,
-        "nota_paridad": [
-            "Ventanilla retrospectiva: es_operable=True y delta_epist=0.02 (estratos legislados).",
-            "Familias con cobertura particionadas con calcular_dutching_v0 (ley V=0 uniforme).",
-            "R2: el motor vivo usa ponderación inversa; aquí rige [LN-QBE-070] para indemnidad total.",
-            "Pago Anticipado sólo se acredita con testigo fáctico (margen >= 2 o traza in-play).",
-            "Sin marcador oficial la posición es NO_LIQUIDABLE con capital devuelto: cero 0-0 fabricado.",
-        ],
+        "nota_paridad": nota_paridad,
     }
 
 
@@ -832,6 +917,13 @@ def imprimir_tablero_rentabilidad_consola(reporte: Dict[str, Any]) -> None:
     print(f"  Bóveda 3NF en SÓLO LECTURA · modo {str(reporte.get('modo')).upper()} · "
           f"bankroll inicial ${_a_float(reporte.get('bankroll_inicial')):,.2f}")
     print(f"  {reporte.get('modo_descripcion', '')}")
+    exclusiones = list(reporte.get("exclusiones_activas") or [])
+    if exclusiones:
+        print(f"  🚫 Veto Fiduciario [LN-QBE-113]: Exclusión de "
+              f"[{', '.join(exclusiones)}] "
+              f"({int(_a_float(reporte.get('vetos_aplicados')))} abstenciones)")
+    else:
+        print("  🚫 Filtros Activos: ninguno (cartera íntegra)")
     print(linea)
 
     print(f" {'J':>2}  {'CART':>4}  {'POS':>3}  {'BASE':>11}  {'INVERTIDO':>11}  "
@@ -917,8 +1009,25 @@ def parsear_rango_jornadas(texto: str) -> List[int]:
     return sorted({j for j in jornadas if j > 0})
 
 
+def resolver_exclusiones_cli(
+    sin_familia_r: bool = False, excluir: Optional[str] = None
+) -> List[str]:
+    """`[ARCH-1.4.52]` Compone la lista de veto desde la CLI (unión idempotente y determinista).
+
+    `--sin-familia-r` inyecta el atajo fiduciario `QBE-R1, QBE-R2`; `--excluir` admite una lista
+    separada por comas. La normalización (`[LN-QBE-113]`) deduplica y ordena, de modo que
+    `--sin-familia-r --excluir qbe-r2` produce exactamente `["QBE-R1", "QBE-R2"]`.
+    """
+    codigos: List[str] = []
+    if sin_familia_r:
+        codigos.extend(FAMILIA_R_CODIGOS)
+    if excluir:
+        codigos.extend(str(excluir).split(","))
+    return list(_normalizar_exclusiones(codigos))
+
+
 def construir_parser() -> argparse.ArgumentParser:
-    """Contrato de banderas del sandbox (`[ARCH-1.4.46]`)."""
+    """Contrato de banderas del sandbox (`[ARCH-1.4.46]` / `[ARCH-1.4.52]`)."""
     parser = argparse.ArgumentParser(
         prog="sandbox_rentabilidad_pipeline",
         description=(
@@ -933,6 +1042,10 @@ def construir_parser() -> argparse.ArgumentParser:
                         help="compuesto = base rodante por jornada · plano = stake nominal fijo.")
     parser.add_argument("--jornadas", default="1-11",
                         help="Rango de jornadas a simular (ej. 1-11, 3, 1-3,7).")
+    parser.add_argument("--sin-familia-r", action="store_true", dest="sin_familia_r",
+                        help="Atajo fiduciario: excluye la Familia R (QBE-R1, QBE-R2).")
+    parser.add_argument("--excluir", type=str, default=None, metavar="LISTA",
+                        help="Códigos separados por coma, ej. QBE-R1,QBE-R2")
     parser.add_argument("--horizonte", type=int, default=JORNADAS_POR_TEMPORADA,
                         help=f"Jornadas por temporada para la anualización (default {JORNADAS_POR_TEMPORADA}).")
     parser.add_argument("--json", action="store_true", dest="salida_json",
@@ -950,6 +1063,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             jornadas=parsear_rango_jornadas(argumentos.jornadas),
             modo=argumentos.modo,
             jornadas_por_temporada=argumentos.horizonte,
+            excluir_estrategias=resolver_exclusiones_cli(
+                argumentos.sin_familia_r, argumentos.excluir
+            ),
         )
     except (ValueError, RuntimeError) as error:
         print(f"🚨 ALTO AL FUEGO: {error}", file=sys.stderr)

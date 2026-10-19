@@ -9,6 +9,7 @@ Invariantes legisladas:
 2. Cota dura de cartera (25%) y cadena rodante de capital jornada a jornada.
 3. Contrato de salida: siete llaves maestras + bloque de proyección anualizada.
 4. No-ruina, determinismo estricto y conservación del PnL acumulado.
+5. Veto fiduciario selectivo por familia estratégica (`[LN-QBE-113]`): cero capital a códigos vetados.
 """
 
 from scripts.laboratorio.sandbox_rentabilidad_pipeline import (
@@ -165,5 +166,51 @@ def test_invarianza_4_no_ruina_determinismo_y_conservacion():
     assert primero["resumen_coberturas"][ESCENARIO_NO_LIQUIDABLE] == sum(
         1 for j in primero["jornadas_detalle"] for p in j["posiciones"]
         if p["escenario"] == ESCENARIO_NO_LIQUIDABLE
+    )
+
+
+def test_invarianza_5_veto_fiduciario_excluye_familia_r():
+    """[INVARIANZA 5 - VETO SELECTIVO]: Si se excluye la Familia R, no debe haber órdenes QBE-R1 ni QBE-R2 en la cartera."""
+    from scripts.laboratorio.sandbox_rentabilidad_pipeline import ejecutar_simulacion_rentabilidad
+
+    sim = ejecutar_simulacion_rentabilidad(
+        bankroll_inicial=PATRIMONIO_BASE_SHIELD,
+        jornadas=list(range(1, 12)),
+        modo="compuesto",
+        excluir_estrategias=["QBE-R1", "QBE-R2"],
+    )
+
+    assert sim["status"] == "EXITO"
+    assert sim["exclusiones_activas"] == ["QBE-R1", "QBE-R2"], (
+        "El reporte no declara el filtro de exclusión activo ([ARCH-1.4.52])"
+    )
+
+    # Auditar cada orden generada en el histórico de la simulación
+    ordenes_operadas = 0
+    for jornada in sim["jornadas_detalle"]:
+        for orden in jornada["posiciones"]:
+            codigo = orden.get("estrategia_codigo") or orden.get("familia") or ""
+            # Garantía Absoluta: Ninguna orden de la Familia R puede recibir capital
+            assert codigo not in ["QBE-R1", "QBE-R2"], (
+                f"Violación de Veto Fiduciario: Se encontró una orden {codigo}"
+            )
+            ordenes_operadas += 1
+
+    # Cero vacuidad: sobre el corpus real 1-11 la Familia R opera (18 de 30 órdenes en la
+    # línea base), por lo que un veto con cero intercepciones es una prueba inconclusa.
+    assert ordenes_operadas > 0, "La cartera depurada quedó vacía: no hay evidencia que auditar"
+    assert sim["vetos_aplicados"] > 0, (
+        "El veto no interceptó ninguna posición: la garantía sería vacua"
+    )
+
+    vetos = [
+        descarte for j in sim["jornadas_detalle"] for descarte in j["descartes"]
+        if descarte.get("veto_fiduciario")
+    ]
+    assert len(vetos) == sim["vetos_aplicados"], (
+        "El contador de vetos no coincide con las abstenciones declaradas"
+    )
+    assert all(d.get("familia_vetada") in ("QBE-R1", "QBE-R2") for d in vetos), (
+        "Un veto fiduciario se aplicó fuera de la lista de exclusión"
     )
 

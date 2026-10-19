@@ -1599,6 +1599,128 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 
 * **[SHIELD]:** `tests/shield/test_shield_sandbox_ataque_defensa_pipeline.py`
 
+### ID: [LN-QBE-109] Modelado Físico de Shocks de Contexto, Altitud Fisiológica y Fatiga de Calendario
+
+* **Ω (Resumen):** Modela formalmente las 4 variables de la Dimensión 7 ($\mathcal{T}_{\text{Shk}}$: Shocks de Contexto y Entorno, V25 a V28) que modulan el vector contextual $(C_H, C_A)$ y la ventaja territorial expandida $\gamma_{\text{home}}(H, A)$ en la ecuación log-lineal canónica. Aísla el impacto fisiológico de la altitud ($\Delta\text{Alt}^+$), la asimetría de recuperación en días ($\Delta\text{Descanso}$) y las perturbaciones por bajas críticas ($Q_{\text{mod}}$) bajo cotas estrictas de contención.
+* **I (Input):** `match_id: str`, altitud de los estadios en msnm, fechas de inicio ($t_{\text{kickoff}}$) de los encuentros previos inmediatos de ambos clubes en `matches`, factores $Q_{\text{mod}, H}, Q_{\text{mod}, A} \in [0.90, 1.05]$.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Altitud Fisiológica Unidireccional (V28):**
+     $$\Delta\text{Altitud}^+ = \max\left(0, \;\text{Altitud}_{\text{Local}} - \text{Altitud}_{\text{Visita}}\right)$$
+     $$\text{Bono}_{\text{alt}} = 0.0300 \cdot \left(\frac{\Delta\text{Altitud}^+}{1000.0}\right)$$
+     *(Solo opera si el local juega a mayor altura que la visita; jugar a nivel del mar no penaliza al local frente a un rival de altura).*
+  2. **Diferencial de Descanso y Fatiga (V27):**
+     $$\text{Días}_T = \min\left(14.0, \; (t_{\text{kickoff}} - t_{\text{anterior}, T}).\text{days}\right) \quad \text{para } T \in \{H, A\}$$
+     $$\Delta\text{Descanso}_{H, A} = \text{Días}_H - \text{Días}_A$$
+     $$\text{Bono}_{\text{rec}} = 0.0200 \cdot \text{Clamp}(\Delta\text{Descanso}_{H, A}, \; [-3.0, \; +3.0])$$
+  3. **Fortaleza de Plaza Aditiva:**
+     $$\Delta\gamma_{\text{plaza}} \in [0.00, 0.10] \quad \text{según catálogo sellado en CONSTANTS.md (Tigres +0.07, Toluca +0.06, etc.)}$$
+  4. **Vector Contextual Compuesto:**
+     $$\gamma_{\text{contextual}} = \bar{\gamma}_{\text{base}} + \Delta\gamma_{\text{plaza}} + \text{Bono}_{\text{alt}} + \text{Bono}_{\text{rec}} \quad (\text{con } \bar{\gamma}_{\text{base}} = 0.1500)$$
+     $$C_H = (\gamma_{\text{contextual}} - \bar{\gamma}_{\text{base}}) + \ln(Q_{\text{mod}, H})$$
+     $$C_A = \ln(Q_{\text{mod}, A})$$
+     $$\Delta\text{Contexto} = \bar{\gamma}_{\text{base}} + C_H - C_A$$
+  5. **Variables de Bajas (V25 y V26):**
+     - $V25$ (Bajas ofensivas): $Q_{\text{mod}, H}$ expresado en porcentaje de merma ($1.00 \to 0\%$, $0.92 \to -8\%$).
+     - $V26$ (Bajas defensivas): $Q_{\text{mod}, A}$ expresado en porcentaje de merma. Si no hay reporte médico auditado, se fijan en `1.00` (`SIN SHOCK / EVALUADO`).
+* **O (Output):** Estructura `ContextoShocksResult` con V25 a V28 evaluadas, desglose de bonos físicos, $\gamma_{\text{contextual}}$, $C_H, C_A$, y el reporte ASCII en consola.
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_contexto_shocks_pipeline.py`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_contexto_shocks_pipeline.py`
+
+### ID: [LN-QBE-110] Modelado Fáctico de Trayectoria, Tendencias de Goles Esperados y Varianza xPTS
+
+* **Ω (Resumen):** Modela formalmente las 4 variables de la Dimensión 8 ($\mathcal{T}_{\text{Traj}}$: Trayectoria y Dinámica Temporal, V29 a V32) que capturan la aceleración o desaceleración competitiva de los clubes en una ventana móvil de 5 partidos ($5P$). Cuantifica la pendiente de peligro ofensivo ($m_{xG}$), la pendiente de vulnerabilidad defensiva ($m_{xGA}$), el momento de puntos (Forma 5P) y el diferencial de puntos esperados ($\Delta xPTS$), aislando el sobre-rendimiento espurio por suerte de la calidad futbolística estructural para alimentar la contracción bayesiana (`[LN-QBE-036]`).
+* **I (Input):** `match_id: str` o `jornada: int`, series cronológicas de $xG$ y $xGA$ de los últimos 5 partidos jugados por cada club hasta el corte $N-1$, puntos reales y puntos esperados ($xPTS$) acumulados.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Momento y Puntos Recientes (V29):**
+     $$\text{Pts5P}_T = \sum_{k=1}^5 (3 \cdot \mathbb{I}_{\{G_k\}} + 1 \cdot \mathbb{I}_{\{E_k\}}) \in [0, 15] \quad \text{para } T \in \{H, A\}$$
+     $$\Delta\text{Pts5P} = \text{Pts5P}_H - \text{Pts5P}_A \in [-15, +15]$$
+  2. **Pendientes de Evolución de Peligro (V30 y V31):**
+     Para la serie cronológica de 5 partidos $t \in \{1, 2, 3, 4, 5\}$ con valores $y_t \in \{xG_t, xGA_t\}$:
+     $$m = \frac{\sum_{t=1}^5 (t - \bar{t})(y_t - \bar{y})}{\sum_{t=1}^5 (t - \bar{t})^2} = \frac{\sum_{t=1}^5 (t - 3)(y_t - \bar{y})}{10}$$
+     - $V30$ (Pendiente $xG$): $m_{xG} > 0 \implies$ Aceleración ofensiva; $m_{xG} < 0 \implies$ Desaceleración.
+     - $V31$ (Pendiente $xGA$): $m_{xGA} < 0 \implies$ Consolidación defensiva (mejora); $m_{xGA} > 0 \implies$ Resquebrajamiento defensivo.
+  3. **Diagnóstico de Varianza y Regresión a la Media (V32):**
+     $$\Delta xPTS_T = \text{PTS}_T - xPTS_T \quad \text{para } T \in \{H, A\}$$
+     - $\Delta xPTS \ge +3.0 \implies$ **Sobrerrendimiento Crítico (Alerta de Regresión):** El equipo ha sumado puntos por azar/suerte; su nivel de juego no respalda la cosecha.
+     - $\Delta xPTS \le -3.0 \implies$ **Subrrendimiento Fiduciario (Rebote Inminente):** El equipo juega bien pero ha perdido puntos por varianza desfavorable.
+     - Diferencial de Partido: $\Delta xPTS_{\text{neto}} = \Delta xPTS_H - \Delta xPTS_A$.
+* **O (Output):** Estructura `TrayectoriaMomentoResult` con V29 a V32 evaluadas, pendientes de tendencia con dirección, saldo de suerte y el reporte ASCII en consola. Toda celda degrada a `SIN EVIDENCIA` si la ventana de 5 partidos está incompleta o la serie $xG/xGA$ presenta faltantes (cero imputación); el tablero publica entonces el guion fiduciario.
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_trayectoria_momento_pipeline.py`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_trayectoria_momento_pipeline.py`
+
+### ID: [LN-QBE-111] Modelado Fáctico de Volumen Territorial y Rendimiento de Guardametas (Volumen & Portería)
+
+* **Ω (Resumen):** Modela formalmente las 4 variables de la Dimensión 1 ($\mathcal{T}_{\text{Vol}}$: Volumen y Dominio Territorial, V01 a V04) y las 3 variables de la Dimensión 4 ($\mathcal{T}_{\text{Gk}}$: Rendimiento de Guardametas, V15 a V17), aislándolas del núcleo de proyección $\lambda$ para que **jamás dupliquen** la señal de peligro ya contabilizada por el $xG$. Define el **residuo de volumen ortogonal** $v_{\text{Vol}}^{\perp}$ —el dominio territorial que NO se tradujo en remate— mediante la reducción cerrada del Factor de Control de Cancha (`[LN-QBE-030]`) montada sobre la base ortogonalizada de Gram-Schmidt (`[LN-QBE-039]`), y el **Porcentaje de Atajadas** ($Save\%$) como métrica individual del guardameta, independiente de la calidad de la zaga. Prohíbe la suma lineal de posesión y $xG$ (doble contabilización) y toda imputación de cifras (`[GOVERNANCE-01]`).
+* **I (Input):** `match_id: str` o `jornada: int`; corte N−1 de la 3NF (`matchday_num < N` ∧ estado terminal); caché congelada `data/cache_optaxg_liga_mx_2026.json` ($xG$/$xGA$ por club y partido); `match_telemetry` ($poss\_pct$, $SoT$, $SoTA$) únicamente cuando cubra el corte **completo** de cada club.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Futuro-ceguera N−1:** el corte de cada club son los partidos con `matchday_num < N` en estado terminal. El fixture evaluado JAMÁS alimenta su propia acumulación.
+  2. **Cobertura íntegra:** si a un solo partido del corte le falta la posesión, el $SoT$ o el $SoTA$, ese club-corte **no** publica la variable (se degrada completo a `SIN EVIDENCIA`). Prohibido mezclar fuentes o imputar cifras (`[GOVERNANCE-01]`); una fila creada con los defaults del esquema (`0.0` / `50.0`) NO es evidencia.
+  3. **Residuo de Volumen Ortogonal (V01-V04 · GSL-3D):** con $\mathbb{H}_{\text{att}} = \operatorname{span}(u_{xG}, u_{SoT}, u_{\text{Vol}})$ y ortogonalización de Gram-Schmidt (`[LN-QBE-039]`), la señal de volumen se reduce al factor cerrado sellado:
+     $$\text{Raw\_FCF}_T = \left(\frac{\text{Poss}_T}{50.0}\right)\cdot\left(\frac{2.0\,(SoT_T+1.0)}{SoT_T+SoTA_T+2.0}\right) \qquad FCF_T = \operatorname{Clamp}(\text{Raw\_FCF}_T,\,[0.65,\,1.35])$$
+     $$v_{\text{Vol},T}^{\perp} = FCF_T - 1.0000 \in [-0.35,\,+0.35]$$
+     - $v_{\text{Vol}}^{\perp} < 0 \implies$ **presión estéril:** dominio territorial sin remate (posesión inflada).
+     - $v_{\text{Vol}}^{\perp} > 0 \implies$ **dominio convertido:** la posesión sí produjo peligro.
+     - $v_{\text{Vol}}^{\perp} = 0 \implies$ neutralidad territorial.
+     El residuo es **diagnóstico**: no se reinyecta a $\lambda$ (el motor sellado ya consume la señal directora $xG$).
+  4. **Porcentaje de Atajadas (V16) [ALGO-PROTECTED]:** sobre el corte N−1 con cobertura íntegra de $SoTA$ y goles en contra reales:
+     $$Save\%_T = \operatorname{Clamp}\left(100\cdot\frac{SoTA_T - GC_T}{SoTA_T},\,[0,\,100]\right)$$
+     Guardas: $SoTA_T = 0 \implies Save\%_T = 100.0$ (no hubo remate a puerta que atajar); $GC_T > SoTA_T \implies Save\%_T = 0.0$ (imposible por física del marcador: se satura, nunca se publica un negativo).
+  5. **Delegación matemática obligatoria:** el sandbox NO reimplementa el FCF ni sus clamps; invoca VERBATIM `SyntheticMetricsEngine._compute_fcf` (`[LN-QBE-030]`, `src/core/metrics.py`) y resta la unidad. La consola y el servidor central emiten por construcción el MISMO $FCF$ para el mismo insumo.
+  6. **Bipartita simétrica:** cada celda V01-V04 y V15-V17 publica `local` y `visita` independientes con su unidad canónica; una variable se declara `EVALUADO` sólo si AMBOS clubes publican magnitud real, y `SIN EVIDENCIA` en caso contrario — jamás un cero ficticio.
+  7. **Degradación fiduciaria:** V02 (toques en área), V03 (pases progresivos), V04 (entradas al último tercio), V15 ($xGOT$) y V17 (salidas por alto) se declaran `SIN EVIDENCIA (FASE 6)` mientras el sensor congelado no los publique. V01 y V16 degradan igual si el corte N−1 no cubre la posesión o el $SoTA$; el tablero publica entonces la cobertura `cubiertos/total` de ambos clubes.
+* **Trazabilidad de varianza (`VAR-2026-LAB5-EVIDENCIA`, ratificada por el Director/Arquitecto):** el Juez `[SHIELD]` certifica el **contrato tri-estado** de V01/V16 —`EVALUADO` con magnitud real, o `SIN EVIDENCIA (FASE 6)` con valores `None` y nota de cobertura— en lugar de exigir una posesión y un $SoTA$ que el corpus 2026 no publica. La aserción de suma $100\%$ queda **condicionada** a que V01 esté `EVALUADO`. Se prohíbe todo mock o cifra inventada para alcanzar el verde (`[GOVERNANCE-01]`). Acta: `docs/DIRGEN_VARIANCE_REQUEST_LAB5_EVIDENCIA.md`.
+* **Trazabilidad de varianza (`VAR-2026-LAB5-FCF-COTAS`, resuelta por alto al fuego):** el primer vector del Juez para $v_{\text{Vol}}^{\perp}$ afirmaba un clamp que aritméticamente no ocurre —$\text{Raw\_FCF}=0.78$ con $(\text{Poss}=65, SoT=2, SoTA=6)$ vive DENTRO de la banda $[0.65,1.35]$—. Se enmendó **sólo el vector de prueba**: la saturación inferior se certifica con $(\text{Poss}=30, SoT=2, SoTA=6)\Rightarrow \text{Raw\_FCF}=0.36 \Rightarrow \text{clamp } 0.65 \Rightarrow -0.35$, y el caso interior se conserva como aserción de **no-clamp** ($-0.22$) que prueba la delegación verbatim a `SyntheticMetricsEngine._compute_fcf`. Cero mutación en `src/core/metrics.py`, en `FCF_MIN`/`FCF_MAX` o en la delegación; la consola y el servidor central siguen emitiendo el MISMO $FCF$. Acta: `docs/DIRGEN_VARIANCE_REQUEST_LAB5_FCF_COTAS.md`.
+* **Ω (Algoritmo — Procedencia fáctica de la telemetría óptica, `VAR-2026-LAB5-EVIDENCIA` Opción A ejecutada):** el sensor `matchDetails` de FotMob (claves duras `BallPossesion` y `ShotsOnTarget`) se congela en `data/cache_telemetria_liga_mx_2026.json` (SHA-256 auto-excluyente, rehidratable con `--desde-cache`) y se materializa en la tabla 3NF `match_telemetry` (`possession_pct`, `sot`, `sota`; `xg`/`xga` = `NULL`) mediante `scripts/ingesta/congelar_telemetria_fotmob.py`. Reglas invariables: (1) **reciprocidad defensiva** `sota_home ≡ sot_away` y `sota_away ≡ sot_home`; (2) **bipartita por partido** `poss_home + poss_away ≡ 100.0`; (3) **no complementariedad entre cortes independientes** — la media de posesión del corte N−1 de un club y la de su rival son muestras separadas y NO suman 100 (San Luis 52.9 % + Santos Laguna 50.8 % = 103.7 %); la identidad legítima es `V01.local_num == mean(poss del corte)` y el diferencial es `Δ = local_num − visita_num` ($+2.1$ pp en `LIGAMX-J11-07`); (4) **cero imputación** — `0.0` de posesión se trata como ausencia (centinela) y degrada la celda a `SIN EVIDENCIA (FASE 6)` sin promediar un cero falso; (5) un partido sin `BallPossesion` o `ShotsOnTarget` queda fuera de la ingesta y se declara en `faltantes`. El $FCF$ y $v_{\text{Vol}}^{\perp}$ siguen siendo propiedad exclusiva de `[LN-QBE-030]` (delegación verbatim; aquí no se recalcula).
+* **O (Output):** Estructura `VolumenPorteriaResult` con `dimension_1_volumen` (V01-V04), `dimension_4_porteria` (V15-V17), `delta_posesion`, `residuo_volumen` (clave real del bloque $v_{\text{Vol}}^{\perp}$ por club; la referencia histórica `residuo_volumen_ortogonal` se corrige aquí sin tocar el sandbox), `cobertura` de telemetría y de `opta_xg` por club, `corte_n_1`, `semaforos` y el reporte ASCII de tres secciones en consola (`--json` suprime el tablero).
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_volumen_porteria_pipeline.py` y `[ARCH-1.4.50]`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_volumen_porteria_pipeline.py`
+
+### ID: [LN-QBE-112] Modelado de Micro-Dinámicas, Balón Parado, Fricción Disciplinaria y Cierre Táctico
+
+* **Ω (Resumen):** Modela formalmente las 15 variables de micro-dinámicas que completan la taxonomía de 44 variables del Tratado Vol. I: Dimensión 5 ($\mathcal{T}_{\text{Spc}}$: Balón Parado y Penales, V18-V21), Dimensión 6 ($\mathcal{T}_{\text{Dsc}}$: Fricción Disciplinaria, V22-V24), Dimensión 9 ($\mathcal{T}_{\text{Time}}$: Cronometría de Gol, V33-V36), Dimensión 10 ($\mathcal{T}_{\text{Sub}}$: Gestión de Banca y Profundidad, V37-V38) y Dimensión 12 ($\mathcal{T}_{\text{Cls}}$: Comportamiento de Cierre, V43-V44). Evalúa asimetrías de táctica fija, riesgo de inferioridad numérica (rojas), fatiga en segundas partes (1T vs 2T) y fragilidad tardía en los minutos finales (80'-90'+) para auditar la robustez del Pago Anticipado (+PA).
+* **I (Input):** `match_id: str` o `jornada: int`, corte histórico $N-1$ en SQLite 3NF y telemetría Opta congelada.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Balón Parado y Penales (V18 a V21):**
+     - $V18 / V19$: Producción y concesión de $xG$ a balón parado por 90'.
+     - $V20$: Córners a favor por 90' ($\Delta\text{Córners} = \text{Córners}_H - \text{Córners}_A$).
+     - $V21$: Penales a favor históricos por partido.
+  2. **Fricción Disciplinaria y Riesgo de Roja (V22 a V24):**
+     - $V22$: Faltas en tercio defensivo por 90' (propensión a regalar tiros libres de peligro).
+     - $V23$: Tarjetas amarillas promedio por 90'.
+     - $V24$: Índice de expulsión ($\text{Rojas por partido} = \text{Rojas} / PJ$). Si supera $0.25 \implies$ Alerta de asimetría numérica.
+  3. **Cronometría y Ratios de Desgaste (V33 a V36):**
+     - $V33$: $\text{Ratio } xG_{1T/2T} = xG_{1T} / xG_{2T}$ ($> 1.0 \implies$ arranque explosivo; $< 1.0 \implies$ diesel / mejor en 2T).
+     - $V34$: $\text{Ratio } xGA_{1T/2T} = xGA_{1T} / xGA_{2T}$ ($> 1.0 \implies$ fragilidad inicial; $< 1.0 \implies$ desajuste tardío).
+     - $V35 / V36$: Goles anotados y concedidos en el intervalo inicial $0\text{-}15'$.
+  4. **Banca y Rotación (V37 y V38):**
+     - $V37$: $xG$ aportado por suplentes por 90'.
+     - $V38$: Rotación del XI titular (variación de alineación entre jornadas consecutivas).
+  5. **Comportamiento de Cierre Tardío (V43 y V44 — Salpicadura a Pago Anticipado):**
+     - $V43$ (Clutch Offense): $xG$ producido entre los minutos $80'$ y $90'+$.
+     - $V44$ (Fragilidad de Cierre): $xGA$ permitido entre los minutos $80'$ y $90'+$.  
+       *Regla fiduciaria:* Un $V44_{\text{fav}} \ge 0.35\text{ xGA}$ alerta sobre alta probabilidad de perder ventajas de 2 goles en el tramo final, encendiendo el indicador de cobertura de Doble Cobro en Pago Anticipado (`[LN-QBE-083]`).
+  6. **Axioma de Degradación Fiduciaria (`[GOVERNANCE-01]`):** Aquellas métricas cuyos feeds por tramo temporal o suplentes no estén presentes en el corpus disponible se marcan limpiamente como `SIN EVIDENCIA / FASE 6` con valores `None`. Prohibida la invención de cifras.
+* **O (Output):** Estructura `MicroDinamicasResult` con las 15 variables evaluadas o degradadas, ratios cronométricos, índice de riesgo de roja y reporte ASCII en consola.
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_micro_dinamicas_pipeline.py`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_micro_dinamicas_pipeline.py`
+
+### ID: [LN-QBE-113] Veto Fiduciario Selectivo por Familia Estratégica en Simulador de Rentabilidad
+
+* **Ω (Resumen):** Habilita la exclusión dinámica de familias estratégicas específicas (ej. Familia R: `QBE-R1`, `QBE-R2`) durante la orquestación retrospectiva de la cartera, permitiendo evaluar el impacto aislado de estrategias de alto riesgo sobre el Drawdown y el ROI del fondo. Las posiciones vetadas no absorben capital de la jornada y se declaran en abstención fiduciaria.
+* **I (Input):** Lista de códigos a excluir (ej. `["QBE-R1", "QBE-R2"]`), resultado del triaje determinista base `[LN-QBE-060-B]`.
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. Para cada partido evaluado en la jornada, se ejecuta el triaje canónico y se obtiene su `codigo` original.
+  2. **Intercepción Pre-Dimensionamiento:**
+     Si el `codigo` pertenece a la lista de exclusión $\implies$ se sobreescribe el estado de la posición a:
+     - `codigo` = `"QBE-00"`
+     - `nombre` = `"Veto Fiduciario Selectivo"`
+     - `alpha` = $0.00$
+  3. Al colapsar a `QBE-00`, el partido es automáticamente descartado por los filtros de la cartera antes de ingresar al ordenamiento lexicográfico (`[LN-QBE-081]`) y la asignación monótona (`[LN-QBE-082]`).
+  4. El capital que habría sido consumido por estas estrategias se reasigna a las estrategias de alta convicción (`H1`, `H2`) o se preserva en efectivo si no hay más oportunidades viables en la fecha.
+* **O (Output):** Cartera depurada de las estrategias excluidas y nuevo PnL acumulado.
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_rentabilidad_pipeline.py`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_rentabilidad_pipeline.py`
+
 ---
 
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo

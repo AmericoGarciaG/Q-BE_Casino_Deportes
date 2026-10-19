@@ -105,6 +105,11 @@
 | `[LN-QBE-106]` | LOGIC | `docs/LOGIC.md` | Pipeline Sandbox Autónomo y Modelado Relacional de Memoria H2H | SELLADO |
 | `[LN-QBE-107]` | LOGIC | `docs/LOGIC.md` | Simulación Retrospectiva de Rentabilidad, Liquidación Factual y Métricas de Riesgo del Fondo | SELLADO |
 | `[LN-QBE-108]` | LOGIC | `docs/LOGIC.md` | Colisión Cruzada de Fuerzas y Modelado Bipartito de Ataque (𝒯_Fin) y Defensa (𝒯_Def) | SELLADO |
+| `[LN-QBE-109]` | LOGIC | `docs/LOGIC.md` | Modelado Físico de Shocks de Contexto, Altitud Fisiológica y Fatiga de Calendario | SELLADO |
+| `[LN-QBE-110]` | LOGIC | `docs/LOGIC.md` | Modelado Fáctico de Trayectoria, Tendencias de Goles Esperados y Varianza xPTS | SELLADO |
+| `[LN-QBE-111]` | LOGIC | `docs/LOGIC.md` | Modelado Fáctico de Volumen Territorial y Rendimiento de Guardametas (Volumen & Portería) | SELLADO |
+| `[LN-QBE-112]` | LOGIC | `docs/LOGIC.md` | Modelado de Micro-Dinámicas, Balón Parado, Fricción Disciplinaria y Cierre Táctico | SELLADO |
+| `[LN-QBE-113]` | LOGIC | `docs/LOGIC.md` | Veto Fiduciario Selectivo por Familia Estratégica en Simulador de Rentabilidad | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -211,6 +216,11 @@
 | `[ARCH-1.4.45]` | ARCH | `docs/ARCH.md` | Arquitectura de Aislamiento Sandbox y Diagnóstico CLI-First [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.46]` | ARCH | `docs/ARCH.md` | Motor de Simulación Retrospectiva de Rentabilidad y Tablero Fiduciario CLI [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.47]` | ARCH | `docs/ARCH.md` | Sandbox Ataque & Defensa: Colisión Cruzada y Tablero Bipartito CLI [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.48]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Contexto y Shocks y Derivación del Vector Contextual C | SELLADO |
+| `[ARCH-1.4.49]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Trayectoria y Dinámica Temporal | SELLADO |
+| `[ARCH-1.4.50]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Volumen Territorial y Portería [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.51]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Micro-Dinámicas y Fricciones Especiales | SELLADO |
+| `[ARCH-1.4.52]` | ARCH | `docs/ARCH.md` | Extensión CLI del Sandbox de Rentabilidad para Políticas de Exclusión | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
