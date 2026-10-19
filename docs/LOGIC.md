@@ -1549,8 +1549,55 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_h2h_pipeline.py`.
 * **[SHIELD]:** `tests/shield/test_shield_sandbox_h2h_pipeline.py`
 
----
+### ID: [LN-QBE-107] Simulación Retrospectiva de Rentabilidad, Liquidación Factual y Métricas de Riesgo del Fondo
 
+**Régimen:** `[DIRGEN-STRICT]` en la liquidación factual, la delegación matemática y las cotas de capital · `[DBBD-FUNGIBLE]` en la composición del pipeline, el CLI y el tablero.
+**Base de Gobierno:** `[LN-QBE-082]` (sizing monótono) · `[LN-QBE-070]`/`[LN-QBE-071]` (dutching y piso de ventanilla) · `[LN-QBE-079]` (contracción fiduciaria) · `[ARCH-1.4.14]` (denominador de cartelera) · `[GOVERNANCE-01]` (cero cifras sintéticas).
+
+* **Ω (Resumen):** Cierra el circuito fiduciario del fondo: convierte decisiones YA congeladas en la 3NF (estrategia, partición y stake) más los marcadores oficiales consumados en un **estado de resultados de cartera** (PnL, ROI, máximo drawdown, tasa de preservación $V=0$ y proyección anualizada a 40 jornadas). Es un instrumento de **medición**, jamás de optimización: no recalibra parámetros, no reentrena modelos y no escribe una sola fila.
+* **I (Input):** `bankroll_inicial > 0` · `rango_jornadas` (p. ej. `1-11`) · `modo ∈ {compuesto, plano}` · bóveda 3NF en **sólo lectura** (`fixtures_snapshots.matches_json` para $P'$, cuotas y `pago_anticipado`; `matches.score_home` / `score_away` como único oráculo; `sovereign_distributions` como respaldo declarado de $P'$).
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Aislamiento y delegación:** `PersistenceGateway.read_session()` sin transacción de escritura. La aritmética NO se reimplementa: se invocan VERBATIM `triaje_determinista_9_estrategias` (`[LN-QBE-060-B]`), `contraer_distribucion_fiduciaria` (`[LN-QBE-079]`), `calcular_probabilidad_exito_estrategia` y `ordenar_cartera_por_certeza_lexicografica` (`[LN-QBE-081]`), `asignar_capital_monotono_cartera` (`[LN-QBE-082]`) y `calcular_dutching_v0` (`[LN-QBE-070]`). Prohibido duplicar una constante o una fórmula del plano canónico.
+  2. **Ventanilla retrospectiva declarada:** el triaje se alimenta con `es_operable = True` (idéntico al carril de Backtesting de `[ARCH-1.4.35]`: el veto de partido concluido `[ARCH-1.6.2]` se suspende porque la liquidación real EXIGE el resultado consumado) y con `delta_epist = 0.02`, estrato legislado por `[LN-QBE-070-C]` (la columna 3NF `epistemic_delta` no se transcribe: su unidad no está certificada). Un fixture sin cuotas 1X2 fácticas muere en la compuerta hacia `QBE-00`.
+  3. **Sizing dinámico con base rodante:** la jornada $j$ dimensiona sobre $B_{j-1}$ en `modo=compuesto` (patrimonio real) y sobre $B_0$ en `modo=plano` (stake nominal fijo). Se preservan las cotas constitucionales $\text{tope}^{\text{indiv}} = 8\%\cdot B$ y $\text{tope}^{\text{cartera}} = 25\%\cdot B$. El piso de ventanilla de $\$2.00$ MXN **no infla** la orden: cuando el piso bivariado ($\$4.00$ MXN) es inalcanzable bajo el tope, la posición se descarta y el capital permanece líquido (`capital_no_desplegado`), conforme al precedente del tope que prevalece.
+  4. **Partición de boletos:** para la Familia con cobertura $(\text{H1},\text{H2},\text{R1},\text{R2})$ la partición la dicta `calcular_dutching_v0`: $B_{seg} = B_i / O_{emp}$, $B_{prio} = B_i - B_{seg}$, con pierna de ataque = favorito en H1/H2 y = underdog en R1/R2. Las familias sin cobertura $(\text{D1},\text{D2},\text{C1},\text{C2})$ viajan con $B_{seg} = \$0.00$. Nota de paridad declarada: la rama `R2` del motor vivo usa ponderación inversa de probabilidad; el sandbox aplica la ley $V=0$ uniforme por mandato de `[LN-QBE-070]`, de modo que toda cobertura de tablas preserva el capital íntegro.
+  5. **Liquidación factual en cinco desenlaces:** con $B_i$ la inversión, $O_{ata}$ la cuota de la pierna de ataque y $O_{emp}$ la del empate:
+     - `VICTORIA_FAVORITO` — la pierna de ataque gana: $\text{Cobro} = B_{prio}\cdot O_{ata}$.
+     - `COBERTURA_EMPATE_V0` — tablas en familia con cobertura: $\text{Cobro} = B_{seg}\cdot O_{emp} \approx B_i$ (indemnidad, tolerancia de redondeo $\le \$0.08$).
+     - `DOBLE_COBRO_PA` — tablas con Pago Anticipado **acreditado**: $\text{Cobro} = B_{prio}\cdot O_{ata} + B_{seg}\cdot O_{emp}$.
+     - `RUPTURA_P_LOW` — gana el bando no cubierto (o tablas sin cobertura): $\text{Cobro} = \$0.00$.
+     - `NO_LIQUIDABLE` — sin marcador oficial: capital devuelto, $\text{PnL} = \$0.00$; **jamás se fabrica un $0\text{-}0$**.
+     El Pago Anticipado se acredita con testigo fáctico: margen final $\ge 2$ goles del bando de ataque (necesariamente lideró por $+2$ en algún instante). En tablas el único testigo válido es la traza in-play opcional `ventaja_maxima_favorito`; sin ella, la acreditación se declara negativa con motivo explícito y se liquida $V=0$ puro.
+  6. **Métricas de riesgo del fondo:** con la curva $\{B_0, B_1, \dots, B_N\}$ completa,
+     $$\text{DD}_j = \frac{\max_{k \le j} B_k - B_j}{\max_{k \le j} B_k}\times 100\% \qquad \text{DD}_{\max} = \max_j \text{DD}_j$$
+     y la tasa de preservación se computa sobre el denominador honesto de desenlaces defensivos: $\text{Tasa}_{V=0} = \frac{\#\text{COBERTURA\_EMPATE\_V0}}{\#\text{COBERTURA\_EMPATE\_V0} + \#\text{RUPTURA\_P\_LOW}}$. Los `NO_LIQUIDABLE` quedan fuera y se reportan aparte.
+  7. **Proyección anualizada (40 jornadas):** $\text{Lineal} = B_0 + \left(\text{PnL}_{\text{total}} / N_{\text{operadas}}\right)\cdot 40$; $\text{Compuesta} = B_0(1 + \overline{\text{ROI}})^{40}$ con $\overline{\text{ROI}} = \frac{1}{N}\sum_j \text{PnL}_j / B_{j-1}$; $\text{CAGR} = \left[(B_N/B_0)^{40/N} - 1\right]\times 100\%$. Guarda fiduciaria: si $(1+\overline{\text{ROI}}) \le 0$ la proyección compuesta se declara colapso analítico ($0.0$), nunca un valor imaginario o `NaN`.
+* **O (Output):** Reporte estructurado con siete llaves maestras (`bankroll_final`, `pnl_acumulado`, `roi_acumulado_pct`, `drawdown_maximo_pct`, `resumen_coberturas`, `jornadas_detalle`, `curva_bankroll`) más `proyeccion_anual` (`lineal_mxn`, `compuesta_mxn`, `roi_anual_compuesto_pct`) y el tablero ASCII de alta densidad (`--json` suprime el tablero).
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_rentabilidad_pipeline.py` y `[ARCH-1.4.46]`.
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_rentabilidad_pipeline.py`
+
+### ID: [LN-QBE-108] Colisión Cruzada de Fuerzas y Modelado Bipartito de Ataque (𝒯_Fin) y Defensa (𝒯_Def)
+
+* **Ω (Resumen):** Sella el protocolo de aislamiento en consola del núcleo de mayor peso de la distribución soberana (>70 % de λ): la Calidad de Remate (Dimensión 2, `𝒯_Fin`, V05-V09) y la Contención Defensiva (Dimensión 3, `𝒯_Def`, V10-V14). Define la **colisión cruzada de fuerzas complementarias** —ataque de un bando contra la defensa del otro— y prohíbe expresamente la resta directa de ataques, preservando la estructura bipartita simétrica de las catorce variables.
+
+* **I (Input):** `match_id: str` | `jornada: int`; corte N−1 de la 3NF (`matchday_num < N` ∧ estado terminal); caché congelada `data/cache_optaxg_liga_mx_2026.json` (xG/xGA por club y partido); `match_telemetry` (SoT/SoTA) únicamente cuando cubra el corte completo.
+
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. **Futuro-ceguera N−1:** el corte de cada club son los partidos con `matchday_num < N` en estado terminal. El fixture evaluado JAMÁS alimenta su propia acumulación.
+  2. **Cobertura íntegra:** si a un solo partido del corte le falta la métrica Opta, ese club-corte **no** publica la tasa (se degrada completo a la ruta sellada con GF/GC reales). Prohibido mezclar fuentes o imputar cifras (`[GOVERNANCE-01]`).
+  3. **Colisión cruzada de fuerzas:**
+     $$\Delta_{\text{of,H}} = A_H - D_A \qquad \Delta_{\text{of,A}} = A_A - D_H \qquad \Delta_{\text{neto}} = \Delta_{\text{of,H}} - \Delta_{\text{of,A}}$$
+     El signo de $\Delta_{\text{neto}}$ identifica al bando dominante (`LOCAL` / `VISITANTE` / `EQUILIBRADO`). Los ataques **no** se restan entre sí: sólo se cruzan fuerzas complementarias.
+  4. **Delegación matemática obligatoria:** el sandbox consume VERBATIM `derivar_factores_estructurales` (`[VAULT-CORE-005]`) y `estimar_intensidades_loglineal` (`[VAULT-CORE-001]`); no reimplementa factores ni intensidades, de modo que la consola y el servidor central emiten la MISMA $\lambda_H$ y la MISMA $\lambda_A$ para el mismo insumo.
+  5. **Contrato homologado (Decreto `VAR-2026-J7-HOMOLOGACION` §E1):** el `raw_match_data` publica `xg` y **nunca** `xga`; el xGA se exhibe como V10 sin inyectarse al motor (publicarlo invertía el diagnóstico defensivo medido).
+  6. **Bipartita simétrica:** cada celda V0x publica `local` y `visita` independientes con su unidad canónica; una variable se declara `EVALUADO` sólo si AMBOS clubes publican magnitud real, y `SIN EVIDENCIA` en caso contrario — jamás un cero ficticio.
+  7. **Presupuesto físico:** las intensidades resultantes se acotan al Invariante I6 $[\lambda_{\min}, \lambda_{\max}] = [0.15, 4.50]$ dentro del plano sellado, incluido el techo conjunto anti-resonancia `[LN-QBE-040-B]`.
+
+* **O (Output):** Reporte estructurado con las llaves `dimension_2_ataque`, `dimension_3_defensa`, `colision`, `factores_estructurales`, `intensidades_proyectadas` y `semaforos`; tablero ASCII de alta densidad en consola (`--json` suprime el tablero).
+
+* **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_ataque_defensa_pipeline.py` y `[ARCH-1.4.47]`.
+
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_ataque_defensa_pipeline.py`
 
 ---
 

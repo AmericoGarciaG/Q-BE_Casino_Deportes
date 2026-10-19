@@ -103,6 +103,8 @@
 | `[LN-QBE-104]` | LOGIC | `docs/LOGIC.md` | Fusión Convexa del Símplex Soberano (Poisson ∪ Kernel H2H) y Persistencia de la Δ_epist Real | SELLADO |
 | `[LN-QBE-105]` | LOGIC | `docs/LOGIC.md` | Consolidación Fáctica de la Dimensión Memoria Longitudinal (H2H) | SELLADO |
 | `[LN-QBE-106]` | LOGIC | `docs/LOGIC.md` | Pipeline Sandbox Autónomo y Modelado Relacional de Memoria H2H | SELLADO |
+| `[LN-QBE-107]` | LOGIC | `docs/LOGIC.md` | Simulación Retrospectiva de Rentabilidad, Liquidación Factual y Métricas de Riesgo del Fondo | SELLADO |
+| `[LN-QBE-108]` | LOGIC | `docs/LOGIC.md` | Colisión Cruzada de Fuerzas y Modelado Bipartito de Ataque (𝒯_Fin) y Defensa (𝒯_Def) | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -169,7 +171,7 @@
 | `[ARCH-1.6.17]` | ARCH | `docs/ARCH.md` | Resiliencia de Sensores ante Acordeones de Fechas Calendario (Betway) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.15-C]` | ARCH | `docs/ARCH.md` | Apertura Dinámica de Jornada en Live Board (sync_service.py) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.21]` | ARCH | `docs/ARCH.md` | Frontera de Competición y Resolución Dinámica en Sensores de Mercado [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.6.22]` | ARCH | `docs/ARCH.md` | Materialización del Ensemble Convexo y del Puente de Δ_epist Real (`sovereign_pipeline.py`, `distribution_sync.py`) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.6.22]` | ARCH | `docs/ARCH.md` | Materialización del Ensemble Convexo y del Puente de Δ_epist Real (`src/core/sovereign_pipeline.py`, `src/storage/distribution_sync.py`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.12]` | ARCH | `docs/ARCH.md` | Aprovisionador JIT de Ligas y Bóveda Soberana de Activos de Clubes (`src/normalization/`) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.9]` | ARCH | `docs/ARCH.md` | Herencia Dinámica de la Cláusula de Pago Anticipado en Boletos [BIZ-LOGIC] | SELLADO |
 | `[ARCH-1.4.16]` | ARCH | `docs/ARCH.md` | Contrato de Atribución Unívoca de Operador en Boletos [ARCH-PILLAR] | SELLADO |
@@ -207,6 +209,8 @@
 | `[ARCH-1.4.43]` | ARCH | `docs/ARCH.md` | Persistencia Blindada de la Evidencia en Vivo, Propagación del Sello de Procedencia y DTOs de Inspección [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.44]` | ARCH | `docs/ARCH.md` | Proveedor H2H Unificado de Corpus Congelado, Sello Opta de Origen y Telemetría Dimensional del Acordeón Forense [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.45]` | ARCH | `docs/ARCH.md` | Arquitectura de Aislamiento Sandbox y Diagnóstico CLI-First [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.46]` | ARCH | `docs/ARCH.md` | Motor de Simulación Retrospectiva de Rentabilidad y Tablero Fiduciario CLI [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.47]` | ARCH | `docs/ARCH.md` | Sandbox Ataque & Defensa: Colisión Cruzada y Tablero Bipartito CLI [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
