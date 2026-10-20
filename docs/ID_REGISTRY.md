@@ -110,6 +110,7 @@
 | `[LN-QBE-111]` | LOGIC | `docs/LOGIC.md` | Modelado Fáctico de Volumen Territorial y Rendimiento de Guardametas (Volumen & Portería) | SELLADO |
 | `[LN-QBE-112]` | LOGIC | `docs/LOGIC.md` | Modelado de Micro-Dinámicas, Balón Parado, Fricción Disciplinaria y Cierre Táctico | SELLADO |
 | `[LN-QBE-113]` | LOGIC | `docs/LOGIC.md` | Veto Fiduciario Selectivo por Familia Estratégica en Simulador de Rentabilidad | SELLADO |
+| `[LN-QBE-114]` | LOGIC | `docs/LOGIC.md` | Orquestación REST para Simulación Financiera Retrospectiva | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |

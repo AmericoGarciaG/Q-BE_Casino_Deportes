@@ -849,6 +849,10 @@ function _aplicarDisponibilidadOperadores(mapaOperadores) {
 // PnL inventados; toda cifra llega hidratada por el backend.
 let modoBacktestingJornada = false;
 
+// [DES-QBE-069 / LN-QBE-114] Centinela del selector: con el candado abierto se ofrece el rango
+// COMPLETO de la temporada (derivado de las jornadas REALES de la bóveda, jamás quemado en HTML).
+const VALOR_TEMPORADA = 'temporada';
+
 function esModoBacktestingJornada() {
     return modoBacktestingJornada === true;
 }
@@ -899,6 +903,16 @@ function _pintarEstadoConmutadorJornada() {
         sel.style.color = '#F8FAFC';
         if (tarjeta) tarjeta.style.border = '1px solid rgba(245, 158, 11, 0.45)';
         if (banner) banner.style.display = 'block';
+        // [DES-QBE-069] Modo Laboratorio: centinela de temporada + filtros fiduciarios + botón mutado.
+        _sincronizarOpcionTemporada();
+        const filtrosLab = document.getElementById('filtros-backtest-container');
+        if (filtrosLab) filtrosLab.style.display = 'flex';
+        const btnCalc = document.getElementById('btn-calcular-cartera');
+        if (btnCalc) {
+            btnCalc.textContent = ' 📈 Simular Rentabilidad ';
+            btnCalc.title = 'Simulación retrospectiva sobre el motor sellado [LN-QBE-107] / [LN-QBE-114]';
+        }
+        _actualizarAlcanceSimulacion();
     } else {
         btn.textContent = '🔒';
         btn.classList.remove('unlocked');
@@ -911,6 +925,15 @@ function _pintarEstadoConmutadorJornada() {
         if (tarjeta) tarjeta.style.border = '';
         if (banner) banner.style.display = 'none';
         if (strip) { strip.style.display = 'none'; strip.innerHTML = ''; }
+        // [DES-QBE-069] Candado cerrado: se retira el centinela y se restituye la ventanilla viva.
+        _sincronizarOpcionTemporada();
+        const filtrosLab = document.getElementById('filtros-backtest-container');
+        if (filtrosLab) filtrosLab.style.display = 'none';
+        const btnCalc = document.getElementById('btn-calcular-cartera');
+        if (btnCalc) {
+            btnCalc.textContent = ' ⚡ Calcular Cartera ';
+            btnCalc.title = '';
+        }
     }
 }
 
@@ -1062,6 +1085,11 @@ function _hidratarOpcionesJornada(jornadas, jornadaActiva) {
     const disponibles = Array.from(sel.options).map(function (op) { return op.value; });
     if (disponibles.includes(previa)) sel.value = previa;
     else if (Number.isFinite(activa) && disponibles.includes(String(activa))) sel.value = String(activa);
+    // [DES-QBE-069] La hidratación REESCRIBE las opciones: se re-inyecta el centinela de temporada
+    // si el laboratorio sigue abierto y se respeta la selección previa del rango completo.
+    _sincronizarOpcionTemporada();
+    if (previa === VALOR_TEMPORADA && esModoBacktestingJornada()) sel.value = VALOR_TEMPORADA;
+    _actualizarAlcanceSimulacion();
 }
 
 // [ARCH-1.4.35] Lectura inicial (una sola vez, al arrancar la SPA): la lista de jornadas del
@@ -3100,11 +3128,361 @@ let backtestingReportCache = null;
 // presentación y jamás muta la evidencia recibida de la bóveda.
 let backtestingUniversoActual = null;
 
+// ── [DES-QBE-068 / DES-QBE-069 / LN-QBE-114] VISOR FINANCIERO DEL MODO LABORATORIO ──────────
+// El candado abierto declara el alcance (jornada o temporada completa) y el veto fiduciario; el
+// botón primario delega en `POST /api/markets/backtesting/simulate`. CERO aritmética financiera
+// en el cliente: KPIs, curva y tabla meso se TRANSCRIBEN del reporte sellado ([LN-QBE-107]).
+let _ultimaSimulacionRentabilidad = null;
+let _equityChart = null;
+let _panelBacktestingActivo = "panel-visor-factico";
+
+function esSimulacionTemporada() {
+    const sel = document.getElementById("select-jornada");
+    return !!sel && sel.value === VALOR_TEMPORADA;
+}
+
+function _valoresJornadaDeclarados() {
+    const sel = document.getElementById("select-jornada");
+    if (!sel) return [];
+    return Array.from(sel.options)
+        .map(op => parseInt(op.value, 10))
+        .filter(Number.isFinite);
+}
+
+/** Rótulo del centinela derivado de las jornadas REALES de la bóveda (cero rango quemado). */
+function _rangoTemporadaEtiqueta() {
+    const valores = _valoresJornadaDeclarados();
+    if (!valores.length) return "Toda la Temporada";
+    return `Toda la Temporada (J${Math.min(...valores)}-J${Math.max(...valores)})`;
+}
+
+/** Inyecta/retira el centinela `temporada` según el estado del candado (idempotente). */
+function _sincronizarOpcionTemporada() {
+    const sel = document.getElementById("select-jornada");
+    if (!sel) return;
+    const existente = Array.from(sel.options).find(op => op.value === VALOR_TEMPORADA);
+
+    if (!esModoBacktestingJornada()) {
+        if (existente) existente.remove();
+        if (sel.value === VALOR_TEMPORADA) {
+            const activa = _jornadaActivaDelConmutador();
+            if (activa !== null) sel.value = activa;
+        }
+        return;
+    }
+    if (existente) {
+        existente.textContent = `📊 ${_rangoTemporadaEtiqueta()}`;
+        return;
+    }
+    const opcion = document.createElement("option");
+    opcion.value = VALOR_TEMPORADA;
+    opcion.textContent = `📊 ${_rangoTemporadaEtiqueta()}`;
+    sel.insertBefore(opcion, sel.firstChild);
+}
+
+/** Rango declarado para el motor: `min-max` en temporada completa, `N` en jornada única. */
+function _rangoSimulacionSeleccionado() {
+    if (esSimulacionTemporada()) {
+        const valores = _valoresJornadaDeclarados();
+        if (!valores.length) {
+            throw new Error("La bóveda 3NF no declara jornadas: prohibido inventar un rango");
+        }
+        const desde = Math.min(...valores);
+        const hasta = Math.max(...valores);
+        return desde === hasta ? String(desde) : `${desde}-${hasta}`;
+    }
+    const jornada = _jornadaSeleccionadaConmutador();
+    if (!Number.isFinite(jornada)) {
+        throw new Error("Selecciona una jornada válida o «Toda la Temporada»");
+    }
+    return String(jornada);
+}
+
+function _actualizarAlcanceSimulacion() {
+    const span = document.getElementById("txt-alcance-simulacion");
+    if (!span) return;
+    if (esSimulacionTemporada()) {
+        span.textContent = `Alcance: ${_rangoTemporadaEtiqueta()} · modo compuesto`;
+        return;
+    }
+    const jornada = _jornadaSeleccionadaConmutador();
+    span.textContent = Number.isFinite(jornada)
+        ? `Alcance: Jornada ${jornada} · modo compuesto`
+        : "Alcance: jornada seleccionada";
+}
+
+function _fmtMxn(valor) {
+    const n = Number(valor);
+    if (!Number.isFinite(n)) return "--";
+    return new Intl.NumberFormat("es-MX", {
+        style: "currency",
+        currency: "MXN",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(n);
+}
+
+
+/** Router del botón primario: candado cerrado ⇒ ventanilla viva; abierto ⇒ laboratorio. */
+async function iniciarSimulacionRentabilidad() {
+    if (!esModoBacktestingJornada()) {
+        return ejecutarDespachoPortafolio();
+    }
+
+    const bankrollInput = document.getElementById("input-bankroll") || document.getElementById("bankroll-input");
+    const bankrollParsed = bankrollInput ? parseFloat(bankrollInput.value) : NaN;
+    const bankroll = Number.isFinite(bankrollParsed) && bankrollParsed > 0
+        ? bankrollParsed
+        : DEFAULTS_CARTERA.bankroll;
+
+    let rango;
+    try {
+        rango = _rangoSimulacionSeleccionado();
+    } catch (e) {
+        alert(`❌ ${e.message}`);
+        return;
+    }
+
+    const excluir = [];
+    const casillaFamiliaR = document.getElementById("chk-excluir-familia-r");
+    if (casillaFamiliaR && casillaFamiliaR.checked) excluir.push("QBE-R1", "QBE-R2");
+
+    const estado = document.getElementById("bt-financiero-estado");
+    const boton = document.getElementById("btn-calcular-cartera");
+    if (boton) boton.disabled = true;
+    if (estado) {
+        estado.textContent = `Simulando J${rango} sobre la bóveda 3NF… ` +
+            (excluir.length ? `veto activo: ${excluir.join(", ")}.` : "sin exclusiones fiduciarias.");
+    }
+
+    try {
+        const resp = await fetch("/api/markets/backtesting/simulate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bankroll_inicial: bankroll,
+                rango_jornadas: rango,
+                modo_interes: "compuesto",
+                // [LN-QBE-113] El veto lo ejecuta el motor: la UI sólo declara la intención.
+                excluir_estrategias: excluir,
+            }),
+        });
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.detail || `HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        _ultimaSimulacionRentabilidad = data;
+        pintarPanelFinanciero(data);
+        switchView("panel-visor-backtesting");
+        activarSubPanelBacktesting("panel-visor-financiero");
+        // La auditoría fáctica queda disponible sin tráfico extra si ya fue certificada.
+        if (!backtestingReportCache) cargarVisorBacktesting();
+    } catch (e) {
+        if (estado) {
+            estado.textContent = `⚠️ Simulación no disponible: ${e.message}. ` +
+                "Cero cifras se exhiben sin respaldo del motor.";
+        }
+        alert(`❌ Error en la simulación de rentabilidad: ${e.message}`);
+    } finally {
+        if (boton) boton.disabled = false;
+    }
+}
+
+
+/** Transcribe el estado de resultados certificado. Prohibido recalcular una sola cifra. */
+function pintarPanelFinanciero(data) {
+    if (!data) return;
+    const set = (id, texto) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = texto;
+    };
+    const pnl = Number(data.pnl_acumulado);
+    const roi = Number(data.roi_acumulado_pct);
+    const drawdownPct = Number(data.drawdown_maximo_pct);
+    const drawdownMxn = Number(data.drawdown_maximo_mxn);
+    const jornadasSolicitadas = Array.isArray(data.jornadas_solicitadas) ? data.jornadas_solicitadas : [];
+    const exclusiones = Array.isArray(data.exclusiones_activas) ? data.exclusiones_activas : [];
+
+    const pintarSigno = (id, valor) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove("bt-valor-positivo", "bt-valor-negativo");
+        if (Number.isFinite(valor)) el.classList.add(valor >= 0 ? "bt-valor-positivo" : "bt-valor-negativo");
+    };
+
+    set("kpi-fin-bankroll", _fmtMxn(data.bankroll_final));
+    set("kpi-fin-bankroll-detalle",
+        `Inicial ${_fmtMxn(data.bankroll_inicial)} · ` +
+        `${data.jornadas_con_cartera || 0} de ${jornadasSolicitadas.length} jornadas con cartera`);
+    set("kpi-fin-pnl", `${Number.isFinite(pnl) && pnl > 0 ? "+" : ""}${_fmtMxn(pnl)}`);
+    pintarSigno("kpi-fin-pnl", pnl);
+    set("kpi-fin-pnl-detalle",
+        `${data.posiciones_operables || 0} posiciones operables · ` +
+        `${data.vetos_aplicados || 0} vetos fiduciarios`);
+    set("kpi-fin-roi", `${Number.isFinite(roi) ? roi.toFixed(2) : "--"}%`);
+    pintarSigno("kpi-fin-roi", roi);
+    set("kpi-fin-roi-detalle", `Modo ${data.modo || "--"} · ${data.modo_descripcion || "sin descripción"}`);
+    set("kpi-fin-drawdown", `${Number.isFinite(drawdownPct) ? drawdownPct.toFixed(2) : "--"}%`);
+    set("kpi-fin-drawdown-detalle",
+        `Máximo ${_fmtMxn(drawdownMxn > 0 ? -Math.abs(drawdownMxn) : 0)}` +
+        (data.jornada_drawdown_maximo ? ` · J${data.jornada_drawdown_maximo}` : " · sin pico declarado"));
+
+    const estado = document.getElementById("bt-financiero-estado");
+    if (estado) {
+        const veto = exclusiones.length
+            ? `Veto fiduciario activo: ${exclusiones.join(", ")} (${data.vetos_aplicados || 0} intercepciones).`
+            : "Sin exclusiones fiduciarias declaradas.";
+        const primera = jornadasSolicitadas.length ? jornadasSolicitadas[0] : "--";
+        const ultima = jornadasSolicitadas.length ? jornadasSolicitadas[jornadasSolicitadas.length - 1] : "--";
+        estado.textContent = `Simulación certificada [LN-QBE-107] · rango J${primera}-J${ultima} · ${veto}`;
+    }
+
+    _pintarMesoFinanciera(Array.isArray(data.jornadas_detalle) ? data.jornadas_detalle : []);
+    _dibujarCurvaCapital(data);
+}
+
+function _pintarMesoFinanciera(detalle) {
+    const cuerpo = document.getElementById("cuerpo-meso-financiero");
+    if (!cuerpo) return;
+    if (!detalle.length) {
+        cuerpo.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-muted);">` +
+            "La simulación no devolvió jornadas liquidables sobre el rango solicitado.</td></tr>";
+        return;
+    }
+    cuerpo.innerHTML = detalle.map(jornada => {
+        const pnl = Number(jornada.pnl_jornada);
+        const colorPnl = pnl >= 0 ? "#10B981" : "#EF4444";
+        const vetos = Array.isArray(jornada.descartes)
+            ? jornada.descartes.filter(d => d && d.veto_fiduciario).length
+            : 0;
+        return `
+            <tr class="bt-jornada-auditada">
+                <td><strong>J${jornada.jornada}</strong></td>
+                <td class="numeric">${jornada.posiciones_operables || 0}</td>
+                <td class="numeric">${_fmtMxn(jornada.inversion_total)}</td>
+                <td class="numeric" style="color:${colorPnl};">${pnl > 0 ? "+" : ""}${_fmtMxn(pnl)}</td>
+                <td class="numeric">${Number(jornada.roi_jornada_pct || 0).toFixed(2)}%</td>
+                <td class="numeric">${_fmtMxn(jornada.bankroll_final)}</td>
+                <td class="numeric">${vetos}</td>
+            </tr>`;
+    }).join("");
+}
+
+
+/** Curva de capital: J0 (patrimonio inicial) + bankroll_final certificado de cada jornada. */
+function _dibujarCurvaCapital(data) {
+    const canvas = document.getElementById("equity-chart");
+    const fallback = document.getElementById("equity-chart-fallback");
+    if (!canvas) return;
+
+    const detalle = Array.isArray(data.jornadas_detalle) ? data.jornadas_detalle : [];
+    if (typeof Chart === "undefined" || !detalle.length) {
+        canvas.style.display = "none";
+        if (fallback) {
+            fallback.textContent = typeof Chart === "undefined"
+                ? "Chart.js no está disponible en este navegador: la trayectoria del capital permanece íntegra en la tabla meso financiera."
+                : "Sin jornadas liquidables: no hay serie que graficar (cero curvas sintéticas).";
+            fallback.style.display = "flex";
+        }
+        return;
+    }
+    canvas.style.display = "block";
+    if (fallback) fallback.style.display = "none";
+
+    const labels = ["J0"].concat(detalle.map(j => `J${j.jornada}`));
+    const serie = [Number(data.bankroll_inicial)].concat(detalle.map(j => Number(j.bankroll_final)));
+
+    if (_equityChart) {
+        _equityChart.destroy();
+        _equityChart = null;
+    }
+    _equityChart = new Chart(canvas.getContext("2d"), {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Bankroll",
+                data: serie,
+                borderColor: "#38BDF8",
+                backgroundColor: "rgba(56, 189, 248, 0.12)",
+                borderWidth: 2,
+                fill: true,
+                tension: 0.25,
+                pointRadius: 3,
+                pointBackgroundColor: "#38BDF8",
+                pointBorderColor: "#0B132B",
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `Bankroll: ${_fmtMxn(ctx.parsed.y)}`,
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: "rgba(30, 41, 59, 0.6)" },
+                    ticks: { color: "#94A3B8", font: { size: 10 } },
+                },
+                y: {
+                    grid: { color: "rgba(30, 41, 59, 0.6)" },
+                    ticks: {
+                        color: "#94A3B8",
+                        font: { size: 10 },
+                        callback: valor => _fmtMxn(valor),
+                    },
+                },
+            },
+        },
+    });
+}
+
+/** Conmutador de paneles del visor dual: ninguna vista destruye a la otra (sólo `d-none`). */
+function activarSubPanelBacktesting(panelId) {
+    const paneles = ["panel-visor-factico", "panel-visor-financiero"];
+    const destino = paneles.includes(panelId) ? panelId : "panel-visor-factico";
+    paneles.forEach(panel => {
+        const el = document.getElementById(panel);
+        if (el) el.classList.toggle("d-none", panel !== destino);
+    });
+    document.querySelectorAll(".bt-subtab-btn").forEach(btn => {
+        const activo = btn.getAttribute("data-bt-panel") === destino;
+        btn.classList.toggle("active", activo);
+        btn.setAttribute("aria-selected", activo ? "true" : "false");
+    });
+    _panelBacktestingActivo = destino;
+    if (destino === "panel-visor-financiero") {
+        if (_equityChart) _equityChart.resize();
+        else if (_ultimaSimulacionRentabilidad) _dibujarCurvaCapital(_ultimaSimulacionRentabilidad);
+    }
+}
+
+window.activarSubPanelBacktesting = activarSubPanelBacktesting;
+window.iniciarSimulacionRentabilidad = iniciarSimulacionRentabilidad;
+window.pintarPanelFinanciero = pintarPanelFinanciero;
+
+
 function initVisorBacktesting() {
     const tab = document.getElementById("tab-visor-backtesting");
     if (tab) {
         tab.addEventListener("click", cargarVisorBacktesting);
     }
+    // [DES-QBE-068] Píldoras del visor dual (auditoría fáctica ↔ rentabilidad financiera).
+    document.querySelectorAll(".bt-subtab-btn").forEach(btn => {
+        btn.addEventListener("click", () => activarSubPanelBacktesting(btn.getAttribute("data-bt-panel")));
+    });
+    // [DES-QBE-069] El alcance declarado se re-deriva de la selección REAL del conmutador.
+    const selectorJornada = document.getElementById("select-jornada");
+    if (selectorJornada) selectorJornada.addEventListener("change", _actualizarAlcanceSimulacion);
+    const casillaFamiliaR = document.getElementById("chk-excluir-familia-r");
+    if (casillaFamiliaR) casillaFamiliaR.addEventListener("change", _actualizarAlcanceSimulacion);
     // [LN-QBE-104] `#chk-excluir-vetados`: conmutador del filtro anti-cuarentena. Cero refetch:
     // se re-pinta desde la caché ya certificada (idempotente y sin tráfico adicional).
     const casillaVetados = document.getElementById("chk-excluir-vetados");

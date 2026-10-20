@@ -347,3 +347,19 @@ class CalibrationReportResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     resumen_temporada: CalibrationSummaryOut
     jornadas: List[CalibrationJornadaOut] = Field(default_factory=list)
+
+
+class SimulatePortfolioRequest(BaseModel):
+    """
+    [LN-QBE-114 / DES-QBE-068] Payload de la pasarela REST de simulación retrospectiva.
+
+    Transporta EXCLUSIVAMENTE los parámetros del motor `[LN-QBE-107]`; la capa web no
+    interpreta ni recalcula PnL, ROI ni drawdown. `excluir_estrategias` alimenta el veto
+    fiduciario selectivo de `[LN-QBE-113]` (la normalización canónica vive en el sandbox).
+    """
+    model_config = ConfigDict(extra="ignore")
+    bankroll_inicial: float = Field(default=10000.0, gt=0.0)
+    rango_jornadas: Optional[str] = "1-11"
+    modo_interes: Literal["compuesto", "plano"] = "compuesto"
+    excluir_estrategias: Optional[List[str]] = None
+

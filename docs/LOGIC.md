@@ -1721,6 +1721,17 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_rentabilidad_pipeline.py`.
 * **[SHIELD]:** `tests/shield/test_shield_sandbox_rentabilidad_pipeline.py`
 
+### ID: [LN-QBE-114] Orquestación REST para Simulación Financiera Retrospectiva
+
+* **Ω (Resumen):** Expone las capacidades del motor de liquidación factual (`[LN-QBE-107]`) mediante una API REST para la parametrización dinámica desde la interfaz cliente. Permite inyectar vectores de configuración (bankroll base, umbrales de certeza, modo de cobertura y listas de exclusión fiduciaria) para recalcular la trayectoria de capital en tiempo real.
+* **I (Input):** Payload `SimulatePortfolioRequest`: `bankroll_inicial` (float), `rango_jornadas` (str), `modo_interes` (plano/compuesto), `excluir_estrategias` (List[str]).
+* **P (Process) [ALGO-PROTECTED] [DIRGEN-STRICT]:**
+  1. El endpoint recibe el payload y delega la ejecución íntegramente a `ejecutar_simulacion_rentabilidad` del `sandbox_rentabilidad_pipeline.py`.
+  2. Queda estrictamente prohibido que la capa web reimplemente cálculos de PnL, Drawdown o sumatorias de capital. El controlador opera exclusivamente como un pasarela (Pass-through) hacia el motor matemático.
+* **O (Output):** Estructura JSON con la curva de capital, métricas de riesgo y detalle meso por jornada.
+* **Φ (Transición):** Hacia `src/web/routes/markets.py` y el renderizador frontend en `app.js`.
+* **[SHIELD]:** `tests/shield/test_shield_backtesting_simulation_rest.py`
+
 ---
 
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo

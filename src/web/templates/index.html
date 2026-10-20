@@ -6,6 +6,10 @@
     <title>Q-BE Casino Deportes — Quantitative Betting Engine</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg?v=2026QBE">
     <link rel="stylesheet" href="/static/css/theme.css?v=2026QBE_V4">
+    <!-- [DES-QBE-068] Chart.js pineado (UMD, sin `@latest`): sólo pinta la curva de capital que
+         certifica el motor. `defer` mantiene el arranque de la SPA independiente del CDN; si el
+         activo no llega, el visor financiero degrada a la tabla meso (cero curvas sintéticas). -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
     <!-- Header Fino de Un Solo Piso (Max-Height 45px, Fondo #0B132B) -->
@@ -202,6 +206,17 @@
                                 <option value="">— hidratando bóveda 3NF —</option>
                             </select>
                         </div>
+                        <!-- [DES-QBE-069 / LN-QBE-114] FILTROS FIDUCIARIOS DEL MODO LABORATORIO.
+                             Sólo visibles con el candado abierto (🔓). La casilla viaja como
+                             `excluir_estrategias: ["QBE-R1","QBE-R2"]` al motor [LN-QBE-113]: el
+                             veto se ejecuta en el sandbox, jamás en el pintor. -->
+                        <div id="filtros-backtest-container" style="display: none; width: 100%; margin-top: 10px; align-items: center; gap: 14px; flex-wrap: wrap;">
+                            <label class="bt-filtro-vetados" for="chk-excluir-familia-r" style="margin-top: 0;">
+                                <input type="checkbox" id="chk-excluir-familia-r">
+                                <span>📉 Excluir Familia R (Underdogs · veto fiduciario)</span>
+                            </label>
+                            <span id="txt-alcance-simulacion" class="bt-alcance-simulacion">Alcance: jornada seleccionada</span>
+                        </div>
                         <!-- [ARCH-1.4.37 / LN-QBE-077-B / ARCH-1.4.12-C] Tríptico de Cobertura (δ):
                              la ventanilla declara el modo de partición del capital. `DEF` (V=0) subsiste
                              como contrato sellado; `BAL` y `AGR` activan la ley general del Dutching
@@ -224,7 +239,7 @@
                                 </button>
                             </div>
                         </div>
-                        <button id="btn-calcular-cartera" class="btn-primary" onclick="ejecutarDespachoPortafolio()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;"> ⚡ Calcular Cartera </button>
+                        <button id="btn-calcular-cartera" class="btn-primary" onclick="iniciarSimulacionRentabilidad()" style="padding: 7px 16px; font-size: 8.5pt; font-weight: 700;"> ⚡ Calcular Cartera </button>
                         <button id="export-pdf-btn" class="btn-primary" style="background: rgba(56,189,248,0.15); border: 1px solid #38BDF8; color: #38BDF8; padding: 7px 16px; font-size: 8.5pt; font-weight: 700; margin-left: 4px;">📄 Exportar PDF A4</button>
                     </div>
                     <!-- [ARCH-1.4.35 / CONMUTADOR DE SLATES] Banner factual del Modo Backtesting:
@@ -616,6 +631,20 @@
 
         <!-- VISTA 5: VISOR DE BACKTESTING (DES-QBE-064 / LN-QBE-100 / ARCH-1.4.38) -->
         <section id="panel-visor-backtesting" class="view-section">
+            <!-- [DES-QBE-068] Píldoras internas del visor dual: la auditoría fáctica (por defecto) y
+                 la rentabilidad financiera coexisten en el DOM; ninguna destruye a la otra. -->
+            <nav class="bt-subtabs" role="tablist" aria-label="Paneles del Visor de Backtesting">
+                <button type="button" id="sub-tab-factico" class="bt-subtab-btn active" role="tab"
+                        aria-selected="true" data-bt-panel="panel-visor-factico">
+                    🔬 Auditoría Fáctica y Distribuciones
+                </button>
+                <button type="button" id="sub-tab-financiero" class="bt-subtab-btn" role="tab"
+                        aria-selected="false" data-bt-panel="panel-visor-financiero">
+                    📈 Rentabilidad y Curva de Capital
+                </button>
+            </nav>
+
+            <div id="panel-visor-factico">
             <div class="card" style="margin-bottom: 1.5rem;">
                 <h3 style="margin-top: 0;">🔬 Visor de Backtesting — Calibración Factual de Temporada</h3>
                 <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 14px;">
@@ -708,7 +737,97 @@
                     </div>
                 </div>
             </div>
+            </div><!-- /#panel-visor-factico -->
+
+            <!-- [DES-QBE-068 / LN-QBE-114] PANEL FINANCIERO: espejo del estado de resultados que
+                 certifica el sandbox. Cero aritmética en el cliente: KPIs, curva y tabla meso se
+                 transcriben del payload de `POST /api/markets/backtesting/simulate`. -->
+            <div id="panel-visor-financiero" class="d-none">
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">📈 Rentabilidad y Curva de Capital</h3>
+                    <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 14px;">
+                        Estado de resultados retrospectivo del fondo sobre los marcadores <strong>consumados</strong>
+                        de la bóveda 3NF. La liquidación factual, la cota de cartera y el veto fiduciario se
+                        ejecutan en el motor sellado <span style="opacity:0.85;">[LN-QBE-107] / [LN-QBE-113]</span>;
+                        esta pantalla sólo <strong>exhibe</strong> su veredicto
+                        <span style="opacity:0.85;">[LN-QBE-114]</span>.
+                    </p>
+                    <div class="bt-macro-grid">
+                        <div class="bt-kpi-card">
+                            <span class="bt-kpi-label">BANKROLL FINAL</span>
+                            <span class="bt-kpi-value" id="kpi-fin-bankroll">--</span>
+                            <span class="bt-kpi-sub" id="kpi-fin-bankroll-detalle">--</span>
+                        </div>
+                        <div class="bt-kpi-card">
+                            <span class="bt-kpi-label">PnL ACUMULADO</span>
+                            <span class="bt-kpi-value" id="kpi-fin-pnl">--</span>
+                            <span class="bt-kpi-sub" id="kpi-fin-pnl-detalle">--</span>
+                        </div>
+                        <div class="bt-kpi-card">
+                            <span class="bt-kpi-label">ROI ACUMULADO</span>
+                            <span class="bt-kpi-value" id="kpi-fin-roi">--</span>
+                            <span class="bt-kpi-sub" id="kpi-fin-roi-detalle">--</span>
+                        </div>
+                        <div class="bt-kpi-card">
+                            <span class="bt-kpi-label">DRAWDOWN MÁXIMO</span>
+                            <span class="bt-kpi-value" id="kpi-fin-drawdown">--</span>
+                            <span class="bt-kpi-sub" id="kpi-fin-drawdown-detalle">--</span>
+                        </div>
+                    </div>
+                    <div id="bt-financiero-estado" class="bt-estado">
+                        Sin simulación: abre el candado de la Mesa y pulsa 📈 Simular Rentabilidad.
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h4 style="margin-top: 0;">💹 Trayectoria del Capital por Jornada</h4>
+                    <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+                        El punto <strong>J0</strong> es el patrimonio inicial declarado en la ventanilla; cada punto
+                        posterior es el <code>bankroll_final</code> certificado por el motor para esa jornada.
+                        Sin Chart.js disponible la curva no se dibuja: se consulta la tabla meso (jamás se
+                        inventa una serie).
+                    </p>
+                    <div class="bt-chart-wrap">
+                        <canvas id="equity-chart" aria-label="Curva de capital del fondo por jornada"></canvas>
+                        <div id="equity-chart-fallback" class="equity-fallback" style="display: none;">
+                            Chart.js no está disponible en este navegador: la trayectoria del capital permanece
+                            íntegra en la tabla meso financiera.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h4 style="margin-top: 0;">🧾 Liquidación Meso por Jornada</h4>
+                    <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+                        Lectura jornada a jornada del estado de resultados: capital desplegado, PnL, ROI y
+                        bankroll de cierre. Los vetos fiduciarios se declaran en su propia columna.
+                    </p>
+                    <div style="overflow-x: auto;">
+                        <table class="bt-table">
+                            <thead>
+                                <tr>
+                                    <th>JORNADA</th>
+                                    <th>POSICIONES</th>
+                                    <th>CAPITAL DESPLEGADO</th>
+                                    <th>PnL JORNADA</th>
+                                    <th>ROI JORNADA</th>
+                                    <th>BANKROLL FINAL</th>
+                                    <th>VETOS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpo-meso-financiero">
+                                <tr>
+                                    <td colspan="7" style="text-align:center; padding:18px; color:var(--text-muted);">
+                                        Sin simulación registrada: el candado de la Mesa debe estar abierto.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div><!-- /#panel-visor-financiero -->
         </section>
+
 
         <!-- VISTA 4: CENTRO DE CONTROL ADMINISTRATIVO (DES-QBE-048 / ARCH-1.4.12) -->
         <section id="view-control-center" class="view-section">

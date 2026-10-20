@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, League, Match, SovereignDistribution, Slate, SlateItem
-from src.models.web_schemas import CalibrationReportResponse
+from src.models.web_schemas import CalibrationReportResponse, SimulatePortfolioRequest
 from src.storage.database import get_db
 from src.core.contracts.progol_math import (
     calcular_sesgo_quiniela,
@@ -1851,5 +1851,52 @@ def get_backtesting_calibration_report(
     Jamás muta la bóveda ni dispara ingesta: cero red, cero escritura.
     """
     return _construir_reporte_calibracion(db, league_id)
+
+
+@router.post("/backtesting/simulate")
+def post_backtesting_simulate(payload: SimulatePortfolioRequest) -> Dict[str, Any]:
+    """
+    [LN-QBE-114 / DES-QBE-068] Pasarela REST de Simulación Financiera Retrospectiva.
+
+    Contrato IPO: recibe `SimulatePortfolioRequest` y devuelve **verbatim** el reporte de
+    `ejecutar_simulacion_rentabilidad` (`[LN-QBE-107]`), incluido el veto fiduciario
+    selectivo de `[LN-QBE-113]`.
+
+    Régimen `[DIRGEN-STRICT]`: esta función es un PASS-THROUGH. Prohibido reimplementar
+    PnL, ROI, drawdown o sumatorias de capital: cualquier aritmética nueva aquí sería una
+    segunda fuente de verdad. La única transformación permitida es el parseo declarativo
+    del rango (`parsear_rango_jornadas`) y la traducción de errores de dominio a HTTP 400.
+
+    El import es diferido para preservar el presupuesto de arranque de The Shield: el
+    sandbox arrastra el plano estocástico completo y sólo se materializa en la primera
+    invocación real del endpoint.
+    """
+    from scripts.laboratorio.sandbox_rentabilidad_pipeline import (
+        ejecutar_simulacion_rentabilidad,
+        parsear_rango_jornadas,
+    )
+
+    try:
+        jornadas = parsear_rango_jornadas(payload.rango_jornadas or "")
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"rango_jornadas inválido ('{payload.rango_jornadas}'): {exc}"
+        ) from exc
+
+    if not jornadas:
+        raise HTTPException(
+            status_code=400,
+            detail="rango_jornadas no declara ninguna jornada positiva (formato: '1-11', '1,3,5').",
+        )
+
+    try:
+        return ejecutar_simulacion_rentabilidad(
+            bankroll_inicial=payload.bankroll_inicial,
+            jornadas=jornadas,
+            modo=payload.modo_interes,
+            excluir_estrategias=payload.excluir_estrategias or [],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Simulación rechazada: {exc}") from exc
 
 

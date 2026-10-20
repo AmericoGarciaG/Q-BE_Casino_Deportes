@@ -666,6 +666,18 @@
   - **Reversible:** desmarcar restaura el agregado original sin recargar ni re-consultar el endpoint.
 * **Criterio de aceptación:** `tests/shield/test_shield_ensemble_fusion_and_ui_sync.py` (inversiones 5 y 6) certifica la presencia del control, la inmutabilidad del cache, la re-derivación por conteos y el rótulo `SIN EVALUAR` con su clase CSS.
 
+### [DES-QBE-068] Diseño Dual del Visor de Backtesting (Auditoría Fáctica vs. Rentabilidad) [UX-MANDATE]
+* **Geometría de Sub-Pestañas:** El contenedor `#view-visor-backtesting` se divide mediante un menú de píldoras interno en la cabecera:
+  1. `[ 🔬 Auditoría Fáctica y Distribuciones ]` (Vista por defecto: KPIs Brier Score, Tabla Meso de Calibración, Parrilla Micro BetExplorer).
+  2. `[ 📈 Rentabilidad y Curva de Capital ]` (Nueva vista: KPIs Financieros, Gráfico Chart.js de Bankroll, Tabla Meso de Liquidación por Jornada).
+* **Protección de Dominio:** Ninguna de las dos vistas destruye a la otra; ambas coexisten en el DOM y se alternan mediante clases `d-none`.
+
+### [DES-QBE-069] Conmutador de Laboratorio (Candado) y Filtros de Estrategia [UX-MANDATE]
+* **El Candado de Operación:** En la tarjeta de Configuración de Cartera, el icono de candado actúa como un `toggle`:
+  - **Cerrado (Modo Producción):** Selector bloqueado en jornada activa, botón `⚡ Calcular Cartera`.
+  - **Abierto (Modo Laboratorio):** El selector de jornada habilita la opción `📊 Toda la Temporada (J1-J11)`. Aparece un contenedor de filtros fiduciarios (`[x] Excluir Familia R (Underdogs)`). El botón muta a `📈 Simular Rentabilidad`.
+* **Transición de Foco:** Al hacer clic en Simular Rentabilidad, la SPA redirige automáticamente la vista hacia la pestaña del Visor de Backtesting y activa la sub-pestaña financiera.
+
 
 ---
 
