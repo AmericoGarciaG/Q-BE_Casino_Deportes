@@ -111,6 +111,8 @@
 | `[LN-QBE-112]` | LOGIC | `docs/LOGIC.md` | Modelado de Micro-Dinámicas, Balón Parado, Fricción Disciplinaria y Cierre Táctico | SELLADO |
 | `[LN-QBE-113]` | LOGIC | `docs/LOGIC.md` | Veto Fiduciario Selectivo por Familia Estratégica en Simulador de Rentabilidad | SELLADO |
 | `[LN-QBE-114]` | LOGIC | `docs/LOGIC.md` | Orquestación REST para Simulación Financiera Retrospectiva | SELLADO |
+| `[LN-QBE-115]` | LOGIC | `docs/LOGIC.md` | Saneamiento Vol. II: Cota Underdog Ley 3, Escudo de Altitud y Trinidad de Certeza | SELLADO |
+| `[LN-QBE-116]` | LOGIC | `docs/LOGIC.md` | Cota de Dominancia P′ ≥ 50% en la Híbrida Visitante (Blindaje H2) | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -222,6 +224,8 @@
 | `[ARCH-1.4.50]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Volumen Territorial y Portería [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.51]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Micro-Dinámicas y Fricciones Especiales | SELLADO |
 | `[ARCH-1.4.52]` | ARCH | `docs/ARCH.md` | Extensión CLI del Sandbox de Rentabilidad para Políticas de Exclusión | SELLADO |
+| `[ARCH-1.4.53]` | ARCH | `docs/ARCH.md` | Saneamiento Vol. II: Cota Underdog, Escudo de Altitud y Parámetros Gobernantes del Simulador [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.54]` | ARCH | `docs/ARCH.md` | Blindaje de Dominancia P′ ≥ 50%, Altitud Atlante y Saneamiento Cromático de la Tabla Meso [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |

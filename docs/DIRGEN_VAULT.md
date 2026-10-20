@@ -1879,6 +1879,23 @@ def american_to_decimal(val_str: str) -> float:
 **Nota de trazabilidad (Directiva de Integración Capa 0→Capa 1, 2026-10-07):** La cascada se subordina a `clasificar_morfologia_simplex` (Capa 0) y recibe $\Gamma$ dinámicamente vía `triaje_determinista_9_estrategias(payload, cuotas, gamma=0.67)`; el umbral quemado $0.65$ queda erradicado del motor y el default de `PortfolioParameters.gamma_threshold` se sella en $0.67$.
 
 ```python
+# ── [LN-QBE-115] SANEAMIENTO VOL. II — COTA UNDERDOG LEY 3 Y ESCUDO DE ALTITUD ────────────────
+# Manifiesto canónico de `docs/CONSTANTS.md` (§5 «Dominio Financiero» y «Parámetros del Escudo de
+# Altitud y de la Trinidad de Certeza»). La cota del 1.5% es un TECHO adicional EXCLUSIVO de la
+# Familia R: jamás un piso, jamás rescata una orden sub-dimensionada ni infla la bolsa del 25%.
+# El escudo de altitud veta la Híbrida Visitante cuando la visita viaja a >= 1000 m por encima de
+# su plaza (trampa fisiológica certificada en `[LN-QBE-109]` V28, unidireccional).
+CAP_UNDERDOG_LEY3_PCT: float = 0.0150          # Cap_underdog — techo duro de QBE-R1 / QBE-R2
+FAMILIAS_UNDERDOG_LEY3: Tuple[str, ...] = ("QBE-R1", "QBE-R2")
+UMBRAL_VETO_ALTITUD_METROS: float = 1000.0     # ΔAlt^veto — trampa de altitud visitante
+# ── [LN-QBE-116] COTA DE DOMINANCIA P' >= 50% — BLINDAJE DE LA HÍBRIDA VISITANTE ────────────
+# Manifiesto canónico de `docs/CONSTANTS.md` («Parámetros de la Cota de Dominancia P′»). La H2
+# promete dominancia foránea con el empate asegurado en tablas: si el propio P' del modelo no
+# concede mayoría al visitante, la promesa es fiduciariamente falsa. Piso de dominancia, jamás
+# exclusión del 50%: la comparación es ESTRICTA (p2 == 0.5000 NO veta).
+UMBRAL_DOMINANCIA_VISITANTE_PCT: float = 0.5000  # P'_min,visita — piso de mayoría del visitante
+
+
 def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float = 0.67) -> dict:
     """[LN-QBE-060-B] Triaje determinista subordinado a la morfología Capa 0."""
     from src.core.simplex_morphology import clasificar_morfologia_simplex
@@ -1915,7 +1932,39 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
 
     if familia == "ASIMETRIA_LOCAL" and oX > theta_1 and aL > 0:
         return {"codigo": "QBE-H1", "nombre": "Híbrida Local + Empate V=0", "alpha": aL, "pa": pa}
+
+    # ── [LN-QBE-115] ESCUDO DE ALTITUD — precedencia estructural ANTES de exigir α_V > 0 ───────
+    # Trampa fisiológica certificada ([LN-QBE-109] V28 unidireccional): la visita sube >= 1000 m
+    # respecto de su plaza y el empate sigue vivo en tablas (O_X > θ2*). El diferencial ausente
+    # vale 0.0: sin evidencia de altitud NO se evalúa el escudo ni se fabrica un veto
+    # (`[GOVERNANCE-01]`). La aduana de altitud es morfológica + de existencia de Dutching.
+    if familia == "ASIMETRIA_VISITANTE":
+        delta_alt_metros = float(payload.get("delta_alt_metros", 0.0) or 0.0)
+        if delta_alt_metros >= UMBRAL_VETO_ALTITUD_METROS and oX > theta_2:
+            return {
+                "codigo": "QBE-00",
+                "nombre": "Veto Fiduciario: Trampa de Altitud Visitante",
+                "alpha": 0.0,
+                "pa": False,
+                "motivo": "Veto Fiduciario: Trampa de Altitud Visitante (Delta Alt >= 1000m)",
+                "arquetipo_veto": "TRAMPA_ALTITUD",
+            }
+
     if familia == "ASIMETRIA_VISITANTE" and oX > theta_2 and aV > 0:
+        # ── [LN-QBE-116] COTA DE DOMINANCIA P' >= 50% ────────────────────────────────────────
+        # Blindaje quirúrgico de la ruta H2: el ataque descansa sobre un favorito foráneo que
+        # el propio modelo NO considera mayoritario. Opera después del Escudo de Altitud
+        # (precedencia estructural del hecho fisiológico certificado) y ANTES de emitir la
+        # Híbrida Visitante. Borde exacto: 0.5000 no veta.
+        if p2 < UMBRAL_DOMINANCIA_VISITANTE_PCT:
+            return {
+                "codigo": "QBE-00",
+                "nombre": "Veto Fiduciario: Ruptura de Dominancia Visitante",
+                "alpha": 0.0,
+                "pa": False,
+                "motivo": "Veto Fiduciario: Dominancia Visitante (P_visitante < 50%)",
+                "arquetipo_veto": "RUPTURA_DOMINANCIA",
+            }
         return {"codigo": "QBE-H2", "nombre": "Híbrida Visita + Empate V=0", "alpha": aV, "pa": pa}
 
     # 4. Mutación DNB si el empate fue caníbal en Asimetrías
@@ -2165,6 +2214,7 @@ def asignar_capital_monotono_cartera(
     K = len(partidos_ordenados)
     cap_max_partido = round(bankroll * cap_max_partido_pct, 2)
     bolsa_disponible = round(bankroll * cap_max_cartera_pct, 2)
+    cap_underdog = round(bankroll * CAP_UNDERDOG_LEY3_PCT, 2)
 
     probabilidades = [max(0.01, float(p.get("prob_exito_efectiva", 0.33))) for p in partidos_ordenados]
     suma_prob = sum(probabilidades)
@@ -2172,7 +2222,14 @@ def asignar_capital_monotono_cartera(
 
     for idx, p in enumerate(partidos_ordenados):
         inv_teorica = round(bolsa_disponible * pesos[idx], 2)
-        p["inversion_total"] = min(cap_max_partido, max(5.00, inv_teorica))
+        asignado = min(cap_max_partido, max(5.00, inv_teorica))
+        # [LN-QBE-115] Cota Underdog Ley 3: techo EXCLUSIVO de la Familia R. La cota de la
+        # jornada la dicta `CAP_UNDERDOG_LEY3_PCT` sobre el bankroll vigente B_j; la monotonía y
+        # el prorrateo posteriores sólo pueden reducir, jamás violar el techo.
+        familia_orden = str(p.get("familia") or p.get("estrategia_codigo") or "").upper()
+        if familia_orden in FAMILIAS_UNDERDOG_LEY3:
+            asignado = min(asignado, cap_underdog)
+        p["inversion_total"] = round(asignado, 2)
 
     # Forzar monotonía no creciente: B_(1) >= B_(2) >= ... >= B_(K)
     for i in range(1, K):
@@ -2197,6 +2254,28 @@ desde este módulo. Reutiliza exclusivamente literales ya sellados ($P^{(0)}=1/3
 **Trazabilidad de registro:** el bloque fue inyectado como `[LN-QBE-080]`/`[LN-QBE-081]`; remapeado a
 `[LN-QBE-081]`/`[LN-QBE-082]` por colisión con el nodo sellado `[LN-QBE-080] Compilador de Reportes
 Oficiales y PDF A4`. Ver `VAR-HIST-080-COLLISION`.
+
+**Enmienda [LN-QBE-115] — Espejo atómico del Saneamiento Vol. II (Decreto 2026-10-20, dictamen V2):** el
+presente bloque transcribe VERBATIM las tres modificaciones autorizadas del sprint sobre
+`[VAULT-CORE-070-TRIAJE]` y `[VAULT-CORE-070-KELLY]`: (i) el manifiesto `CAP_UNDERDOG_LEY3_PCT = 0.0150` /
+`FAMILIAS_UNDERDOG_LEY3` / `UMBRAL_VETO_ALTITUD_METROS = 1000.0`; (ii) el Escudo de Altitud con
+precedencia estructural sobre $\alpha_V > 0$ en la rama `ASIMETRIA_VISITANTE`; y (iii) la cota Underdog
+Ley 3 en el asignador monótono. El principio `src == vault` se preserva **exclusivamente para el delta de
+este sprint**. Se declara honestamente (`[GOVERNANCE-01]`) que el bloque de triaje de esta Bóveda es
+anterior a la aduana de overround `[LN-QBE-007-H]` y a la aduana anti-ruptura `[LN-QBE-060-C]`; su
+reconciliación íntegra contra el plano vivo queda FUERA del alcance de esta enmienda y se registra como
+deuda abierta del vault, sin alterar una sola coma de lo ya sellado.
+
+**Enmienda [LN-QBE-116] — Cota de Dominancia P′ ≥ 50% (Decreto 2026-10-20, `SPRINT-H2-DOMINANCE-ATLANTE-MESO-UI-17`,
+Opción A ratificada):** el presente bloque transcribe VERBATIM el delta autorizado sobre
+`[VAULT-CORE-070-TRIAJE]`: (i) el manifiesto `UMBRAL_DOMINANCIA_VISITANTE_PCT = 0.5000`; y (ii) la cota
+anidada **dentro** del predicado de emisión de la Híbrida Visitante, que colapsa a `QBE-00` con
+`arquetipo_veto = "RUPTURA_DOMINANCIA"` toda fila con $p_2 < 0.5000$. El Escudo de Altitud `[LN-QBE-115]`
+conserva la precedencia estructural (su `motivo` y su `arquetipo_veto` no son desplazados) y el borde es
+estricto: $p_2 = 0.5000$ no veta. Alcance: **exclusivamente la ruta `QBE-H2`** — la Familia R, `QBE-C1` y
+`QBE-C2` conservan su cascada íntegra. El principio `src == vault` se preserva **exclusivamente para el
+delta de este sprint**; la deuda de reconciliación íntegra del bloque declarada en la enmienda anterior
+permanece abierta y sin alteración.
 
 ---
 

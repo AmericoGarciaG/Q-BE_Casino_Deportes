@@ -1860,7 +1860,8 @@ def post_backtesting_simulate(payload: SimulatePortfolioRequest) -> Dict[str, An
 
     Contrato IPO: recibe `SimulatePortfolioRequest` y devuelve **verbatim** el reporte de
     `ejecutar_simulacion_rentabilidad` (`[LN-QBE-107]`), incluido el veto fiduciario
-    selectivo de `[LN-QBE-113]`.
+    selectivo de `[LN-QBE-113]` y los parámetros gobernantes de `[LN-QBE-115]` (Γ, Slider de
+    Certeza §5.10 y modo de cobertura δ).
 
     Régimen `[DIRGEN-STRICT]`: esta función es un PASS-THROUGH. Prohibido reimplementar
     PnL, ROI, drawdown o sumatorias de capital: cualquier aritmética nueva aquí sería una
@@ -1895,6 +1896,10 @@ def post_backtesting_simulate(payload: SimulatePortfolioRequest) -> Dict[str, An
             jornadas=jornadas,
             modo=payload.modo_interes,
             excluir_estrategias=payload.excluir_estrategias or [],
+            # [ARCH-1.4.53 / LN-QBE-115] Pass-through puro de los parámetros gobernantes.
+            gamma=payload.gamma_slider,
+            target_certeza_pct=payload.target_certeza_pct,
+            modo_cobertura=payload.modo_cobertura,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Simulación rechazada: {exc}") from exc

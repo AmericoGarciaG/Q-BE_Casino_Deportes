@@ -58,6 +58,23 @@ LAMBDA_SUMA_FUEGO_VETO: float = 3.0000  # Σλ_fuego — techo de xG combinados 
 P_EMPATE_FUEGO_TECHO: float = 0.2200    # p_X^max — cota de empate asfixiado en juegos de fuego
 
 
+# ── [LN-QBE-115] SANEAMIENTO VOL. II — COTA UNDERDOG LEY 3 Y ESCUDO DE ALTITUD ────────────────
+# Manifiesto canónico de `docs/CONSTANTS.md` (§5 «Dominio Financiero» y «Parámetros del Escudo de
+# Altitud y de la Trinidad de Certeza»). La cota del 1.5% es un TECHO adicional EXCLUSIVO de la
+# Familia R: jamás un piso, jamás rescata una orden sub-dimensionada ni infla la bolsa del 25%.
+# El escudo de altitud veta la Híbrida Visitante cuando la visita viaja a >= 1000 m por encima de
+# su plaza (trampa fisiológica certificada en `[LN-QBE-109]` V28, unidireccional).
+CAP_UNDERDOG_LEY3_PCT: float = 0.0150          # Cap_underdog — techo duro de QBE-R1 / QBE-R2
+FAMILIAS_UNDERDOG_LEY3: Tuple[str, ...] = ("QBE-R1", "QBE-R2")
+UMBRAL_VETO_ALTITUD_METROS: float = 1000.0     # ΔAlt^veto — trampa de altitud visitante
+# ── [LN-QBE-116] COTA DE DOMINANCIA P' >= 50% — BLINDAJE DE LA HÍBRIDA VISITANTE ────────────
+# Manifiesto canónico de `docs/CONSTANTS.md` («Parámetros de la Cota de Dominancia P′»). La H2
+# promete dominancia foránea con el empate asegurado en tablas: si el propio P' del modelo no
+# concede mayoría al visitante, la promesa es fiduciariamente falsa. Piso de dominancia, jamás
+# exclusión del 50%: la comparación es ESTRICTA (p2 == 0.5000 NO veta).
+UMBRAL_DOMINANCIA_VISITANTE_PCT: float = 0.5000  # P'_min,visita — piso de mayoría del visitante
+
+
 def calcular_delta_max_analitico(o_fav: float, o_emp: float) -> float:
     """[LN-QBE-077-C] Techo de viabilidad analítica δ_max = O_emp / θ* − 1.0000.
 
@@ -261,7 +278,39 @@ def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float 
 
     if familia == "ASIMETRIA_LOCAL" and oX > theta_1 and aL > 0:
         return {"codigo": "QBE-H1", "nombre": "Híbrida Local + Empate V=0", "alpha": aL, "pa": pa}
+
+    # ── [LN-QBE-115] ESCUDO DE ALTITUD — precedencia estructural ANTES de exigir α_V > 0 ───────
+    # Trampa fisiológica certificada ([LN-QBE-109] V28 unidireccional): la visita sube >= 1000 m
+    # respecto de su plaza y el empate sigue vivo en tablas (O_X > θ2*). El diferencial ausente
+    # vale 0.0: sin evidencia de altitud NO se evalúa el escudo ni se fabrica un veto
+    # (`[GOVERNANCE-01]`). La aduana de altitud es morfológica + de existencia de Dutching.
+    if familia == "ASIMETRIA_VISITANTE":
+        delta_alt_metros = float(payload.get("delta_alt_metros", 0.0) or 0.0)
+        if delta_alt_metros >= UMBRAL_VETO_ALTITUD_METROS and oX > theta_2:
+            return {
+                "codigo": "QBE-00",
+                "nombre": "Veto Fiduciario: Trampa de Altitud Visitante",
+                "alpha": 0.0,
+                "pa": False,
+                "motivo": "Veto Fiduciario: Trampa de Altitud Visitante (Delta Alt >= 1000m)",
+                "arquetipo_veto": "TRAMPA_ALTITUD",
+            }
+
     if familia == "ASIMETRIA_VISITANTE" and oX > theta_2 and aV > 0:
+        # ── [LN-QBE-116] COTA DE DOMINANCIA P' >= 50% ────────────────────────────────────────
+        # Blindaje quirúrgico de la ruta H2: el ataque descansa sobre un favorito foráneo que
+        # el propio modelo NO considera mayoritario. Opera después del Escudo de Altitud
+        # (precedencia estructural del hecho fisiológico certificado) y ANTES de emitir la
+        # Híbrida Visitante. Borde exacto: 0.5000 no veta.
+        if p2 < UMBRAL_DOMINANCIA_VISITANTE_PCT:
+            return {
+                "codigo": "QBE-00",
+                "nombre": "Veto Fiduciario: Ruptura de Dominancia Visitante",
+                "alpha": 0.0,
+                "pa": False,
+                "motivo": "Veto Fiduciario: Dominancia Visitante (P_visitante < 50%)",
+                "arquetipo_veto": "RUPTURA_DOMINANCIA",
+            }
         return {"codigo": "QBE-H2", "nombre": "Híbrida Visita + Empate V=0", "alpha": aV, "pa": pa}
 
     # 3. Underdogs Familia R (Subordinados estrictamente a Capa 0: prohibido en Asimetrías opuestas y Bipolaridad)
@@ -662,6 +711,7 @@ def asignar_capital_monotono_cartera(
     K = len(partidos_ordenados)
     cap_max_partido = round(bankroll * cap_max_partido_pct, 2)
     bolsa_disponible = round(bankroll * cap_max_cartera_pct, 2)
+    cap_underdog = round(bankroll * CAP_UNDERDOG_LEY3_PCT, 2)
 
     probabilidades = [max(0.01, float(p.get("prob_exito_efectiva", 0.33))) for p in partidos_ordenados]
     suma_prob = sum(probabilidades)
@@ -669,7 +719,14 @@ def asignar_capital_monotono_cartera(
 
     for idx, p in enumerate(partidos_ordenados):
         inv_teorica = round(bolsa_disponible * pesos[idx], 2)
-        p["inversion_total"] = min(cap_max_partido, max(5.00, inv_teorica))
+        asignado = min(cap_max_partido, max(5.00, inv_teorica))
+        # [LN-QBE-115] Cota Underdog Ley 3: techo EXCLUSIVO de la Familia R. La cota de la
+        # jornada la dicta `CAP_UNDERDOG_LEY3_PCT` sobre el bankroll vigente B_j; la monotonía y
+        # el prorrateo posteriores sólo pueden reducir, jamás violar el techo.
+        familia_orden = str(p.get("familia") or p.get("estrategia_codigo") or "").upper()
+        if familia_orden in FAMILIAS_UNDERDOG_LEY3:
+            asignado = min(asignado, cap_underdog)
+        p["inversion_total"] = round(asignado, 2)
 
     # Forzar monotonía no creciente: B_(1) >= B_(2) >= ... >= B_(K)
     for i in range(1, K):

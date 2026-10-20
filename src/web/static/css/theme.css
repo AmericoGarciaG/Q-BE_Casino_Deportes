@@ -1251,6 +1251,14 @@ table.fintech-table {
 }
 .bt-table td { padding: 8px 10px; border-bottom: 1px solid #263449; color: var(--text-slate); }
 .bt-jornada-auditada:hover { background: rgba(56, 189, 248, 0.06); }
+/* [ARCH-1.4.54] Croma de la tabla meso financiera por TOKEN: cero hex quemados en el cliente.
+   Una jornada inerte no despliega capital ni liquida PnL, por lo que la atenuación de su `td`
+   no compite con el semáforo de resultado. */
+.bt-table tr.meso-inactiva { background: rgba(71, 85, 105, 0.08); }
+.bt-table tr.meso-inactiva td { color: #475569; font-style: italic; }
+.meso-pnl-positivo { color: var(--accent-green); font-weight: 600; }
+.meso-pnl-negativo { color: var(--accent-red); font-weight: 600; }
+.meso-pnl-neutro { color: var(--text-muted); }
 .bt-pendiente { color: var(--text-muted); font-style: italic; }
 .bt-cobertura-alta { color: var(--accent-green); font-weight: 700; }
 .bt-cobertura-media { color: var(--accent-cyan); font-weight: 700; }

@@ -362,4 +362,11 @@ class SimulatePortfolioRequest(BaseModel):
     rango_jornadas: Optional[str] = "1-11"
     modo_interes: Literal["compuesto", "plano"] = "compuesto"
     excluir_estrategias: Optional[List[str]] = None
+    # ── [ARCH-1.4.53 / LN-QBE-115] Parámetros gobernantes del Saneamiento Vol. II ─────────────
+    # Γ de Capa 0 (dominio legislado [0.67, 0.75]), Slider de Certeza §5.10 en PORCENTAJE
+    # (0.0 = identidad neutra / Modo Crecimiento) y modo de cobertura δ (DEF = V=0, BAL = 50% de
+    # δ*, AGR = δ*). La capa web sólo los transporta: el dominio se valida en el motor.
+    gamma_slider: float = Field(default=0.67, ge=0.67, le=0.75)
+    target_certeza_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    modo_cobertura: Literal["DEF", "BAL", "AGR"] = "DEF"
 

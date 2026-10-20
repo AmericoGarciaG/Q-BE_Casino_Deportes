@@ -108,6 +108,7 @@ CATALOGO_ALTITUDES_LIGAMX: Dict[str, float] = {
     "pumas-unam": 2240.0,
     "club-america": 2240.0,
     "cruz-azul": 2240.0,
+    "atlante": 2240.0,
     "chivas-guadalajara": 1560.0,
     "atlas-fc": 1560.0,
     "club-leon": 1815.0,
@@ -142,6 +143,7 @@ ALIAS_ALTITUDES: Dict[str, str] = {
     "mazatlan": "mazatlan-fc",
     "puebla": "club-puebla",
     "toluca": "deportivo-toluca",
+    "club-atlante": "atlante",
 }
 
 

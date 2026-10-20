@@ -1603,6 +1603,23 @@ def sincronizar_progol_pipeline_completo(
 * **Observabilidad Visual:** El tablero ASCII de salida debe imprimir en su cabecera si existe un filtro de exclusión activo, garantizando transparencia en el contexto de la simulación.
 * **[SHIELD]:** `tests/shield/test_shield_sandbox_rentabilidad_pipeline.py`
 
+### [ARCH-1.4.53] Saneamiento Vol. II: Cota Underdog, Escudo de Altitud y Parámetros Gobernantes del Simulador [ARCH-PILLAR]
+* **Ubicación Canónica:** `scripts/laboratorio/sandbox_rentabilidad_pipeline.py`, con delegación matemática obligatoria a `src/core/contracts/portfolio_math.py` (`[LN-QBE-115]`) y espejo atómico en `docs/DIRGEN_VAULT.md`.
+* **Especificación CLI:** incorpora `--gamma [Γ]` (default `0.67`, dominio `[0.67, 0.75]`), `--certeza [%]` (default `0.0` = slider sin exigencia / Modo Crecimiento) y `--modo-cobertura {DEF,BAL,AGR}` (default `DEF`). Conviven con `--bankroll`, `--modo`, `--jornadas`, `--sin-familia-r`, `--excluir`, `--horizonte` y `--json`.
+* **Contrato REST:** `SimulatePortfolioRequest` transporta `gamma_slider`, `target_certeza_pct` y `modo_cobertura`; `POST /api/backtesting/simulate` los despacha VERBATIM al motor como pasarela pura (cero aritmética en la capa web, `[LN-QBE-114]`).
+* **Observabilidad:** el tablero ASCII publica en cabecera $\Gamma$, la banda de la Trinidad de Certeza y el modo $\delta$ activos; el contrato JSON añade `parametros_simulacion` y `resumen_estrategias` (desglose de posiciones, inversión, PnL y ROI por código estratégico).
+* **Lectura Fáctica de $\Delta_{\text{epist}}$:** `sovereign_distributions.epistemic_delta` con guarda de dominio `0.0 <= Δ <= 1.0` (fuera de dominio ⇒ fallback `0.02`, declarado en `nota_paridad`).
+* **Escudo de Altitud:** el sandbox inyecta `delta_alt_metros` en el `payload` del triaje derivándolo del catálogo inmutable `CATALOGO_ALTITUDES_LIGAMX` de `[LN-QBE-109]` (`altitud_estadio(home_slug)`); `matches_json` no transporta altitud y el dato jamás se fabrica.
+* **[SHIELD]:** `tests/shield/test_shield_saneamiento_estrategias_vol2.py`
+
+### [ARCH-1.4.54] Blindaje de Dominancia P′ ≥ 50%, Altitud Atlante y Saneamiento Cromático de la Tabla Meso [ARCH-PILLAR]
+* **Ubicación Canónica:** `src/core/contracts/portfolio_math.py` (cota de dominancia, con espejo atómico en `docs/DIRGEN_VAULT.md` → `[VAULT-CORE-070-TRIAJE]`), `scripts/laboratorio/sandbox_contexto_shocks_pipeline.py` (catálogo inmutable `CATALOGO_ALTITUDES_LIGAMX` de `[LN-QBE-109]`) y la capa de presentación `src/web/static/js/app.js` + `src/web/static/css/theme.css` (`[DBBD-FUNGIBLE]`).
+* **Cota de Dominancia (`[LN-QBE-116]`):** la cota se intercala **dentro** del predicado de emisión de la Híbrida Visitante (`ASIMETRIA_VISITANTE` + `O_X > θ_2^*` + `α_V > 0`), de modo que su alcance es exclusivamente la ruta `QBE-H2`: `p_visitante < UMBRAL_DOMINANCIA_VISITANTE_PCT` (`0.5000`) colapsa la orden a `QBE-00` con `motivo = "Veto Fiduciario: Dominancia Visitante (P_visitante < 50%)"` y `arquetipo_veto = "RUPTURA_DOMINANCIA"`. El borde es estricto: `0.5000` no veta. El Escudo de Altitud `[LN-QBE-115]` conserva la precedencia estructural.
+* **Hecho de altitud (Atlante):** el catálogo inmutable incorpora `"atlante": 2240.0` y su forma compuesta `"club-atlante"` con alias de nomenclatura viva. Es un hecho declarado (cero calibración local, `[GOVERNANCE-01]`): $\Delta\text{Alt}^+(\text{atlante}, \text{rayados-de-monterrey}) = 1700$ m activa el escudo y neutraliza `LIGAMX-J10-01`.
+* **Saneamiento cromático de la tabla meso:** `_pintarMesoFinanciera` deja de emitir los hex quemados `#10B981` / `#EF4444` y clasifica PnL y ROI con las clases `meso-pnl-positivo`, `meso-pnl-negativo` y `meso-pnl-neutro` (tokens `--accent-green`, `--accent-red`, `--text-muted`); las jornadas sin posiciones operables reciben la clase de atenuación `meso-inactiva` (`#475569`). Cero aritmética en el cliente: el croma sólo lee los campos certificados del contrato.
+* **Certificación del Bucle Reflexivo (corpus real J1–J11, `modo="compuesto"`, bankroll $10,000.00$):** ROI AGR `+8.41%` ($\ge +8.0\%$), PnL `+$841.11` MXN, `18` posiciones operables, drawdown máximo `0.04%` (línea base previa: ROI `−0.26%`, PnL `−$26.18`, 21 posiciones, drawdown `8.00%`).
+* **[SHIELD]:** `tests/shield/test_shield_h2_dominance_and_atlante_altitude.py`
+
 ### [ARCH-1.4.12-B] Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR]
 * **Endpoint REST:** `GET /api/admin/status/drift`
   - Operación pura de solo lectura (`Read-Only`) en tiempo real.

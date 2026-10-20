@@ -701,6 +701,13 @@ function actualizarProgresoHUD(paso, porcentaje) {
 // Bankroll = $100.00 MXN · Γ (Concentración de Masa) = 70% (0.70).
 const DEFAULTS_CARTERA = Object.freeze({ bankroll: 100.0, gamma: 0.70 });
 
+// [ARCH-1.4.53 / LN-QBE-115] Defaults y dominio de la ventanilla para los parámetros gobernantes
+// del laboratorio de rentabilidad. `CERTEZA_PCT_DEFAULT` replica el `value="80"` del slider
+// `#slider-risk-certainty` (PORCENTAJE, no fracción) y `MODOS_COBERTURA_VALIDOS` es el dominio
+// legislado del tríptico δ ([ARCH-1.4.37]). Cero lógica financiera: sólo guardas de transporte.
+const CERTEZA_PCT_DEFAULT = 80.0;
+const MODOS_COBERTURA_VALIDOS = Object.freeze(["DEF", "BAL", "AGR"]);
+
 async function ejecutarDespachoPortafolio() {
     const bankrollInput = document.getElementById('input-bankroll') || document.getElementById('bankroll-input');
     const bankrollParsed = bankrollInput ? parseFloat(bankrollInput.value) : NaN;
@@ -3247,11 +3254,46 @@ async function iniciarSimulacionRentabilidad() {
     const casillaFamiliaR = document.getElementById("chk-excluir-familia-r");
     if (casillaFamiliaR && casillaFamiliaR.checked) excluir.push("QBE-R1", "QBE-R2");
 
+    // ── [ARCH-1.4.53 / LN-QBE-115] Parámetros gobernantes del laboratorio ────────────────────
+    // Γ (Concentración de Masa de Capa 0), Slider de Certeza §5.10 y modo de cobertura δ viajan
+    // VERBATIM desde la ventanilla hacia `POST /api/markets/backtesting/simulate`. Cero
+    // aritmética en el cliente: la banda de la Trinidad de Certeza y el δ efectivo los resuelve
+    // el motor como pass-through puro ([LN-QBE-114]). Los nombres de llave son los LEGISLADOS en
+    // `SimulatePortfolioRequest` (`gamma_slider`, `target_certeza_pct`, `modo_cobertura`): el DTO
+    // declara `extra="ignore"`, de modo que una llave mal nombrada se descartaría en silencio.
+    //
+    // Unidades: `target_certeza_pct` es PORCENTAJE (0.0-100.0) — a diferencia del
+    // `target_certeza` fraccionario (0.80) de la ventanilla viva. Prohibido reutilizar el factor
+    // de normalización de esa ruta.
+    //
+    // Γ: tri-estado `input[name="opcion_gamma"]` (67% | 70% | 75%). Fallback = default legislado
+    // de la UI `DEFAULTS_CARTERA.gamma` (0.70, [DICTAMEN DIRECTOR 2026-10-11]): pantalla y motor
+    // jamás divergen si el grupo de radios quedara sin marcar.
+    const gammaSeleccionado = parseFloat(
+        document.querySelector('input[name="opcion_gamma"]:checked')?.value ||
+        String(DEFAULTS_CARTERA.gamma)
+    );
+    // Certeza: `#slider-risk-certainty` publica el porcentaje ya escalado (70-90) + display
+    // `#certainty-val`. Se transporta el valor tal cual, sin normalizar a fracción.
+    const certezaSlider = document.getElementById("slider-risk-certainty");
+    const certezaParsed = certezaSlider ? parseFloat(certezaSlider.value) : NaN;
+    const certezaSeleccionada = Number.isFinite(certezaParsed)
+        ? certezaParsed
+        : CERTEZA_PCT_DEFAULT;
+    // Cobertura: `state.modo_cobertura` es la ÚNICA fuente de verdad del tríptico (clase `active`
+    // y estilos re-derivados de él, [ARCH-1.4.12-C]). Guarda contra valores fuera del dominio
+    // legislado `DEF|BAL|AGR`: degradación al default de la Mesa (`BAL`).
+    const MODO_COBERTURA_DEFAULT = "BAL";
+    const modoCoberturaSeleccionado = MODOS_COBERTURA_VALIDOS.includes(state.modo_cobertura)
+        ? state.modo_cobertura
+        : MODO_COBERTURA_DEFAULT;
+
     const estado = document.getElementById("bt-financiero-estado");
     const boton = document.getElementById("btn-calcular-cartera");
     if (boton) boton.disabled = true;
     if (estado) {
-        estado.textContent = `Simulando J${rango} sobre la bóveda 3NF… ` +
+        estado.textContent = `Simulando J${rango} sobre la bóveda 3NF · Γ ${gammaSeleccionado.toFixed(2)} · ` +
+            `Certeza ${certezaSeleccionada.toFixed(1)}% · Cobertura ${modoCoberturaSeleccionado}… ` +
             (excluir.length ? `veto activo: ${excluir.join(", ")}.` : "sin exclusiones fiduciarias.");
     }
 
@@ -3265,6 +3307,12 @@ async function iniciarSimulacionRentabilidad() {
                 modo_interes: "compuesto",
                 // [LN-QBE-113] El veto lo ejecuta el motor: la UI sólo declara la intención.
                 excluir_estrategias: excluir,
+                // [ARCH-1.4.53 / LN-QBE-115] Pass-through VERBATIM de los parámetros gobernantes.
+                // Nombres LEGISLADOS del DTO: `extra="ignore"` descartaría en silencio cualquier
+                // alias (`gamma`, `target_certeza`) y el motor volvería a sus defaults.
+                gamma_slider: gammaSeleccionado,
+                target_certeza_pct: certezaSeleccionada,
+                modo_cobertura: modoCoberturaSeleccionado,
             }),
         });
         if (!resp.ok) {
@@ -3335,34 +3383,59 @@ function pintarPanelFinanciero(data) {
             : "Sin exclusiones fiduciarias declaradas.";
         const primera = jornadasSolicitadas.length ? jornadasSolicitadas[0] : "--";
         const ultima = jornadasSolicitadas.length ? jornadasSolicitadas[jornadasSolicitadas.length - 1] : "--";
-        estado.textContent = `Simulación certificada [LN-QBE-107] · rango J${primera}-J${ultima} · ${veto}`;
+        // [ARCH-1.4.53 / LN-QBE-115] TRANSCRIPCIÓN del bloque `parametros_simulacion` que sella el
+        // motor: certifica en pantalla que Γ, la banda de la Trinidad de Certeza y el δ efectivo
+        // fueron los despachados (paridad estricta backend↔pantalla, [GOVERNANCE-01]). Cero
+        // recálculo: si la llave falta, se degrada a `--` sin inventar un valor.
+        const parametros = data.parametros_simulacion || {};
+        const numeroParam = (valor, decimales) =>
+            Number.isFinite(Number(valor)) ? Number(valor).toFixed(decimales) : "--";
+        const gobernantes = `Γ ${numeroParam(parametros.gamma, 2)} · ` +
+            `Certeza ${numeroParam(parametros.target_certeza_pct, 1)}% (${parametros.modo_certeza || "--"}) · ` +
+            `Cobertura ${parametros.modo_cobertura || "--"}`;
+        estado.textContent = `Simulación certificada [LN-QBE-107] · rango J${primera}-J${ultima} · ` +
+            `${gobernantes} · ${veto}`;
     }
 
     _pintarMesoFinanciera(Array.isArray(data.jornadas_detalle) ? data.jornadas_detalle : []);
     _dibujarCurvaCapital(data);
 }
 
+/**
+ * [ARCH-1.4.54] Clasificador cromático por TOKEN: la tabla meso jamás emite hex quemados.
+ * El croma sólo lee el campo certificado del contrato; cero aritmética de negocio en cliente.
+ */
+const _clasePnlMeso = (valor) => {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero) || numero === 0) return "meso-pnl-neutro";
+    return numero > 0 ? "meso-pnl-positivo" : "meso-pnl-negativo";
+};
+
 function _pintarMesoFinanciera(detalle) {
     const cuerpo = document.getElementById("cuerpo-meso-financiero");
     if (!cuerpo) return;
     if (!detalle.length) {
-        cuerpo.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-muted);">` +
+        cuerpo.innerHTML = `<tr class="meso-inactiva"><td colspan="7" style="text-align:center; padding:18px;">` +
             "La simulación no devolvió jornadas liquidables sobre el rango solicitado.</td></tr>";
         return;
     }
     cuerpo.innerHTML = detalle.map(jornada => {
         const pnl = Number(jornada.pnl_jornada);
-        const colorPnl = pnl >= 0 ? "#10B981" : "#EF4444";
+        const roi = Number(jornada.roi_jornada_pct || 0);
+        const operables = Number(jornada.posiciones_operables || 0);
         const vetos = Array.isArray(jornada.descartes)
             ? jornada.descartes.filter(d => d && d.veto_fiduciario).length
             : 0;
+        const clases = ["bt-jornada-auditada"];
+        // [ARCH-1.4.54] Jornada sin despliegue operativo: se atenúa, jamás se disimula.
+        if (operables === 0) clases.push("meso-inactiva");
         return `
-            <tr class="bt-jornada-auditada">
+            <tr class="${clases.join(" ")}">
                 <td><strong>J${jornada.jornada}</strong></td>
-                <td class="numeric">${jornada.posiciones_operables || 0}</td>
+                <td class="numeric">${operables}</td>
                 <td class="numeric">${_fmtMxn(jornada.inversion_total)}</td>
-                <td class="numeric" style="color:${colorPnl};">${pnl > 0 ? "+" : ""}${_fmtMxn(pnl)}</td>
-                <td class="numeric">${Number(jornada.roi_jornada_pct || 0).toFixed(2)}%</td>
+                <td class="numeric ${_clasePnlMeso(pnl)}">${pnl > 0 ? "+" : ""}${_fmtMxn(pnl)}</td>
+                <td class="numeric ${_clasePnlMeso(roi)}">${roi.toFixed(2)}%</td>
                 <td class="numeric">${_fmtMxn(jornada.bankroll_final)}</td>
                 <td class="numeric">${vetos}</td>
             </tr>`;

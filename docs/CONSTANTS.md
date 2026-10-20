@@ -131,6 +131,7 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 |:---:|---|---|:---:|:---:|---|---|
 | $\text{Cap}_{\text{partido}}$ | Hard-Cap Individual Máximo | `0.0800` ($8.0\%$) | % Bankroll | `[LN-QBE-070-B]` | Exposición máxima por evento | Inviolable (The Shield Invariante #3) |
 | $\text{Cap}_{\text{cartera}}$ | Hard-Cap Global de Jornada | `0.2500` ($25.0\%$) | % Bankroll | `[LN-QBE-070-B]` | Exposición total simultánea de jornada | Inviolable (The Shield Invariante #4) |
+| $\text{Cap}_{\text{underdog}}$ | Cota Underdog Ley 3 (Familia R) | `0.0150` ($1.5\%$) | % Bankroll | `[LN-QBE-115]` | Techo exclusivo de `QBE-R1`/`QBE-R2` | **Techo, jamás piso**: no rescata órdenes sub-dimensionadas |
 | $\text{Piso}_{\text{ventanilla}}$ | Apuesta Mínima Legal | `$2.00` | MXN | `[LN-QBE-071]` | Terminal físico de casino | Ningún boleto split puede ser $< 2.00$ |
 | $\text{Tol}_{\text{tablas}}$ | Tolerancia Bancaria $V=0$ | `$0.08` | MXN | `[LN-QBE-070]` | Desviación máxima de indemnidad | $\|B_{\text{seg}} \cdot O_{\text{emp}} - B_i\| \le 0.08$ |
 
@@ -141,6 +142,18 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $P_{\max}^{\min}$ | `PMAX_MIN_OPERABLE` | `0.3800` (38.0%) | Fracción | `[LN-QBE-060-C]` | Piso de masa del favorito para apostar |
 | $\sum \lambda_{\text{fuego}}$ | `LAMBDA_SUMA_FUEGO_VETO` | `3.0000` | Goles xG | `[LN-QBE-060-C]` | Techo de goles combinados para veto en 1X2 |
 | $p_{X,\text{fuego}}^{\max}$ | `P_EMPATE_FUEGO_TECHO` | `0.2200` (22.0%) | Fracción | `[LN-QBE-060-C]` | Cota de asfixia de empate en partidos de fuego |
+
+### Parámetros del Escudo de Altitud y de la Trinidad de Certeza (Saneamiento Vol. II)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Propósito Fiduciario |
+|:---:|---|---|:---:|:---:|---|
+| $\Delta\text{Alt}^{\text{veto}}$ | `UMBRAL_VETO_ALTITUD_METROS` | `1000.0` | Metros | `[LN-QBE-115]` | Veta la Híbrida Visitante (`QBE-H2`) por trampa de altitud |
+| $\text{Certeza}_{\text{conservador}}$ | Banda Conservadora §5.10 | `90.0` | % | `[LN-QBE-115]` | Admite sólo Híbridas con cobertura (veta D1/D2/R1/R2) |
+| $\text{Certeza}_{\text{balanceado}}$ | Banda Balanceada §5.10 | `80.0` | % | `[LN-QBE-115]` | Veta Familia R y directas foráneas (`QBE-D2`) |
+
+### Parámetros de la Cota de Dominancia P′ (Blindaje H2)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Propósito Fiduciario |
+|:---:|---|---|:---:|:---:|---|
+| $P'_{\min,\text{visita}}$ | `UMBRAL_DOMINANCIA_VISITANTE_PCT` | `0.5000` (50.0%) | Fracción | `[LN-QBE-116]` | Veta la Híbrida Visitante (`QBE-H2`) si el propio P′ del modelo no concede mayoría al visitante |
 
 ---
 
@@ -164,6 +177,7 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 | $\rho_{\text{estable}}$ (`0.55`) | $\rho_{\text{shock}}$ (`0.30`) | El ancla macro sólo se relaja con **shock verificado** ($Q_{\text{mod}} \ne 1.0$) | `[LN-QBE-036]` |
 | $\text{Cap}_{\text{partido}}$ (`0.08`) | $\text{Cap}_{\text{cartera}}$ (`0.25`) | El cap individual no puede superar el 32% del cap de cartera (relación $0.08/0.25$) | `[LN-QBE-070-B]` |
 | $\tau_{\text{disp}}$ (`0.12`) | $\text{Tol}_{\text{tablas}}$ (`0.08` MXN) | Uno mide desacuerdo epistémico en probabilidad; el otro indemnidad bancaria en pesos | `[LN-QBE-070-B]` / `[LN-QBE-070]` |
+| $\text{Cap}_{\text{partido}}$ (`0.08`) | $\text{Cap}_{\text{underdog}}$ (`0.015`) | **Jamás son intercambiables**: la cota del 1.5% es un techo adicional EXCLUSIVO de la Familia R y no sustituye el hard-cap individual | `[LN-QBE-070-B]` / `[LN-QBE-115]` |
 
 ---
 

@@ -2,6 +2,7 @@
 """
 [LN-QBE-107] / [ARCH-1.4.46] SANDBOX DE RENTABILIDAD — SIMULADOR RETROSPECTIVO DEL FONDO.
 [LN-QBE-113] / [ARCH-1.4.52] VETO FIDUCIARIO SELECTIVO POR FAMILIA ESTRATÉGICA.
+[LN-QBE-115] / [ARCH-1.4.53] COTA UNDERDOG LEY 3, ESCUDO DE ALTITUD Y TRINIDAD DE CERTEZA.
 
 Misión
 ------
@@ -15,7 +16,8 @@ Régimen: `[HÍBRIDO DUAL-TRACK]`
   ordenamiento lexicográfico, el sizing monótono y la partición dutching NO se reimplementan:
   se invocan VERBATIM desde `src.core.contracts.portfolio_math`.
 * `[DBBD-FUNGIBLE]`: composición del pipeline, CLI (`--bankroll` / `--modo` / `--jornadas` /
-  `--sin-familia-r` / `--excluir` / `--json`) y tablero ASCII.
+  `--sin-familia-r` / `--excluir` / `--gamma` / `--certeza` / `--modo-cobertura` / `--json`) y
+  tablero ASCII.
 
 Axiomas operativos
 ------------------
@@ -23,20 +25,30 @@ Axiomas operativos
    `data/qbe_database.db`; prohibido abrir red. El módulo es una función pura de la bóveda.
 2. **Ventanilla retrospectiva declarada:** el triaje se alimenta con `es_operable = True`
    (idéntico al carril de Backtesting `[ARCH-1.4.35]`: la liquidación real EXIGE el resultado
-   consumado) y con el estrato legislado `delta_epist = 0.02` de `[LN-QBE-070-C]`; la columna
-   3NF `epistemic_delta` NO se transcribe porque su unidad no está certificada.
+   consumado) y con el `epistemic_delta` FÁCTICO de la bóveda bajo guarda de dominio
+   (`[LN-QBE-115]`): `0.0 <= Δ <= 1.0` ⇒ valor real; fuera de dominio o ausente ⇒ fallback
+   legislado `0.02` de `[LN-QBE-070-C]`. La fuente efectiva se declara en `nota_paridad`.
 3. **Cero fabricación de resultados:** el único oráculo es `matches.score_home` / `score_away`.
    Sin marcador la posición se declara `NO_LIQUIDABLE` con capital devuelto (jamás un `0-0`).
 4. **Instrumento de medición, no de optimización:** no recalibra parámetros, no reentrena
-   modelos y no altera una sola fila de la bóveda.
+   modelos y no altera una sola fila de la bóveda. Γ, el Slider de Certeza y el modo δ se
+   TRANSPORTAN y se aplican; jamás se optimizan dentro del instrumento.
 5. **Paridad declarada:** las familias con cobertura (H1/H2/R1/R2) se particionan con
-   `calcular_dutching_v0` (ley V=0 uniforme de `[LN-QBE-070]`); la rama R2 del motor vivo usa
-   ponderación inversa de probabilidad y esa divergencia se publica en el reporte.
+   `calcular_particion_dutching_dinamico` (`[LN-QBE-077-B/C/D]`); el modo `DEF` degenera
+   exactamente en la ley V=0 de `[LN-QBE-070]`. La rama R2 del motor vivo usa ponderación
+   inversa de probabilidad y esa divergencia se publica en el reporte.
 6. **Veto fiduciario selectivo (`[LN-QBE-113]`):** la exclusión intercepta el resultado del
    triaje canónico DESPUÉS del triaje y ANTES del ordenamiento lexicográfico, del sizing monótono
    y del dutching. El código vetado colapsa atómicamente a `QBE-00` / "Veto Fiduciario Selectivo"
    con `alpha = 0.0`, no absorbe capital y se declara en `descartes` con `veto_fiduciario = True`.
    Cero mutación de `portfolio_math`: el veto es orquestación, no aritmética.
+7. **Escudo de Altitud (`[LN-QBE-115]`):** ΔAlt⁺ se deriva del catálogo inmutable
+   `CATALOGO_ALTITUDES_LIGAMX` de `[LN-QBE-109]` (`altitud_estadio(home_slug)`). `matches_json`
+   no transporta altitud: sin catálogo ⇒ `0.0` (el escudo NO se evalúa; cero veto fabricado).
+8. **Trinidad de Certeza §5.10 (`[LN-QBE-115]`):** el Slider de Certeza es un filtro ACTIVO de
+   admisión. `>= 90%` Conservador (sólo Híbridas con cobertura) · `80-90%` Balanceado (veta
+   Familia R y `QBE-D2`) · `< 80%` Crecimiento (cartera plena). `0.0` es la identidad neutra que
+   reproduce la línea base. Sus abstenciones se cuentan aparte (`vetos_certeza_aplicados`).
 
 Uso:
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --bankroll 10000
@@ -44,6 +56,7 @@ Uso:
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --json
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --sin-familia-r
     python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --excluir QBE-C1,QBE-C2
+    python -m scripts.laboratorio.sandbox_rentabilidad_pipeline --jornadas 1-11 --certeza 90 --modo-cobertura BAL
 """
 from __future__ import annotations
 
@@ -65,9 +78,12 @@ from sqlalchemy import select
 
 # ── Planos sellados (cero reimplementación de fórmulas) ─────────────────────────────────────
 from src.core.contracts.portfolio_math import (
+    CAP_UNDERDOG_LEY3_PCT,
     FAMILIAS_CON_COBERTURA,
+    UMBRAL_DOMINANCIA_VISITANTE_PCT,
+    UMBRAL_VETO_ALTITUD_METROS,
     asignar_capital_monotono_cartera,
-    calcular_dutching_v0,
+    calcular_particion_dutching_dinamico,
     calcular_probabilidad_exito_estrategia,
     contraer_distribucion_fiduciaria,
     ordenar_cartera_por_certeza_lexicografica,
@@ -80,7 +96,8 @@ logger = logging.getLogger("SandboxRentabilidad")
 
 # ── Parámetros legislados ──────────────────────────────────────────────────────────────────
 GAMMA_BASE = 0.67                        # [LN-QBE-060-B] umbral de masa Capa 0
-DELTA_EPIST_LEGISLADO = 0.02             # [LN-QBE-070-C] estrato R-1 por defecto
+GAMMA_MIN, GAMMA_MAX = 0.67, 0.75        # [LN-QBE-059] dominio legislado del slider Γ
+DELTA_EPIST_LEGISLADO = 0.02             # [LN-QBE-070-C] estrato R-1 (fallback de Δ_epist)
 CAP_MAX_PARTIDO_PCT = 0.08               # [LN-QBE-082] tope individual
 CAP_MAX_CARTERA_PCT = 0.25               # [LN-QBE-082] bolsa de jornada
 PISO_VENTANILLA_MXN = 2.00               # [LN-QBE-071] piso por boleto
@@ -107,6 +124,19 @@ MODOS_VALIDOS = ("compuesto", "plano")
 CODIGO_VETO_FIDUCIARIO = "QBE-00"
 NOMBRE_VETO_FIDUCIARIO = "Veto Fiduciario Selectivo"
 FAMILIA_R_CODIGOS: Tuple[str, ...] = ("QBE-R1", "QBE-R2")
+
+# ── [LN-QBE-115] Cobertura dinámica δ y Trinidad de Certeza §5.10 ─────────────────────────
+MODOS_COBERTURA_VALIDOS: Tuple[str, ...] = ("DEF", "BAL", "AGR")
+MODO_COBERTURA_DEF = "DEF"
+UMBRAL_CERTEZA_CONSERVADOR = 90.0        # >= 90.0 ⇒ sólo Híbridas con cobertura
+UMBRAL_CERTEZA_BALANCEADO = 80.0         # >= 80.0 ⇒ veta Familia R y QBE-D2
+MODO_CERTEZA_CRECIMIENTO = "CRECIMIENTO"
+MODO_CERTEZA_BALANCEADO = "BALANCEADO"
+MODO_CERTEZA_CONSERVADOR = "CONSERVADOR"
+NOMBRE_VETO_CERTEZA = "Veto Trinidad de Certeza"
+VETOS_CERTEZA_CONSERVADOR: Tuple[str, ...] = ("QBE-D1", "QBE-D2", "QBE-R1", "QBE-R2")
+VETOS_CERTEZA_BALANCEADO: Tuple[str, ...] = ("QBE-R1", "QBE-R2", "QBE-D2")
+CERTEZA_NEUTRA_PCT = 0.0                 # identidad: reproduce la línea base sin filtro
 
 
 def _a_float(valor: Any, defecto: float = 0.0) -> float:
@@ -136,6 +166,48 @@ def _normalizar_exclusiones(codigos: Optional[Sequence[str]]) -> Tuple[str, ...]
         str(codigo).strip().upper() for codigo in codigos if str(codigo or "").strip()
     }
     return tuple(sorted(normalizados))
+
+
+def _resolver_trinidad_certeza(target_certeza_pct: float) -> Tuple[str, Tuple[str, ...]]:
+    """`[LN-QBE-115]` Resuelve la banda de la Trinidad de Certeza §5.10 y su tupla de vetos."""
+    certeza = _a_float(target_certeza_pct, CERTEZA_NEUTRA_PCT)
+    if certeza >= UMBRAL_CERTEZA_CONSERVADOR:
+        return (MODO_CERTEZA_CONSERVADOR, VETOS_CERTEZA_CONSERVADOR)
+    if certeza >= UMBRAL_CERTEZA_BALANCEADO:
+        return (MODO_CERTEZA_BALANCEADO, VETOS_CERTEZA_BALANCEADO)
+    return (MODO_CERTEZA_CRECIMIENTO, ())
+
+
+def _delta_epist_factico(distribucion: Any) -> Tuple[float, str]:
+    """`[LN-QBE-115]` Δ_epist fáctico con guarda de dominio y fallback legislado `0.02`.
+
+    Si `0.0 <= Δ <= 1.0` se usa el valor fáctico de `sovereign_distributions`; cualquier otro
+    caso (legado no normalizado, `None`, `NaN`) degenera al estrato R-1 de `[LN-QBE-070-C]`.
+    Cero inferencia: la unidad sólo se acepta dentro de su dominio probabilístico.
+    """
+    valor = getattr(distribucion, "epistemic_delta", None) if distribucion is not None else None
+    try:
+        delta = float(valor) if valor is not None else None
+    except (TypeError, ValueError):
+        delta = None
+    if delta is None or not (0.0 <= delta <= 1.0):
+        return (DELTA_EPIST_LEGISLADO, "fallback")
+    return (delta, "factico")
+
+
+def _delta_altitud_metros(home_slug: Any, away_slug: Any) -> float:
+    """`[LN-QBE-115]` ΔAlt⁺ unidireccional desde el catálogo inmutable de `[LN-QBE-109]`.
+
+    Club fuera de catálogo ⇒ `0.0` (SIN EVIDENCIA): el escudo NO se evalúa y jamás se fabrica
+    un veto de altitud. Import diferido para no cargar el plano contextual en cada arranque.
+    """
+    from scripts.laboratorio.sandbox_contexto_shocks_pipeline import altitud_estadio
+
+    altitud_local = altitud_estadio(home_slug)
+    altitud_visita = altitud_estadio(away_slug)
+    if altitud_local is None or altitud_visita is None:
+        return 0.0
+    return round(max(0.0, float(altitud_local) - float(altitud_visita)), 4)
 
 
 def _familias_con_cobertura() -> Tuple[str, ...]:
@@ -375,6 +447,10 @@ def _construir_cartera_jornada(
     cargado: Dict[str, Any],
     base_capital: float,
     excluir_estrategias: Sequence[str] = (),
+    gamma: float = GAMMA_BASE,
+    modo_cobertura: str = MODO_COBERTURA_DEF,
+    familias_veto_certeza: Sequence[str] = (),
+    modo_certeza: str = MODO_CERTEZA_CRECIMIENTO,
 ) -> Dict[str, Any]:
     """Construye y liquida la cartera de una jornada sobre la base de capital declarada.
 
@@ -387,8 +463,10 @@ def _construir_cartera_jornada(
     # Normalización defensiva en la frontera del veto (`[LN-QBE-113]`): idempotente, garantiza que
     # un llamador directo con minúsculas o duplicados no anule silenciosamente la abstención.
     vetos = frozenset(_normalizar_exclusiones(excluir_estrategias))
+    vetos_certeza = frozenset(_normalizar_exclusiones(familias_veto_certeza))
     candidatos: List[Dict[str, Any]] = []
     descartes: List[Dict[str, Any]] = []
+    origen_delta_conteo: Dict[str, int] = {"factico": 0, "fallback": 0}
 
     for fixture in cargado["fixtures"]:
         mid = str(fixture.get("id_partido") or "").strip()
@@ -427,13 +505,23 @@ def _construir_cartera_jornada(
         pago_anticipado = bool(
             momios.get("pa") or momios.get("pago_anticipado") or fixture.get("pago_anticipado")
         )
+        # ── [LN-QBE-115] Δ_epist fáctico (guarda de dominio) y ΔAlt⁺ del catálogo inmutable ──
+        delta_epist, origen_delta = _delta_epist_factico(distribucion)
+        origen_delta_conteo[origen_delta] = origen_delta_conteo.get(origen_delta, 0) + 1
+        delta_alt_metros = _delta_altitud_metros(
+            fixture.get("home_team_slug")
+            or (partido.home_team_slug if partido is not None else None),
+            fixture.get("away_team_slug")
+            or (partido.away_team_slug if partido is not None else None),
+        )
         payload = {
             "p_local": float(p_l),
             "p_empate": float(p_e),
             "p_visitante": float(p_v),
             # Ventanilla retrospectiva: la liquidación real exige el resultado consumado.
             "es_operable": True,
-            "delta_epist": DELTA_EPIST_LEGISLADO,
+            "delta_epist": delta_epist,
+            "delta_alt_metros": delta_alt_metros,
             "p_under_25": _a_float(fixture.get("p_under_25")),
             "lambda_home": _a_float(fixture.get("lambda_home")),
             "lambda_away": _a_float(fixture.get("lambda_away")),
@@ -444,7 +532,7 @@ def _construir_cartera_jornada(
             "Under_25": _a_float(momios.get("Under_25")),
         }
 
-        triaje = triaje_determinista_9_estrategias(payload, cuotas, gamma=GAMMA_BASE)
+        triaje = triaje_determinista_9_estrategias(payload, cuotas, gamma=gamma)
         codigo_triaje = str(triaje.get("codigo") or CODIGO_VETO_FIDUCIARIO).upper()
 
         # ── [LN-QBE-113] Intercepción PRE-dimensionamiento: veto fiduciario selectivo ──────
@@ -452,13 +540,30 @@ def _construir_cartera_jornada(
         # lexicográfico ([LN-QBE-081]) y de la asignación monótona de capital ([LN-QBE-082]):
         # la posición vetada jamás absorbe capital y queda declarada en abstención fiduciaria.
         vetada = bool(vetos) and codigo_triaje != CODIGO_VETO_FIDUCIARIO and codigo_triaje in vetos
-        if vetada:
+        # ── [LN-QBE-115] Trinidad de Certeza §5.10: filtro ACTIVO de admisión de cartera ───────
+        # Intercepta en el MISMO punto pre-dimensionamiento que `[LN-QBE-113]`, pero se cuenta
+        # aparte (`veto_trinidad_certeza`) para no contaminar la traza del veto selectivo.
+        vetada_certeza = (
+            bool(vetos_certeza)
+            and codigo_triaje != CODIGO_VETO_FIDUCIARIO
+            and codigo_triaje in vetos_certeza
+        )
+        if vetada or vetada_certeza:
+            if vetada:
+                nombre_veto = NOMBRE_VETO_FIDUCIARIO
+                motivo_veto = f"{NOMBRE_VETO_FIDUCIARIO}: {codigo_triaje} excluida de la jornada"
+            else:
+                nombre_veto = NOMBRE_VETO_CERTEZA
+                motivo_veto = (
+                    f"{NOMBRE_VETO_CERTEZA} [{modo_certeza}] (§5.10): "
+                    f"{codigo_triaje} no admitida por el nivel de certeza solicitado"
+                )
             triaje = {
                 **triaje,
                 "codigo": CODIGO_VETO_FIDUCIARIO,
-                "nombre": NOMBRE_VETO_FIDUCIARIO,
+                "nombre": nombre_veto,
                 "alpha": 0.0,
-                "motivo": f"{NOMBRE_VETO_FIDUCIARIO}: {codigo_triaje} excluida de la jornada",
+                "motivo": motivo_veto,
             }
 
         codigo = str(triaje.get("codigo") or CODIGO_VETO_FIDUCIARIO).upper()
@@ -471,6 +576,9 @@ def _construir_cartera_jornada(
             if vetada:
                 descarte["familia_vetada"] = codigo_triaje
                 descarte["veto_fiduciario"] = True
+            if vetada_certeza:
+                descarte["familia_no_admitida"] = codigo_triaje
+                descarte["veto_trinidad_certeza"] = True
             descartes.append(descarte)
             continue
 
@@ -490,13 +598,16 @@ def _construir_cartera_jornada(
             "odd_und": o_v if favorece_local else o_l,
             "fav_lado": "LOCAL" if favorece_local else "VISITANTE",
             "pago_anticipado": pago_anticipado,
-            "delta_epist": DELTA_EPIST_LEGISLADO,
+            "delta_epist": delta_epist,
+            "delta_alt_metros": delta_alt_metros,
             "marcador_local": partido.score_home if partido is not None else None,
             "marcador_visitante": partido.score_away if partido is not None else None,
             "estado_partido": str(partido.status) if partido is not None else "SIN_REGISTRO",
         })
 
-    return _dimensionar_y_liquidar(jornada, candidatos, descartes, base_capital)
+    cartera = _dimensionar_y_liquidar(jornada, candidatos, descartes, base_capital, modo_cobertura)
+    cartera["delta_epist_origen"] = dict(origen_delta_conteo)
+    return cartera
 
 
 def _dimensionar_y_liquidar(
@@ -504,6 +615,7 @@ def _dimensionar_y_liquidar(
     candidatos: List[Dict[str, Any]],
     descartes: List[Dict[str, Any]],
     base_capital: float,
+    modo_cobertura: str = MODO_COBERTURA_DEF,
 ) -> Dict[str, Any]:
     """Contracción fiduciaria → orden lexicográfico → sizing monótono → dutching → liquidación."""
     if not candidatos or float(base_capital) <= 0.0:
@@ -561,11 +673,20 @@ def _dimensionar_y_liquidar(
             capital_no_desplegado = round(capital_no_desplegado + inversion, 2)
             continue
 
+        delta_cobertura = 0.0
+        roi_favorito_pct = 0.0
+        roi_empate_pct = 0.0
         if familia in familias_con_cobertura:
-            # [LN-QBE-070] Partición V=0 sellada: B_seg = B_i / O_empate, B_prio = B_i - B_seg.
-            b_prio, b_seg, _, _ = calcular_dutching_v0(
-                inversion, candidato["odd_fav"], candidato["odd_emp"]
+            # [LN-QBE-077-B/C/D] Partición dinámica sellada. El modo `DEF` degenera EXACTAMENTE en
+            # la ley V=0 de [LN-QBE-070]: B_seg = B_i / O_empate y B_prio = B_i - B_seg.
+            particion = calcular_particion_dutching_dinamico(
+                inversion, candidato["odd_fav"], candidato["odd_emp"], modo=modo_cobertura
             )
+            b_prio = particion["monto_ataque"]
+            b_seg = particion["monto_seguro"]
+            delta_cobertura = particion["delta_efectivo"]
+            roi_favorito_pct = particion["roi_favorito_porcentaje"]
+            roi_empate_pct = particion["roi_empate_porcentaje"]
             cubre_empate = True
         else:
             b_prio, b_seg, cubre_empate = inversion, 0.0, False
@@ -608,6 +729,10 @@ def _dimensionar_y_liquidar(
             "cuota_empate": round(_a_float(candidato["odd_emp"]), 2),
             "pago_anticipado": bool(candidato["pago_anticipado"]),
             "cubre_empate": cubre_empate,
+            # [LN-QBE-077-B] & Invariante VIII-54: δ y ROIs proyectados viajan en la orden.
+            "delta_cobertura": delta_cobertura,
+            "roi_favorito_pct": roi_favorito_pct,
+            "roi_empate_pct": roi_empate_pct,
         }
         liquidacion = liquidar_posicion_factual(
             posicion,
@@ -639,6 +764,9 @@ def ejecutar_simulacion_rentabilidad(
     jornadas_por_temporada: int = JORNADAS_POR_TEMPORADA,
     gateway: Any = None,
     excluir_estrategias: Optional[Sequence[str]] = None,
+    gamma: float = GAMMA_BASE,
+    target_certeza_pct: float = CERTEZA_NEUTRA_PCT,
+    modo_cobertura: str = MODO_COBERTURA_DEF,
 ) -> Dict[str, Any]:
     """`[LN-QBE-107]` Simula la trayectoria del fondo jornada a jornada y emite el tablero.
 
@@ -652,6 +780,12 @@ def ejecutar_simulacion_rentabilidad(
     Selectivo. El veto intercepta el triaje antes del dimensionamiento, de modo que el capital
     liberado se reasigna a las estrategias de alta convicción o queda líquido. La lista vacía
     reproduce exactamente la línea base `[LN-QBE-107]`.
+
+    `[LN-QBE-115]`: `gamma` gobierna la Capa 0 (dominio legislado `[0.67, 0.75]`);
+    `target_certeza_pct` activa la Trinidad de Certeza §5.10 como filtro de admisión
+    (`0.0` = identidad neutra); `modo_cobertura` fija δ (`DEF` = V=0 exacto, `BAL` = 0.5·δ*,
+    `AGR` = δ*). Cero optimización dentro del instrumento: los tres parámetros se aplican, no
+    se calibran.
     """
     modo_norm = str(modo or "").strip().lower()
     if modo_norm not in MODOS_VALIDOS:
@@ -661,6 +795,25 @@ def ejecutar_simulacion_rentabilidad(
         raise ValueError("El bankroll inicial debe ser estrictamente positivo.")
 
     exclusiones = _normalizar_exclusiones(excluir_estrategias)
+
+    # ── [LN-QBE-115] Validación de dominio de los parámetros gobernantes (cero clamping mudo) ──
+    gamma_norm = round(_a_float(gamma, GAMMA_BASE), 4)
+    if not (GAMMA_MIN <= gamma_norm <= GAMMA_MAX):
+        raise ValueError(
+            f"Γ fuera del dominio legislado [{GAMMA_MIN}, {GAMMA_MAX}]: {gamma!r}"
+        )
+    cobertura_norm = str(modo_cobertura or MODO_COBERTURA_DEF).strip().upper()
+    if cobertura_norm not in MODOS_COBERTURA_VALIDOS:
+        raise ValueError(
+            f"Modo de cobertura no legislado: {modo_cobertura!r}. "
+            f"Válidos: {MODOS_COBERTURA_VALIDOS}"
+        )
+    certeza_pct = round(_a_float(target_certeza_pct, CERTEZA_NEUTRA_PCT), 2)
+    if not (0.0 <= certeza_pct <= 100.0):
+        raise ValueError(
+            f"target_certeza_pct fuera de [0.0, 100.0]: {target_certeza_pct!r}"
+        )
+    modo_certeza, familias_veto_certeza = _resolver_trinidad_certeza(certeza_pct)
 
     jornadas_lista = sorted({int(j) for j in (jornadas if jornadas is not None else range(1, 12))})
     if not jornadas_lista:
@@ -673,14 +826,23 @@ def ejecutar_simulacion_rentabilidad(
     descartes_totales = 0
     capital_no_desplegado = 0.0
     bankroll = base_inicial
+    origen_delta: Dict[str, int] = {"factico": 0, "fallback": 0}
 
     with pasarela.read_session() as sesion:
         for jornada in jornadas_lista:
             base_dimensionamiento = bankroll if modo_norm == "compuesto" else base_inicial
             cargado = _cargar_jornada(sesion, jornada)
             cartera = _construir_cartera_jornada(
-                cargado, base_dimensionamiento, excluir_estrategias=exclusiones
+                cargado,
+                base_dimensionamiento,
+                excluir_estrategias=exclusiones,
+                gamma=gamma_norm,
+                modo_cobertura=cobertura_norm,
+                familias_veto_certeza=familias_veto_certeza,
+                modo_certeza=modo_certeza,
             )
+            for origen, conteo in (cartera.get("delta_epist_origen") or {}).items():
+                origen_delta[origen] = origen_delta.get(origen, 0) + int(conteo)
 
             posiciones = cartera["posiciones"]
             inversion = round(_a_float(cartera["inversion_total"]), 2)
@@ -729,6 +891,16 @@ def ejecutar_simulacion_rentabilidad(
         descartes_totales=descartes_totales,
         capital_no_desplegado=capital_no_desplegado,
         jornadas_por_temporada=int(jornadas_por_temporada),
+        parametros_simulacion={
+            "gamma": gamma_norm,
+            "target_certeza_pct": certeza_pct,
+            "modo_certeza": modo_certeza,
+            "familias_vetadas_certeza": list(familias_veto_certeza),
+            "modo_cobertura": cobertura_norm,
+            "escudo_altitud_metros": UMBRAL_VETO_ALTITUD_METROS,
+            "cap_underdog_ley3_pct": CAP_UNDERDOG_LEY3_PCT,
+            "delta_epist_origen": dict(origen_delta),
+        },
         exclusiones_activas=exclusiones,
     )
 
@@ -743,6 +915,7 @@ def _consolidar_reporte(
     descartes_totales: int,
     capital_no_desplegado: float,
     jornadas_por_temporada: int,
+    parametros_simulacion: Optional[Dict[str, Any]] = None,
     exclusiones_activas: Sequence[str] = (),
 ) -> Dict[str, Any]:
     """Consolida curva, drawdown, tasa de preservación V=0 y proyección anualizada."""
@@ -812,9 +985,59 @@ def _consolidar_reporte(
         1 for jornada in detalle for descarte in jornada.get("descartes", [])
         if descarte.get("veto_fiduciario")
     )
+    # ── [LN-QBE-115] Abstenciones de admisión por la Trinidad de Certeza §5.10 ─────────────
+    vetos_certeza_aplicados = sum(
+        1 for jornada in detalle for descarte in jornada.get("descartes", [])
+        if descarte.get("veto_trinidad_certeza")
+    )
+    parametros = dict(parametros_simulacion or {})
+
+    # ── [LN-QBE-115] Desglose por estrategia (meso-económico, cero recálculo en la capa web) ──
+    resumen_estrategias: Dict[str, Dict[str, Any]] = {}
+    for jornada in detalle:
+        for posicion in jornada.get("posiciones", []):
+            codigo = str(
+                posicion.get("estrategia_codigo") or posicion.get("familia") or ""
+            ).upper()
+            if not codigo:
+                continue
+            bloque = resumen_estrategias.setdefault(codigo, {
+                "posiciones": 0, "inversion_total": 0.0, "pnl_neto": 0.0,
+                "aciertos": 0, "_delta_acumulado": 0.0,
+            })
+            bloque["posiciones"] += 1
+            bloque["inversion_total"] = round(
+                bloque["inversion_total"] + _a_float(posicion.get("inversion_total")), 2
+            )
+            bloque["pnl_neto"] = round(
+                bloque["pnl_neto"] + _a_float(posicion.get("pnl_mxn")), 2
+            )
+            if _a_float(posicion.get("pnl_mxn")) > 0.0:
+                bloque["aciertos"] += 1
+            bloque["_delta_acumulado"] = round(
+                bloque["_delta_acumulado"] + _a_float(posicion.get("delta_cobertura")), 6
+            )
+
+    for bloque in resumen_estrategias.values():
+        operaciones = int(bloque["posiciones"])
+        inversion_bloque = float(bloque["inversion_total"])
+        bloque["roi_pct"] = (
+            round((bloque["pnl_neto"] / inversion_bloque) * 100.0, 2)
+            if inversion_bloque > 0.0 else 0.0
+        )
+        bloque["tasa_acierto_pct"] = (
+            round((bloque["aciertos"] / operaciones) * 100.0, 2) if operaciones else 0.0
+        )
+        bloque["delta_medio"] = (
+            round(bloque.pop("_delta_acumulado") / operaciones, 4) if operaciones else 0.0
+        )
+    resumen_estrategias = {
+        codigo: resumen_estrategias[codigo] for codigo in sorted(resumen_estrategias)
+    }
+
     nota_paridad = [
-        "Ventanilla retrospectiva: es_operable=True y delta_epist=0.02 (estratos legislados).",
-        "Familias con cobertura particionadas con calcular_dutching_v0 (ley V=0 uniforme).",
+        "Ventanilla retrospectiva: es_operable=True (estrato legislado) y Δ_epist fáctico de 3NF.",
+        "Familias con cobertura particionadas con la ley δ de [LN-QBE-077] (DEF ⇒ V=0 uniforme).",
         "R2: el motor vivo usa ponderación inversa; aquí rige [LN-QBE-070] para indemnidad total.",
         "Pago Anticipado sólo se acredita con testigo fáctico (margen >= 2 o traza in-play).",
         "Sin marcador oficial la posición es NO_LIQUIDABLE con capital devuelto: cero 0-0 fabricado.",
@@ -824,6 +1047,39 @@ def _consolidar_reporte(
             f"Veto Fiduciario Selectivo [LN-QBE-113]: exclusión de "
             f"{', '.join(exclusiones)} ({vetos_aplicados} abstenciones fiduciarias)."
         )
+
+    # ── [LN-QBE-115] Paridad declarada del Saneamiento Vol. II (cero silencios) ────────────
+    origen = parametros.get("delta_epist_origen") or {}
+    nota_paridad.append(
+        "Δ_epist [LN-QBE-115]: lectura fáctica de sovereign_distributions.epistemic_delta con "
+        f"guarda 0.0<=Δ<=1.0 ({int(_a_float(origen.get('factico')))} fixtures) y fallback "
+        f"legislado 0.02 ({int(_a_float(origen.get('fallback')))} fixtures)."
+    )
+    nota_paridad.append(
+        "Escudo de Altitud [LN-QBE-115]: ΔAlt⁺ >= "
+        f"{UMBRAL_VETO_ALTITUD_METROS:.0f} m veta QBE-H2 sobre ASIMETRIA_VISITANTE "
+        "(catálogo inmutable [LN-QBE-109]); sin evidencia de altitud no hay veto."
+    )
+    nota_paridad.append(
+        "Cota de Dominancia P′ [LN-QBE-116]: QBE-H2 se veta cuando "
+        f"P_visitante < {UMBRAL_DOMINANCIA_VISITANTE_PCT * 100.0:.2f}% (borde exacto: el piso "
+        "no veta); opera después del escudo de altitud y sólo sobre la ruta H2."
+    )
+    nota_paridad.append(
+        f"Cota Underdog Ley 3 [LN-QBE-115]: QBE-R1/QBE-R2 <= "
+        f"{CAP_UNDERDOG_LEY3_PCT * 100.0:.2f}% del capital de la jornada."
+    )
+    nota_paridad.append(
+        "Trinidad de Certeza §5.10 [LN-QBE-115]: modo "
+        f"{parametros.get('modo_certeza', MODO_CERTEZA_CRECIMIENTO)} a "
+        f"{_a_float(parametros.get('target_certeza_pct')):.2f}% "
+        f"({vetos_certeza_aplicados} abstenciones de admisión)."
+    )
+    nota_paridad.append(
+        "Cobertura dinámica δ [LN-QBE-077]: modo "
+        f"{parametros.get('modo_cobertura', MODO_COBERTURA_DEF)} "
+        f"con Γ = {_a_float(parametros.get('gamma'), GAMMA_BASE):.2f} en Capa 0."
+    )
 
     return {
         "status": "EXITO",
@@ -852,6 +1108,10 @@ def _consolidar_reporte(
         "tasa_preservacion_v0_pct": tasa_preservacion,
         "exclusiones_activas": list(exclusiones),
         "vetos_aplicados": int(vetos_aplicados),
+        # ── [LN-QBE-115] Trazabilidad del Saneamiento Vol. II ──────────────────────────────
+        "vetos_certeza_aplicados": int(vetos_certeza_aplicados),
+        "parametros_simulacion": parametros,
+        "resumen_estrategias": resumen_estrategias,
         "proyeccion_anual": {
             "horizonte_jornadas": horizonte,
             "jornadas_operadas": total_operadas,
@@ -917,6 +1177,14 @@ def imprimir_tablero_rentabilidad_consola(reporte: Dict[str, Any]) -> None:
     print(f"  Bóveda 3NF en SÓLO LECTURA · modo {str(reporte.get('modo')).upper()} · "
           f"bankroll inicial ${_a_float(reporte.get('bankroll_inicial')):,.2f}")
     print(f"  {reporte.get('modo_descripcion', '')}")
+    parametros = reporte.get("parametros_simulacion") or {}
+    print(f"  ⚙️  Γ = {_a_float(parametros.get('gamma'), GAMMA_BASE):.2f} · "
+          f"Certeza {_a_float(parametros.get('target_certeza_pct')):.1f}% "
+          f"({parametros.get('modo_certeza', MODO_CERTEZA_CRECIMIENTO)}) · "
+          f"Cobertura δ {parametros.get('modo_cobertura', MODO_COBERTURA_DEF)} · "
+          f"Escudo altitud "
+          f"{_a_float(parametros.get('escudo_altitud_metros'), UMBRAL_VETO_ALTITUD_METROS):.0f} m · "
+          f"Cota R {_a_float(parametros.get('cap_underdog_ley3_pct')) * 100.0:.2f}%")
     exclusiones = list(reporte.get("exclusiones_activas") or [])
     if exclusiones:
         print(f"  🚫 Veto Fiduciario [LN-QBE-113]: Exclusión de "
@@ -924,6 +1192,10 @@ def imprimir_tablero_rentabilidad_consola(reporte: Dict[str, Any]) -> None:
               f"({int(_a_float(reporte.get('vetos_aplicados')))} abstenciones)")
     else:
         print("  🚫 Filtros Activos: ninguno (cartera íntegra)")
+    if int(_a_float(reporte.get("vetos_certeza_aplicados"))) > 0:
+        print(f"  🎚️  Trinidad de Certeza [LN-QBE-115]: "
+              f"{int(_a_float(reporte.get('vetos_certeza_aplicados')))} "
+              f"abstenciones de admisión")
     print(linea)
 
     print(f" {'J':>2}  {'CART':>4}  {'POS':>3}  {'BASE':>11}  {'INVERTIDO':>11}  "
@@ -965,6 +1237,18 @@ def imprimir_tablero_rentabilidad_consola(reporte: Dict[str, Any]) -> None:
               f"{_DESCRIPCION_ESCENARIO.get(escenario, '')}")
     print(f"    → Tasa de preservación V=0: {_a_float(reporte.get('tasa_preservacion_v0_pct')):.2f}%  "
           f"| Capital no desplegado: ${_a_float(reporte.get('capital_no_desplegado')):,.2f}")
+    print(separador)
+
+    print("  🎯 DESGLOSE POR ESTRATEGIA [LN-QBE-115]")
+    resumen_estrategias = reporte.get("resumen_estrategias") or {}
+    if not resumen_estrategias:
+        print("    ● sin posiciones operables")
+    for codigo, bloque in resumen_estrategias.items():
+        print(f"    ● {str(codigo):<8} {int(_a_float(bloque.get('posiciones'))):>3} pos · "
+              f"inv ${_a_float(bloque.get('inversion_total')):>10,.2f} · "
+              f"PnL {_formatear_pesos(bloque.get('pnl_neto')):>13} · "
+              f"ROI {_a_float(bloque.get('roi_pct')):>+7.2f}% · "
+              f"ac. {_a_float(bloque.get('tasa_acierto_pct')):>6.2f}%")
     print(separador)
 
     proyeccion = reporte.get("proyeccion_anual", {})
@@ -1048,6 +1332,15 @@ def construir_parser() -> argparse.ArgumentParser:
                         help="Códigos separados por coma, ej. QBE-R1,QBE-R2")
     parser.add_argument("--horizonte", type=int, default=JORNADAS_POR_TEMPORADA,
                         help=f"Jornadas por temporada para la anualización (default {JORNADAS_POR_TEMPORADA}).")
+    parser.add_argument("--gamma", type=float, default=GAMMA_BASE, metavar="GAMMA",
+                        help=f"Γ de Capa 0, dominio [{GAMMA_MIN}, {GAMMA_MAX}] "
+                             f"(default {GAMMA_BASE}).")
+    parser.add_argument("--certeza", type=float, default=CERTEZA_NEUTRA_PCT, metavar="PCT",
+                        help="Slider de Certeza §5.10 en %% (0.0 = sin exigencia; "
+                             ">= 80 Balanceado; >= 90 Conservador).")
+    parser.add_argument("--modo-cobertura", choices=MODOS_COBERTURA_VALIDOS,
+                        default=MODO_COBERTURA_DEF, dest="modo_cobertura",
+                        help="DEF (V=0 exacto), BAL (50%% de delta*), AGR (delta*).")
     parser.add_argument("--json", action="store_true", dest="salida_json",
                         help="Emite el contrato JSON y suprime el tablero ASCII.")
     return parser
@@ -1066,6 +1359,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             excluir_estrategias=resolver_exclusiones_cli(
                 argumentos.sin_familia_r, argumentos.excluir
             ),
+            gamma=argumentos.gamma,
+            target_certeza_pct=argumentos.certeza,
+            modo_cobertura=argumentos.modo_cobertura,
         )
     except (ValueError, RuntimeError) as error:
         print(f"🚨 ALTO AL FUEGO: {error}", file=sys.stderr)
