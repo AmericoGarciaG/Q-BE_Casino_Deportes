@@ -267,6 +267,44 @@ def _bloque_sede(cualificados: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return {"pj": corte["pj"], "gf": corte["gf"], "gc": corte["gc"], "pts": corte["pts"]}
 
 
+def _volumen_porteria_corte(
+    cualificados: Sequence[Dict[str, Any]], cache_volumen: Dict[str, Any]
+) -> Dict[str, float]:
+    """[LN-QBE-118] · [LN-QBE-119] Agregado de Volumen & Portería del club al corte (cobertura ÍNTEGRA).
+
+    Misma ley que el xG: si a un solo partido cualificado le falta `sot`/`sota`/`possession`, el
+    agregado NO se publica (cero mezcla de fuentes, cero imputación). Las TRES magnitudes se
+    publican como TASA POR PARTIDO del corte: `sot`/`sota` son la media de conteos y `possession`
+    el porcentaje medio. Antes de `[LN-QBE-119]` los conteos se acumulaban sin dividir y la casilla
+    `V06` («Tiros a puerta por partido») multiplicaba la magnitud exhibida por PJ. Exige además UN
+    SOLO nivel de procedencia por acumulación (`procedencia`), igual que [ARCH-1.4.39].
+    """
+    if not cualificados:
+        return {}
+    sot = sota = posesion = 0.0
+    niveles: set = set()
+    for p in cualificados:
+        lado = "home" if p["es_local"] else "away"
+        registro = (cache_volumen.get(p["match_id"]) or {}).get(lado) or {}
+        if registro.get("sot") is None or registro.get("sota") is None:
+            return {}
+        if registro.get("possession") is None:
+            return {}
+        sot += float(registro["sot"])
+        sota += float(registro["sota"])
+        posesion += float(registro["possession"])
+        niveles.add(str(registro.get("procedencia") or "fuente_unica"))
+    if len(niveles) > 1:
+        return {}
+    total = float(len(cualificados))
+    return {
+        # [LN-QBE-119] Tasa por partido (no sumatoria de torneo): misma unidad que la casilla V06.
+        "sot": round(sot / total, 3),
+        "sota": round(sota / total, 3),
+        "possession": round(posesion / total, 3),
+    }
+
+
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 # PILAR 2 — CADENA DE PROCEDENCIA DE MÉTRICAS OPTA (xG / SoT) · CERO INVENCIÓN
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -311,6 +349,10 @@ def _telemetria_3nf(sesion, identidad: Dict[str, Tuple[str, str]]) -> Dict[str, 
             "xg": _a_flotante(fila.xg),
             "xga": _a_flotante(fila.xga),
             "sot": _a_flotante(fila.sot),
+            # [LN-QBE-118] Volumen & Portería REAL del lado (aditivo: cero ruptura de la lectura
+            # previa de `xg`/`xga` que consume la acumulación de [ARCH-1.4.39]).
+            "sota": _a_flotante(fila.sota),
+            "possession": _a_flotante(fila.possession_pct),
         }
     return partidos
 
@@ -745,7 +787,10 @@ def _xg_acumulado(
 
 
 def _bloque_general(
-    cualificados: Sequence[Dict[str, Any]], cache: Dict[str, Any], etiqueta: str
+    cualificados: Sequence[Dict[str, Any]],
+    cache: Dict[str, Any],
+    etiqueta: str,
+    cache_volumen: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], str]:
     """Bloque general del club al corte: acumulado 3NF + xG factual o respaldo calibrado declarado.
 
@@ -770,7 +815,36 @@ def _bloque_general(
         bloque["xg"] = xg
     else:
         bloque["xg"] = round(max(XG_MINIMO_CALIBRADO, corte["gf"] * FACTOR_XG_CALIBRADO), 3)
+    # [LN-QBE-118] Volumen & Portería (aditivo): el generador sellado lo publica en
+    # `volumen_porteria` y en las claves planas `sot_*` / `sota_*` / `poss_*` de [LN-QBE-102].
+    # El mapa de volumen es de UNA SOLA fuente por acumulación: la caché congelada de xG no lo
+    # publica, de modo que se recibe explícito (nunca se completa un corte con otro nivel).
+    bloque.update(
+        _volumen_porteria_corte(
+            cualificados, cache_volumen if cache_volumen is not None else cache
+        )
+    )
     return bloque, procedencia
+
+
+def _contexto_del_fixture(sesion, id_partido: str) -> Dict[str, Any]:
+    """[LN-QBE-118] Bloque `contexto` del fixture (altitud catalogada + descanso real).
+
+    Delega ÍNTEGRAMENTE en el proveedor canónico `obtener_metricas_contexto` de `[LN-QBE-117]`:
+    cero cálculo paralelo en el script. Un fixture ausente de la cartelera o una plaza sin
+    catalogar degradan a `None` (jamás a "nivel del mar" inventado).
+    """
+    try:
+        from src.core.sovereign.context_provider import obtener_metricas_contexto
+    except ImportError:  # pragma: no cover - contrato de proveedores ausente
+        return {}
+    try:
+        bloque = obtener_metricas_contexto(sesion, id_partido)
+    except Exception as ex:  # pragma: no cover - degradación honesta, cero bloqueo del lote
+        logger.warning("Contexto no reconstruible para %s: %s", id_partido, ex)
+        return {}
+    insumos = bloque.get("insumos") if isinstance(bloque, dict) else None
+    return dict(insumos) if isinstance(insumos, dict) else {}
 
 
 def _bloque_sede_con_opta(
@@ -880,11 +954,14 @@ def _vector_homologo(
     partidos: Sequence[Dict[str, Any]],
     cache: Dict[str, Any],
     etiqueta_respaldo: str,
+    cache_volumen: Optional[Dict[str, Any]] = None,
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
     """Ensambla el `raw_match_data` homólogo de un fixture (Pilares 1..3) y su traza fáctica.
 
     Corte de cada club = jornadas 1..j−1 (futuro-ceguera estricta); splits de sede del Pilar 1;
     memoria H2H profunda del Pilar 3. Cero estadística sintética: un corte vacío entra como `{}`.
+    `[LN-QBE-118]` `cache_volumen` es el mapa de UNA sola fuente para el Pilar Volumen & Portería
+    (la caché congelada de xG no publica la métrica); `None` reutiliza `cache`.
     """
     id_partido = str(fixture.get("id_partido") or "")
     local = str(fixture.get("home_team_slug") or "")
@@ -896,9 +973,14 @@ def _vector_homologo(
     except (TypeError, ValueError):
         fecha_ref = None
 
-    h_st, proc_h = _bloque_general(_partidos_de_club(partidos, local, jornada), cache, etiqueta_respaldo)
+    h_st, proc_h = _bloque_general(
+        _partidos_de_club(partidos, local, jornada), cache, etiqueta_respaldo, cache_volumen
+    )
     a_st, proc_a = _bloque_general(
-        _partidos_de_club(partidos, visitante, jornada), cache, etiqueta_respaldo
+        _partidos_de_club(partidos, visitante, jornada),
+        cache,
+        etiqueta_respaldo,
+        cache_volumen,
     )
     h_split = _bloque_sede_con_opta(
         _partidos_de_club(partidos, local, jornada, "local"), cache, etiqueta_respaldo
@@ -909,6 +991,11 @@ def _vector_homologo(
     h2h = _memoria_h2h(sesion, int(league_id), fecha_ref, local, visitante)
     gira_local = _bloque_sede(_partidos_de_club(partidos, local, jornada, "visita"))
     casa_visita = _bloque_sede(_partidos_de_club(partidos, visitante, jornada, "local"))
+    # [LN-QBE-118] Hechos de plaza REALES: altitud catalogada de ambas sedes y descanso
+    # reconstruido del calendario terminal (futuro-ceguera). El generador sellado los adopta por
+    # su ruta legislada de contexto efectivo (`_contexto_efectivo`, [LN-QBE-102]): la matemática
+    # no cambia — cambia la evidencia que recibe.
+    contexto = _contexto_del_fixture(sesion, id_partido)
 
     item: Dict[str, Any] = {
         "match_id": id_partido,
@@ -927,6 +1014,14 @@ def _vector_homologo(
             es_procedencia_opta_real(proc_h) and es_procedencia_opta_real(proc_a)
         ),
         "h2h_conteo": len(h2h),
+        # [LN-QBE-118] Contexto fáctico publicado al generador sellado (aditivo, cero ruptura del
+        # contrato de captura de 7 campos: estas claves viajan al motor, no al JSON del Visor).
+        "altitud_local": contexto.get("altitud_local"),
+        "altitud_visita": contexto.get("altitud_visita"),
+        "descanso_local": contexto.get("descanso_local"),
+        "descanso_visita": contexto.get("descanso_visita"),
+        "delta_alt_metros": float(contexto.get("delta_alt_metros") or 0.0),
+        "delta_descanso_dias": float(contexto.get("delta_descanso_dias") or 0.0),
     }
     traza: Dict[str, Any] = {
         "id_partido": id_partido,
@@ -952,6 +1047,12 @@ def _vector_homologo(
         ),
         "h2h_duelos": len(h2h),
         "h2h_conteo": len(h2h),
+        # [LN-QBE-118] Contexto fáctico efectivo del duelo (evidencia declarada del suministro).
+        "delta_alt_metros": item["delta_alt_metros"],
+        "delta_descanso_dias": item["delta_descanso_dias"],
+        "altitud_local": item["altitud_local"],
+        "altitud_visita": item["altitud_visita"],
+        "contexto_status": contexto.get("status"),
     }
     # [ARCH-1.4.39] Invariante del Pilar 1: PJ_casa + PJ_gira ≡ PJ_corte (por club, por corte).
     traza["invariante_sede"] = all(
@@ -1026,6 +1127,14 @@ def homologar(
     gateway = PersistenceGateway()
     mu_liga, gamma_home = _macros_de_competencia(gateway)
 
+    # [ARCH-1.4.55 / LN-QBE-118] Continuidad de operación: respaldo atómico de la bóveda ANTES de
+    # escribir. Resguardo WORM del lote (API online de SQLite, verificada con `PRAGMA quick_check`).
+    # El DRY-RUN no muta nada ⇒ no respalda. Se invoca UNA sola vez por lote, jamás por escritura.
+    ruta_backup: Optional[str] = None
+    if not dry_run:
+        ruta_backup = gateway.crear_backup_boveda_sqlite()
+        logger.info("🛡️ [RESGUARDO WORM] Respaldo atómico previo al lote verificado: %s", ruta_backup)
+
     with gateway.read_session() as sesion:
         partidos = _partidos_consumados(sesion, COMPETENCIA_CANONICA)
         capturas = _capturas_por_jornada(sesion, int(liga_id), jornadas)
@@ -1038,6 +1147,10 @@ def homologar(
         sensor = _sensor_fotmob_opta(
             candidatos, identidad_fotmob, permitir_red, nombre_liga=nombre_liga
         )
+        # [LN-QBE-118] Pilar Volumen & Portería: mapa de UNA SOLA fuente por acumulación. Sólo el
+        # nivel 3NF publica `sot`/`sota`/`possession` (la caché congelada y el sensor sólo emiten
+        # xG/xGA), de modo que la acumulación del corte jamás mezcla niveles de procedencia.
+        cache_volumen = _sellar_procedencia(telemetria, PROCEDENCIA_TELEMETRIA)
         # Precedencia legislada: caché congelada > telemetría 3NF > sensor vivo (todas factuales).
         cache = {
             **_sellar_procedencia(sensor, PROCEDENCIA_SENSOR),
@@ -1058,7 +1171,14 @@ def homologar(
         for jornada in jornadas:
             for fixture in capturas.get(int(jornada), []):
                 armado = _vector_homologo(
-                    sesion, int(liga_id), int(jornada), fixture, partidos, cache, dominante
+                    sesion,
+                    int(liga_id),
+                    int(jornada),
+                    fixture,
+                    partidos,
+                    cache,
+                    dominante,
+                    cache_volumen,
                 )
                 if armado is None:
                     continue
@@ -1084,6 +1204,8 @@ def homologar(
         "gamma_home": gamma_home,
         "trazas": trazas,
     }
+    # [LN-QBE-118] Resguardo WORM del lote: ruta verificada (`None` en dry-run, que no muta).
+    parte["resguardo_worm"] = ruta_backup
 
     if dry_run:
         valores, suficiencias = _proyectar_valores(items, mu_liga, gamma_home)

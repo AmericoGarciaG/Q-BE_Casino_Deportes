@@ -22,7 +22,8 @@ def test_arch_1_4_28_admin_tasks_whitelist_and_coordinator_wiring():
 
     # Verificar que la whitelist legislada sigue intacta: 9 de [ARCH-1.4.12] + la purga total
     # in-process sellada por [ARCH-1.4.29] = 10, ampliada a 15 exactas por la Enmienda
-    # [ARCH-1.4.12-C] (2 ejecutores individuales + 3 cadenas temporales homologadas).
+    # [ARCH-1.4.12-C] (2 ejecutores individuales + 3 cadenas temporales homologadas) y supersedida
+    # a 19 exactas por [ARCH-1.4.58] (sonda `auditar_completitud_visor` del Visor 44V).
     assert "cadena_ingesta_total" in TAREAS_PERMITIDAS
     assert "centinela_deportivo" in TAREAS_PERMITIDAS
     assert "centinela_mercado" in TAREAS_PERMITIDAS
@@ -34,8 +35,8 @@ def test_arch_1_4_28_admin_tasks_whitelist_and_coordinator_wiring():
     assert "cadena_pre_jornada" in TAREAS_PERMITIDAS
     assert "cadena_post_jornada" in TAREAS_PERMITIDAS
     assert "cadena_progol" in TAREAS_PERMITIDAS
-    assert len(TAREAS_PERMITIDAS) == 18, (
-        "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 18 tareas certificadas."
+    assert len(TAREAS_PERMITIDAS) == 19, (
+        "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 19 tareas certificadas."
     )
 
     # Auditar AST de admin_tasks.py para confirmar cableado del coordinador

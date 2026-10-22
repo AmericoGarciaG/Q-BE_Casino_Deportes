@@ -1694,6 +1694,142 @@ def sincronizar_progol_pipeline_completo(
   - `"R SOCIED. B"` $\to$ `"Real Sociedad B"` | `"E.U.A."` $\to$ `"USA"`
 * **[SHIELD]:** `tests/shield/test_shield_ligapremier_and_global_aliases.py`
 
+### [ARCH-1.4.55] Proveedores Canónicos de Insumos y Orquestación Anidada de `insumos_factivados` [ARCH-PILLAR]
+* Se crea la capa modular `src/core/sovereign/` de proveedores puros de telemetría fáctica
+  (Fase 1 de la Integración Maestra), migrando la matemática validada de los sandboxes:
+  * `context_provider.py` → `obtener_metricas_contexto` (V27/V28, `CATALOGO_ALTITUDES_LIGAMX`,
+    `calcular_vector_contextual_c`, `Q_mod` y `gamma_contextual`). Hospeda además la **capa de
+    lectura compartida** (`leer_fixture_cartelera`, `partidos_terminales_de_club`,
+    `identidad_coincide`, `parse_fecha`) consumida por los demás proveedores: una sola
+    implementación del corte futuro-ciego N−1, cero duplicación.
+  * `trajectory_provider.py` → `obtener_metricas_trayectoria` (V29 forma 5P, V30/V31 pendientes de
+    xG/xGA, V32 ΔxPTS).
+  * `telemetry_provider.py` → `obtener_metricas_volumen_porteria` (V01 posesión %, V16 Save %,
+    `v_Vol⊥`; fuente `match_telemetry`, cero caché congelada).
+  * `attack_defense_core.py` → `obtener_metricas_ataque_defensa` (V05/V06/V10/V11 + factores
+    estructurales sellados + colisión cruzada `A_H − D_A` / `A_A − D_H`).
+* **Contrato aditivo:** `factor_attribution.empaquetar_insumos_factivados` publica el diccionario
+  **anidado** `insumos_factivados` con los cinco sub-bloques (`h2h`, `contexto`, `trayectoria`,
+  `volumen_porteria`, `ataque_defensa`) y **conserva** las claves planas heredadas en la raíz
+  (`xg_local_rate`, `poss_local`, `delta_alt_metros`, …). `_aplanar_insumos` deriva las claves
+  planas de un paquete sólo anidado mediante la tabla declarativa `_MAPA_NIDOS_A_PLANO`: el
+  catálogo de 44 variables de `[LN-QBE-101]` ilumina exactamente las mismas celdas.
+* **Semaforización:** `evaluar_semaforos_salud_datos` emite `opta/sede/h2h/ctx` derivados de
+  magnitudes fácticas; `epist` se conserva como luz interna (retiro visual diferido a Fase 3) para
+  no romper a los consumidores vigentes.
+* **Continuidad de operación:** `PersistenceGateway.crear_backup_boveda_sqlite(directorio_destino=None)`
+  añade un respaldo atómico por la API online de `sqlite3` (`Connection.backup`) verificado con
+  `PRAGMA quick_check`; se invoca explícitamente al inicio del lote (jamás por escritura).
+* **[SHIELD]:** `tests/shield/test_shield_fase1_master_integration_providers.py`
+
+### [ARCH-1.4.55-B] Aduana de Lectura Soberana: Proyección ORM → Diccionarios Planos (`src/core/sovereign_reads.py`) [ARCH-PILLAR]
+* **Defecto extirpado (evidencia fáctica 2026-10-21):** los proveedores migrados de `src/core/sovereign/`
+  importaban `src.storage.models` (`Match`, `MatchTelemetry`, `StandingSnapshot`) para consultar la bóveda
+  3NF, violando el invariante de pureza que audita por AST `[ARCH-1.4.26]`
+  (`assert "src.storage" not in node.module`); el juez `test_arch_1_4_26_core_pure_function_isolation`
+  quedaba en rojo. Cambiar `select(...)` por `Session.query(...)` no eximía del import: el defecto era de
+  **acoplamiento de capas**, no de estilo de consulta.
+* **Aduana canónica:** `src/core/sovereign_reads.py` es el ÚNICO punto autorizado para tocar la bóveda en
+  servicio de la capa pura. Proyecta `matches`, `match_telemetry` y `standings_snapshots` a **diccionarios
+  planos** mediante `leer_fixture`, `leer_partidos_corte`, `leer_calendario`, `leer_telemetria` y
+  `leer_snapshots_posiciones`. SÓLO lectura: cero `add`/`commit`/`flush`, cero DDL, cero caché lateral,
+  cero imputación de defaults.
+* **Dirección de dependencia:** `src/core/sovereign/` (aritmética pura) → `src/core/sovereign_reads.py`
+  (adaptador) → bóveda 3NF. `sovereign_reads.py` no importa ningún proveedor, de modo que no se crea ciclo;
+  las firmas públicas `(sesion, ...)` y la salida de los tres proveedores quedan **intactas**
+  (`_valor_telemetria`, `_entradas_snapshot` y `_snapshot_corte` operan sobre dicts).
+* **Verificación:** el AST del juez `[ARCH-1.4.26]` vuelve a verde con los cinco módulos soberanos migrados;
+  la integración Fase‑1 (`test_shield_fase1_master_integration_providers.py`) certifica paridad verbatim con
+  el motor sellado sobre bóveda en memoria.
+
+### [ARCH-1.4.56] Materialización Anidada de los Cinco Pilares en el Generador Sellado y Resguardo WORM del Lote [ARCH-PILLAR]
+* **Brecha cerrada (Fase 2 de la Integración Maestra):** los proveedores de `src/core/sovereign/`
+  (`[ARCH-1.4.55]`) publicaban el shape anidado, pero el generador `[VAULT-CORE-005]` seguía emitiendo sólo
+  las 21 claves planas: la sonda sobre las 99 filas J1–J11 de `sovereign_distributions` certificó **0 bloques
+  anidados**. Ahora `sovereign_pipeline._empaquetar_insumos_factivados` **anida los cinco pilares** (`h2h`,
+  `contexto`, `trayectoria`, `volumen_porteria`, `ataque_defensa`) sobre el MISMO paquete plano, mediante
+  helpers puros (`_sub_bloque`, `_estado_del_bloque`, `_bloque_*`, `_paquete_anidado_cinco_pilares`) y la
+  regla de cobertura `EXITO` / `PARCIAL` / `SIN_EVIDENCIA`.
+* **Aditividad certificada:** las 21 claves planas de `[LN-QBE-102]` conservan nombre, unidad y valor;
+  `factor_attribution._MAPA_NIDOS_A_PLANO` re-deriva exactamente los mismos números (paridad verificada por
+  el Juez 1). El DTO `StochasticAuditTrace` no cambia de firma y los consumidores (`admin_status.py`,
+  `markets.py`) siguen leyendo la raíz plana.
+* **Dirección de dependencia intacta:** `sovereign_pipeline.py` no importa `src.storage` ni
+  `src/core/sovereign/` (auditoría AST `[ARCH-1.4.26]` en verde): el anidamiento es aritmética de
+  diccionarios sobre magnitudes ya recibidas, sin I/O y sin una segunda derivación.
+* **Suministro fáctico en la homologación:** `scripts/ingesta/homologar_temporada_optah2h.py` publica en el
+  vector homólogo la altitud catalogada y el descanso real (`_contexto_del_fixture` →
+  `obtener_metricas_contexto`), el agregado de Volumen & Portería (`_volumen_porteria_corte`, cobertura
+  íntegra sobre `match_telemetry`) y amplía `_telemetria_3nf` de forma aditiva con `sota` y `possession`.
+  Cero fórmulas en el script: todo lo matemático sigue delegado a los planos sellados.
+* **Continuidad de operación:** el lote invoca `crear_backup_boveda_sqlite` **antes** de cualquier DML y
+  publica la ruta verificada (`PRAGMA quick_check`) en `parte["resguardo_worm"]` bajo el marcador
+  `🛡️ [RESGUARDO WORM]`. `--dry-run` no muta ⇒ no respalda.
+* **[SHIELD]:** `tests/shield/test_shield_fase2_rehomologacion_and_audit_trace.py`
+
+### [ARCH-1.4.57] Frontera de Presentación de los Cards Polimórficos: `variables_44` como Única Fuente y Deuda Declarada de `insumos_factivados` [ARCH-PILLAR]
+* **Hecho certificado (Fase 3, sonda de sólo lectura sobre las 99 filas J1–J11 de `sovereign_distributions`):** el
+  cliente **no necesita** el paquete anidado `insumos_factivados` para pintar los Cards Semánticos. El motor puro
+  `_celda_telemetria` / `_celda_h2h_stats` (`src/core/sovereign/factor_attribution.py`) ya transcribe al catálogo
+  `variables_44` las magnitudes realmente consumidas, **incluidas las celdas en cadena**: `V01` (90/99), `V05` (90/99),
+  `V06` (90/99), `V10` (90/99), `V11` (90/99), `V27` (99/99), `V28` (99/99), `V39` (99/99), `V40` (88/99) y `V41`
+  (88/99). Cinco dimensiones publican ≥1 variable `EVALUADO` (`𝒯_Shk` 99/99, `𝒯_H2H` 99/99, `𝒯_Vol`/`𝒯_Rem`/`𝒯_Def`
+  90/99); las siete restantes quedan en 0 y se exhiben atenuadas.
+* **Decisión de frontera:** el DTO `AtribucionFactorialOut` (`src/models/web_schemas.py`, `extra="ignore"`) **no se muta**;
+  la ruta `markets._atribucion_factorial_del_partido` tampoco. Los Cards consumen exclusivamente
+  `atribucion_factorial.variables_44`, de modo que `src/core/**` permanece byte-idéntico (`[DIRGEN-STRICT]`) y el
+  contrato `[LN-QBE-101]/[LN-QBE-103]` no sufre ruptura alguna.
+* **Deuda declarada (cero maquillaje):** `insumos_factivados.contexto.insumos` publica la altitud **absoluta** de sede
+  (p. ej. 2,240 m / 2,135 m en el corpus Atlante) y `q_mod_h`/`q_mod_a`, magnitudes que **no cruzan** el DTO porque la
+  raíz del bloque de atribución no las expone. La capa visible exhibe `ΔAlt⁺` (`V28`, magnitud realmente aplicada por
+  el motor) y **no** fabrica la altitud del estadio. Promover la anotación de sede exige enmienda aditiva de jurisdicción
+  sobre `src/models/web_schemas.py` + `src/web/routes/markets.py`; queda como nodo de seguimiento abierto, no como
+  omisión silenciosa.
+* **Retiro visual del semáforo EPIST (`[DES-QBE-071]`):** el micro-HUD compone la tetralogía `OPTA · SEDE · H2H · CTX`.
+  `semaforos.epist` sigue vivo en el payload y el filtro anti-cuarentena lo lee por acceso indexado: la resta es de
+  presentación, jamás de gobierno.
+* **[SHIELD]:** `tests/shield/test_shield_fase3_polymorphic_cards_ui.py`
+
+### [ARCH-1.4.58] Telemetría Dimensional en el DTO, 19.ª Tarea del Centro de Control y Sonda de Completitud Fáctica 44V [ARCH-PILLAR]
+* **Hecho certificado (cierre de la deuda de frontera de `[ARCH-1.4.57]`):** el acordeón forense del Visor 44V
+  degradaba TODA dimensión a `SIN EVALUAR · ○ 0 de 0`, aunque el motor puro sí había evaluado sus celdas. La causa
+  raíz no era el motor: el DTO `AtribucionDimensionOut` (`src/models/web_schemas.py`, `extra="ignore"`) **descartaba
+  en silencio** los tres contadores que el productor `estructurar_catalogo_44_variables`
+  (`src/core/sovereign/factor_attribution.py`) ya publicaba: `total_variables`, `variables_evaluadas` y
+  `tiene_datos`. El `0 de 0` no era un dato fáctico: era un campo perdido en la frontera de serialización.
+* **Enmienda aditiva (cero ruptura):** los tres campos se declaran en `AtribucionDimensionOut` con default explícito
+  (`total_variables: int = 0`, `variables_evaluadas: int = 0`, `tiene_datos: bool = False`). Ningún consumidor previo
+  queda obligado a enviarlos, de modo que el contrato `[LN-QBE-101]` se preserva; `AtribucionFactorialOut` y la ruta
+  `markets._atribucion_factorial_del_partido` no se tocan y `src/core/**` permanece byte-idéntico (`[DIRGEN-STRICT]`).
+* **Presentación auto-sanada (cero parche cosmético):** `app.js::_cardDimension44` / `_badgeDimension44` ya leían
+  `dimension.variables_evaluadas` y `dimension.total_variables` exigiendo ambos finitos y `> 0`; con los contadores
+  presentes, el badge (`n/m evaluadas`) y el encabezado del acordeón se pueblan **sin editar una línea de JS**.
+* **Sub-pestaña renombrada (`src/web/templates/index.html`):** `[ 🔬 Auditoría Fáctica y Distribuciones ]` pasa a
+  `[ 🎯 Calibración y Distribuciones ]`. Motivo: la vista publica calibración factual (Brier/α) y distribuciones 1X2;
+  el término «Auditoría» se reserva al panel `🛡️ Auditoría y Diagnóstico`, donde ahora vive la sonda forense.
+* **19.ª tarea gobernada del Centro de Control (`src/web/routes/admin_tasks.py`):** `auditar_completitud_visor` entra a
+  `TAREAS_PERMITIDAS` / `COMANDOS_TAREAS` despachada como **lista argv**
+  (`["scripts", "auditoria", "auditar_completitud_visor.py"]`): cero shell, cero texto libre del cliente, parámetros
+  compuestos por el servidor. La cardinalidad legislada pasa de 18 a **19** y los tres jueces de igualdad estricta la
+  afirman (`test_shield_purga_total_db.py`, `test_shield_sprint5_domain_reconnection.py`,
+  `test_shield_completitud_visor_and_sync_j13.py`).
+* **Sonda de sólo lectura (`scripts/auditoria/auditar_completitud_visor.py`):** barre J1→J17
+  (`RANGO_JORNADAS_DEFAULT = "1-17"`, rangos explícitos por CLI) sobre la salida **ya validada** por
+  `CalibrationReportResponse` —audita el DTO que ve el navegador, no la tabla cruda— y emite tabla ASCII + parte JSON
+  (`data/output/auditoria_completitud_visor.json`). Familias de anomalía: `DENOMINADOR_NULO`,
+  `EVALUADAS_EXCEDE_TOTAL`, `CONTEO_DIVERGENTE` (alias histórico `conteo` ≠ denominador), `BADGE_INCOHERENTE`
+  (`tiene_datos` ⟺ `variables_evaluadas > 0`), `COTA_SOT` (`V06`/`V11` fuera de `[0, 15.0]`), `COTA_POSS` (`V01`
+  fuera de `[0, 100]`), `CATALOGO_INCOMPLETO` (Σ ≠ 44), `SIN_CATALOGO_44V`, `SINCRONIA_JORNADA` (jornada con partidos
+  consumados que el Visor omite) y `UNIVERSO_MERMA` (`auditados + pendientes ≠ concluidos_boveda`). Cero
+  `write_transaction`.
+* **Frontera de jurisdicción:** la sonda vive en `scripts/auditoria/` (jamás en `src/core/` ni `src/storage/`) porque
+  **mide** el contrato de salida, no produce matemática ni altera la bóveda; su lectura es única y gobernada.
+* **Sincronía de jornadas (J13 incluida):** `markets._construir_reporte_calibracion` no porta techo de jornada; el
+  Visor publica toda jornada concluida con P′ sellada. El literal `"1-11"` que sobrevive en `src/models/web_schemas.py`
+  es el **default del simulador financiero** (V-5, ley de capital distinta) y permanece intacto: el juez prohíbe al
+  Visor heredarlo y certifica que el default sigue siendo `1-11`.
+* **[SHIELD]:** `tests/shield/test_shield_completitud_visor_and_sync_j13.py` · `tests/shield/test_shield_fase2_rehomologacion_and_audit_trace.py`
+
 ---
 
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**

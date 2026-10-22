@@ -636,7 +636,7 @@
             <nav class="bt-subtabs" role="tablist" aria-label="Paneles del Visor de Backtesting">
                 <button type="button" id="sub-tab-factico" class="bt-subtab-btn active" role="tab"
                         aria-selected="true" data-bt-panel="panel-visor-factico">
-                    🔬 Auditoría Fáctica y Distribuciones
+                    🎯 Calibración y Distribuciones
                 </button>
                 <button type="button" id="sub-tab-financiero" class="bt-subtab-btn" role="tab"
                         aria-selected="false" data-bt-panel="panel-visor-financiero">
@@ -919,6 +919,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_cartera_shield')" title="Qué hace: Verifica las invarianzas financieras de cartera (hard caps 8% individual / 25% jornada, piso de boleto). Cuándo usar: Tras modificar reglas de capital o estrategias.">🔍 Invarianzas de Cartera · Shield</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_coherencia_cartelera')" title="Qué hace: Ejecuta el pre-vuelo diagnóstico de coherencia relacional de la cartelera activa (paridad de vector p, overround, piso/techo, coherencia Capa 0 y divergencia de mercado). Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas o cuando el semáforo marque integridad en rojo.">🧭 Coherencia de Cartelera · Pre-Vuelo</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pipeline_backtesting')" title="Qué hace: Audita de punta a punta el pipeline de calibración histórica (cortes anti-leakage, Brier multicategórico y paridad de la evidencia sellada). Cuándo usar: Antes de certificar cambios en el motor de calibración o al validar la temporada homologada.">🧪 Auditoría E2E · Pipeline de Backtesting</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_completitud_visor')" title="Qué hace: Barre la salida REAL del Visor de Calibración (Pydantic validado) jornada por jornada y certifica la completitud fáctica del catálogo de 44 variables: cero «0 de 0», cotas físicas de SoT por partido (≤ 15) y posesión (0-100), coherencia de los badges del acordeón y sincronía de las jornadas publicadas. Cuándo usar: Tras homologar una jornada nueva o cuando un badge del acordeón marque SIN EVALUAR con evidencia sellada.">🔍 Auditoría de Completitud Fáctica (44V)</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('consultar_uso_llm')" title="Qué hace: Reporta el consumo de tokens y la salud del pool de llaves Gemini. Cuándo usar: Antes de lanzar la cadena de ingesta o ante errores de cuota.">🔑 Salud de Llaves Gemini y Tokens</button>
                         </div>
                     </div>

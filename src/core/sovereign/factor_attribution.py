@@ -484,21 +484,145 @@ def _celda_telemetria(
     }
 
 
+# ── [ARCH-1.4.55] Orquestación ANIDADA del paquete `insumos_factivados` ───────────────────────
+# Fase 1 de la Integración Maestra: los proveedores canónicos de `src/core/sovereign/` publican
+# bloques con `status` + `insumos`; aquí se anidan bajo sus cinco nombres legislados y se derivan
+# las claves PLANAS heredadas para que el catálogo de 44 variables ([LN-QBE-101]) ilumine
+# exactamente las mismas celdas. Cero I/O: el empaquetado es una función pura de sus argumentos.
+SUB_BLOQUES_INSUMOS_FACTIVADOS: Tuple[str, ...] = (
+    "h2h",
+    "contexto",
+    "trayectoria",
+    "volumen_porteria",
+    "ataque_defensa",
+)
+
+# (sub_bloque, clave en `insumos` del bloque, clave plana heredada). El ORDEN declara la
+# precedencia: la primera aparición gana (jamás se sobreescribe una clave ya derivada). El bloque
+# `ataque_defensa` manda porque hospeda la ruta sellada `[VAULT-CORE-005]` realmente consumida;
+# `trayectoria` no hereda claves planas (su contrato son las celdas V29–V32, no un insumo previo).
+_MAPA_NIDOS_A_PLANO: Tuple[Tuple[str, str, str], ...] = (
+    ("ataque_defensa", "xg_local_rate", "xg_local_rate"),
+    ("ataque_defensa", "xg_visita_rate", "xg_visita_rate"),
+    ("ataque_defensa", "xga_local_rate", "xga_local_rate"),
+    ("ataque_defensa", "xga_visita_rate", "xga_visita_rate"),
+    ("ataque_defensa", "gc_local_rate", "gc_local_rate"),
+    ("ataque_defensa", "gc_visita_rate", "gc_visita_rate"),
+    ("ataque_defensa", "sot_local", "sot_local"),
+    ("ataque_defensa", "sot_visita", "sot_visita"),
+    ("ataque_defensa", "sota_local", "sota_local"),
+    ("ataque_defensa", "sota_visita", "sota_visita"),
+    ("ataque_defensa", "pj_sede_local", "pj_sede_local"),
+    ("ataque_defensa", "pj_sede_visita", "pj_sede_visita"),
+    ("ataque_defensa", "xg_es_real_opta", "xg_es_real_opta"),
+    ("contexto", "delta_alt_metros", "delta_alt_metros"),
+    ("contexto", "delta_descanso_dias", "delta_descanso_dias"),
+    ("contexto", "q_mod_h", "q_mod_h"),
+    ("contexto", "q_mod_a", "q_mod_a"),
+    ("volumen_porteria", "poss_local", "poss_local"),
+    ("volumen_porteria", "poss_visita", "poss_visita"),
+    ("h2h", "h2h_conteo", "h2h_conteo"),
+    ("h2h", "h2h_stats", "h2h_stats"),
+)
+
+
+def _insumos_del_bloque(bloque: Any) -> Dict[str, Any]:
+    """Insumos planos de un sub-bloque de proveedor (`insumos` si lo publica; si no, el bloque)."""
+    if not isinstance(bloque, dict):
+        return {}
+    anidado = bloque.get("insumos")
+    return anidado if isinstance(anidado, dict) else bloque
+
+
+def _aplanar_insumos(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[ARCH-1.4.55] Deriva las claves planas heredadas de un paquete SÓLO anidado.
+
+    Sólo se transcriben magnitudes publicadas por los proveedores (jamás `None`, jamás un valor
+    inventado). La tabla `_MAPA_NIDOS_A_PLANO` es la ÚNICA fuente de verdad del aplanado.
+    """
+    planas: Dict[str, Any] = {}
+    if not isinstance(paquete, dict):
+        return planas
+    for sub_bloque, clave_nido, clave_plana in _MAPA_NIDOS_A_PLANO:
+        if clave_plana in planas:
+            continue
+        bloque = _insumos_del_bloque(paquete.get(sub_bloque))
+        valor = bloque.get(clave_nido) if clave_nido in bloque else None
+        if valor is not None:
+            planas[clave_plana] = valor
+    return planas
+
+
+def _fusionar_planas(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """Vista plana del paquete: una clave raíz publicada manda, salvo que declare `None`.
+
+    La ignorancia declarada en la raíz (`None`) no borra la evidencia REAL publicada por el
+    sub-bloque anidado: es la misma magnitud, sólo cambió su ubicación `[ARCH-1.4.55]`.
+    """
+    fusionado = _aplanar_insumos(paquete)
+    for clave, valor in paquete.items():
+        if valor is None and clave in fusionado:
+            continue
+        fusionado[clave] = valor
+    return fusionado
+
+
+def empaquetar_insumos_factivados(
+    h2h: Optional[Dict[str, Any]] = None,
+    contexto: Optional[Dict[str, Any]] = None,
+    trayectoria: Optional[Dict[str, Any]] = None,
+    volumen_porteria: Optional[Dict[str, Any]] = None,
+    ataque_defensa: Optional[Dict[str, Any]] = None,
+    claves_heredadas: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """[ARCH-1.4.55] Paquete `insumos_factivados` ANIDADO + claves planas heredadas.
+
+    * Los cinco sub-bloques se publican con el shape ÍNTEGRO de los proveedores (`status`,
+      `motivo`, `variables`, `insumos`, `semaforos`, …) para consumo de la consola forense.
+    * `_aplanar_insumos` completa las claves planas ausentes: un paquete SÓLO anidado ilumina
+      exactamente las mismas celdas del catálogo de 44 variables de `[LN-QBE-101]`.
+    * `claves_heredadas` son las magnitudes que el generador sellado `[LN-QBE-102]` ya publica:
+      mandan sobre cualquier derivación (ruta byte-idéntica, cero ruptura de contrato). Un `None`
+      heredado NO borra la evidencia real del sub-bloque: misma regla que `_fusionar_planas`.
+    """
+    paquete: Dict[str, Any] = {
+        "h2h": h2h if isinstance(h2h, dict) else None,
+        "contexto": contexto if isinstance(contexto, dict) else None,
+        "trayectoria": trayectoria if isinstance(trayectoria, dict) else None,
+        "volumen_porteria": volumen_porteria if isinstance(volumen_porteria, dict) else None,
+        "ataque_defensa": ataque_defensa if isinstance(ataque_defensa, dict) else None,
+    }
+    paquete.update(_aplanar_insumos(paquete))
+    if claves_heredadas:
+        for clave, valor in claves_heredadas.items():
+            if not isinstance(clave, str):
+                continue
+            if valor is None and paquete.get(clave) is not None:
+                # La ignorancia declarada en la raíz no destruye la magnitud REAL ya derivada.
+                continue
+            paquete[clave] = valor
+    return paquete
+
+
+
 def _insumos_factivados(datos: Dict[str, Any]) -> Dict[str, Any]:
     """[LN-QBE-102] Paquete de telemetría fáctica publicado por el generador (`{}` si ausente).
 
     Se admiten las dos ubicaciones canónicas: la raíz del payload y la traza persistida
     (`audit_trace_json`). La ausencia NO es evidencia de nada: simplemente desactiva la iluminación.
+    `[ARCH-1.4.55]` Un paquete SÓLO anidado se aplana aquí por `_MAPA_NIDOS_A_PLANO`, de modo que
+    la ruta heredada de lectura permanece intacta.
     """
     candidato = datos.get("insumos_factivados")
     if isinstance(candidato, dict) and candidato:
-        return candidato
+        return _fusionar_planas(candidato)
     trace = datos.get("audit_trace") or datos.get("trace")
     if isinstance(trace, dict):
         candidato = trace.get("insumos_factivados")
         if isinstance(candidato, dict) and candidato:
-            return candidato
+            return _fusionar_planas(candidato)
     return {}
+
 
 
 def _formatear_insumo(valor: Any, formato: str) -> Optional[str]:

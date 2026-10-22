@@ -9,7 +9,8 @@ import os
 import sqlite3
 import logging
 from contextlib import contextmanager
-from typing import Generator
+from datetime import datetime
+from typing import Generator, Optional
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -103,3 +104,64 @@ class PersistenceGateway:
         """Crea todas las tablas declaradas en el esquema ORM."""
         base_metadata.create_all(bind=self.engine)
         logger.info("✅ [GATEWAY TABLES] Esquema relacional 3NF sincronizado.")
+
+    # ── [ARCH-1.4.55] Respaldo atómico de la bóveda (continuidad de operación) ────────────────
+    def _ruta_sqlite_local(self) -> str:
+        """Ruta física del archivo SQLite gobernado por el motor (`RuntimeError` si no aplica)."""
+        url = self.engine.url
+        backend = url.get_backend_name()
+        if backend != "sqlite":
+            raise RuntimeError(
+                f"🚨 [GATEWAY BACKUP] El respaldo atómico exige SQLite; motor declarado: {backend}."
+            )
+        archivo = url.database
+        if not archivo or archivo == ":memory:":
+            raise RuntimeError(
+                "🚨 [GATEWAY BACKUP] La bóveda no tiene archivo físico (URL en memoria): "
+                "no existe nada que respaldar."
+            )
+        return os.path.abspath(archivo)
+
+    def crear_backup_boveda_sqlite(self, directorio_destino: Optional[str] = None) -> str:
+        """[ARCH-1.4.55] Copia CONSISTENTE de la bóveda vía la API online de SQLite.
+
+        `sqlite3.Connection.backup` es la única lectura segura bajo WAL con escritores activos:
+        no bloquea al daemon de captura ni congela el journal. El respaldo se verifica con
+        `PRAGMA quick_check` antes de declararse válido; una copia corrupta JAMÁS se publica
+        (se elimina y se lanza `RuntimeError`).
+
+        Se invoca EXPLÍCITAMENTE al inicio del lote (jamás por escritura). Devuelve la ruta
+        absoluta del respaldo materializado en
+        `data/backups/qbe_database_backup_{YYYYMMDD_HHMMSS}.db` por omisión.
+        """
+        origen = self._ruta_sqlite_local()
+        if not os.path.isfile(origen):
+            raise RuntimeError(
+                f"🚨 [GATEWAY BACKUP] La bóveda declarada no existe en disco: {origen}"
+            )
+        destino_dir = os.path.abspath(directorio_destino or os.path.join("data", "backups"))
+        os.makedirs(destino_dir, exist_ok=True)
+        marca = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destino = os.path.join(destino_dir, f"qbe_database_backup_{marca}.db")
+
+        con_origen = sqlite3.connect(origen)
+        con_destino = sqlite3.connect(destino)
+        try:
+            con_origen.backup(con_destino)
+            fila = con_destino.execute("PRAGMA quick_check;").fetchone()
+        finally:
+            con_destino.close()
+            con_origen.close()
+
+        veredicto = str(fila[0]) if fila else "sin respuesta"
+        if veredicto != "ok":
+            try:
+                os.remove(destino)
+            except OSError:  # pragma: no cover — limpieza best-effort del artefacto inválido
+                pass
+            raise RuntimeError(
+                f"🚨 [GATEWAY BACKUP] Respaldo corrupto ({veredicto}); copia descartada: {destino}"
+            )
+        logger.info(f"🛡️ [GATEWAY BACKUP] Bóveda respaldada y verificada: {destino}")
+        return destino
+

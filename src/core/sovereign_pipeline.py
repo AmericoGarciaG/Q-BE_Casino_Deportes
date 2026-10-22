@@ -199,6 +199,150 @@ def _agregar_h2h_stats(h2h_matches: Any) -> Optional[Dict[str, str]]:
     }
 
 
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# [LN-QBE-118] MATERIALIZACIÓN ANIDADA DE LOS CINCO PILARES (Fase 2 · Integración Maestra)
+# El generador sellado publica el paquete ANIDADO como PROYECCIÓN PURA de las magnitudes que ya
+# consumió: cada sub-bloque declara `status` + `insumos` con el shape de los proveedores de
+# `[LN-QBE-117]`. Cero matemática nueva: λ, Dixon-Coles, el operador de André y la fusión
+# `[LN-QBE-104]` permanecen bit-idénticas, y las claves planas de `[LN-QBE-102]` conservan
+# nombre, unidad y valor (el anidamiento es ADITIVO).
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+ESTADO_BLOQUE_EXITO = "EXITO"
+ESTADO_BLOQUE_PARCIAL = "PARCIAL"
+ESTADO_BLOQUE_SIN_EVIDENCIA = "SIN_EVIDENCIA"
+
+
+def _estado_del_bloque(insumos: Dict[str, Any]) -> str:
+    """[LN-QBE-118] Estado de cobertura de un sub-bloque: `None` = magnitud no publicada.
+
+    `EXITO` exige TODAS las magnitudes publicadas; `PARCIAL` al menos una; `SIN_EVIDENCIA`
+    ninguna. El estado declara la evidencia: jamás sustituye un `None` por un default.
+    """
+    publicadas = [valor for valor in insumos.values() if valor is not None]
+    if not publicadas:
+        return ESTADO_BLOQUE_SIN_EVIDENCIA
+    if len(publicadas) < len(insumos):
+        return ESTADO_BLOQUE_PARCIAL
+    return ESTADO_BLOQUE_EXITO
+
+
+def _sub_bloque(nombre: str, insumos: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Sub-bloque con el shape legislado `{bloque, status, insumos}`."""
+    return {"bloque": nombre, "status": _estado_del_bloque(insumos), "insumos": dict(insumos)}
+
+
+def _bloque_ataque_defensa(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar A/D: tasas canónicas `[ARCH-1.4.41]`, SoT/SoTA y sufrimiento de sede."""
+    return _sub_bloque(
+        "ataque_defensa",
+        {
+            "xg_local_rate": paquete.get("xg_local_rate"),
+            "xg_visita_rate": paquete.get("xg_visita_rate"),
+            "xga_local_rate": paquete.get("xga_local_rate"),
+            "xga_visita_rate": paquete.get("xga_visita_rate"),
+            "gc_local_rate": paquete.get("gc_local_rate"),
+            "gc_visita_rate": paquete.get("gc_visita_rate"),
+            "sot_local": paquete.get("sot_local"),
+            "sot_visita": paquete.get("sot_visita"),
+            "sota_local": paquete.get("sota_local"),
+            "sota_visita": paquete.get("sota_visita"),
+            "pj_sede_local": paquete.get("pj_sede_local"),
+            "pj_sede_visita": paquete.get("pj_sede_visita"),
+            "xg_es_real_opta": paquete.get("xg_es_real_opta"),
+        },
+    )
+
+
+def _bloque_contexto(paquete: Dict[str, Any], raw_match_data: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Contexto: ΔAlt⁺ y ΔDías REALES consumidos por λ `[LN-QBE-109]`.
+
+    Los hechos de plaza viajan en el registro (`altitud_local`/`descanso_local`, publicados por la
+    homologación): aquí sólo se declaran. `None` cuando la fuente no los publica.
+    """
+    return _sub_bloque(
+        "contexto",
+        {
+            "delta_alt_metros": paquete.get("delta_alt_metros"),
+            "delta_descanso_dias": paquete.get("delta_descanso_dias"),
+            "q_mod_h": paquete.get("q_mod_h"),
+            "q_mod_a": paquete.get("q_mod_a"),
+            "altitud_local": _magnitud_insumo(raw_match_data, ("altitud_local",)),
+            "altitud_visita": _magnitud_insumo(raw_match_data, ("altitud_visita",)),
+            "descanso_local": _magnitud_insumo(raw_match_data, ("descanso_local",)),
+            "descanso_visita": _magnitud_insumo(raw_match_data, ("descanso_visita",)),
+        },
+    )
+
+
+def _bloque_trayectoria(raw_match_data: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Trayectoria `[LN-QBE-110]`: ventana 5P y su pendiente.
+
+    La captura de homologación no publica la serie de cinco partidos ⇒ los cuatro insumos quedan
+    en `None` (`SIN_EVIDENCIA`). El bloque existe —la ausencia es información veraz— y su ventana
+    sintética está prohibida (cero fabricación de una tendencia).
+    """
+    return _sub_bloque(
+        "trayectoria",
+        {
+            "pts_5p_local": _magnitud_insumo(raw_match_data, ("pts_5p_local",)),
+            "pts_5p_visita": _magnitud_insumo(raw_match_data, ("pts_5p_visita",)),
+            "pendiente_local": _magnitud_insumo(raw_match_data, ("pendiente_local", "m_local")),
+            "pendiente_visita": _magnitud_insumo(raw_match_data, ("pendiente_visita", "m_visita")),
+        },
+    )
+
+
+def _bloque_volumen_porteria(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Volumen & Portería `[LN-QBE-111]`: posesión y volumen de disparos."""
+    return _sub_bloque(
+        "volumen_porteria",
+        {
+            "poss_local": paquete.get("poss_local"),
+            "poss_visita": paquete.get("poss_visita"),
+            "sot_local": paquete.get("sot_local"),
+            "sot_visita": paquete.get("sot_visita"),
+            "sota_local": paquete.get("sota_local"),
+            "sota_visita": paquete.get("sota_visita"),
+        },
+    )
+
+
+def _bloque_h2h(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Memoria `[LN-QBE-105]`: conteo de la ventana y su agregado fáctico.
+
+    Ley Zero-H2H `[LN-QBE-020-B]`: sin enfrentamientos verificables el bloque se publica
+    `SIN_EVIDENCIA` con su motivo, jamás un récord 0-0-0 inventado.
+    """
+    insumos: Dict[str, Any] = {"h2h_conteo": paquete.get("h2h_conteo")}
+    if paquete.get("h2h_stats") is not None:
+        insumos["h2h_stats"] = paquete["h2h_stats"]
+    bloque = _sub_bloque("h2h", insumos)
+    if not int(insumos["h2h_conteo"] or 0):
+        bloque["status"] = ESTADO_BLOQUE_SIN_EVIDENCIA
+        bloque["motivo"] = (
+            "Ley Zero-H2H: la ventana no publicó enfrentamientos directos verificables."
+        )
+    return bloque
+
+
+def _paquete_anidado_cinco_pilares(
+    paquete: Dict[str, Any], raw_match_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """[LN-QBE-118] Proyección ANIDADA de los cinco pilares sobre las claves planas selladas.
+
+    Cada sub-bloque lee EXCLUSIVAMENTE del paquete plano ya construido (más los hechos
+    contextuales del registro): no existe una segunda derivación de magnitudes, de modo que el
+    aplanador `_MAPA_NIDOS_A_PLANO` de `[ARCH-1.4.55]` re-deriva exactamente el mismo valor plano.
+    """
+    return {
+        "h2h": _bloque_h2h(paquete),
+        "contexto": _bloque_contexto(paquete, raw_match_data),
+        "trayectoria": _bloque_trayectoria(raw_match_data),
+        "volumen_porteria": _bloque_volumen_porteria(paquete),
+        "ataque_defensa": _bloque_ataque_defensa(paquete),
+    }
+
+
 def _empaquetar_insumos_factivados(
     raw_match_data: Dict[str, Any],
     delta_alt_metros: float,
@@ -214,6 +358,10 @@ def _empaquetar_insumos_factivados(
     splits de sede [LN-QBE-038] y parámetros contextuales efectivos). `None` = no publicado.
     `[LN-QBE-105]` `h2h_stats` se anexa de forma aditiva SÓLO cuando la ventana publicó duelos
     verificables; en su ausencia la clave no existe y la ruta heredada de V39 queda intacta.
+
+    `[LN-QBE-118]` Sobre esas MISMAS magnitudes se anidan los cinco pilares (`h2h`, `contexto`,
+    `trayectoria`, `volumen_porteria`, `ataque_defensa`): el anidamiento es una PROYECCIÓN, no un
+    cálculo, y ninguna de sus claves alimenta λ, Dixon-Coles, André ni la fusión `[LN-QBE-104]`.
     """
     local = _bloque_factico(raw_match_data, "home_team_stats")
     visita = _bloque_factico(raw_match_data, "away_team_stats")
@@ -253,6 +401,8 @@ def _empaquetar_insumos_factivados(
     }
     if h2h_stats is not None:
         paquete["h2h_stats"] = dict(h2h_stats)
+    # [LN-QBE-118] Los cinco pilares se anidan sobre las MISMAS magnitudes planas (aditivo).
+    paquete.update(_paquete_anidado_cinco_pilares(paquete, raw_match_data))
     return paquete
 
 

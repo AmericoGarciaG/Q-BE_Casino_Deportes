@@ -647,6 +647,13 @@ def ejecutar(argv: Optional[List[str]] = None) -> int:
 
     # ── 2. LECTURA DEL ESTADO DE LA BÓVEDA (identidad, capturas y cortes certificados) ─────
     gateway = PersistenceGateway()
+    # [ARCH-1.4.55] Continuidad de operación: respaldo atómico ANTES de escribir (API online de
+    # SQLite verificada con `PRAGMA quick_check`). El DRY-RUN no muta la bóveda ⇒ no respalda.
+    if not args.dry_run:
+        logger.info(
+            "🛡️ Respaldo atómico previo al lote verificado: %s",
+            gateway.crear_backup_boveda_sqlite(),
+        )
     with gateway.read_session() as sesion:
         catalogo = construir_catalogo_3nf(sesion, args.liga_id)
         clubes = clubes_desde_boveda(sesion, args.liga_id)

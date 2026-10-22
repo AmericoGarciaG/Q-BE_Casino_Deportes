@@ -211,6 +211,13 @@ class AtribucionDimensionOut(BaseModel):
     dimension: str
     titulo: str = ""
     conteo: int = 0
+    # [ARCH-1.4.58] Telemetría dimensional del acordeón bicolor. El productor puro
+    # (`estructurar_catalogo_44_variables`, [DES-QBE-066]) YA publicaba estos tres contadores, pero
+    # `extra="ignore"` los descartaba en silencio y el Visor degradaba a `SIN EVALUAR` / `○ 0 de 0`.
+    # Campos ADITIVOS con default: el contrato [LN-QBE-101] no sufre ruptura alguna.
+    total_variables: int = 0
+    variables_evaluadas: int = 0
+    tiene_datos: bool = False
     variables: List[AtribucionVariableOut] = Field(default_factory=list)
 
 

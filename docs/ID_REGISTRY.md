@@ -113,6 +113,9 @@
 | `[LN-QBE-114]` | LOGIC | `docs/LOGIC.md` | Orquestación REST para Simulación Financiera Retrospectiva | SELLADO |
 | `[LN-QBE-115]` | LOGIC | `docs/LOGIC.md` | Saneamiento Vol. II: Cota Underdog Ley 3, Escudo de Altitud y Trinidad de Certeza | SELLADO |
 | `[LN-QBE-116]` | LOGIC | `docs/LOGIC.md` | Cota de Dominancia P′ ≥ 50% en la Híbrida Visitante (Blindaje H2) | SELLADO |
+| `[LN-QBE-117]` | LOGIC | `docs/LOGIC.md` | Proveedores Canónicos de Insumos Factuales (Fase 1 · Integración Maestra) | SELLADO |
+| `[LN-QBE-118]` | LOGIC | `docs/LOGIC.md` | Materialización Anidada de los Cinco Pilares y Resguardo WORM Previo a la DML (Fase 2 · Re-homologación) | SELLADO |
+| `[LN-QBE-119]` | LOGIC | `docs/LOGIC.md` | Ley de Unidad de Volumen & Portería (Tasa Por Partido) y Sonda de Completitud Fáctica del Visor 44V (Fase 3 · Sincronía J13) | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -219,17 +222,22 @@
 | `[ARCH-1.4.45]` | ARCH | `docs/ARCH.md` | Arquitectura de Aislamiento Sandbox y Diagnóstico CLI-First [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.46]` | ARCH | `docs/ARCH.md` | Motor de Simulación Retrospectiva de Rentabilidad y Tablero Fiduciario CLI [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.47]` | ARCH | `docs/ARCH.md` | Sandbox Ataque & Defensa: Colisión Cruzada y Tablero Bipartito CLI [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.48]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Contexto y Shocks y Derivación del Vector Contextual C | SELLADO |
-| `[ARCH-1.4.49]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Trayectoria y Dinámica Temporal | SELLADO |
+| `[ARCH-1.4.48]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Contexto y Shocks y Derivación del Vector Contextual C [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.49]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Trayectoria y Dinámica Temporal [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.50]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Volumen Territorial y Portería [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.51]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Micro-Dinámicas y Fricciones Especiales | SELLADO |
-| `[ARCH-1.4.52]` | ARCH | `docs/ARCH.md` | Extensión CLI del Sandbox de Rentabilidad para Políticas de Exclusión | SELLADO |
+| `[ARCH-1.4.51]` | ARCH | `docs/ARCH.md` | Arquitectura del Laboratorio de Micro-Dinámicas y Fricciones Especiales [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.52]` | ARCH | `docs/ARCH.md` | Extensión CLI del Sandbox de Rentabilidad para Políticas de Exclusión [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.53]` | ARCH | `docs/ARCH.md` | Saneamiento Vol. II: Cota Underdog, Escudo de Altitud y Parámetros Gobernantes del Simulador [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.54]` | ARCH | `docs/ARCH.md` | Blindaje de Dominancia P′ ≥ 50%, Altitud Atlante y Saneamiento Cromático de la Tabla Meso [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-B]` | ARCH | `docs/ARCH.md` | Detector de Deriva y Semáforo de Desactualización de Fuentes [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.12-C]` | ARCH | `docs/ARCH.md` | Reestructuración de Cadenas de Ingesta Temporal y Whitelist Ampliada [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.6.20]` | ARCH | `docs/ARCH.md` | Actualización de Endpoint de Búsqueda FotMob (/searchapi/suggest) [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.11]` | ARCH | `docs/ARCH.md` | Catálogo de Jerga y Aliases Globales de Progol (PROGOL_GLOBAL_ALIASES) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.55]` | ARCH | `docs/ARCH.md` | Proveedores Canónicos de Insumos y Orquestación Anidada de `insumos_factivados` [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.55-B]` | ARCH | `docs/ARCH.md` | Aduana de Lectura Soberana: Proyección ORM → Diccionarios Planos (`src/core/sovereign_reads.py`) [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.56]` | ARCH | `docs/ARCH.md` | Materialización Anidada de los Cinco Pilares en el Generador Sellado y Resguardo WORM del Lote [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.57]` | ARCH | `docs/ARCH.md` | Frontera de Presentación de los Cards Polimórficos: `variables_44` como Única Fuente y Deuda Declarada de `insumos_factivados` [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.58]` | ARCH | `docs/ARCH.md` | Telemetría Dimensional en el DTO, 19.ª Tarea del Centro de Control y Sonda de Completitud Fáctica 44V [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---

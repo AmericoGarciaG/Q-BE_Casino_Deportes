@@ -668,15 +668,39 @@
 
 ### [DES-QBE-068] Diseño Dual del Visor de Backtesting (Auditoría Fáctica vs. Rentabilidad) [UX-MANDATE]
 * **Geometría de Sub-Pestañas:** El contenedor `#view-visor-backtesting` se divide mediante un menú de píldoras interno en la cabecera:
-  1. `[ 🔬 Auditoría Fáctica y Distribuciones ]` (Vista por defecto: KPIs Brier Score, Tabla Meso de Calibración, Parrilla Micro BetExplorer).
+  1. `[ 🎯 Calibración y Distribuciones ]` (Vista por defecto: KPIs Brier Score, Tabla Meso de Calibración, Parrilla Micro BetExplorer).
+     **Renombrada por `[ARCH-1.4.58]`:** la píldora se rotulaba `[ 🔬 Auditoría Fáctica y Distribuciones ]` y se confundía
+     con la sonda forense; «Auditoría» queda reservada al panel `🛡️` del Centro de Control.
   2. `[ 📈 Rentabilidad y Curva de Capital ]` (Nueva vista: KPIs Financieros, Gráfico Chart.js de Bankroll, Tabla Meso de Liquidación por Jornada).
 * **Protección de Dominio:** Ninguna de las dos vistas destruye a la otra; ambas coexisten en el DOM y se alternan mediante clases `d-none`.
+* **Sonda aditiva de Completitud 44V (`[ARCH-1.4.58]`):** el botón `🔍 Auditoría de Completitud Fáctica (44V)` del panel
+  `🛡️ Auditoría y Diagnóstico` despacha la 19.ª tarea gobernada (`auditar_completitud_visor`) y su tabla ASCII se lee en la
+  terminal de streaming, **fuera** del DOM del Visor: la sonda no muta `backtestingReportCache` ni el estado de la SPA.
 
 ### [DES-QBE-069] Conmutador de Laboratorio (Candado) y Filtros de Estrategia [UX-MANDATE]
 * **El Candado de Operación:** En la tarjeta de Configuración de Cartera, el icono de candado actúa como un `toggle`:
   - **Cerrado (Modo Producción):** Selector bloqueado en jornada activa, botón `⚡ Calcular Cartera`.
   - **Abierto (Modo Laboratorio):** El selector de jornada habilita la opción `📊 Toda la Temporada (J1-J11)`. Aparece un contenedor de filtros fiduciarios (`[x] Excluir Familia R (Underdogs)`). El botón muta a `📈 Simular Rentabilidad`.
 * **Transición de Foco:** Al hacer clic en Simular Rentabilidad, la SPA redirige automáticamente la vista hacia la pestaña del Visor de Backtesting y activa la sub-pestaña financiera.
+
+### [DES-QBE-070] Cards Semánticos Polimórficos por Dimensión en el Catálogo Forense [UX-MANDATE]
+* **Objetivo:** que las 44 variables se lean como **insight deportivo** y no como volcado tabular. Cada dimensión del acordeón de `#modal-44-variables` abre con un **Card Semántico Polimórfico** (Hero Card) cuya anatomía depende de la familia de la dimensión. **Enmienda, no deroga:** la tabla numérica de 7 columnas de `[DES-QBE-064]` sobrevive como soporte de auditoría; lo que queda prohibido es la tabla plana como **único** vehículo de lectura.
+* **Insumo único:** las celdas servidas de `atribucion_factorial.variables_44` (`local`, `visita`, `z_score`, `origen`, `estado`, `impacto`, `nota`), donde `local`/`visita` pueden llegar como `str` ya formateado (`'54.0%'`, `'+0.0 d'`, `'105m'`, `'3V - 1E - 0D'`). El cliente **transcribe**; jamás re-deriva probabilidades, λ, Δ logarítmicas ni récords de goles.
+* **Anatomía por familia (clases CSS legisladas):**
+  - `𝒯_Vol` ⇒ `.card-semantico-dimension` + `.barra-posesion-dual`: barra dual con `V01` local/visita. Si la suma de los dos porcentajes servidos no alcanza 100 se rotula `s/d` en el centro; cero normalización inventada.
+  - `𝒯_Rem` / `𝒯_Def` / `𝒯_Por` ⇒ `.balanza-goles-badge`: xG/PJ (`V05`), xGA/PJ (`V10`) y el par `V06`/`V11`; el badge declara únicamente el signo del diferencial **leído** de las celdas.
+  - `𝒯_Shk` ⇒ `.card-semantico-dimension` con `ΔDescanso` (`V27`) y **`Altitud`** (`V28` = ΔAlt⁺ servido por el motor); prohibido inventar la altitud absoluta de la sede en el cliente.
+  - `𝒯_H2H` ⇒ `.card-semantico-dimension` + `.balanza-goles-badge` con `V39` (`3V - 1E - 0D`), `V40` y `V41` (récord de la visita en la sede) transcritos verbatim.
+  - `𝒯_Tra` y las restantes ⇒ `.card-semantico-dimension` con la rejilla `id · variable · estado`.
+* **Dimensiones sin evidencia (Fase 6):** `.card-fase6-muted` con el rótulo `○ 0 de N (Fase 6)`. Prohibido un `0` fabricado o un porcentaje aparente sobre denominador vacío.
+* **Blindaje de presentación:** el marcado se compone con literales de plantilla y el único dato de red pasa por `_valor44` (preserva los `str` servidos y degrada `null` a `—`). Los badges de `[DES-QBE-066]`/`[DES-QBE-067]` conservan su construcción `createElement` + `textContent`: este nodo no los toca.
+* **Criterio de aceptación:** `tests/shield/test_shield_fase3_polymorphic_cards_ui.py` certifica las cuatro clases legisladas, el literal `Altitud`, la invocación `_cardDimension44(dimension)` y la supervivencia de `_tablaDimension44` (`"dimensiones.map(_tablaDimension44)"`).
+
+### [DES-QBE-071] Tetralogía Fáctica en el Micro-HUD y Retiro Visual del Semáforo EPIST [UX-MANDATE]
+* **Objetivo:** el micro-HUD de la tarjeta deja de exhibir el semáforo `EPIST` (veredicto epistémico interno del modelo) y publica únicamente la **tetralogía fáctica** `● OPTA ● SEDE ● H2H ● CTX`, cuyos cuatro estados ya llegan servidos en `atribucion_factorial.semaforos`.
+* **Alcance estrictamente visual:** el backend **sigue publicando** `semaforos.epist` (`[ARCH-1.4.42]`, `[LN-QBE-070-B]`) y el filtro anti-cuarentena `#chk-excluir-vetados` de `[DES-QBE-067]` lo sigue leyendo por acceso indexado (`semaforos["epist"]`). El veto es **lógica de datos**, no semáforo de presentación: retirarlo de la vitrina no lo retira del gobierno.
+* **Prohibiciones:** prohibido el pilón `● EPIST` en el micro-HUD y en el panel `.vars44-semaforos`; prohibida la clase `card-semaforo-epist`; prohibido reintroducir el veredicto epistémico bajo otro rótulo o como quinto semáforo encubierto.
+* **Criterio de aceptación:** `tests/shield/test_shield_fase3_polymorphic_cards_ui.py` (Test 1) certifica la ausencia de `● EPIST` y de `card-semaforo-epist`, la presencia de los cuatro rótulos de la tetralogía y la **supervivencia** de `SEMAFORO_EPIST_VETO` y del literal `"epist"` en el cuerpo del filtro de veto.
 
 
 ---

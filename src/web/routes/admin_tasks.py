@@ -115,6 +115,15 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
         "descripcion": "Auditoría E2E del pipeline de calibración y backtesting",
         "comandos": [["scripts", "auditoria", "auditar_pipeline_end_to_end_backtesting.py"]],
     },
+    # ── [ARCH-1.4.58] SONDA DE COMPLETITUD FÁCTICA DEL VISOR (19ª tarea certificada) ────────────
+    # Barrido de SÓLO LECTURA sobre la salida REAL del contrato Pydantic
+    # (`CalibrationReportResponse`, ya validada): cero `0 de 0`, cotas físicas de SoT/Poss, cobertura
+    # 44V por jornada y sincronía de las jornadas publicadas. Sin argumentos obligatorios: es
+    # invocable tal cual desde el cockpit (los defaults cubren liga canónica y rango J1-J17).
+    "auditar_completitud_visor": {
+        "descripcion": "Auditoría de Completitud Fáctica del Visor (44V, J1-J17) — solo lectura",
+        "comandos": [["scripts", "auditoria", "auditar_completitud_visor.py"]],
+    },
     "exportar_dataset_investigacion": {
         "descripcion": "Extracción del dataset de investigación a CSV (data/output/)",
         "comandos": [["scripts", "utilidades", "exportar_dataset_investigacion.py"]],
@@ -206,9 +215,10 @@ COMANDOS_TAREAS: Dict[str, List[List[str]]] = {
 # ── [ARCH-1.4.28] MODOS DE DESPACHO Y PUENTE INTEGRADO (CAPA 5) ───────────────
 # La whitelist de [ARCH-1.4.12] (9 tareas) se amplió a 10 con la purga total in-process sellada
 # por [ARCH-1.4.29], a 15 con los dos sensores individuales y las tres cadenas temporales
-# homologadas de [ARCH-1.4.12-C], y a 18 con los tres ejecutores de la Enmienda 2026-10-17
-# (`homologar_temporada_optah2h`, `auditar_pipeline_backtesting`, `exportar_dataset_investigacion`);
-# ninguna otra tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
+# homologadas de [ARCH-1.4.12-C], a 18 con los tres ejecutores de la Enmienda 2026-10-17
+# (`homologar_temporada_optah2h`, `auditar_pipeline_backtesting`, `exportar_dataset_investigacion`)
+# y a 19 con la sonda de sólo lectura `auditar_completitud_visor` de [ARCH-1.4.58]; ninguna otra
+# tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
 # sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
 # hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.
 MODO_DESPACHO_SUBPROCESS = "subprocess"

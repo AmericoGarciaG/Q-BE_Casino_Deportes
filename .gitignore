@@ -8,6 +8,8 @@ data/output/*
 !data/output/.gitkeep
 data/input/*
 !data/input/.gitkeep
+# [ARCH-1.4.55 / LN-QBE-118] Resguardos WORM del lote: copias de la bóveda, jamás artefactos de código.
+data/backups/
 .env
 .cache_partidos/
 .pytest_cache/

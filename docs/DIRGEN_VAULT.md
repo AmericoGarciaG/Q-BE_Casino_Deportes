@@ -913,6 +913,255 @@ def fusionar_simplex_con_h2h(
 
 
 
+### Adenda protocolaria `[LN-QBE-118]` — Materialización Anidada de los Cinco Pilares y Resguardo WORM
+
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]` (matemática pura de presentación) · `[DBBD-FUNGIBLE]` (orquestación de suministro fáctico)  
+**Firma:** SHA256-VAULT-CORE-005-LN-QBE-118-NESTED-FIVE-PILLARS
+
+**Alcance:** delta **aditivo** sobre el orquestador sellado. `derivar_factores_con_procedencia`,
+`estimar_intensidades_loglineal`, Dixon-Coles, el operador de André y la fusión `[LN-QBE-104]`
+permanecen **bit-idénticos**: lo que se legisla es la **materialización** del contrato anidado de
+`[LN-QBE-117]` (hasta esta adenda el aplanador `_MAPA_NIDOS_A_PLANO` existía sin productor) y el
+**orden** del lote (resguardo antes de la primera DML). Cada sub-bloque se deriva de las magnitudes
+que la matemática **ya consumió**: cero segunda derivación, cero imputación.
+
+```python
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# [LN-QBE-118] MATERIALIZACIÓN ANIDADA DE LOS CINCO PILARES (Fase 2 · Integración Maestra)
+# El generador sellado publica el paquete ANIDADO como PROYECCIÓN PURA de las magnitudes que ya
+# consumió: cada sub-bloque declara `status` + `insumos` con el shape de los proveedores de
+# `[LN-QBE-117]`. Cero matemática nueva: λ, Dixon-Coles, el operador de André y la fusión
+# `[LN-QBE-104]` permanecen bit-idénticas, y las claves planas de `[LN-QBE-102]` conservan
+# nombre, unidad y valor (el anidamiento es ADITIVO).
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+ESTADO_BLOQUE_EXITO = "EXITO"
+ESTADO_BLOQUE_PARCIAL = "PARCIAL"
+ESTADO_BLOQUE_SIN_EVIDENCIA = "SIN_EVIDENCIA"
+
+
+def _estado_del_bloque(insumos: Dict[str, Any]) -> str:
+    """[LN-QBE-118] Estado de cobertura de un sub-bloque: `None` = magnitud no publicada.
+
+    `EXITO` exige TODAS las magnitudes publicadas; `PARCIAL` al menos una; `SIN_EVIDENCIA`
+    ninguna. El estado declara la evidencia: jamás sustituye un `None` por un default.
+    """
+    publicadas = [valor for valor in insumos.values() if valor is not None]
+    if not publicadas:
+        return ESTADO_BLOQUE_SIN_EVIDENCIA
+    if len(publicadas) < len(insumos):
+        return ESTADO_BLOQUE_PARCIAL
+    return ESTADO_BLOQUE_EXITO
+
+
+def _sub_bloque(nombre: str, insumos: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Sub-bloque con el shape legislado `{bloque, status, insumos}`."""
+    return {"bloque": nombre, "status": _estado_del_bloque(insumos), "insumos": dict(insumos)}
+
+
+def _bloque_ataque_defensa(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar A/D: tasas canónicas `[ARCH-1.4.41]`, SoT/SoTA y sufrimiento de sede."""
+    return _sub_bloque(
+        "ataque_defensa",
+        {
+            "xg_local_rate": paquete.get("xg_local_rate"),
+            "xg_visita_rate": paquete.get("xg_visita_rate"),
+            "xga_local_rate": paquete.get("xga_local_rate"),
+            "xga_visita_rate": paquete.get("xga_visita_rate"),
+            "gc_local_rate": paquete.get("gc_local_rate"),
+            "gc_visita_rate": paquete.get("gc_visita_rate"),
+            "sot_local": paquete.get("sot_local"),
+            "sot_visita": paquete.get("sot_visita"),
+            "sota_local": paquete.get("sota_local"),
+            "sota_visita": paquete.get("sota_visita"),
+            "pj_sede_local": paquete.get("pj_sede_local"),
+            "pj_sede_visita": paquete.get("pj_sede_visita"),
+            "xg_es_real_opta": paquete.get("xg_es_real_opta"),
+        },
+    )
+
+
+def _bloque_contexto(paquete: Dict[str, Any], raw_match_data: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Contexto: ΔAlt⁺ y ΔDías REALES consumidos por λ `[LN-QBE-109]`.
+
+    Los hechos de plaza viajan en el registro (`altitud_local`/`descanso_local`, publicados por la
+    homologación): aquí sólo se declaran. `None` cuando la fuente no los publica.
+    """
+    return _sub_bloque(
+        "contexto",
+        {
+            "delta_alt_metros": paquete.get("delta_alt_metros"),
+            "delta_descanso_dias": paquete.get("delta_descanso_dias"),
+            "q_mod_h": paquete.get("q_mod_h"),
+            "q_mod_a": paquete.get("q_mod_a"),
+            "altitud_local": _magnitud_insumo(raw_match_data, ("altitud_local",)),
+            "altitud_visita": _magnitud_insumo(raw_match_data, ("altitud_visita",)),
+            "descanso_local": _magnitud_insumo(raw_match_data, ("descanso_local",)),
+            "descanso_visita": _magnitud_insumo(raw_match_data, ("descanso_visita",)),
+        },
+    )
+
+
+def _bloque_trayectoria(raw_match_data: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Trayectoria `[LN-QBE-110]`: ventana 5P y su pendiente.
+
+    La captura de homologación no publica la serie de cinco partidos ⇒ los cuatro insumos quedan
+    en `None` (`SIN_EVIDENCIA`). El bloque existe —la ausencia es información veraz— y su ventana
+    sintética está prohibida (cero fabricación de una tendencia).
+    """
+    return _sub_bloque(
+        "trayectoria",
+        {
+            "pts_5p_local": _magnitud_insumo(raw_match_data, ("pts_5p_local",)),
+            "pts_5p_visita": _magnitud_insumo(raw_match_data, ("pts_5p_visita",)),
+            "pendiente_local": _magnitud_insumo(raw_match_data, ("pendiente_local", "m_local")),
+            "pendiente_visita": _magnitud_insumo(raw_match_data, ("pendiente_visita", "m_visita")),
+        },
+    )
+
+
+def _bloque_volumen_porteria(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Volumen & Portería `[LN-QBE-111]`: posesión y volumen de disparos."""
+    return _sub_bloque(
+        "volumen_porteria",
+        {
+            "poss_local": paquete.get("poss_local"),
+            "poss_visita": paquete.get("poss_visita"),
+            "sot_local": paquete.get("sot_local"),
+            "sot_visita": paquete.get("sot_visita"),
+            "sota_local": paquete.get("sota_local"),
+            "sota_visita": paquete.get("sota_visita"),
+        },
+    )
+
+
+def _bloque_h2h(paquete: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-118] Pilar Memoria `[LN-QBE-105]`: conteo de la ventana y su agregado fáctico.
+
+    Ley Zero-H2H `[LN-QBE-020-B]`: sin enfrentamientos verificables el bloque se publica
+    `SIN_EVIDENCIA` con su motivo, jamás un récord 0-0-0 inventado.
+    """
+    insumos: Dict[str, Any] = {"h2h_conteo": paquete.get("h2h_conteo")}
+    if paquete.get("h2h_stats") is not None:
+        insumos["h2h_stats"] = paquete["h2h_stats"]
+    bloque = _sub_bloque("h2h", insumos)
+    if not int(insumos["h2h_conteo"] or 0):
+        bloque["status"] = ESTADO_BLOQUE_SIN_EVIDENCIA
+        bloque["motivo"] = (
+            "Ley Zero-H2H: la ventana no publicó enfrentamientos directos verificables."
+        )
+    return bloque
+
+
+def _paquete_anidado_cinco_pilares(
+    paquete: Dict[str, Any], raw_match_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """[LN-QBE-118] Proyección ANIDADA de los cinco pilares sobre las claves planas selladas.
+
+    Cada sub-bloque lee EXCLUSIVAMENTE del paquete plano ya construido (más los hechos
+    contextuales del registro): no existe una segunda derivación de magnitudes, de modo que el
+    aplanador `_MAPA_NIDOS_A_PLANO` de `[ARCH-1.4.55]` re-deriva exactamente el mismo valor plano.
+    """
+    return {
+        "h2h": _bloque_h2h(paquete),
+        "contexto": _bloque_contexto(paquete, raw_match_data),
+        "trayectoria": _bloque_trayectoria(raw_match_data),
+        "volumen_porteria": _bloque_volumen_porteria(paquete),
+        "ataque_defensa": _bloque_ataque_defensa(paquete),
+    }
+```
+
+**Delta de cierre dentro de `_empaquetar_insumos_factivados` (las claves planas NO se tocan):**
+
+```python
+    if h2h_stats is not None:
+        paquete["h2h_stats"] = dict(h2h_stats)
+    # [LN-QBE-118] Los cinco pilares se anidan sobre las MISMAS magnitudes planas (aditivo).
+    paquete.update(_paquete_anidado_cinco_pilares(paquete, raw_match_data))
+    return paquete
+```
+
+**Delta de suministro fáctico (`scripts/ingesta/homologar_temporada_optah2h.py`, `[DBBD-FUNGIBLE]`) · adenda `[LN-QBE-119]` (tasa por partido, no sumatoria de torneo):**
+
+```python
+def _volumen_porteria_corte(
+    cualificados: Sequence[Dict[str, Any]], cache_volumen: Dict[str, Any]
+) -> Dict[str, float]:
+    """[LN-QBE-118] · [LN-QBE-119] Agregado de Volumen & Portería del club al corte (cobertura ÍNTEGRA).
+
+    Misma ley que el xG: si a un solo partido cualificado le falta `sot`/`sota`/`possession`, el
+    agregado NO se publica (cero mezcla de fuentes, cero imputación). Las TRES magnitudes se
+    publican como TASA POR PARTIDO del corte: `sot`/`sota` son la media de conteos y `possession`
+    el porcentaje medio. Antes de `[LN-QBE-119]` los conteos se acumulaban sin dividir y la casilla
+    `V06` («Tiros a puerta por partido») multiplicaba la magnitud exhibida por PJ. Exige además UN
+    SOLO nivel de procedencia por acumulación (`procedencia`), igual que [ARCH-1.4.39].
+    """
+    if not cualificados:
+        return {}
+    sot = sota = posesion = 0.0
+    niveles: set = set()
+    for p in cualificados:
+        lado = "home" if p["es_local"] else "away"
+        registro = (cache_volumen.get(p["match_id"]) or {}).get(lado) or {}
+        if registro.get("sot") is None or registro.get("sota") is None:
+            return {}
+        if registro.get("possession") is None:
+            return {}
+        sot += float(registro["sot"])
+        sota += float(registro["sota"])
+        posesion += float(registro["possession"])
+        niveles.add(str(registro.get("procedencia") or "fuente_unica"))
+    if len(niveles) > 1:
+        return {}
+    total = float(len(cualificados))
+    return {
+        # [LN-QBE-119] Tasa por partido (no sumatoria de torneo): misma unidad que la casilla V06.
+        "sot": round(sot / total, 3),
+        "sota": round(sota / total, 3),
+        "possession": round(posesion / total, 3),
+    }
+
+
+def _contexto_del_fixture(sesion, id_partido: str) -> Dict[str, Any]:
+    """[LN-QBE-118] Bloque `contexto` del fixture (altitud catalogada + descanso real).
+
+    Delega ÍNTEGRAMENTE en el proveedor canónico `obtener_metricas_contexto` de `[LN-QBE-117]`:
+    cero cálculo paralelo en el script. Un fixture ausente de la cartelera o una plaza sin
+    catalogar degradan a `None` (jamás a "nivel del mar" inventado).
+    """
+    try:
+        from src.core.sovereign.context_provider import obtener_metricas_contexto
+    except ImportError:  # pragma: no cover - contrato de proveedores ausente
+        return {}
+    try:
+        bloque = obtener_metricas_contexto(sesion, id_partido)
+    except Exception as ex:  # pragma: no cover - degradación honesta, cero bloqueo del lote
+        logger.warning("Contexto no reconstruible para %s: %s", id_partido, ex)
+        return {}
+    insumos = bloque.get("insumos") if isinstance(bloque, dict) else None
+    return dict(insumos) if isinstance(insumos, dict) else {}
+```
+
+**Nota de fuente única (Pilar Volumen & Portería):** la caché congelada del Pilar 2 y el sensor
+FotMob publican **sólo** `xg`/`xga`; el único nivel que emite `sot`/`sota`/`possession` es
+`match_telemetry`. El orquestador construye por ello un mapa dedicado
+(`cache_volumen = _sellar_procedencia(telemetria, PROCEDENCIA_TELEMETRIA)`) que `_vector_homologo`
+recibe explícito (`cache_volumen`): así **ninguna acumulación mezcla niveles** y un corte con un
+partido sin telemetría se declara `SIN EVIDENCIA` en vez de completarse con otra fuente.
+
+**Invariantes sellados por esta adenda (custodiados por
+`tests/shield/test_shield_fase2_rehomologacion_and_audit_trace.py`):**
+
+1. **Invarianza matemática:** con el MISMO `raw_match_data` y los mismos parámetros, `λ_h`, `λ_a`,
+   el símplex publicado, `phi_lead2`, `Δ_epist` y `kernel_h2h_empirico` son **idénticos** antes y
+   después del anidamiento (el nido no alimenta ninguna fórmula).
+2. **Cinco bloques siempre presentes:** toda traza publica `h2h`, `contexto`, `trayectoria`,
+   `volumen_porteria` y `ataque_defensa`, con `status` ∈ {`EXITO`, `PARCIAL`, `SIN_EVIDENCIA`}.
+3. **Paridad plana ↔ nido:** cada clave del nido con espejo en `_MAPA_NIDOS_A_PLANO` es
+   **exactamente igual** a su clave plana heredada.
+4. **Orden del resguardo:** `crear_backup_boveda_sqlite` precede por AST a toda DML del lote
+   (`sincronizar_distribuciones_soberanas_partidos` y `write_transaction`), una sola invocación.
+
 ---
 
 ## [VAULT-DATA-002] Servicio de Distribución Soberana y Sincronización en BD (`src/storage/distribution_sync.py`)
