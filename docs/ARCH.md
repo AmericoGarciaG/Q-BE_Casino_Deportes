@@ -1912,6 +1912,49 @@ def sincronizar_progol_pipeline_completo(
 * **Cero impacto en λ:** ningún archivo de `src/core/**` ni de `src/storage/**` se edita; `factor_attribution.py` y `web_schemas.py` quedan byte-idénticos. La fase es de presentación y composición de laboratorio.
 * **[SHIELD]:** `tests/shield/test_shield_fasec_visual_and_micro_dynamics.py` (nuevo, 3 jueces) · `test_shield_fase3_polymorphic_cards_ui.py` (realineado: sólo literales de nombre) · `test_shield_sandbox_micro_dinamicas_pipeline.py` (realineado al contrato de 5 celdas) · `test_shield_purga_nominal_alt_b.py` · `test_shield_factor_attribution_and_telemetry.py`.
 
+### [ARCH-1.4.63] Saneamiento de Vitrina: Derogación de la Tabla Duplicada por Dimensión, Soporte Forense Único y Normalización de la Barra de Posesión
+
+* **Ω (Resumen):** `[ARCH-1.4.62]` realineó la vitrina al catálogo de 32, pero dejó dos defectos de presentación: el acordeón **replicaba** la tabla de 7 columnas de `[DES-QBE-064]` dentro de cada `details` —una transcripción idéntica a la que el Hero Card ya sirve, seis veces por partida— y la barra de posesión de `𝒯_Vol` declaraba `Posesión s/d` cuando el par servido no sumaba 100, es decir, negaba un dato que sí existía por un redondeo de origen. Este nodo deroga la tabla duplicada, conserva el soporte de auditoría **una sola vez** y normaliza la barra por complemento bipartito.
+* **P (Process) [DBBD-FUNGIBLE] (presentación pura; cero backend):**
+  1. **Derogación localizada.** `_tablaDimension32` deja de emitir `<table>`: sólo `<details class="vars44-dimension">` + `<summary>` con `vars44-badge-slot` + `vars44-dim-conteo` + `_cardDimension32(dimension)`. **Ninguna ancla de contrato se renombra:** la función, la clase `vars44-dimension`, el atributo `data-dimension` y la invocación `dimensiones.map(_tablaDimension32)` sobreviven byte-idénticos (tres Jueces sellados los exigen).
+  2. **Soporte forense consolidado (`_soporteForense32`).** Una sola tabla replegable (`.vars44-soporte` → `.vars44-tabla-soporte`) al pie del acordeón, con las ocho columnas de `[DES-QBE-064]` (`ID`, `Variable`, `Local`, `Visita`, `Z-Score`, `Origen`, `Estado`, `Impacto`) y una cabecera de familia por dimensión. `[DES-QBE-064]` **no se demuele**: cambia de cardinalidad (seis tablas ⇒ una), no de contenido.
+  3. **Posesión normalizada.** `_cardPosesion32` calcula `proporcionLocal = (local / total) * 100` con `total = local + visita`: la posesión de un partido SIEMPRE suma 100, de modo que `54.0%` / `45.0%` es redondeo, no contradicción. Con `total <= 0` no se pinta proporcionalidad aparente: rótulo `Posesión sin evidencia` y carriles al 50/50 (el rótulo derogado `Posesión s/d` desaparece del artefacto).
+  4. **Blindaje de presentación intacto.** Todo el marcado sigue saliendo de literales de plantilla y de `_valor32`; el soporte consolidado no añade una sola hidratación por `innerHTML` de datos de red, y los badges de `[DES-QBE-066]` conservan su construcción `createElement` + `textContent`.
+  5. **Cero impacto en λ.** Ni `src/core/sovereign/factor_attribution.py` (en su parte aritmética), ni `web_schemas.py`, ni el endpoint `atribucion_factorial.variables_44` cambian una coma: la fase es de capa visible.
+* **O (Output):** acordeón sin tablas internas, soporte forense único con las 7 columnas selladas y barra de posesión normalizada. `tests/shield/test_shield_saneamiento_trayectoria_ui_purga_v16.py` en verde y **499 passed / 0 failed**.
+* **Enmienda sobre `[DES-QBE-070-B]`:** su criterio de aceptación decía que `_tablaDimension32` «sigue siendo» el soporte de auditoría; tras este nodo el soporte es `_soporteForense32`. La supervivencia de `_tablaDimension32` se conserva como nombre de contrato del acordeón, no como vehículo de tabla.
+* **Enmienda sobre `docs/DESIGN.md` §`𝒯_Vol`:** queda derogado el rótulo `Posesión s/d` y la tolerancia ±1.0 sobre la suma; rige la normalización por complemento.
+* **Deuda declarada:** `theme.css` conserva las reglas `.vars44-tabla` que el soporte consolidado reutiliza (no se retiran); ninguna otra hoja de estilo consume la tabla derogada.
+* **[SHIELD]:** `tests/shield/test_shield_saneamiento_trayectoria_ui_purga_v16.py` (nuevo, 4 jueces: cuarentena V16, cableado V31/V32, guardián V30 y purga de vitrina) · `test_shield_fase3_polymorphic_cards_ui.py` · `test_shield_fasec_visual_and_micro_dynamics.py`.
+
+### [ARCH-1.4.64] Delegación del Orden Fiduciario del Visor a la Función Pura Canónica y Resolución Declarada del Desnivel de Altitud
+
+* **Ω (Resumen):** el Visor de calibración reimplementaba en su controlador el ordenamiento de vértices (un `pares.sort(...)` local). Con la Banda de Indiferencia de `[LN-QBE-124]` esa duplicación se volvía peligrosa: dos ordenamientos ⇒ dos verdades. Este nodo delega el orden a `resolver_orden_fiduciario_con_indiferencia` y resuelve el desnivel $\Delta Alt^{+}$ por precedencia declarada, **prohibiendo la imputación silenciosa**: el fixture de la bóveda no porta altitud (`[ARCH-1.4.54]`), de modo que un `fixture.get("delta_alt_metros", 0.0)` habría devuelto siempre `0.0` — una medición falsa por defecto.
+* **P (Process) [DIRGEN-STRICT]:**
+  1. **Precedencia de altitud (BR-3):** (i) `delta_alt_metros` numérico del propio fixture, si existiera; (ii) **traza V29** `sovereign_distributions.audit_trace_json → insumos_factivados.contexto.insumos.delta_alt_metros` (la magnitud que $\lambda$ REALMENTE consumió; en `LIGAMX-J10-01` = `1700.0`); (iii) catálogo inmutable de plazas `altitud_estadio(home_slug) − altitud_estadio(away_slug)`; (iv) ausencia total ⇒ `0.0` **declarado** (sin desnivel ⇒ sin rescate). Precedencia implementada en `_delta_altitud_del_partido`.
+  2. **Una sola invocación:** el controlador llama la función canónica y consume sus diez claves; el `sort` local desaparece. La importación es diferida (patrón ya usado por el controlador) para no cargar el plano estocástico en el arranque de The Shield.
+  3. **Sellos aditivos en el micro-DTO:** `delta_alt_metros` (magnitud usada) y `rescate_indiferencia` (bandera) viajan al navegador; la micro-tarjeta los rotula `🛡️ RESCATE P_MID · ΔAlt 1700 m` con el cian sellado de `P_MID`. Cero aritmética en el pintor.
+  4. **Cero impacto en $\lambda$:** `markets.py` es capa de lectura; no se toca `src/core/sovereign/*` ni la cascada de 9 estrategias.
+* **O (Output):** `LIGAMX-J10-01` servido `clasificacion_triada = "P_MID"`, `r_mid = "LOCAL"`, `rescate_indiferencia = true`, `delta_alt_metros = 1700.0`, `masa_cobertura_pct = 73.99`.
+* **[SHIELD]:** `tests/shield/test_shield_cold_start_and_indifference_band.py`.
+
+---
+
+### [ARCH-1.4.65] Vitrina de Muestra Declarada: Selector Calibrada/Global en el Visor de Calibración
+
+* **Ω (Resumen):** con `[LN-QBE-125]` el Visor publica dos universos (calibrado y global). Servirlos sin declaración habría dejado al Director con la duda de qué Alpha está leyendo: este nodo materializa el **selector de muestra** y la declaración textual del universo activo en `#bt-estado`.
+* **P (Process) [DBBD-FUNGIBLE] (presentación pura; cero backend nuevo):**
+  1. **Selector:** `#visor-segmentacion` con dos botones (`🎯 Muestra Calibrada (J4–J13)` · `🌐 Torneo Completo (J1–J13)`) sobre `.bt-macro-grid`; estado activo persistido en `_muestraVisorActiva` (default `CALIBRADA`).
+  2. **Conmutación:** `conmutarMuestraVisor(tipo)` reasigna la muestra y re-pinta desde la caché certificada (`_pintarVisorBacktesting`) — **cero refetch**, idempotente. El KPI macro y `#bt-estado` cambian de universo; la tabla meso y la parrilla micro **no** se filtran (siguen exhibiendo el torneo completo, con sus badges de ceguera declarados).
+  3. **Ceguera declarada:** la fila meso de una jornada con `es_cold_start` porta `❄️ Cold Start (S=0)` en la columna de Alpha; la micro-tarjeta sustituye el rótulo derogado `🧊 COLD START: PRIOR DE MERCADO` por `❄️ Cold Start (S=0)` (afirmaba una sustitución ya inexistente).
+  4. **Blindaje de presentación:** todo el marcado sale de literales de plantilla; ningún dato de red entra por `innerHTML`.
+* **O (Output):** conmutador operativo y declarativo; cero regresión en el contrato sellado del Juez 4 (`p.resultado_real === c.clave ? claseResultado : "micro-box-inactivo"`) ni en el `rankReal`.
+* **Deuda declarada:** la muestra calibrada y la global comparten el filtro anti-cuarentena (`[LN-QBE-104]`); si el filtro se activa, el agregado del subconjunto se recalcula sobre la muestra activa y el estado lo declara.
+* **[SHIELD]:** `tests/shield/test_shield_cold_start_and_indifference_band.py`.
+
+---
+
+
 ---
 
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**

@@ -967,3 +967,72 @@ def calcular_brier_multicategorico(partidos: List[Dict[str, Any]]) -> float:
         return 0.0
     return round(suma_error / (3.0 * evaluados), 4)
 
+
+# ── [LN-QBE-124] BANDA DE INDIFERENCIA FIDUCIARIA EN LA COBERTURA ORDINAL ───────────────────
+# Manifiesto canónico de la ley: la banda reconoce la cuasi-paridad estocástica de la frontera
+# {P_siguiente, P_ultimo}. Cuando la separación es indistinguible del ruido de régimen y el
+# anfitrión ostenta una ventaja territorial extrema (ΔAlt⁺ ≥ 1000 msnm), el desempate fiduciario
+# promueve al LOCAL a P_mid. La banda JAMÁS altera P_max y JAMÁS inventa una magnitud: sólo
+# PERMUTA los dos vértices inferiores (la masa de cobertura P_max + P_mid queda invariante).
+BANDA_INDIFERENCIA_EPSILON: float = 0.0100     # ε_indif — banda de indiferencia ordinal (1.00 %)
+UMBRAL_ALTITUD_RESCATE_METROS: float = 1000.0  # ΔAlt⁺_rescate — desnivel que decide la banda
+
+
+def resolver_orden_fiduciario_con_indiferencia(
+    p1: float, pX: float, p2: float, delta_alt: float = 0.0
+) -> Dict[str, Any]:
+    """
+    [LN-QBE-124] [DIRGEN-STRICT] Jerarquía ordinal fiduciaria con Banda de Indiferencia y
+    desempate por altitud geográfica del anfitrión.
+
+    Contrato IPO: recibe el trío soberano P′ = (p1, pX, p2) y el desnivel del anfitrión
+    ΔAlt⁺ = max(0, altitud_local − altitud_visita) en metros; devuelve la tupla ordenada
+    (P_max, P_mid, P_low) con la bandera `rescate_indiferencia`.
+
+      1. Orden aritmético descendente (`sorted` estable ⇒ el orden canónico 1 · X · 2 resuelve la
+         igualdad exacta; cero desempate inventado).
+      2. Rescate territorial: si |P_mid − P_low| ≤ ε_indif, el par en disputa es exactamente
+         {LOCAL, EMPATE} y ΔAlt⁺ ≥ 1000.0 msnm, el LOCAL se promueve a P_mid y el EMPATE
+         desciende a P_low.
+      3. En cualquier otro caso rige el orden aritmético estricto.
+
+    Invarianzas: P_max NUNCA cambia (la banda no reescribe al favorito); la masa de cobertura
+    P_max + P_mid es invariante bajo la permutación; un par {LOCAL, VISITANTE} o
+    {EMPATE, VISITANTE} en banda NO se toca. Cero I/O, cero números mágicos, cero estado.
+    """
+    candidatos = [
+        ("LOCAL", float(p1)),
+        ("EMPATE", float(pX)),
+        ("VISITANTE", float(p2)),
+    ]
+    ordenados = sorted(candidatos, key=lambda x: x[1], reverse=True)
+    r_max, p_max_val = ordenados[0]
+    r_mid, p_mid_val = ordenados[1]
+    r_low, p_low_val = ordenados[2]
+
+    separacion = abs(p_mid_val - p_low_val)
+    desnivel = max(0.0, float(delta_alt))
+    rescate = False
+    if (
+        separacion <= BANDA_INDIFERENCIA_EPSILON
+        and {r_mid, r_low} == {"LOCAL", "EMPATE"}
+        and desnivel >= UMBRAL_ALTITUD_RESCATE_METROS
+    ):
+        # Permutación pura: los dos vértices inferiores intercambian posición, jamás magnitud.
+        rescate = True
+        r_mid, p_mid_val = "LOCAL", float(p1)
+        r_low, p_low_val = "EMPATE", float(pX)
+
+    return {
+        "r_max": r_max,
+        "r_mid": r_mid,
+        "r_low": r_low,
+        "p_max_val": float(p_max_val),
+        "p_mid_val": float(p_mid_val),
+        "p_low_val": float(p_low_val),
+        "masa_cobertura_pct": round((float(p_max_val) + float(p_mid_val)) * 100.0, 2),
+        "separacion_mid_low": round(separacion, 4),
+        "rescate_indiferencia": rescate,
+        "delta_alt_metros": round(desnivel, 1),
+    }
+

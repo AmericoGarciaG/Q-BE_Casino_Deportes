@@ -444,10 +444,13 @@ _PLANAS_DEL_CONTRATO = (
 
 # Celdas del catálogo de 32 variables [LN-QBE-120] que la Fase 1 enciende con evidencia REAL:
 # posesión (V01), xG (V06), SoT (V07), xGA (V12), SoT recibidos (V13), Δdescanso (V30),
-# Δaltitud (V29) y el conteo H2H (V26). El remapeo [LN-QBE-120] no altera magnitud alguna.
-# transcriben al paquete plano (su proveedor las publica en `dimension_8_trayectoria`).
+# Δaltitud (V29) y el conteo H2H (V26), más la memoria longitudinal (V27/V28) y la trayectoria
+# (V31 forma 5P, V32 ΔxPTS). El remapeo [LN-QBE-120] no altera magnitud alguna.
+# [LN-QBE-123] Realineado: V31/V32 SÍ se transcriben al catálogo desde `trayectoria.insumos`
+# (`pts_last5_*`, `xpts_diff_*`) porque el proveedor las publica en `dimension_8_trayectoria`;
+# la varianza ratificada cerró esa deuda y la igualdad exacta se conserva sobre el conjunto nuevo.
 _EVALUADAS_FASE_1 = frozenset(
-    {"V01", "V06", "V07", "V12", "V13", "V26", "V27", "V28", "V29", "V30"}
+    {"V01", "V06", "V07", "V12", "V13", "V26", "V27", "V28", "V29", "V30", "V31", "V32"}
 )
 
 

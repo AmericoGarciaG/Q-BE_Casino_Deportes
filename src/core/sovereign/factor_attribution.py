@@ -310,7 +310,10 @@ _CATALOGO_44: Tuple[Tuple[str, str, str, Tuple[str, ...], str, str, str], ...] =
     ("V13", "Tiros al Arco Recibidos por Partido (SoTA)", "𝒯_Def", ("sota", "shots_on_target_against"), "directo", "OPTA", "H_def"),
     ("V14", "Acciones Defensivas por Partido", "𝒯_Def", ("defensive_contributions", "defensive_actions_per_match"), "directo", "OPTA", "H_def"),
     ("V15", "Intercepciones por Partido", "𝒯_Def", ("interceptions_mid", "mid_third_recoveries", "interception_team"), "directo", "OPTA", "H_def"),
-    ("V16", "Big Chances Concedidas", "𝒯_Def", ("big_chances_conceded", "bc_conceded"), "directo", "OPTA", "H_def"),
+    # [LN-QBE-123] V16 en CUARENTENA: FotMob no publica leaderboard de big chances concedidas. La
+    # fila se conserva (integridad del 32V y de `derivar_taxonomia`) pero queda FUERA DE FUENTE: sin
+    # claves de extracción y con modo `cuarentena`, de modo que ninguna ruta heredada puede encenderla.
+    ("V16", "Big Chances Concedidas", "𝒯_Def", (), "cuarentena", "FotMob", "H_def"),
     # 𝒯_Por — Rendimiento de Portería (4)
     ("V17", "Goles Evitados", "𝒯_Por", ("goals_prevented", "goles_prevenidos"), "directo", "OPTA", "H_def"),
     ("V18", "Save % (Porcentaje de Atajadas)", "𝒯_Por", ("save_pct", "save_percentage", "atajadas_pct"), "directo", "OPTA", "H_def"),
@@ -393,6 +396,19 @@ _ESTADO_DERIVADO = "DERIVADO"
 _ESTADO_SIN_EVIDENCIA = "SIN EVIDENCIA"
 _ESTADO_EVALUADO = "EVALUADO"   # [LN-QBE-102] El insumo publicado SÍ fue consumido por el motor.
 
+# ── [LN-QBE-123] Cuarentena de fuentes no extraíbles ───────────────────────────────────────────
+# Una celda puede pertenecer al catálogo forense y NO tener fuente publicable. Se exhibe con su
+# fila (integridad del 32V y de `derivar_taxonomia`) y se declara `FUERA DE FUENTE`: la cuarentena
+# se evalúa ANTES de la telemetría y de la ruta heredada, de modo que ninguna clave —ni la macros
+# torneal— puede encenderla por la espalda. Cero imputación, cero cero fabricado.
+ESTADO_FUERA_DE_FUENTE = "FUERA DE FUENTE"
+_CUARENTENA: Dict[str, str] = {
+    "V16": (
+        "FUERA DE FUENTE: FotMob no publica el leaderboard de big chances concedidas "
+        "(ni el corpus Opta homologado); la celda se exhibe vacía y jamás se imputa [LN-QBE-123]."
+    ),
+}
+
 # ── [LN-QBE-102] Tabla de transcripción tipada de los insumos telemetrizados ────────────────────
 # (clave_local, clave_visita, formato): traduce el número REALMENTE consumido por el pipeline a la
 # celda forense del catálogo de 32 variables ([LN-QBE-120]). `clave_visita = None` ⇒ magnitud de
@@ -457,6 +473,56 @@ def _celda_h2h_stats(
         "variable": nombre,
         "local": valor.strip(),
         "visita": None,
+        "z_score": _num(z_scores.get(identificador)),
+        "origen": origen,
+        "estado": _ESTADO_EVALUADO,
+        "impacto": espacio,
+        "nota": nota,
+    }
+
+
+# ── [LN-QBE-123] Transcripción del bloque `trayectoria` a V31/V32 ─────────────────────────────
+# `trajectory_provider` publica las claves planas de su bloque en `trayectoria.insumos`
+# (`pts_last5_*`, `xpts_diff_*`). Aquí SÓLO se transcribe la magnitud REALMENTE publicada: una clave
+# ausente o `None` apaga la celda. La trayectoria es DIAGNÓSTICO forense: jamás entra en λ ni en P′
+# (`[DIRGEN-STRICT]` intacto).
+_CLAVES_TRAYECTORIA: Dict[str, Tuple[str, str, str, str]] = {
+    "V31": (
+        "pts_last5_local", "pts_last5_visita", "num0",
+        "Forma 5P transcrita de `trajectory_provider` (puntos de la ventana de 5) [LN-QBE-123]",
+    ),
+    "V32": (
+        "xpts_diff_local", "xpts_diff_visita", "delta2",
+        "ΔxPTS transcrita de `trajectory_provider` (+ sobre-rendimiento esperado) [LN-QBE-123]",
+    ),
+}
+
+
+def _celda_trayectoria(
+    identificador: str,
+    nombre: str,
+    origen: str,
+    espacio: str,
+    z_scores: Dict[str, Any],
+    insumos: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Celda `EVALUADO` de V31/V32 desde el bloque `trayectoria` (`None` si no se publicó)."""
+    receta = _CLAVES_TRAYECTORIA.get(identificador)
+    if receta is None:
+        return None
+    clave_local, clave_visita, formato, nota = receta
+    bloque = _insumos_del_bloque(insumos.get("trayectoria"))
+    if not bloque:
+        return None
+    local_insumo = _formatear_insumo(bloque.get(clave_local), formato)
+    visita_insumo = _formatear_insumo(bloque.get(clave_visita), formato)
+    if local_insumo is None and visita_insumo is None:
+        return None
+    return {
+        "id": identificador,
+        "variable": nombre,
+        "local": local_insumo,
+        "visita": visita_insumo,
         "z_score": _num(z_scores.get(identificador)),
         "origen": origen,
         "estado": _ESTADO_EVALUADO,
@@ -607,10 +673,11 @@ def _celda_telemetria(
     """[LN-QBE-102] Celda `EVALUADO` de un insumo consumido (o `None` si no se publicó).
 
     Precedencia: `[LN-QBE-105]` el bloque `h2h_stats` manda cuando está presente (V26/V27/V28);
-    si no llegó, rige la receta primaria de `_FORMATO_INSUMO` (ruta heredada byte-idéntica) y,
-    en su ausencia, el respaldo legislado de `_RESPALDO_INSUMO` (Axioma 4). Como ÚLTIMO recurso
-    de exhibición —nunca de motor— rige `_CLAVES_MACRO_STATS` (`[LN-QBE-121]`): la verdad torneal
-    sólo enciende celdas que el corte certificado dejó apagadas.
+    `[LN-QBE-123]` el bloque `trayectoria` manda para V31/V32; si no llegó, rige la receta primaria de
+    `_FORMATO_INSUMO` (ruta heredada byte-idéntica) y, en su ausencia, el respaldo legislado de
+    `_RESPALDO_INSUMO` (Axioma 4). Como ÚLTIMO recurso de exhibición —nunca de motor— rige
+    `_CLAVES_MACRO_STATS` (`[LN-QBE-121]`): la verdad torneal sólo enciende celdas que el corte
+    certificado dejó apagadas.
     """
     estadisticas_h2h = insumos.get("h2h_stats")
     if isinstance(estadisticas_h2h, dict):
@@ -619,6 +686,11 @@ def _celda_telemetria(
         )
         if celda_h2h is not None:
             return celda_h2h
+
+    # [LN-QBE-123] V31/V32: transcripción del bloque `trayectoria` ANTES de la ruta heredada.
+    celda_trayectoria = _celda_trayectoria(identificador, nombre, origen, espacio, z_scores, insumos)
+    if celda_trayectoria is not None:
+        return celda_trayectoria
 
     receta = _FORMATO_INSUMO.get(identificador)
     if receta is not None:
@@ -708,6 +780,34 @@ _MAPA_NIDOS_A_PLANO: Tuple[Tuple[str, str, str], ...] = (
     ("h2h", "h2h_conteo", "h2h_conteo"),
     ("h2h", "h2h_stats", "h2h_stats"),
 )
+
+
+# ── [LN-QBE-123] Guardián de presencia de las magnitudes de `contexto` ────────────────────────
+# (identificador, clave_bandera, claves_fecha…): si la bandera declara `False` —o TODAS las fechas
+# publicadas son `None`— la celda se apaga. El centinela plano del homologador (`0.0`) no es prueba.
+_PRESENCIA_CONTEXTO: Dict[str, Tuple[str, ...]] = {
+    "V30": ("descanso_evaluado", "descanso_local", "descanso_visita"),
+}
+
+
+def _presencia_refutada(identificador: str, insumos: Dict[str, Any]) -> bool:
+    """[LN-QBE-123] La ausencia DECLARADA por el proveedor manda sobre cualquier clave plana.
+
+    `homologar_temporada_optah2h` publica `delta_descanso_dias = 0.0` cuando el fixture no
+    reconstruye fechas (`or 0.0`): ese cero heredado es un CENTINELA de ausencia, no una magnitud.
+    Si el bloque `contexto` declara el descanso como no evaluado (`descanso_evaluado = False`, o
+    ambas fechas publicadas en `None`), la celda V30 se apaga aunque la clave plana traiga `0.0`.
+    """
+    claves = _PRESENCIA_CONTEXTO.get(identificador)
+    if not claves:
+        return False
+    bloque = _insumos_del_bloque(insumos.get("contexto"))
+    if not bloque:
+        return False
+    if bloque.get("descanso_evaluado") is False:
+        return True
+    presentes = [clave for clave in claves[1:] if clave in bloque]
+    return bool(presentes) and all(bloque[clave] is None for clave in presentes)
 
 
 def _insumos_del_bloque(bloque: Any) -> Dict[str, Any]:
@@ -825,6 +925,8 @@ def _formatear_insumo(valor: Any, formato: str) -> Optional[str]:
         return f"{numero:.2f}"
     if formato == "num0":
         return f"{numero:.0f}"
+    if formato == "delta2":                     # [LN-QBE-123] Magnitud CON signo (ΔxPTS)
+        return f"{numero:+.2f}"
     if formato == "metros":
         return f"{numero:.0f}m"
     if formato == "dias":
@@ -987,6 +1089,38 @@ def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = 
     acumuladas: Dict[str, List[Dict[str, Any]]] = {dimension: [] for dimension, _ in DIMENSIONES_CANONICAS}
     insumos = _insumos_factivados(datos)
     for identificador, nombre, dimension, claves, modo, origen, espacio in _CATALOGO_44:
+        # [LN-QBE-123] Cuarentena ANTES de cualquier ruta: la fuente no existe y la celda no se enciende.
+        nota_cuarentena = _CUARENTENA.get(identificador)
+        if nota_cuarentena is not None:
+            acumuladas[dimension].append({
+                "id": identificador,
+                "variable": nombre,
+                "local": None,
+                "visita": None,
+                "z_score": _num(z_scores.get(identificador)),
+                "origen": ESTADO_FUERA_DE_FUENTE,
+                "estado": _ESTADO_SIN_EVIDENCIA,
+                "impacto": espacio,
+                "nota": nota_cuarentena,
+            })
+            continue
+        # [LN-QBE-123] El centinela `0.0` del homologador no es magnitud: la ausencia declarada manda.
+        if _presencia_refutada(identificador, insumos):
+            acumuladas[dimension].append({
+                "id": identificador,
+                "variable": nombre,
+                "local": None,
+                "visita": None,
+                "z_score": _num(z_scores.get(identificador)),
+                "origen": _ESTADO_SIN_EVIDENCIA,
+                "estado": _ESTADO_SIN_EVIDENCIA,
+                "impacto": espacio,
+                "nota": (
+                    "SIN EVIDENCIA: el fixture no reconstruye las fechas previas y el centinela "
+                    "`0.0` del homologador no es magnitud [LN-QBE-123]."
+                ),
+            })
+            continue
         # [LN-QBE-102] Precedencia de la telemetría: si el motor consumió el insumo, la celda se
         # enciende en `EVALUADO` con la magnitud tipada. Si no lo publicó, la ruta heredada decide.
         celda = _celda_telemetria(identificador, nombre, origen, espacio, z_scores, insumos)

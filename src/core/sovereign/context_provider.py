@@ -217,6 +217,12 @@ def calcular_vector_contextual_c(
     delta_contexto = GAMMA_BASE + C_H - C_A
 
     # ── λ: delegación VERBATIM al motor sellado (canal contextual aislado: A = D = 0) ──────
+    # [LN-QBE-123] El adaptador del motor exige `float` (firma sellada, [LN-QBE-109]): cuando el
+    # descanso o la altitud NO son reconstruibles, el bono vale 0.0 y al motor se le entrega `0.0`
+    # —ausencia de bono, no una medición—. Esa ignorancia NO se propaga a la telemetría: el vector
+    # publica `delta_descanso_dias = None`/`delta_alt_metros = None` y las banderas
+    # `descanso_evaluado` / `altitud_evaluada`, de modo que la celda forense V30/V29 se apaga en
+    # lugar de exhibir un `+0.0 d` fabricado.
     lambda_home, lambda_away = estimar_intensidades_loglineal(
         0.0, 0.0, 0.0, 0.0,
         mu_liga=MU_LIGA_DEFAULT,
@@ -580,6 +586,9 @@ def _bloque_vacio_contexto(match_id: str, motivo: str, temporada: str) -> Dict[s
             "delta_contexto": None,
             "descanso_local": None,
             "descanso_visita": None,
+            # [LN-QBE-123] Presencia DECLARADA: sin fixture no hay altitud ni descanso evaluados.
+            "altitud_evaluada": False,
+            "descanso_evaluado": False,
         },
         "variables": {
             "AUX_XG_BAJAS": _celda("AUX_XG_BAJAS", "Impacto xG de bajas ofensivas", None, None,
@@ -746,6 +755,10 @@ def obtener_metricas_contexto(
             "bono_plaza": vector["bono_plaza"],
             "descanso_local": descanso_local,
             "descanso_visita": descanso_visita,
+            # [LN-QBE-123] Presencia DECLARADA de las magnitudes de `contexto`: la bandera manda
+            # sobre cualquier centinela plano del homologador (`0.0`) al encender V30/V29.
+            "altitud_evaluada": bool(altitud_evaluada),
+            "descanso_evaluado": bool(descanso_evaluado),
             "alpha_ligadura": vector["alpha_ligadura"],
             "lambda_contextual_home": vector["lambda_home"],
             "lambda_contextual_away": vector["lambda_away"],

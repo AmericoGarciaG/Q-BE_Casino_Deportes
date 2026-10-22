@@ -1197,6 +1197,41 @@ table.fintech-table {
 
 
 /* ── [LN-QBE-100 / ARCH-1.4.38] VISOR DE BACKTESTING (CALIBRACIÓN FACTUAL) ── */
+/* [LN-QBE-125 · ARCH-1.4.65] SELECTOR DE MUESTRA DECLARADA del Visor de calibración: dos universos
+   (calibrada S(I)=1 ↔ torneo completo J1–J13) servidos con la MISMA aritmética y conmutados sin
+   refetch. */
+.visor-segmentacion {
+    display: inline-flex;
+    gap: 8px;
+    margin: 4px 0 14px 0;
+    padding: 4px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.visor-muestra-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 8.2pt;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.visor-muestra-btn:hover { color: #F8FAFC; border-color: var(--border-color); }
+.visor-muestra-btn.active {
+    background: #0C4A6E;
+    border-color: #0EA5E9;
+    color: #E0F2FE;
+}
+/* [LN-QBE-125] Sello de ceguera declarada: el Alpha de la jornada no es una medición de ventaja. */
+.bt-badge-cold-start { white-space: nowrap; }
+/* [LN-QBE-124] Rescate territorial: el LOCAL se promueve a P_mid por el desnivel del anfitrión. */
+.bt-badge-rescate-alt { white-space: nowrap; }
+
 .bt-macro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .bt-kpi-card {
     background: var(--bg-main);
@@ -1655,6 +1690,37 @@ table.fintech-table {
 .vars44-col-estado { text-align: center; font-weight: 700; white-space: nowrap; }
 .vars44-col-impacto { color: #94A3B8; text-align: center; }
 .vars44-tabla-descomposicion .vars44-col-num { width: 120px; }
+/* [ARCH-1.4.63] Soporte forense CONSOLIDADO: una sola tabla replegable bajo el acordeón de Cards.
+   Sustituye a la tabla que cada dimensión replicaba dentro de su propio `details`. */
+.vars44-soporte {
+    margin-top: 14px;
+    background: #0B1120;
+    border: 1px solid #1E293B;
+    border-left: 3px solid #475569;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.vars44-soporte summary {
+    cursor: pointer;
+    color: #94A3B8;
+    font-size: 8.4pt;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    list-style: none;
+}
+.vars44-soporte summary::-webkit-details-marker { display: none; }
+.vars44-soporte[open] { border-color: #334155; }
+.vars44-soporte[open] summary { color: #38BDF8; }
+.vars44-tabla-soporte { margin-top: 10px; }
+.vars44-soporte-familia {
+    color: #38BDF8;
+    background: rgba(56, 189, 248, 0.06);
+    padding-top: 10px;
+    padding-bottom: 4px;
+    text-align: left;
+    font-size: 8.2pt;
+    letter-spacing: 0.04em;
+}
 @media (max-width: 860px) {
     .vars44-grid { grid-template-columns: 1fr; }
 }

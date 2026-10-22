@@ -277,8 +277,10 @@ class CalibrationMatchOut(BaseModel):
     brier_qbe: float
     brier_mercado: float
     acierto: bool
-    # [LN-QBE-100 · Axioma del Prior de Mercado (Cold Start Resolution)] Sello de suficiencia
-    # fáctica S(I) del partido: 0 = ignorancia declarada ⇒ P′ fue sustituida por q_mkt (Cold Start).
+    # [LN-QBE-125 · derogación de la sustitución de [LN-QBE-100]] Sello de suficiencia fáctica
+    # S(I) del partido: 0 = ignorancia declarada ⇒ P′ se evalúa TAL CUAL fue publicada (Cold Start
+    # sincero) y la ceguera se declara en la vitrina (`❄️ Cold Start (S=0)`); jamás se sustituye
+    # por q_mkt.
     suficiencia_S_I: Optional[int] = None
     # [LN-QBE-102] Sello de procedencia de la evidencia que sostiene P′: "EN_VIVO" (captura en
     # ventanilla, blindada por el candado) | "HISTORICO_RECONSTRUIDO" (reconstrucción posterior).
@@ -291,6 +293,10 @@ class CalibrationMatchOut(BaseModel):
     clasificacion_triada: Optional[Literal["P_MAX", "P_MID", "P_LOW"]] = None
     masa_cobertura_pct: Optional[float] = None
     p_low_ruptura_pct: Optional[float] = None
+    # [LN-QBE-124 / ARCH-1.4.64] Desnivel REALMENTE consumido por λ (traza V29 → catálogo → 0.0)
+    # y bandera del rescate territorial que promovió al LOCAL a P_mid.
+    delta_alt_metros: Optional[float] = None
+    rescate_indiferencia: bool = False
     # [ARCH-1.4.42] Micro-HUD de atribución factorial + DTO de inspección de 44 variables.
     atribucion_factorial: Optional[AtribucionFactorialOut] = None
 
@@ -318,6 +324,10 @@ class CalibrationJornadaOut(BaseModel):
     brier_score_qbe: float
     brier_score_mercado: float
     alpha_calibracion_pct: float
+    # [LN-QBE-125 / ARCH-1.4.65] Ceguera declarada de la jornada (todos sus partidos con S(I)=0) y
+    # etiqueta del Alpha servido: "COLD_START" (no es una medición) vs "MEDIDO".
+    es_cold_start: bool = False
+    alpha_etiqueta: Optional[str] = None
     partidos: List[CalibrationMatchOut] = Field(default_factory=list)
 
 
@@ -354,10 +364,16 @@ class CalibrationReportResponse(BaseModel):
     """
     [ARCH-1.4.38] Contrato REST del Visor de Backtesting (solo lectura):
     resumen macro de temporada + tabla meso por jornada con parrilla micro embebida.
+
+    [LN-QBE-125 · ARCH-1.4.65] Doble agregado declarado: `resumen_calibrado` (universo informado,
+    S(I)=1) y `resumen_global` (temporada completa). `resumen_temporada` subsiste como alias
+    byte-idéntico del global porque tres consumidores sellados lo leen.
     """
     model_config = ConfigDict(extra="ignore")
     resumen_temporada: CalibrationSummaryOut
     jornadas: List[CalibrationJornadaOut] = Field(default_factory=list)
+    resumen_calibrado: Optional[CalibrationSummaryOut] = None
+    resumen_global: Optional[CalibrationSummaryOut] = None
 
 
 class SimulatePortfolioRequest(BaseModel):

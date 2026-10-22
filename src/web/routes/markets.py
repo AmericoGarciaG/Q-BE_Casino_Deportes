@@ -1545,6 +1545,118 @@ def _alpha_calibracion_pct(brier_qbe: float, brier_mercado: float) -> float:
     return round((1.0 - (brier_qbe / brier_mercado)) * 100.0, 2)
 
 
+def _delta_altitud_del_partido(
+    traza: Optional[Dict[str, Any]],
+    fixture: Optional[Dict[str, Any]],
+    fila: Match,
+) -> float:
+    """
+    [LN-QBE-124 / ARCH-1.4.64 · BR-3] Desnivel positivo del anfitrión que decide la Banda de
+    Indiferencia: ΔAlt⁺ = max(0, altitud_local − altitud_visita).
+
+    Precedencia DECLARADA (prohibida toda imputación silenciosa [GOVERNANCE-01]):
+      1. `delta_alt_metros` del propio fixture, si la captura lo publicara.
+      2. Traza V29 de `sovereign_distributions.audit_trace_json` → la magnitud que λ REALMENTE
+         consumió (`insumos_factivados.contexto.insumos.delta_alt_metros` o su clave plana).
+      3. Catálogo inmutable de plazas `altitud_estadio(local) − altitud_estadio(visita)`.
+      4. Ausencia de evidencia ⇒ `0.0` **declarado** (sin desnivel ⇒ sin rescate).
+    """
+    insumos = ((traza or {}).get("audit_trace") or {}).get("insumos_factivados") or {}
+    contexto = insumos.get("contexto") or {}
+    candidatos = [
+        (fixture or {}).get("delta_alt_metros"),
+        (contexto.get("insumos") or {}).get("delta_alt_metros"),
+        insumos.get("delta_alt_metros"),
+    ]
+    for valor in candidatos:
+        if valor is None:
+            continue
+        try:
+            return round(max(0.0, float(valor)), 1)
+        except (TypeError, ValueError):
+            continue
+
+    from src.core.sovereign.context_provider import altitud_estadio
+
+    altitud_local = altitud_estadio(getattr(fila, "home_team_slug", None))
+    altitud_visita = altitud_estadio(getattr(fila, "away_team_slug", None))
+    if altitud_local is None or altitud_visita is None:
+        return 0.0
+    return round(max(0.0, float(altitud_local) - float(altitud_visita)), 1)
+
+
+def _agregar_resumen_calibracion(
+    partidos: List[Dict[str, Any]],
+    registros_qbe: List[Dict[str, Any]],
+    registros_mkt: List[Dict[str, Any]],
+    jornadas_auditadas: List[int],
+    partidos_pendientes: int,
+) -> Dict[str, Any]:
+    """
+    [LN-QBE-125] Agregado macro ÚNICO del Visor (una sola aritmética para las dos muestras).
+
+    Recibe los micro-DTO planos del universo elegido y sus registros de Brier, y emite el bloque
+    `CalibrationSummaryOut` completo: tasas puras por vértice del símplex Δ² (P_max · P_mid ·
+    P_low ≡ 100 %), desglose factual del rescate secundario (empate vs rival), Brier dual y Alpha
+    de calibración. Cero ponderación, cero cifra fabricada: con `partidos` vacío toda tasa es 0.0.
+    """
+    from src.core.contracts.portfolio_math import calcular_brier_multicategorico
+
+    total = len(partidos)
+    favorito_t = sum(1 for p in partidos if p["tipo_resultado"] == "FAVORITO")
+    empate_t = sum(1 for p in partidos if p["tipo_resultado"] == "EMPATE")
+    underdog_t = sum(1 for p in partidos if p["tipo_resultado"] == "UNDERDOG")
+
+    total_p_max = sum(1 for p in partidos if p["clasificacion_triada"] == "P_MAX")
+    total_p_mid = sum(1 for p in partidos if p["clasificacion_triada"] == "P_MID")
+    total_p_low = sum(1 for p in partidos if p["clasificacion_triada"] == "P_LOW")
+    total_p_mid_empate = sum(
+        1
+        for p in partidos
+        if p["clasificacion_triada"] == "P_MID"
+        and p["resultado_real"] == "EMPATE"
+        and p["r_mid"] == "EMPATE"
+    )
+    total_p_mid_rival = total_p_mid - total_p_mid_empate
+
+    def _pct(cantidad: int) -> float:
+        return round((cantidad / total) * 100.0, 2) if total else 0.0
+
+    p_max_aciertos_pct = _pct(total_p_max)
+    p_mid_rescate_pct = _pct(total_p_mid)
+    p_low_ruptura_pct = _pct(total_p_low)
+    bs_qbe = calcular_brier_multicategorico(registros_qbe)
+    bs_mkt = calcular_brier_multicategorico(registros_mkt)
+
+    return {
+        "total_partidos": total,
+        "partidos_favorito": favorito_t,
+        "partidos_empate": empate_t,
+        "partidos_underdog": underdog_t,
+        "tasa_coincidencia_fiduciaria_pct": (
+            round(((favorito_t + empate_t) / total) * 100.0, 2) if total else 0.0
+        ),
+        # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Taxonomía macro de vértices (payload
+        # sellado por [ARCH-1.4.38]): masa de cobertura y desglose factual del rescate P_mid.
+        "masa_cobertura_pct": round(p_max_aciertos_pct + p_mid_rescate_pct, 2),
+        "p_max_aciertos_pct": p_max_aciertos_pct,
+        "p_mid_rescate_pct": p_mid_rescate_pct,
+        "p_mid_empate_pct": _pct(total_p_mid_empate),
+        "p_mid_rival_pct": _pct(total_p_mid_rival),
+        "p_low_ruptura_pct": p_low_ruptura_pct,
+        "total_p_max": total_p_max,
+        "total_p_mid": total_p_mid,
+        "total_p_low": total_p_low,
+        "total_p_mid_empate": total_p_mid_empate,
+        "total_p_mid_rival": total_p_mid_rival,
+        "brier_score_qbe": bs_qbe,
+        "brier_score_mercado": bs_mkt,
+        "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe, bs_mkt),
+        "partidos_pendientes_captura": partidos_pendientes,
+        "jornadas_auditadas": sorted(jornadas_auditadas),
+    }
+
+
 def _construir_reporte_calibracion(
     session: Session, league_id: Optional[int] = None
 ) -> Dict[str, Any]:
@@ -1559,6 +1671,7 @@ def _construir_reporte_calibracion(
     from src.core.contracts.portfolio_math import (
         desmarcar_cuotas_proporcional,
         calcular_brier_multicategorico,
+        resolver_orden_fiduciario_con_indiferencia,
     )
 
     fixtures = _fixtures_snapshot_indexados(session, league_id)
@@ -1574,6 +1687,9 @@ def _construir_reporte_calibracion(
     # por jornada: acierto primario (P_MAX), rescate secundario (P_MID, desglosado en empate vs
     # rival) y ruptura residual (P_LOW). Conteos puros: cero ponderación, cero cifra fabricada.
     triada_por_jornada: Dict[int, Dict[str, int]] = {}
+    # [LN-QBE-125] Registros de Brier indexados por partido: la muestra calibrada se agrega con la
+    # MISMA aritmética que la global, sin segunda verdad ni recálculo.
+    registros_por_partido: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]] = {}
 
     filas = session.query(Match).order_by(Match.matchday_num.asc(), Match.id.asc()).all()
 
@@ -1608,33 +1724,31 @@ def _construir_reporte_calibracion(
             float(cuotas.get("V", 0.0) or 0.0),
         )
 
-        # [LN-QBE-100] Axioma del Prior de Mercado (Cold Start Resolution) — 2026-10-14:
-        # un partido que declara ignorancia fáctica S(I)=0 sólo porta el prior uniforme
-        # (1/3, 1/3, 1/3), que no es una predicción informada. Su vector se sustituye POR EL
-        # CONSENSO DES-MARGINADO DEL MERCADO antes de ejecutar el clasificador factual y el Brier,
-        # aislando el Alpha (≡ 0.00% por identidad de vectores) para medir la ventaja estocástica
-        # únicamente donde el modelo operó con evidencia. Cuotas inválidas ⇒ la ley de bóveda
-        # `desmarcar_cuotas_proporcional` ya devuelve (1/3, 1/3, 1/3): cero cifras inventadas.
+        # [LN-QBE-125] Cold Start SINCERO — derogación expresa de la sustitución del *Axioma del
+        # Prior de Mercado* ([LN-QBE-100]): un partido que declara ignorancia fáctica S(I)=0 se
+        # puntúa con su P′ SOBERANA REAL (el prior puro del modelo). Sustituirla por el consenso
+        # desmarcado q_mkt forzaba `BS_QBE ≡ BS_MKT` por identidad de vectores y fabricaba un
+        # Alpha ≡ 0.00% que NO era una medición. La ceguera se DECLARA en la vitrina
+        # (`es_cold_start` · `❄️ Cold Start (S=0)`), jamás se maquilla [GOVERNANCE-01].
         _s_i = (fixture or {}).get("suficiencia_S_I")
         suficiencia_s_i = 1 if _s_i is None else int(_s_i)
-        if suficiencia_s_i == 0:
-            p_local, p_empate, p_visitante = q_local, q_empate, q_visitante
 
         favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
 
-        # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Jerarquía estocástica de vértices en Δ²:
-        # los desenlaces se ordenan por probabilidad fiduciaria descendente (`sort` estable ⇒
-        # empate técnico resuelto por el orden canónico 1 · X · 2). P_mid queda DESVINCULADO del
-        # empate: en morfologías bipolares el vértice secundario es el equipo rival.
-        pares = [
-            ("LOCAL", float(p_local)),
-            ("EMPATE", float(p_empate)),
-            ("VISITANTE", float(p_visitante)),
-        ]
-        pares.sort(key=lambda x: x[1], reverse=True)
-        r_max, p_max_val = pares[0]
-        r_mid, p_mid_val = pares[1]
-        r_low, p_low_val = pares[2]
+        # [LN-QBE-124 / ARCH-1.4.64] Jerarquía estocástica de vértices en Δ² DELEGADA al plano
+        # canónico: la MISMA función pura que gobierna el triaje fiduciario resuelve aquí el orden
+        # (cero segunda verdad). El desnivel ΔAlt⁺ se resuelve por precedencia declarada
+        # (fixture → traza V29 → catálogo de plazas → 0.0), jamás por imputación silenciosa.
+        delta_alt_metros = _delta_altitud_del_partido(
+            trazas_soberanas.get(id_partido), fixture, fila
+        )
+        orden_fiduciario = resolver_orden_fiduciario_con_indiferencia(
+            p_local, p_empate, p_visitante, delta_alt=delta_alt_metros
+        )
+        r_max, p_max_val = orden_fiduciario["r_max"], orden_fiduciario["p_max_val"]
+        r_mid, p_mid_val = orden_fiduciario["r_mid"], orden_fiduciario["p_mid_val"]
+        r_low, p_low_val = orden_fiduciario["r_low"], orden_fiduciario["p_low_val"]
+        rescate_indiferencia = bool(orden_fiduciario["rescate_indiferencia"])
 
         if desenlace == r_max:
             clasificacion = "P_MAX"
@@ -1710,6 +1824,10 @@ def _construir_reporte_calibracion(
             # Masa individual de cobertura = (P_max + P_mid) · 100 ≡ (1 − P_low) · 100.
             "masa_cobertura_pct": round((p_max_val + p_mid_val) * 100.0, 2),
             "p_low_ruptura_pct": round(p_low_val * 100.0, 2),
+            # [LN-QBE-124 / ARCH-1.4.64] Sellos del desempate territorial: desnivel REALMENTE
+            # consumido por λ y bandera del rescate que promovió al LOCAL a P_mid.
+            "delta_alt_metros": delta_alt_metros,
+            "rescate_indiferencia": rescate_indiferencia,
             # [ARCH-1.4.42] Micro-HUD de atribución factorial + DTO forense de 44 variables.
             "atribucion_factorial": _atribucion_factorial_del_partido(
                 trazas_soberanas.get(id_partido), fixture, suficiencia_s_i
@@ -1717,6 +1835,8 @@ def _construir_reporte_calibracion(
         })
         registros_qbe.setdefault(jornada, []).append(registro_qbe)
         registros_mkt.setdefault(jornada, []).append(registro_mkt)
+        # [LN-QBE-125] Índice por partido para segmentar la muestra calibrada sin recalcular.
+        registros_por_partido[id_partido] = (registro_qbe, registro_mkt)
 
     jornadas: List[Dict[str, Any]] = []
     for jornada in sorted(micro_por_jornada.keys()):
@@ -1741,6 +1861,10 @@ def _construir_reporte_calibracion(
         pct_p_mid = round((n_p_mid / total) * 100.0, 2) if total else 0.0
         pct_p_low = round((n_p_low / total) * 100.0, 2) if total else 0.0
 
+        # [LN-QBE-125] Ceguera DECLARADA de la jornada, derivada del DATO (todos sus partidos con
+        # S(I)=0) y no del número de jornada: mañana una J14 ciega se declarará igual.
+        es_cold_start = all(p["suficiencia_S_I"] == 0 for p in partidos)
+
         jornadas.append({
             "jornada": jornada,
             "total_partidos": total,
@@ -1764,73 +1888,47 @@ def _construir_reporte_calibracion(
             "brier_score_qbe": bs_qbe,
             "brier_score_mercado": bs_mkt,
             "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe, bs_mkt),
+            # [LN-QBE-125 / ARCH-1.4.65] Ceguera declarada de la jornada y etiqueta del Alpha
+            # servido: "COLD_START" no es una medición de ventaja, es un prior sin evidencia.
+            "es_cold_start": es_cold_start,
+            "alpha_etiqueta": "COLD_START" if es_cold_start else "MEDIDO",
             "partidos": partidos,
         })
 
     todos_qbe = [r for j in sorted(registros_qbe.keys()) for r in registros_qbe[j]]
     todos_mkt = [r for j in sorted(registros_mkt.keys()) for r in registros_mkt[j]]
-    total_temporada = len(todos_qbe)
-    favorito_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "FAVORITO")
-    empate_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "EMPATE")
-    underdog_t = sum(1 for j in jornadas for p in j["partidos"] if p["tipo_resultado"] == "UNDERDOG")
+    partidos_planos = [p for j in jornadas for p in j["partidos"]]
 
-    bs_qbe_temporada = calcular_brier_multicategorico(todos_qbe)
-    bs_mkt_temporada = calcular_brier_multicategorico(todos_mkt)
-
-    # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Agregado macro de la temporada: porcentajes
-    # puros por vértice (P_max + P_mid + P_low ≡ 100%) y desglose factual de la procedencia del
-    # rescate secundario. Universo: total_temporada = partidos auditados con P′ sellada.
-    total_p_max = sum(c.get("n_p_max", 0) for c in triada_por_jornada.values())
-    total_p_mid = sum(c.get("n_p_mid", 0) for c in triada_por_jornada.values())
-    total_p_low = sum(c.get("n_p_low", 0) for c in triada_por_jornada.values())
-    total_p_mid_empate = sum(c.get("n_p_mid_empate", 0) for c in triada_por_jornada.values())
-    total_p_mid_rival = sum(c.get("n_p_mid_rival", 0) for c in triada_por_jornada.values())
-    p_max_aciertos_pct = (
-        round((total_p_max / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    # [LN-QBE-125 · ARCH-1.4.65] DOBLE AGREGADO DECLARADO con una sola aritmética (cero segunda
+    # verdad, `_agregar_resumen_calibracion`):
+    #   · `resumen_global`    — universo completo auditado (partidos con P′ sellada).
+    #   · `resumen_calibrado` — universo INFORMADO (S(I)=1). El criterio es el DATO, no el número
+    #     de jornada: una jornada futura parcialmente ciega no puede contaminar la medición.
+    #   · `resumen_temporada` — alias byte-idéntico del global (tres consumidores sellados).
+    resumen_global = _agregar_resumen_calibracion(
+        partidos_planos,
+        todos_qbe,
+        todos_mkt,
+        [j["jornada"] for j in jornadas],
+        partidos_pendientes,
     )
-    p_mid_rescate_pct = (
-        round((total_p_mid / total_temporada) * 100.0, 2) if total_temporada else 0.0
+    partidos_calibrados = [p for p in partidos_planos if p["suficiencia_S_I"] == 1]
+    resumen_calibrado = _agregar_resumen_calibracion(
+        partidos_calibrados,
+        [registros_por_partido[p["id_partido"]][0] for p in partidos_calibrados],
+        [registros_por_partido[p["id_partido"]][1] for p in partidos_calibrados],
+        [j["jornada"] for j in jornadas
+         if any(p["suficiencia_S_I"] == 1 for p in j["partidos"])],
+        partidos_pendientes,
     )
-    p_mid_empate_pct = (
-        round((total_p_mid_empate / total_temporada) * 100.0, 2) if total_temporada else 0.0
-    )
-    p_mid_rival_pct = (
-        round((total_p_mid_rival / total_temporada) * 100.0, 2) if total_temporada else 0.0
-    )
-    p_low_ruptura_pct = (
-        round((total_p_low / total_temporada) * 100.0, 2) if total_temporada else 0.0
-    )
-    masa_cobertura_pct = round(p_max_aciertos_pct + p_mid_rescate_pct, 2)
 
     return {
-        "resumen_temporada": {
-            "total_partidos": total_temporada,
-            "partidos_favorito": favorito_t,
-            "partidos_empate": empate_t,
-            "partidos_underdog": underdog_t,
-            "tasa_coincidencia_fiduciaria_pct": (
-                round(((favorito_t + empate_t) / total_temporada) * 100.0, 2)
-                if total_temporada else 0.0
-            ),
-            # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Taxonomía macro de vértices (payload
-            # sellado por [ARCH-1.4.38]): masa de cobertura y desglose factual del rescate P_mid.
-            "masa_cobertura_pct": masa_cobertura_pct,
-            "p_max_aciertos_pct": p_max_aciertos_pct,
-            "p_mid_rescate_pct": p_mid_rescate_pct,
-            "p_mid_empate_pct": p_mid_empate_pct,
-            "p_mid_rival_pct": p_mid_rival_pct,
-            "p_low_ruptura_pct": p_low_ruptura_pct,
-            "total_p_max": total_p_max,
-            "total_p_mid": total_p_mid,
-            "total_p_low": total_p_low,
-            "total_p_mid_empate": total_p_mid_empate,
-            "total_p_mid_rival": total_p_mid_rival,
-            "brier_score_qbe": bs_qbe_temporada,
-            "brier_score_mercado": bs_mkt_temporada,
-            "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe_temporada, bs_mkt_temporada),
-            "partidos_pendientes_captura": partidos_pendientes,
-            "jornadas_auditadas": [j["jornada"] for j in jornadas],
-        },
+        # [ARCH-1.4.38] Alias SELLADO de la temporada (tres consumidores lo leen): byte-idéntico al
+        # agregado global, que es lo que siempre significó.
+        "resumen_temporada": dict(resumen_global),
+        # [LN-QBE-125 · ARCH-1.4.65] Doble agregado declarado: informado (S=1) vs completo.
+        "resumen_global": resumen_global,
+        "resumen_calibrado": resumen_calibrado,
         "jornadas": jornadas,
     }
 

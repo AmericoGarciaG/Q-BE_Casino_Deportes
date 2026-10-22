@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Q-BE Casino Deportes — Quantitative Betting Engine</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg?v=2026QBE">
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026QBE_V4">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026QBE_V5">
     <!-- [DES-QBE-068] Chart.js pineado (UMD, sin `@latest`): sólo pinta la curva de capital que
          certifica el motor. `defer` mantiene el arranque de la SPA independiente del CDN; si el
          activo no llega, el visor financiero degrada a la tabla meso (cero curvas sintéticas). -->
@@ -659,6 +659,19 @@
                 <!-- [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cuatro métricas PURAS de la
                      taxonomía de vértices del símplex Δ² (P_max ≥ P_mid ≥ P_low). Queda extirpada
                      la falsa equivalencia «Empate = Cobertura» (H_fid / FAS · FES · FUS). -->
+                <!-- [LN-QBE-125 · ARCH-1.4.65] SELECTOR DE MUESTRA DECLARADA. El Visor sirve dos
+                     universos con la MISMA aritmética: la muestra CALIBRADA (partidos con
+                     suficiencia fáctica S(I)=1 — donde el modelo operó con evidencia) y el TORNEO
+                     COMPLETO (incluye las jornadas de Cold Start, cuya ignorancia se declara con
+                     ❄️ en la tabla meso). Conmutar no refetchea: re-pinta la caché certificada. -->
+                <div class="visor-segmentacion" id="visor-segmentacion" role="tablist"
+                     aria-label="Muestra del visor de calibración">
+                    <button type="button" class="visor-muestra-btn active" data-muestra="CALIBRADA"
+                            role="tab" aria-selected="true">🎯 Muestra Calibrada (J4–J13)</button>
+                    <button type="button" class="visor-muestra-btn" data-muestra="GLOBAL"
+                            role="tab" aria-selected="false">🌐 Torneo Completo (J1–J13)</button>
+                </div>
+
                 <div class="bt-macro-grid">
                     <div class="bt-kpi-card">
                         <span class="bt-kpi-label">MASA DE COBERTURA</span>
@@ -993,6 +1006,6 @@
     </div>
 
 
-    <script src="/static/js/app.js?v=2026QBE_V6"></script>
+    <script src="/static/js/app.js?v=2026QBE_V7"></script>
 </body>
 </html>

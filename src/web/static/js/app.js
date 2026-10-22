@@ -3562,6 +3562,10 @@ function initVisorBacktesting() {
     if (casillaVetados) {
         casillaVetados.addEventListener("change", _pintarVisorBacktesting);
     }
+    // [LN-QBE-125 · ARCH-1.4.65] Conmutador de muestra declarada (idempotente, cero refetch).
+    document.querySelectorAll(".visor-muestra-btn").forEach(btn => {
+        btn.addEventListener("click", () => conmutarMuestraVisor(btn.getAttribute("data-muestra")));
+    });
 }
 
 function _pctBacktesting(valor) {
@@ -3605,6 +3609,17 @@ async function cargarVisorBacktesting() {
 // PRESENTACIÓN (`[GOVERNANCE-01]`: cero cifras maquilladas, cero mutación de la bóveda).
 const SEMAFORO_EPIST_VETO = "ROJO";
 const VERTICES_TRIADA_BACKTESTING = ["P_MAX", "P_MID", "P_LOW"];
+// [LN-QBE-125 · ARCH-1.4.65] MUESTRA DECLARADA del Visor: "CALIBRADA" (universo informado
+// S(I)=1 — el criterio es el DATO, no el número de jornada) o "GLOBAL" (torneo completo).
+// La conmutación NO refetchea: re-pinta la caché certificada y `#bt-estado` declara el universo.
+let _muestraVisorActiva = "CALIBRADA";
+
+/** [LN-QBE-125] Etiqueta legible de la muestra activa (declaración textual de la vitrina). */
+function _etiquetaMuestraVisor() {
+    return _muestraVisorActiva === "GLOBAL"
+        ? "🌐 Torneo Completo (J1–J13)"
+        : "🎯 Muestra Calibrada (J4–J13)";
+}
 
 function _partidoVetadoBacktesting(partido) {
     const atribucion = partido && partido.atribucion_factorial;
@@ -3745,9 +3760,22 @@ function _agregadoTriadaBacktesting(partidos) {
  * enteros del subconjunto. Jornadas sin ningún vetado se sirven tal cual (cero recálculo: la
  * aritmética del servidor es la fuente de verdad y se respeta bit a bit).
  */
+/**
+ * [LN-QBE-125 · ARCH-1.4.65] Resumen SERVIDO del universo activo. El backend publica los dos
+ * agregados con la MISMA aritmética (`resumen_calibrado` · `resumen_global`), de modo que el
+ * pintor no recalcula nada: sólo elige. Un payload legado sin el bloque calibrado degrada al
+ * alias sellado `resumen_temporada` y `#bt-estado` lo declara.
+ */
+function _resumenMuestraVisor(payload) {
+    const raiz = payload || {};
+    const global = raiz.resumen_global || raiz.resumen_temporada || {};
+    if (_muestraVisorActiva === "GLOBAL") return global;
+    return raiz.resumen_calibrado || global;
+}
+
 function _universoCalibracion() {
     const payload = backtestingReportCache || {};
-    const resumenServido = payload.resumen_temporada || {};
+    const resumenServido = _resumenMuestraVisor(payload);
     const casilla = document.getElementById("chk-excluir-vetados");
     const excluir = Boolean(casilla && casilla.checked);
     let excluidos = 0;
@@ -3791,9 +3819,10 @@ function _universoCalibracion() {
     };
 }
 
-/** Declaración textual del universo leído: certificado (íntegro) o filtrado (anti-cuarentena). */
+/** Declaración textual del universo leído: muestra activa + régimen del filtro anti-cuarentena. */
 function _estadoLecturaBacktesting(universo) {
     const resumen = universo.resumen || {};
+    const etiquetaMuestra = _etiquetaMuestraVisor();
     const jornadasAuditadas = (resumen.jornadas_auditadas || []).map(j => `J${j}`).join(" · ");
     const auditoria = "auditados contra la bóveda 3NF" +
         (jornadasAuditadas ? ` (${jornadasAuditadas})` : "");
@@ -3802,18 +3831,41 @@ function _estadoLecturaBacktesting(universo) {
         `${Number(resumen.alpha_calibracion_pct || 0) >= 0 ? "+" : ""}` +
         `${Number(resumen.alpha_calibracion_pct || 0).toFixed(2)}%`;
     if (!universo.excluir) {
-        return `Lectura certificada · ${resumen.total_partidos || 0} partidos concluidos ` +
-            `${auditoria} · ${calibracion} (solo lectura: cero escritura, cero mocks).`;
+        return `${etiquetaMuestra} · Lectura certificada · ${resumen.total_partidos || 0} ` +
+            `partidos concluidos ${auditoria} · ${calibracion} ` +
+            "(solo lectura: cero escritura, cero mocks).";
     }
     if (universo.filtroInerte) {
-        return "Filtro anti-cuarentena activo sin efecto · 0 partidos vetados sobre " +
-            `${resumen.total_partidos || 0} partidos concluidos ${auditoria} · ${calibracion}.`;
+        return `${etiquetaMuestra} · Filtro anti-cuarentena activo sin efecto · 0 partidos ` +
+            `vetados sobre ${resumen.total_partidos || 0} partidos concluidos ${auditoria} · ` +
+            `${calibracion}.`;
     }
-    return `Filtro anti-cuarentena activo · ${universo.excluidos} de ${universo.totalServido} ` +
-        "partidos concluidos excluidos por Cuarentena Fiduciaria (EPIST 🔴 · Δ_epist > 0.12) · " +
-        `universo efectivo: ${resumen.total_partidos || 0} partidos ${auditoria} · ${calibracion} ` +
-        "[LN-QBE-104].";
+    return `${etiquetaMuestra} · Filtro anti-cuarentena activo · ${universo.excluidos} de ` +
+        `${universo.totalServido} partidos concluidos excluidos por Cuarentena Fiduciaria ` +
+        "(EPIST 🔴 · Δ_epist > 0.12) · " +
+        `universo efectivo: ${resumen.total_partidos || 0} partidos ${auditoria} · ` +
+        `${calibracion} [LN-QBE-104].`;
 }
+
+/**
+ * [LN-QBE-125 · ARCH-1.4.65] Conmutador de MUESTRA DECLARADA del Visor de calibración.
+ * No refetchea: reasigna el universo activo y re-pinta desde la caché certificada
+ * (`_pintarVisorBacktesting`), que es idempotente. El KPI macro y `#bt-estado` cambian de
+ * universo; la tabla meso y la parrilla micro siguen exhibiendo el torneo completo con sus
+ * sellos de ceguera declarados.
+ */
+function conmutarMuestraVisor(tipo) {
+    const destino = tipo === "GLOBAL" ? "GLOBAL" : "CALIBRADA";
+    _muestraVisorActiva = destino;
+    document.querySelectorAll(".visor-muestra-btn").forEach(btn => {
+        const activo = btn.getAttribute("data-muestra") === destino;
+        btn.classList.toggle("active", activo);
+        btn.setAttribute("aria-selected", activo ? "true" : "false");
+    });
+    if (backtestingReportCache) _pintarVisorBacktesting();
+}
+
+window.conmutarMuestraVisor = conmutarMuestraVisor;
 
 /** Re-pintado íntegro del visor desde la caché certificada (idempotente, cero refetch). */
 function _pintarVisorBacktesting() {
@@ -3885,6 +3937,11 @@ function pintarMesoBacktesting(jornadas, resumen) {
         const conteosTriada =
             `(${fila.n_p_max || 0} · ${fila.n_p_mid || 0} · ${fila.n_p_low || 0}) · ` +
             `[P_mid: ${fila.n_p_mid_empate || 0} Emp · ${fila.n_p_mid_rival || 0} Riv]`;
+        // [LN-QBE-125 / ARCH-1.4.65] Ceguera DECLARADA de la jornada: sin evidencia fáctica el
+        // Alpha no mide ventaja, mide un prior puro. El sello lo dice en su propia columna.
+        const selloCeguera = (fila.es_cold_start || fila.alpha_etiqueta === "COLD_START")
+            ? ' <span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:1px 6px; border-radius:4px; font-size:9px; font-family:monospace;" title="S(I)=0 en todos sus partidos: el Alpha no es una medición de ventaja">❄️ Cold Start (S=0)</span>'
+            : "";
         filas.push(`
             <tr class="bt-jornada-auditada">
                 <td><strong>J${fila.jornada}</strong></td>
@@ -3896,7 +3953,7 @@ function pintarMesoBacktesting(jornadas, resumen) {
                 </td>
                 <td class="numeric">${Number(fila.brier_score_qbe || 0).toFixed(4)}</td>
                 <td class="numeric">${Number(fila.brier_score_mercado || 0).toFixed(4)}</td>
-                <td class="numeric">${Number(fila.alpha_calibracion_pct || 0).toFixed(2)}%</td>
+                <td class="numeric">${Number(fila.alpha_calibracion_pct || 0).toFixed(2)}%${selloCeguera}</td>
                 <td><button type="button" class="bt-btn-micro" data-jornada-idx="${idx}">Ver partidos</button></td>
             </tr>`);
     }
@@ -3935,10 +3992,12 @@ function mostrarMicroJornadaBacktesting(idx) {
     const partidos = jornada.partidos || [];
     const bloques = partidos.map(p => {
         const momios = p.momios || {};
-        // [LN-QBE-100 · Axioma del Prior de Mercado] Honestidad visual ([GOVERNANCE-01]): con
-        // S(I)=0 la parrilla espeja el consenso del mercado, NO una distribución propia de Q-BE.
+        // [LN-QBE-125 · ARCH-1.4.65] Ceguera DECLARADA ([GOVERNANCE-01]): con S(I)=0 el partido se
+        // puntúa con su P′ SOBERANA — la sustitución por el consenso del mercado quedó DEROGADA —,
+        // así que el rótulo ya no puede afirmar que la parrilla espeja q_mkt: declara la ignorancia
+        // fáctica del insumo y deja que el Brier mida la degradación real del prior.
         const pildoraColdStart = p.suficiencia_S_I === 0
-            ? '<span style="background:#475569; color:#F8FAFC; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;">🧊 COLD START: PRIOR DE MERCADO</span>'
+            ? '<span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="S(I)=0: sin evidencia fáctica; se evalúa el prior puro del modelo (Cold Start sincero)">❄️ Cold Start (S=0)</span>'
             : "";
         // [ARCH-1.4.38-R3 · Rediseño Tridimensional 1X2] Ranking fiduciario del partido: los tres
         // desenlaces ordenados por P′ descendente resuelven QUIÉN es 1er, 2º y 3er favorito de
@@ -4007,6 +4066,14 @@ function mostrarMicroJornadaBacktesting(idx) {
             P_LOW: '<span class="badge-triada badge-dog" style="background:#7F1D1D; border:1px solid #DC2626; color:#F87171; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">💀 RUPTURA P_LOW</span>',
         };
         const badgeTriadaHtml = MAPA_BADGE_TRIADA[triadaFiduciaria];
+        // [LN-QBE-124 / ARCH-1.4.65] RESCATE TERRITORIAL: la Banda de Indiferencia promovió al LOCAL
+        // a P_mid porque la frontera P_mid/P_low era plana (≤ ε = 1.00%) y el anfitrión jugaba con
+        // un desnivel ΔAlt⁺ ≥ 1000 msnm. Se exhibe la magnitud REALMENTE consumida por λ (traza
+        // V29); el pintor no deriva ni recalcula nada ([GOVERNANCE-01]).
+        const badgeRescateAltitudHtml = p.rescate_indiferencia
+            ? '<span class="bt-badge-rescate-alt" style="background:#082F49; border:1px solid #22D3EE; color:#67E8F9; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace; margin-left:6px;" title="Banda de indiferencia ε = 1.00%: el LOCAL se promueve a P_mid por el desnivel del anfitrión">' +
+                `🛡️ RESCATE P_MID · ΔAlt ${Math.round(Number(p.delta_alt_metros || 0))} m</span>`
+            : "";
         // Columna central: Brier Score individual + Alpha del partido
         // Alpha_i = (1 − BS_QBE / BS_MKT) · 100 (guarda anti-división por cero: BS_MKT = 0 ⇒ 0%).
         const bsQbeRaw = Number(p.brier_qbe || 0);
@@ -4096,6 +4163,7 @@ function mostrarMicroJornadaBacktesting(idx) {
                         ? `<span style="color:#94A3B8; font-size:10px;"> · ${triadaProv}` +
                             `${p.clasificacion_triada ? ` (${p.clasificacion_triada})` : ""}</span>`
                         : ""}
+                    ${badgeRescateAltitudHtml}
                 </div>
             </div>
         </div>`;
@@ -4245,21 +4313,14 @@ function _badgeDimension32(dimension) {
     return badge;
 }
 
+/**
+ * [ARCH-1.4.63] Acordeón dimensional: el Card es el ÚNICO vehículo de lectura por dimensión.
+ * La tabla de 7 columnas sellada por [DES-QBE-064] se DEROGÓ de este nodo (duplicaba, dimensión a
+ * dimensión, la misma transcripción que el Card ya sirve) y sobrevive UNA sola vez, consolidada,
+ * en el soporte forense del modal (`_soporteForense32`). El badge bicolor se hidrata igual sobre
+ * `vars44-badge-slot`: la geometría del acordeón no cambia.
+ */
 function _tablaDimension32(dimension) {
-    const filas = (dimension.variables || []).map(variable => {
-        const colorEstado = COLORES_ESTADO_32[variable.estado] || "#94A3B8";
-        return `
-            <tr>
-                <td class="vars44-col-id">${variable.id}</td>
-                <td class="vars44-col-variable">${variable.variable}</td>
-                <td class="vars44-col-num">${_valor32(variable.local)}</td>
-                <td class="vars44-col-num">${_valor32(variable.visita)}</td>
-                <td class="vars44-col-num">${_valor32(variable.z_score)}</td>
-                <td class="vars44-col-origen">${variable.origen || "—"}</td>
-                <td class="vars44-col-estado" style="color:${colorEstado};">${variable.estado || "—"}</td>
-                <td class="vars44-col-impacto">${variable.impacto || "—"}</td>
-            </tr>`;
-    }).join("");
     const indice = String(dimension && dimension.dimension ? dimension.dimension : "");
     return `
         <details class="vars44-dimension" data-dimension="${indice}">
@@ -4271,7 +4332,42 @@ function _tablaDimension32(dimension) {
                 </span>
             </summary>
             ${_cardDimension32(dimension)}
-            <table class="vars44-tabla">
+        </details>`;
+}
+
+/**
+ * [ARCH-1.4.63] Soporte forense CONSOLIDADO: una sola tabla con las siete columnas selladas por
+ * [DES-QBE-064] (ID, Variable, Local, Visita, Z-Score, Origen, Estado, Impacto) para las SEIS
+ * dimensiones. Transcribe las celdas servidas VERBATIM: cero derivación, cero normalización, cero
+ * imputación — es soporte de auditoría, no de lectura ([GOVERNANCE-01]).
+ */
+function _soporteForense32(dimensiones) {
+    const bloques = (dimensiones || []).map(dimension => {
+        const filas = (dimension.variables || []).map(variable => {
+            const colorEstado = COLORES_ESTADO_32[variable.estado] || "#94A3B8";
+            return `
+                <tr>
+                    <td class="vars44-col-id">${variable.id}</td>
+                    <td class="vars44-col-variable">${variable.variable}</td>
+                    <td class="vars44-col-num">${_valor32(variable.local)}</td>
+                    <td class="vars44-col-num">${_valor32(variable.visita)}</td>
+                    <td class="vars44-col-num">${_valor32(variable.z_score)}</td>
+                    <td class="vars44-col-origen">${variable.origen || "—"}</td>
+                    <td class="vars44-col-estado" style="color:${colorEstado};">${variable.estado || "—"}</td>
+                    <td class="vars44-col-impacto">${variable.impacto || "—"}</td>
+                </tr>`;
+        }).join("");
+        return `
+            <tbody>
+                <tr><td colspan="8" class="vars44-soporte-familia">${dimension.titulo || dimension.dimension}</td></tr>
+                ${filas}
+            </tbody>`;
+    }).join("");
+    if (!bloques) return "";
+    return `
+        <details class="vars44-soporte">
+            <summary>Soporte forense consolidado · 7 columnas [DES-QBE-064] / [ARCH-1.4.63]</summary>
+            <table class="vars44-tabla vars44-tabla-soporte">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -4284,7 +4380,7 @@ function _tablaDimension32(dimension) {
                         <th>Impacto</th>
                     </tr>
                 </thead>
-                <tbody>${filas}</tbody>
+                ${bloques}
             </table>
         </details>`;
 }
@@ -4317,9 +4413,10 @@ function _hidratarBadgesDimension32(contenedor, dimensiones) {
 /* ==========================================================================
    [DES-QBE-070-B] CARDS SEMÁNTICOS POLIMÓRFICOS DEL CATÁLOGO DE 32V (FASE C)
    --------------------------------------------------------------------------
-   Hero Card que antecede a la tabla de 7 columnas sellada por [DES-QBE-064]: la
-   tabla SOBREVIVE como soporte de auditoría (enmienda, no deroga). El Card sólo
-   TRANSCRIBE las celdas servidas de `atribucion_factorial.variables_44`; tiene
+   Hero Card que antecede al soporte forense de 7 columnas sellado por [DES-QBE-064]:
+   el soporte SOBREVIVE (enmienda, no deroga) como UNA sola tabla consolidada del modal
+   —`_soporteForense32`—, nunca replicada dimensión a dimensión ([ARCH-1.4.63]). El Card
+   sólo TRANSCRIBE las celdas servidas de `atribucion_factorial.variables_44`; tiene
    prohibido derivar λ, Δlog, xG, récords o altitudes absolutas ([GOVERNANCE-01] /
    [ARCH-1.4.57]). Cero hidratación de datos de red por marcado crudo: todo el
    marcado sale de literales de plantilla y de `_valor32`, que preserva las celdas
@@ -4354,25 +4451,28 @@ function _porcentaje32(variable) {
 }
 
 /**
- * 𝒯_Vol — barra dual de posesión efectiva (`V01`). Los anchos son los porcentajes SERVIDOS; si
- * los dos carriles no suman 100 (±1.0 de tolerancia de redondeo) la barra se declara `Posesión
- * s/d` en lugar de fingir una proporcionalidad que la evidencia no sostiene ([GOVERNANCE-01]).
+ * 𝒯_Vol — barra dual de posesión efectiva (`V01`). [ARCH-1.4.63] Los dos porcentajes servidos se
+ * NORMALIZAN por complemento bipartito: la posesión de un partido SIEMPRE suma 100, de modo que un
+ * par servido que no cierra (`54.0%` / `45.0%` por redondeo de origen) sigue siendo una posesión
+ * medible, no una contradicción. El ancho es `local / (local + visita) * 100`: una sola magnitud
+ * independiente (`visita` queda determinada por el complemento). Con Σ ≤ 0 no hay porcentaje que
+ * exhibir: se declara `Posesión sin evidencia` en lugar de fingir un 50/50 ([GOVERNANCE-01]).
  */
 function _cardPosesion32(dimension) {
     const variable = _variable32(dimension, "V01");
     const local = _porcentaje32(variable);
     const visita = variable ? parseFloat(String(variable.visita)) : null;
-    const coherente = local !== null && Number.isFinite(visita) &&
-        Math.abs((local + visita) - 100) <= 1.0;
-    const anchoLocal = coherente ? local : 50;
-    const anchoVisita = coherente ? 100 - local : 50;
-    const rotulo = coherente
-        ? `Posesión ${local.toFixed(1)}% · ${visita.toFixed(1)}%`
-        : "Posesión s/d";
+    const total = local !== null && Number.isFinite(visita) ? local + visita : 0;
+    const proporcionLocal = total > 0 ? (local / total) * 100 : null;
+    const anchoLocal = proporcionLocal === null ? 50 : proporcionLocal;
+    const anchoVisita = proporcionLocal === null ? 50 : 100 - proporcionLocal;
+    const rotulo = proporcionLocal === null
+        ? "Posesión sin evidencia"
+        : `Posesión ${proporcionLocal.toFixed(1)}% · ${(100 - proporcionLocal).toFixed(1)}%`;
     return `
-        <div class="barra-posesion-dual" title="V01 · posesión efectiva servida [LN-QBE-102]">
-            <div class="barra-posesion-carril barra-posesion-local" style="width:${anchoLocal}%;"></div>
-            <div class="barra-posesion-carril barra-posesion-visita" style="width:${anchoVisita}%;"></div>
+        <div class="barra-posesion-dual" title="V01 · posesión efectiva normalizada [LN-QBE-102] / [ARCH-1.4.63]">
+            <div class="barra-posesion-carril barra-posesion-local" style="width:${anchoLocal.toFixed(1)}%;"></div>
+            <div class="barra-posesion-carril barra-posesion-visita" style="width:${anchoVisita.toFixed(1)}%;"></div>
             <span class="barra-posesion-rotulo">${rotulo}</span>
         </div>`;
 }
@@ -4474,8 +4574,9 @@ function _rejillaCardTodos32(dimension) {
 
 /**
  * [DES-QBE-070-B] Despachador polimórfico del Hero Card: la anatomía depende de la familia `𝒯_*` de
- * la dimensión. La tabla forense de [DES-QBE-064] se pinta DEBAJO (`_tablaDimension32`) y sigue
- * siendo el soporte de auditoría. Sin una sola variable `EVALUADO` el Card se atenúa
+ * la dimensión. El soporte forense de [DES-QBE-064] se pinta UNA sola vez, consolidado, en
+ * `_soporteForense32` ([ARCH-1.4.63]): el acordeón ya no replica una tabla por dimensión. Sin una
+ * sola variable `EVALUADO` el Card se atenúa
  * (`card-fase6-muted`) y declara `○ 0 de N (Fase 6)`: jamás un cero fabricado ni un porcentaje
  * aparente sobre denominador vacío ([GOVERNANCE-01] / [DES-QBE-066]).
  */
@@ -4627,7 +4728,8 @@ function abrirModal44Variables(idPartido) {
             ${dimensiones.length
                 ? dimensiones.map(_tablaDimension32).join("")
                 : `<div class="vars44-aviso">⚪ El endpoint no publicó el catálogo de 32 variables de este partido.</div>`}
-        </div>`;
+        </div>
+        ${_soporteForense32(dimensiones)}`;
 
     // [DES-QBE-066] Hidratación del badge bicolor: se pinta en DOM tras transcribir el bloque.
     _hidratarBadgesDimension32(cuerpo, dimensiones);

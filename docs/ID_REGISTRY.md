@@ -119,6 +119,9 @@
 | `[LN-QBE-120]` | LOGIC | `docs/LOGIC.md` | Catálogo Estructural de 32 Variables PRE-KICKOFF (Reingeniería Macro) y Derogación de la Partición 12×44 | SELLADO |
 | `[LN-QBE-121]` | LOGIC | `docs/LOGIC.md` | Aduana de Exhibición Macro-Torneal: Iluminación Fáctica de las Celdas No Insumidas y Purga Nominal 44V | SELLADO |
 | `[LN-QBE-122]` | LOGIC | `docs/LOGIC.md` | Purga Nominal ALT-B: Derivación Estructural de Taxonomías desde el Catálogo Único y Régimen de Auxiliares `AUX_*` | SELLADO |
+| `[LN-QBE-123]` | LOGIC | `docs/LOGIC.md` | Saneamiento de Trayectoria Fáctica, Cuarentena Declarada de V16 y Guardián de Presencia del Descanso (Régimen Opción B) | SELLADO |
+| `[LN-QBE-124]` | LOGIC | `docs/LOGIC.md` | Banda de Indiferencia Fiduciaria en la Cobertura Ordinal y Desempate por Altitud del Anfitrión | SELLADO |
+| `[LN-QBE-125]` | LOGIC | `docs/LOGIC.md` | Cold Start Sincero: Derogación de la Sustitución por Prior de Mercado y Segmentación Declarada de la Muestra Calibrada | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -242,9 +245,10 @@
 | `[ARCH-1.4.57]` | ARCH | `docs/ARCH.md` | Frontera de Presentación de los Cards Polimórficos: `variables_44` como Única Fuente y Deuda Declarada de `insumos_factivados` [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.58]` | ARCH | `docs/ARCH.md` | Telemetría Dimensional en el DTO, 19.ª Tarea del Centro de Control y Sonda de Completitud Fáctica 44V [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.59]` | ARCH | `docs/ARCH.md` | Centinela de Macro-Estadísticas FotMob y Congelación Idempotente del Artefacto `cache_macro_stats_liga_mx_2026.json` [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.60]` | ARCH | `docs/ARCH.md` | Inyección Macro-Torneal como Aduana de Exhibición y Derivación Dinámica de Taxonomías desde el Catálogo Único [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.61]` | ARCH | `docs/ARCH.md` | Taxonomías Derivadas en Import-Time y Régimen de Auxiliares `AUX_*` (Cierre de la Deriva Nominal 44V) [ARCH-PILLAR] | SELLADO |
-| `[ARCH-1.4.62]` | ARCH | `docs/ARCH.md` | Fase C de Vitrina: Retiro del Régimen 44V en la Capa Visible y Alineación de `sandbox_micro_dinamicas_pipeline` al Catálogo de 32 Variables [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.62]` | ARCH | `docs/ARCH.md` | Fase C de Vitrina: Retiro del Régimen 44V en la Capa Visible y Alineación de `sandbox_micro_dinamicas_pipeline` al Catálogo de 32 Variables | SELLADO |
+| `[ARCH-1.4.63]` | ARCH | `docs/ARCH.md` | Saneamiento de Vitrina: Derogación de la Tabla Duplicada por Dimensión, Soporte Forense Único y Normalización de la Barra de Posesión | SELLADO |
+| `[ARCH-1.4.64]` | ARCH | `docs/ARCH.md` | Delegación del Orden Fiduciario del Visor a la Función Pura Canónica y Resolución Declarada del Desnivel de Altitud | SELLADO |
+| `[ARCH-1.4.65]` | ARCH | `docs/ARCH.md` | Vitrina de Muestra Declarada: Selector Calibrada/Global en el Visor de Calibración | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---
