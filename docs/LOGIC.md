@@ -1820,6 +1820,22 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 ---
 
 
+### ID: [LN-QBE-120] Catálogo Estructural de 32 Variables PRE-KICKOFF (Reingeniería Macro) y Derogación de la Partición 12×44
+
+* **Ω (Resumen):** La partición de **12 dimensiones × 44 variables** de `[LN-QBE-101]` se **deroga** (decreto `VAR-3`) porque su granularidad de minuto a minuto (1T/2T, 0-15', 80-90'), de banca y de rotación del XI no gobierna la decisión PRE-KICKOFF y diluía la señal directora en ruido de baja frecuencia. El catálogo vigente es **6 dimensiones × 32 variables** estrictamente correlativas (`V01`…`V32`), con los mismos espacios de Hilbert (`H_att` / `H_def` / `H_ctx`) y **la misma semántica por magnitud**: la reingeniería **renumera**, no reinterpreta. Cero matemática nueva: `derivar_factores_con_procedencia`, la loglineal de Poisson, Dixon-Coles, la fusión `[LN-QBE-104]` y el operador de André quedan **bit-idénticos**.
+* **I (Input):** El paquete `insumos_factivados` (`[LN-QBE-102]`/`[LN-QBE-117]`), el bloque `h2h_stats` (`[LN-QBE-105]`) y los hechos contextuales `delta_alt_metros` / `delta_descanso_dias` que λ ya consumía.
+* **P (Process) [DBBD-FUNGIBLE] (renumeración declarativa, cero matemática nueva):**
+  1. **Partición canónica (`DIMENSIONES_CANONICAS`, 6 renglones / 32 variables, cero duplicados):** `𝒯_Vol` Volumen Territorial y Fricción (5: V01-V05), `𝒯_Rem` Calidad de Remate (6: V06-V11), `𝒯_Def` Resistencia Defensiva (5: V12-V16), `𝒯_Por` Rendimiento de Portería (4: V17-V20), `𝒯_Spc` Balón Parado y Disciplina (5: V21-V25) y `𝒯_Ctx` Memoria, Forma y Contexto (7: V26-V32). `CATALOGO_VERSION = "32V-2026"`.
+  2. **Mapa de renumeración (`VAR-3`, magnitud → celda, sin cambio de semántica):** xG/PJ `V05→V06`; SoT/PJ `V06→V07`; xGA/PJ `V10→V12`; SoTA/PJ `V11→V13`; ΔDescanso `V27→V30`; ΔAltitud `V28→V29`; memoria longitudinal `V39→V26` (récord), `V40→V27` (ΔG) y `V41→V28` (sede). Las métricas de cronometría, banca, rotación y cierre (`V33-V38`, `V43-V44` de `[LN-QBE-101]`) se **excluyen** del catálogo base y se delegan a un proyecto periférico de inferencia causal.
+  3. **Cero ruptura de contrato (alias conservados):** el productor sigue llamándose `estructurar_catalogo_44_variables`, la clave de payload sigue siendo `variables_44` y el DTO sigue siendo `Catalogo44Out`; sólo cambia su **cardinalidad** (`total_variables: 32`, `_CATALOGO_32` como alias semántico de lectura). La UI (`app.js::_cardDimension44` / `_badgeDimension44`) se auto-sana: lee `n/m` del propio DTO, sin una línea de JS editada.
+  4. **Tablas de transcripción realineadas:** `_FORMATO_INSUMO` (V01, V06, V07, V12, V13, V26, V29, V30), `_RESPALDO_INSUMO` (respaldo GC/PJ del Axioma 4 ahora en `V12`) y `_CLAVES_H2H_STATS` (V26/V27/V28) apuntan a las nuevas celdas sin cambiar la magnitud ni el formato (`pct`, `num0`, `num2`, `partidos`, `metros`, `dias`).
+  5. **Sonda de completitud realineada (`[LN-QBE-119]`):** `TOTAL_VARIABLES_CATALOGO = 32` (el `CATALOGO_INCOMPLETO` compara Σ ≠ 32) y la cota física `COTA_SOT` vigila `V07`/`V13` (SoT/SoTA por partido), ya no `V06`/`V11`.
+* **O (Output):** `estructurar_catalogo_44_variables({})` publica `total_variables = 32` y `6` dimensiones con denominador real (5/6/5/4/5/7); con el paquete de Fase 1 enciende exactamente `V01, V06, V07, V12, V13, V26, V27, V28, V29, V30` y ninguna otra celda.
+* **Φ (Transición):** Hacia `src/models/web_schemas.py` (`Catalogo44Out`), `scripts/auditoria/auditar_completitud_visor.py`, el extractor macro `[ARCH-1.4.59]` (cuyo `MAPA_LEADERBOARDS` referencia los `V01`…`V32` vigentes) y el espejo `docs/DIRGEN_VAULT.md`.
+* **[SHIELD]:** `tests/shield/test_shield_factor_attribution_and_telemetry.py` · `tests/shield/test_shield_fase1_master_integration_providers.py` · `tests/shield/test_shield_h2h_dimension_population.py` · `tests/shield/test_shield_live_lock_and_input_telemetry.py` · `tests/shield/test_shield_opta_flag_and_accordion_telemetry.py` · `tests/shield/test_shield_completitud_visor_and_sync_j13.py` · `tests/shield/test_shield_macro_extraction_phase_a.py`
+
+---
+
 > **Trazabilidad de registro (VARIANCE-01) — Fase 8 (Colisión `LN-QBE-080`):** el nodo
 > solicitado como `[LN-QBE-080]` por la Directiva P.I.R. **colisiona** con el nodo YA sellado
 > `[LN-QBE-080] Compilador de Reportes Oficiales y PDF A4` (línea 555 de este libro,

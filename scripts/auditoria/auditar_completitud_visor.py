@@ -8,10 +8,11 @@ Autoridad: Américo García Guerrero (Director Humano)
 QUÉ CERTIFICA
 -------------
 1. Cero `0 de 0`: toda dimensión publicada declara `total_variables > 0` y
-   `variables_evaluadas <= total_variables`; el catálogo suma exactamente 44 variables.
+   `variables_evaluadas <= total_variables`; el catálogo suma exactamente 32 variables
+   ([LN-QBE-120] deroga la partición 12×44 de [LN-QBE-101]).
 2. Coherencia de badge: `tiene_datos` ⟺ (`variables_evaluadas` > 0). Un `SIN EVALUAR` con
    evidencia evaluada —o un encendido sin evidencia— es anomalía 🔴.
-3. Cotas físicas: SoT/SoTA por partido (`V06`/`V11`) en `[0, 15.0]` y posesión (`V01`) en `[0, 100]`.
+3. Cotas físicas: SoT/SoTA por partido (`V07`/`V13`) en `[0, 15.0]` y posesión (`V01`) en `[0, 100]`.
    Una sumatoria de torneo en una casilla de tasa rebasa la cota y se declara 🔴.
 4. Identidad de universo: `partidos_auditados + partidos_pendientes_captura == partidos_concluidos_boveda`
    (una jornada concluida jamás desaparece del Visor).
@@ -49,7 +50,8 @@ LIGA_ID_CANONICA = 1
 RANGO_JORNADAS_DEFAULT = "1-17"
 RUTA_SALIDA_DEFAULT = os.path.join("data", "output", "auditoria_completitud_visor.json")
 
-TOTAL_VARIABLES_CATALOGO = 44
+# [LN-QBE-120] Cardinalidad vigente del catálogo PRE-KICKOFF (deroga la partición 12×44).
+TOTAL_VARIABLES_CATALOGO = 32
 # [LN-QBE-119] Cota física de la tasa por partido: una sumatoria de corte (41, 56, …) la rebasa.
 COTA_SOT_MAX = 15.0
 COTA_POSS_MIN = 0.0
@@ -127,7 +129,7 @@ def _anomalia(nivel: str, codigo: str, detalle: str, jornada: Any = None,
 
 # ── Auditoría de una casilla micro ──────────────────────────────────────────────────────────
 def _auditar_partido(partido: Dict[str, Any]) -> Dict[str, Any]:
-    """Valida la telemetría dimensional de 44V de UNA casilla micro del Visor.
+    """Valida la telemetría dimensional de 32V de UNA casilla micro del Visor.
 
     Retorna `{evaluadas, total, cobertura_pct, sot, poss, anomalias}`. `sot` es la media de las dos
     porterías cuando ambas están publicadas (`None` si el partido no porta evidencia de volumen).
@@ -143,7 +145,7 @@ def _auditar_partido(partido: Dict[str, Any]) -> Dict[str, Any]:
     if not dimensiones:
         anomalias.append(_anomalia(
             NIVEL_ROJO, "SIN_CATALOGO_44V",
-            "la casilla micro no publica dimensiones del catálogo de 44 variables", jornada, id_partido,
+            "la casilla micro no publica dimensiones del catálogo de 32 variables [LN-QBE-120]", jornada, id_partido,
         ))
         return {
             "evaluadas": 0, "total": 0, "cobertura_pct": 0.0,
@@ -190,11 +192,12 @@ def _auditar_partido(partido: Dict[str, Any]) -> Dict[str, Any]:
 
         for variable in dimension.get("variables") or []:
             identificador = str(variable.get("id") or "")
-            if identificador in ("V01", "V06", "V11"):
+            if identificador in ("V01", "V07", "V13"):
                 valores[identificador] = (_num(variable.get("local")), _num(variable.get("visita")))
 
     # (3) Cota física de la tasa por partido (detector de sumatoria de torneo en casilla de tasa).
-    for identificador in ("V06", "V11"):
+    # [LN-QBE-120] SoT = V07 y SoTA = V13 tras la renumeración de 32 variables.
+    for identificador in ("V07", "V13"):
         for lado, valor in zip(("local", "visita"), valores.get(identificador, (None, None))):
             if valor is None:
                 continue
@@ -220,7 +223,7 @@ def _auditar_partido(partido: Dict[str, Any]) -> Dict[str, Any]:
             jornada, id_partido,
         ))
 
-    porterias = [v for v in valores.get("V06", (None, None)) if v is not None]
+    porterias = [v for v in valores.get("V07", (None, None)) if v is not None]
     posesiones = [v for v in valores.get("V01", (None, None)) if v is not None]
     return {
         "evaluadas": evaluadas,

@@ -268,85 +268,72 @@ def evaluar_semaforos_salud_datos(
     return {"opta": opta, "sede": sede, "h2h": h2h, "epist": epist, "ctx": ctx}
 
 
-# ── [LN-QBE-101].P.4 — Taxonomía normativa de 44 variables (dossier §3) ────────────────────────
-# Partición canónica INMUTABLE: 12 dimensiones, 44 variables, cero duplicados.
+# ── [LN-QBE-120].P.4 — Catálogo Estructural de 32 Variables de Predicción (Reingeniería Macro) ──
+# Partición canónica INMUTABLE: 6 dimensiones, 32 variables PRE-KICKOFF, cero duplicados.
+# Deroga la taxonomía histórica de 44 variables de [LN-QBE-101] (superseditada, no reutilizada).
 # Cada renglón declara su espacio de Hilbert (H_att / H_def / H_ctx) de forma explícita:
-# la señal directora es xG/90' (ataque) y xGA/90' (defensa); contexto, shocks, disciplina,
-# cronometría y memoria longitudinal viven en H_ctx ([LN-QBE-039], [ARCH-1.4.33]).
+# la señal directora es xG/PJ (ataque) y xGA/PJ (defensa); contexto, forma, sede y memoria
+# longitudinal viven en H_ctx ([LN-QBE-039], [ARCH-1.4.33]).
+# Las métricas de minuto a minuto (1T/2T, 0-15', 80-90'), suplentes y rotación del XI quedan
+# EXCLUIDAS del catálogo base y se delegan a un proyecto periférico de inferencia causal.
+CATALOGO_VERSION: str = "32V-2026"
+
 DIMENSIONES_CANONICAS: Tuple[Tuple[str, str], ...] = (
-    ("𝒯_Vol", "Volumen Territorial"),
+    ("𝒯_Vol", "Volumen Territorial y Fricción"),
     ("𝒯_Rem", "Calidad de Remate"),
-    ("𝒯_Def", "Defensa"),
-    ("𝒯_Por", "Portería"),
-    ("𝒯_Bal", "Balón Parado y Penales"),
-    ("𝒯_Dis", "Disciplina"),
-    ("𝒯_Shk", "Shocks de Plantilla/Contexto"),
-    ("𝒯_Tra", "Trayectoria"),
-    ("𝒯_Cro", "Cronometría"),
-    ("𝒯_Ban", "Banca/Profundidad"),
-    ("𝒯_H2H", "Memoria Longitudinal/H2H"),
-    ("𝒯_Cls", "Cierre de Partido"),
+    ("𝒯_Def", "Resistencia Defensiva"),
+    ("𝒯_Por", "Rendimiento de Portería"),
+    ("𝒯_Spc", "Balón Parado y Disciplina"),
+    ("𝒯_Ctx", "Memoria, Forma y Contexto"),
 )
 
 # (id, nombre, dimensión, claves fácticas, modo, origen, espacio)
+# [LN-QBE-120] El nombre de la tupla se CONSERVA por contrato del Juez Inmutable y de las
+# dependencias locales (`estructurar_catalogo_44_variables`, DTO `variables_44`); su contenido
+# es de 32 renglones. El alias `_CATALOGO_32` documenta la verdad semántica.
 _CATALOGO_44: Tuple[Tuple[str, str, str, Tuple[str, ...], str, str, str], ...] = (
-    # 𝒯_Vol — Volumen Territorial (4)
-    ("V01", "Posesión efectiva (%)", "𝒯_Vol", ("possession", "possession_pct", "posesion"), "directo", "OPTA", "H_att"),
-    ("V02", "Toques en área rival", "𝒯_Vol", ("opp_box_touches", "toques_area_rival"), "directo", "OPTA", "H_att"),
-    ("V03", "Pases progresivos completados", "𝒯_Vol", ("progressive_passes", "pases_progresivos"), "directo", "OPTA", "H_att"),
-    ("V04", "Entradas al último tercio", "𝒯_Vol", ("final_third_entries", "entradas_ultimo_tercio"), "directo", "OPTA", "H_att"),
-    # 𝒯_Rem — Calidad de Remate (5)
-    ("V05", "xG por partido (ancla npxG)", "𝒯_Rem", ("npxg", "xg"), "tasa", "OPTA", "H_att"),
-    ("V06", "Tiros a puerta (SoT)", "𝒯_Rem", ("sot", "shots_on_target"), "directo", "OPTA", "H_att"),
-    ("V07", "xG a puerta (xGOT)", "𝒯_Rem", ("xgot",), "directo", "OPTA", "H_att"),
-    ("V08", "Grandes oportunidades creadas", "𝒯_Rem", ("big_chances_created", "bc_created"), "directo", "OPTA", "H_att"),
-    ("V09", "Grandes oportunidades falladas", "𝒯_Rem", ("big_chances_missed", "bc_missed"), "directo", "OPTA", "H_att"),
-    # 𝒯_Def — Defensa (5)
-    ("V10", "xGA por partido (ancla defensiva)", "𝒯_Def", ("xga",), "tasa", "OPTA", "H_def"),
-    ("V11", "Tiros a puerta concedidos (SoTA)", "𝒯_Def", ("sota", "shots_on_target_against"), "directo", "OPTA", "H_def"),
-    ("V12", "PPDA", "𝒯_Def", ("ppda",), "directo", "OPTA", "H_def"),
-    ("V13", "Intercepciones/recuperaciones tercio medio", "𝒯_Def", ("mid_third_recoveries", "interceptions_mid"), "directo", "OPTA", "H_def"),
-    ("V14", "Grandes oportunidades concedidas", "𝒯_Def", ("big_chances_conceded", "bc_conceded"), "directo", "OPTA", "H_def"),
-    # 𝒯_Por — Portería (3)
-    ("V15", "Goles prevenidos (xGOT − GC)", "𝒯_Por", ("goals_prevented", "goles_prevenidos"), "directo", "OPTA", "H_def"),
-    ("V16", "Porcentaje de atajadas", "𝒯_Por", ("save_pct", "atajadas_pct"), "directo", "OPTA", "H_def"),
-    ("V17", "Salidas exitosas por alto", "𝒯_Por", ("high_claims", "salidas_altas"), "directo", "OPTA", "H_def"),
-    # 𝒯_Bal — Balón Parado y Penales (4)
-    ("V18", "xG a balón parado", "𝒯_Bal", ("xg_setpiece",), "directo", "OPTA", "H_att"),
-    ("V19", "xGA a balón parado", "𝒯_Bal", ("xga_setpiece",), "directo", "OPTA", "H_def"),
-    ("V20", "Tiros de esquina a favor", "𝒯_Bal", ("corners", "tiros_esquina"), "directo", "OPTA", "H_att"),
-    ("V21", "Tasa histórica de penales a favor", "𝒯_Bal", ("penalty_rate", "penales_tasa"), "directo", "OPTA", "H_att"),
-    # 𝒯_Dis — Disciplina (3)
-    ("V22", "Faltas en tercio defensivo", "𝒯_Dis", ("fouls_def_third", "faltas_tercio_def"), "directo", "OPTA", "H_def"),
-    ("V23", "Tarjetas amarillas promedio", "𝒯_Dis", ("yellow_cards", "amarillas"), "directo", "OPTA", "H_ctx"),
-    ("V24", "Índice de riesgo de expulsión", "𝒯_Dis", ("red_card_risk", "riesgo_expulsion"), "directo", "OPTA", "H_ctx"),
-    # 𝒯_Shk — Shocks de Plantilla/Contexto (4)
-    ("V25", "Impacto xG de bajas ofensivas", "𝒯_Shk", ("injury_att_impact", "bajas_xg"), "directo", "Q-BE", "H_ctx"),
-    ("V26", "Impacto xGA de bajas defensivas", "𝒯_Shk", ("injury_def_impact", "bajas_xga"), "directo", "Q-BE", "H_ctx"),
-    ("V27", "Diferencial de descanso (ΔDías)", "𝒯_Shk", ("delta_descanso_dias",), "contexto", "FIXTURE", "H_ctx"),
-    ("V28", "Factor de altitud fisiológica (ΔAltitud+)", "𝒯_Shk", ("delta_alt_metros",), "contexto_local", "FIXTURE", "H_ctx"),
-    # 𝒯_Tra — Trayectoria (4)
-    ("V29", "Diferencial de puntos recientes (5P)", "𝒯_Tra", ("pts_last5", "pts_5p", "puntos_recientes"), "directo", "Q-BE", "H_att"),
-    ("V30", "Pendiente de xG", "𝒯_Tra", ("xg_trend", "pendiente_xg"), "directo", "Q-BE", "H_att"),
-    ("V31", "Pendiente de xGA", "𝒯_Tra", ("xga_trend", "pendiente_xga"), "directo", "Q-BE", "H_def"),
-    ("V32", "Diferencial de puntos esperados (xPTS)", "𝒯_Tra", ("xpts", "xpts_diff"), "directo", "OPTA", "H_ctx"),
-    # 𝒯_Cro — Cronometría (4)
-    ("V33", "Ratio xG 1T vs 2T", "𝒯_Cro", ("xg_ratio_ht", "xg_1t_2t"), "directo", "OPTA", "H_att"),
-    ("V34", "Ratio xGA 1T vs 2T", "𝒯_Cro", ("xga_ratio_ht", "xga_1t_2t"), "directo", "OPTA", "H_def"),
-    ("V35", "Goles tempranos anotados (0–15')", "𝒯_Cro", ("early_goals_for", "goles_tempranos"), "directo", "OPTA", "H_att"),
-    ("V36", "Goles tempranos concedidos (0–15')", "𝒯_Cro", ("early_goals_against",), "directo", "OPTA", "H_def"),
-    # 𝒯_Ban — Banca/Profundidad (2)
-    ("V37", "Impacto xG promedio de suplentes", "𝒯_Ban", ("bench_xg", "suplentes_xg"), "directo", "OPTA", "H_ctx"),
-    ("V38", "Índice de rotación del XI", "𝒯_Ban", ("rotation_index", "rotacion_xi"), "directo", "OPTA", "H_ctx"),
-    # 𝒯_H2H — Memoria Longitudinal/H2H (4)
-    ("V39", "Victorias en los últimos cinco H2H", "𝒯_H2H", ("h2h_wins",), "h2h_victorias", "Q-BE", "H_ctx"),
-    ("V40", "Diferencial de goles en H2H reciente", "𝒯_H2H", ("h2h_gd",), "h2h_diferencia", "Q-BE", "H_ctx"),
-    ("V41", "Resistencia del visitante en esa sede", "𝒯_H2H", ("resistencia_sede_visita",), "contexto_local_inverso", "Q-BE", "H_ctx"),
-    ("V42", "xG promedio a favor en H2H", "𝒯_H2H", ("h2h_xg",), "h2h_xg", "Q-BE", "H_ctx"),
-    # 𝒯_Cls — Cierre de Partido (2)
-    ("V43", "xG generado en minutos 80–90+", "𝒯_Cls", ("xg_late", "xg_80_90"), "directo", "OPTA", "H_att"),
-    ("V44", "xGA concedido en minutos 80–90+", "𝒯_Cls", ("xga_late", "xga_80_90"), "directo", "OPTA", "H_def"),
+    # 𝒯_Vol — Volumen Territorial y Fricción (5)
+    ("V01", "Posesión Promedio (%)", "𝒯_Vol", ("possession_pct", "possession", "posesion"), "directo", "OPTA", "H_att"),
+    ("V02", "Toques en Área Rival", "𝒯_Vol", ("opp_box_touches", "touches_opp_box", "toques_area_rival"), "directo", "OPTA", "H_att"),
+    ("V03", "Pases Precisos", "𝒯_Vol", ("accurate_pass_team", "accurate_passes_per_match", "pases_precisos"), "directo", "OPTA", "H_att"),
+    ("V04", "Pases Largos Precisos", "𝒯_Vol", ("accurate_long_balls_team", "accurate_long_balls_per_match", "pases_largos_precisos"), "directo", "OPTA", "H_att"),
+    ("V05", "Faltas Cometidas", "𝒯_Vol", ("fk_foul_lost_team", "fouls_per_match", "faltas_cometidas"), "directo", "OPTA", "H_att"),
+    # 𝒯_Rem — Calidad de Remate (6)
+    ("V06", "xG por Partido (ancla npxG)", "𝒯_Rem", ("npxg", "xg"), "tasa", "OPTA", "H_att"),
+    ("V07", "Tiros al Arco por Partido (SoT)", "𝒯_Rem", ("sot", "shots_on_target", "ontarget_scoring_att_team"), "directo", "OPTA", "H_att"),
+    ("V08", "Big Chances Creadas", "𝒯_Rem", ("big_chances_created", "big_chance_team", "bc_created"), "directo", "OPTA", "H_att"),
+    ("V09", "Big Chances Falladas", "𝒯_Rem", ("big_chances_missed", "big_chance_missed_team", "bc_missed"), "directo", "OPTA", "H_att"),
+    ("V10", "xGOT de Plantilla", "𝒯_Rem", ("xgot", "expected_goalsontarget"), "directo", "OPTA", "H_att"),
+    ("V11", "xA de Plantilla", "𝒯_Rem", ("xa", "expected_assists"), "directo", "OPTA", "H_att"),
+    # 𝒯_Def — Resistencia Defensiva (5)
+    ("V12", "xGA por Partido (ancla defensiva)", "𝒯_Def", ("xga",), "tasa", "OPTA", "H_def"),
+    ("V13", "Tiros al Arco Recibidos por Partido (SoTA)", "𝒯_Def", ("sota", "shots_on_target_against"), "directo", "OPTA", "H_def"),
+    ("V14", "Acciones Defensivas por Partido", "𝒯_Def", ("defensive_contributions", "defensive_actions_per_match"), "directo", "OPTA", "H_def"),
+    ("V15", "Intercepciones por Partido", "𝒯_Def", ("interceptions_mid", "mid_third_recoveries", "interception_team"), "directo", "OPTA", "H_def"),
+    ("V16", "Big Chances Concedidas", "𝒯_Def", ("big_chances_conceded", "bc_conceded"), "directo", "OPTA", "H_def"),
+    # 𝒯_Por — Rendimiento de Portería (4)
+    ("V17", "Goles Evitados", "𝒯_Por", ("goals_prevented", "goles_prevenidos"), "directo", "OPTA", "H_def"),
+    ("V18", "Save % (Porcentaje de Atajadas)", "𝒯_Por", ("save_pct", "save_percentage", "atajadas_pct"), "directo", "OPTA", "H_def"),
+    ("V19", "Salidas/Líbero por Partido", "𝒯_Por", ("sweeper_actions", "total_keeper_sweeper", "high_claims", "salidas_altas"), "directo", "OPTA", "H_def"),
+    ("V20", "Clean Sheets", "𝒯_Por", ("clean_sheets", "clean_sheet_team"), "directo", "OPTA", "H_def"),
+    # 𝒯_Spc — Balón Parado y Disciplina (5)
+    ("V21", "Goles a Favor de Pelota Parada", "𝒯_Spc", ("set_piece_goals", "xg_setpiece"), "directo", "OPTA", "H_att"),
+    ("V22", "Goles Recibidos de Pelota Parada", "𝒯_Spc", ("set_piece_goals_conceded", "xga_setpiece"), "directo", "OPTA", "H_def"),
+    ("V23", "Córners por Partido", "𝒯_Spc", ("corners", "corner_taken_team", "tiros_esquina"), "directo", "OPTA", "H_att"),
+    ("V24", "Penales Favor/Contra", "𝒯_Spc", ("penalty_rate", "penalty_won_team", "penalty_conceded_team", "penales_tasa"), "directo", "OPTA", "H_att"),
+    ("V25", "Tarjetas Amarillas/Rojas", "𝒯_Spc", ("yellow_cards", "total_yel_card_team", "red_card_risk", "amarillas"), "directo", "OPTA", "H_ctx"),
+    # 𝒯_Ctx — Memoria, Forma y Contexto (7)
+    ("V26", "Récord H2H", "𝒯_Ctx", ("h2h_wins",), "h2h_victorias", "Q-BE", "H_ctx"),
+    ("V27", "ΔG H2H (Diferencial de Goles)", "𝒯_Ctx", ("h2h_gd",), "h2h_diferencia", "Q-BE", "H_ctx"),
+    ("V28", "Récord Visitante Sede", "𝒯_Ctx", ("resistencia_sede_visita",), "contexto_local_inverso", "Q-BE", "H_ctx"),
+    ("V29", "Altitud ΔAlt+ (Factor Fisiológico)", "𝒯_Ctx", ("delta_alt_metros",), "contexto_local", "FIXTURE", "H_ctx"),
+    ("V30", "Días de Descanso (ΔDías)", "𝒯_Ctx", ("delta_descanso_dias",), "contexto", "FIXTURE", "H_ctx"),
+    ("V31", "Forma 5P (Puntos Recientes)", "𝒯_Ctx", ("pts_last5", "pts_5p", "puntos_recientes"), "directo", "Q-BE", "H_ctx"),
+    ("V32", "Varianza ΔxPTS", "𝒯_Ctx", ("xpts_variance", "varianza_xpts", "xpts_diff"), "directo", "Q-BE", "H_ctx"),
 )
+
+# Alias semántico de lectura: el catálogo vigente es de 32 variables ([LN-QBE-120]).
+_CATALOGO_32 = _CATALOGO_44
 
 _ESTADO_VALIDADO = "VALIDADO"
 _ESTADO_DERIVADO = "DERIVADO"
@@ -355,25 +342,29 @@ _ESTADO_EVALUADO = "EVALUADO"   # [LN-QBE-102] El insumo publicado SÍ fue consu
 
 # ── [LN-QBE-102] Tabla de transcripción tipada de los insumos telemetrizados ────────────────────
 # (clave_local, clave_visita, formato): traduce el número REALMENTE consumido por el pipeline a la
-# celda forense del catálogo de 44 variables. `clave_visita = None` ⇒ magnitud de contexto (no
-# bilateral): se declara en la columna `local` y la visita permanece `None` (cero fabricación).
+# celda forense del catálogo de 32 variables ([LN-QBE-120]). `clave_visita = None` ⇒ magnitud de
+# contexto (no bilateral): se declara en la columna `local` y la visita permanece `None` (cero
+# fabricación). REMAPEO [LN-QBE-120]: la renumeración V01..V32 conserva la MISMA magnitud en la
+# celda que la hospeda (xG V05→V06, SoT V06→V07, xGA V10→V12, SoTA V11→V13, ΔDescanso V27→V30,
+# ΔAltitud V28→V29, H2H V39→V26). Ningún insumo cambia de semántica.
 _FORMATO_INSUMO: Dict[str, Tuple[str, Optional[str], str]] = {
     "V01": ("poss_local", "poss_visita", "pct"),        # Posesión media
-    "V05": ("xg_local_rate", "xg_visita_rate", "num2"),  # xG por partido (ancla acumulado / PJ)
-    "V06": ("sot_local", "sot_visita", "num0"),          # Tiros a puerta por partido
-    "V10": ("xga_local_rate", "xga_visita_rate", "num2"),  # xGA por partido
-    "V11": ("sota_local", "sota_visita", "num0"),        # Tiros a puerta recibidos por partido
-    "V27": ("delta_descanso_dias", None, "dias"),        # Δ descanso REALMENTE aplicado al modelo
-    "V28": ("delta_alt_metros", None, "metros"),         # Δ altitud REALMENTE aplicado al modelo
-    "V39": ("h2h_conteo", None, "partidos"),             # Duelos leídos dentro de la ventana τ
+    "V06": ("xg_local_rate", "xg_visita_rate", "num2"),  # xG por partido (ancla acumulado / PJ)
+    "V07": ("sot_local", "sot_visita", "num0"),          # Tiros a puerta por partido
+    "V12": ("xga_local_rate", "xga_visita_rate", "num2"),  # xGA por partido
+    "V13": ("sota_local", "sota_visita", "num0"),        # Tiros a puerta recibidos por partido
+    "V26": ("h2h_conteo", None, "partidos"),             # Duelos leídos dentro de la ventana τ
+    "V29": ("delta_alt_metros", None, "metros"),         # Δ altitud REALMENTE aplicado al modelo
+    "V30": ("delta_descanso_dias", None, "dias"),        # Δ descanso REALMENTE aplicado al modelo
 }
 
 # ── [ARCH-1.4.44] Respaldo declarado del Axioma 4 (cero fabricación de xGA) ────────────────────
-# Si el generador publicó `gc_*_rate` (goles recibidos por partido) sin `xga_*_rate`, la celda V10
-# transcribe el respaldo REALMENTE consumido y lo declara en su nota forense. Nunca se sustituye
-# una métrica ausente por un valor inventado: sólo se exhibe el insumo que el motor sí consumió.
+# Si el generador publicó `gc_*_rate` (goles recibidos por partido) sin `xga_*_rate`, la celda V12
+# (ancla defensiva, antes V10) transcribe el respaldo REALMENTE consumido y lo declara en su nota
+# forense. Nunca se sustituye una métrica ausente por un valor inventado: sólo se exhibe el
+# insumo que el motor sí consumió.
 _RESPALDO_INSUMO: Dict[str, Tuple[Tuple[str, str], str, str]] = {
-    "V10": (
+    "V12": (
         ("gc_local_rate", "gc_visita_rate"),
         "num2",
         "Respaldo GC/PJ (xGA no publicado) · Axioma 4 [ARCH-1.4.44]",
@@ -381,14 +372,14 @@ _RESPALDO_INSUMO: Dict[str, Tuple[Tuple[str, str], str, str]] = {
 }
 
 
-# ── [LN-QBE-105] Transcripción del bloque `h2h_stats` del pipeline a V39/V40/V41 ───────────────
+# ── [LN-QBE-105] Transcripción del bloque `h2h_stats` del pipeline a V26/V27/V28 ───────────────
 # El orquestador ya agregó la ventana desde la perspectiva del local evaluado; aquí sólo se
-# TRANSCRIBE la magnitud consumida, sin recalcular récords ni fabricar sede alguna. V42
-# (`h2h_xg`) queda fuera de este mapa: permanece `SIN EVIDENCIA` hasta la Fase 6.
+# TRANSCRIBE la magnitud consumida, sin recalcular récords ni fabricar sede alguna. [LN-QBE-120]
+# remapea la memoria longitudinal a 𝒯_Ctx: V39→V26 (récord), V40→V27 (ΔG), V41→V28 (sede).
 _CLAVES_H2H_STATS: Dict[str, Tuple[str, str]] = {
-    "V39": ("record_general", "Récord H2H del local evaluado (V-E-D) [LN-QBE-105]"),
-    "V40": ("dif_goles", "Diferencial acumulado de goles H2H Σ(GF−GC) [LN-QBE-105]"),
-    "V41": ("record_sede", "Récord del visitante en la sede evaluada [LN-QBE-105]"),
+    "V26": ("record_general", "Récord H2H del local evaluado (V-E-D) [LN-QBE-105]"),
+    "V27": ("dif_goles", "Diferencial acumulado de goles H2H Σ(GF−GC) [LN-QBE-105]"),
+    "V28": ("record_sede", "Récord del visitante en la sede evaluada [LN-QBE-105]"),
 }
 
 
@@ -400,7 +391,7 @@ def _celda_h2h_stats(
     z_scores: Dict[str, Any],
     estadisticas: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    """Celda `EVALUADO` de V39/V40/V41 a partir del agregado `h2h_stats` (`None` si no aplica)."""
+    """Celda `EVALUADO` de V26/V27/V28 a partir del agregado `h2h_stats` (`None` si no aplica)."""
     receta = _CLAVES_H2H_STATS.get(identificador)
     if receta is None:
         return None
@@ -431,7 +422,7 @@ def _celda_telemetria(
 ) -> Optional[Dict[str, Any]]:
     """[LN-QBE-102] Celda `EVALUADO` de un insumo consumido (o `None` si no se publicó).
 
-    Precedencia: `[LN-QBE-105]` el bloque `h2h_stats` manda cuando está presente (V39/V40/V41);
+    Precedencia: `[LN-QBE-105]` el bloque `h2h_stats` manda cuando está presente (V26/V27/V28);
     si no llegó, rige la receta primaria de `_FORMATO_INSUMO` (ruta heredada byte-idéntica) y,
     en su ausencia, el respaldo legislado de `_RESPALDO_INSUMO` (Axioma 4).
     """
@@ -780,8 +771,10 @@ def _valor_variable(
 
 
 def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """[LN-QBE-101].P.4 — Taxonomía forense de 44 variables en 12 dimensiones canónicas.
+    """[LN-QBE-101].P.4 — Taxonomía forense de 32 variables en 6 dimensiones canónicas.
 
+    Contrato [LN-QBE-120]: el nombre de la función se CONSERVA (contrato REST `variables_44` y
+    dependencias locales) aunque el catálogo vigente sea de 32 variables PRE-KICKOFF.
     Cada renglón exhibe `local` / `visita` / `z_score` / `origen` / `estado` / `impacto`.
     La ausencia de evidencia se declara `SIN EVIDENCIA` con valor `None`; jamás se rellena.
     """
@@ -841,6 +834,7 @@ def estructurar_catalogo_44_variables(datos_partido: Optional[Dict[str, Any]] = 
             "variables": filas,
         })
     return {
+        "catalogo_version": CATALOGO_VERSION,
         "total_variables": len(_CATALOGO_44),
         "total_evaluadas": sum(dimension["variables_evaluadas"] for dimension in dimensiones),
         "dimensiones": dimensiones,

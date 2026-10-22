@@ -229,7 +229,7 @@ def test_semaforos_se_pronuncian_con_la_telemetria_publicada():
     assert atribucion["origen_captura"] == "EN_VIVO"
 
 
-# ── Inversión 4: catálogo de 44 variables con las ocho variables vivas iluminadas ────────────
+# ── Inversión 4: catálogo de 32 variables [LN-QBE-120] con las ocho variables vivas ──────────
 def test_catalogo_44_ilumina_las_ocho_variables_vivas_sin_fabricar():
     from src.core.sovereign.factor_attribution import estructurar_catalogo_44_variables
 
@@ -237,24 +237,24 @@ def test_catalogo_44_ilumina_las_ocho_variables_vivas_sin_fabricar():
         "insumos_factivados": _insumos_vivos(h2h_conteo=5, delta_alt=2660.0, delta_descanso=3.0),
     })
     planas = {v["id"]: v for d in catalogo["dimensiones"] for v in d["variables"]}
-    assert len(planas) == 44
+    assert len(planas) == 32
 
     esperado = {
         "V01": "53.5%",
-        "V05": "1.60",
-        "V06": "5",
-        "V10": "1.00",
-        "V11": "4",
-        "V27": "+3.0 d",
-        "V28": "2660m",
-        "V39": "5 partidos",
+        "V06": "1.60",
+        "V07": "5",
+        "V12": "1.00",
+        "V13": "4",
+        "V30": "+3.0 d",
+        "V29": "2660m",
+        "V26": "5 partidos",
     }
     for identificador, valor in esperado.items():
         assert planas[identificador]["local"] == valor, f"{identificador} no exhibe el insumo fáctico."
         assert planas[identificador]["estado"] == "EVALUADO", f"{identificador} debe encenderse en EVALUADO."
 
-    assert planas["V39"]["visita"] is None, "La ventana H2H es contexto de la serie, no bilateral."
-    assert planas["V12"]["estado"] == "SIN EVIDENCIA", "Cero fabricación: V12 no publicada."
+    assert planas["V26"]["visita"] is None, "La ventana H2H es contexto de la serie, no bilateral."
+    assert planas["V08"]["estado"] == "SIN EVIDENCIA", "Cero fabricación: V08 no publicada."
 
     # Regresión dura: sin el paquete telemetrizado la ruta heredada permanece intacta.
     heredado = {

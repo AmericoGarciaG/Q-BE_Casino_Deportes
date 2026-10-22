@@ -59,7 +59,7 @@ INSUMOS_VIVOS = {
     "xg_es_real_opta": True,
 }
 
-DIMENSIONES_CON_DATOS = {"𝒯_Vol", "𝒯_Rem", "𝒯_Def", "𝒯_Shk", "𝒯_H2H"}
+DIMENSIONES_CON_DATOS = {"𝒯_Vol", "𝒯_Rem", "𝒯_Def", "𝒯_Ctx"}
 
 
 def _dimensiones(bloque):
@@ -143,16 +143,16 @@ def test_predicado_de_procedencia_opta_real():
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 def test_telemetria_dimensional_del_catalogo():
     """[INVARIANZA 2 — CONTADORES SERVIDOS POR DIMENSIÓN]:
-    El acordeón bicolor sólo puede pintarse con la verdad del servidor: 12 dimensiones, 44
+    El acordeón bicolor sólo puede pintarse con la verdad del servidor: 6 dimensiones, 32
     variables y contadores `total_variables` / `variables_evaluadas` / `tiene_datos` coherentes.
     """
     from src.core.sovereign.factor_attribution import estructurar_catalogo_44_variables
 
     bloque = estructurar_catalogo_44_variables({"insumos_factivados": dict(INSUMOS_VIVOS)})
     dimensiones = bloque["dimensiones"]
-    assert len(dimensiones) == 12, "La partición canónica exige 12 dimensiones."
-    assert sum(d["total_variables"] for d in dimensiones) == 44
-    assert sum(d["conteo"] for d in dimensiones) == 44 == bloque["total_variables"]
+    assert len(dimensiones) == 6, "La partición canónica [LN-QBE-120] exige 6 dimensiones."
+    assert sum(d["total_variables"] for d in dimensiones) == 32
+    assert sum(d["conteo"] for d in dimensiones) == 32 == bloque["total_variables"]
 
     for dimension in dimensiones:
         for clave in ("total_variables", "variables_evaluadas", "tiene_datos"):
@@ -192,11 +192,11 @@ def test_semaforo_h2h_sobre_la_ventana_publicada():
 
 
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-# INVARIANZA 3 — AXIOMA 4 COMPLETO (V10 CON RESPALDO GC/PJ)
+# INVARIANZA 3 — AXIOMA 4 COMPLETO (V12 CON RESPALDO GC/PJ · V10→V12 [LN-QBE-120])
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-def test_axioma4_v10_respaldo_gc():
+def test_axioma4_v12_respaldo_gc():
     """[INVARIANZA 3 — AXIOMA 4 SIN AGUJEROS]:
-    `V10` enciende con `xga_*_rate`; si el generador sólo publicó `gc_*_rate`, la celda transcribe
+    `V12` enciende con `xga_*_rate`; si el generador sólo publicó `gc_*_rate`, la celda transcribe
     el respaldo GC/PJ declarándolo en la nota forense (cero fabricación de xGA).
     """
     from src.core.sovereign.factor_attribution import estructurar_catalogo_44_variables
@@ -206,18 +206,18 @@ def test_axioma4_v10_respaldo_gc():
         if not clave.startswith("xga_")
     }
     bloque = estructurar_catalogo_44_variables({"insumos_factivados": solo_gc})
-    v10 = _dimensiones(bloque)["𝒯_Def"]["variables"][0]
-    assert v10["id"] == "V10"
-    assert v10["local"] == "1.10" and v10["visita"] == "1.20", (
-        f"V10 debe transcribir el respaldo GC/PJ: {v10['local']} / {v10['visita']}"
+    v12 = _dimensiones(bloque)["𝒯_Def"]["variables"][0]
+    assert v12["id"] == "V12"
+    assert v12["local"] == "1.10" and v12["visita"] == "1.20", (
+        f"V12 debe transcribir el respaldo GC/PJ: {v12['local']} / {v12['visita']}"
     )
-    assert v10["estado"] == "EVALUADO"
-    assert "GC" in v10["nota"].upper(), "El respaldo debe declararse en la nota (cero maquillaje)."
+    assert v12["estado"] == "EVALUADO"
+    assert "GC" in v12["nota"].upper(), "El respaldo debe declararse en la nota (cero maquillaje)."
 
     # Con xGA publicado el respaldo NO se usa: manda la métrica defensiva canónica.
     bloque_xga = estructurar_catalogo_44_variables({"insumos_factivados": dict(INSUMOS_VIVOS)})
-    v10_xga = _dimensiones(bloque_xga)["𝒯_Def"]["variables"][0]
-    assert v10_xga["local"] == "1.05" and v10_xga["visita"] == "1.31"
+    v12_xga = _dimensiones(bloque_xga)["𝒯_Def"]["variables"][0]
+    assert v12_xga["local"] == "1.05" and v12_xga["visita"] == "1.31"
 
 
 

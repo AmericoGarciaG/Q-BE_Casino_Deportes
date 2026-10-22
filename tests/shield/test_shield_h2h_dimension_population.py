@@ -22,7 +22,7 @@ from src.core.sovereign.factor_attribution import estructurar_catalogo_44_variab
 
 
 def test_invarianza_variables_h2h_calculadas_y_formateadas():
-    """[INVARIANZA 1]: V39, V40 y V41 deben estar EVALUADAS y formateadas correctamente."""
+    """[INVARIANZA 1]: V26, V27 y V28 deben estar EVALUADAS y formateadas correctamente."""
     datos_mock = {
         "insumos_factivados": {
             "h2h_stats": {
@@ -35,27 +35,27 @@ def test_invarianza_variables_h2h_calculadas_y_formateadas():
 
     cat = estructurar_catalogo_44_variables(datos_partido=datos_mock)
 
-    # Buscar variables en la dimensión "Memoria Longitudinal/H2H"
-    dim_h2h = next(d for d in cat["dimensiones"] if "H2H" in d["nombre"])
-    v39 = next(v for v in dim_h2h["variables"] if v["id"] == "V39")
-    v40 = next(v for v in dim_h2h["variables"] if v["id"] == "V40")
-    v41 = next(v for v in dim_h2h["variables"] if v["id"] == "V41")
-    v42 = next(v for v in dim_h2h["variables"] if v["id"] == "V42")
+    # [LN-QBE-120] La memoria longitudinal vive en 𝒯_Ctx ("Memoria, Forma y Contexto").
+    dim_h2h = next(d for d in cat["dimensiones"] if "Memoria" in d["nombre"])
+    v26 = next(v for v in dim_h2h["variables"] if v["id"] == "V26")
+    v27 = next(v for v in dim_h2h["variables"] if v["id"] == "V27")
+    v28 = next(v for v in dim_h2h["variables"] if v["id"] == "V28")
+    v32 = next(v for v in dim_h2h["variables"] if v["id"] == "V32")
 
-    # Aserciones V39
-    assert v39["estado"] == "EVALUADO"
-    assert v39["local"] == "2V - 1E - 1D"
+    # Aserciones V26 (antiguo V39: récord H2H)
+    assert v26["estado"] == "EVALUADO"
+    assert v26["local"] == "2V - 1E - 1D"
 
-    # Aserciones V40
-    assert v40["estado"] == "EVALUADO"
-    assert v40["local"] == "+2"
+    # Aserciones V27 (antiguo V40: diferencial de goles)
+    assert v27["estado"] == "EVALUADO"
+    assert v27["local"] == "+2"
 
-    # Aserciones V41
-    assert v41["estado"] == "EVALUADO"
-    assert v41["local"] == "0V - 1E - 1D (Visita)"
+    # Aserciones V28 (antiguo V41: récord en sede)
+    assert v28["estado"] == "EVALUADO"
+    assert v28["local"] == "0V - 1E - 1D (Visita)"
 
-    # Aserciones V42 (Debe permanecer intocable en Fase 6)
-    assert v42["estado"] == "SIN EVIDENCIA"
+    # Aserciones V32 (Varianza ΔxPTS: debe permanecer intocable en Fase 6)
+    assert v32["estado"] == "SIN EVIDENCIA"
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -125,7 +125,7 @@ def test_proveedor_h2h_publica_bandera_de_sede(tmp_path):
 
 
 def test_precedencia_legacy_v39_sin_h2h_stats():
-    """[INVARIANZA 3 — RETROCOMPATIBILIDAD]: sin bloque `h2h_stats` la ruta heredada de V39
+    """[INVARIANZA 3 — RETROCOMPATIBILIDAD]: sin bloque `h2h_stats` la ruta heredada de V26 (V39→V26, [LN-QBE-120])
     (`"N partidos"`) permanece byte-idéntica y EVALUADA.
     """
     catalogo = estructurar_catalogo_44_variables({
@@ -133,11 +133,11 @@ def test_precedencia_legacy_v39_sin_h2h_stats():
     })
     planas = {v["id"]: v for d in catalogo["dimensiones"] for v in d["variables"]}
 
-    assert planas["V39"]["estado"] == "EVALUADO"
-    assert planas["V39"]["local"] == "5 partidos", (
+    assert planas["V26"]["estado"] == "EVALUADO"
+    assert planas["V26"]["local"] == "5 partidos", (
         "La telemetría heredada de la ventana H2H no puede degradarse por la ampliación."
     )
-    assert planas["V39"]["visita"] is None
+    assert planas["V26"]["visita"] is None
 
 
 def test_pipeline_agrega_h2h_stats_y_declara_sede_vacia():

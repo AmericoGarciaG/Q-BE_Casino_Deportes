@@ -222,10 +222,14 @@ class AtribucionDimensionOut(BaseModel):
 
 
 class Catalogo44Out(BaseModel):
-    """[LN-QBE-101].P.4 — Partición normativa 12 dimensiones × 44 variables."""
+    """[LN-QBE-120].P.4 — Partición vigente: 6 dimensiones × 32 variables PRE-KICKOFF.
+
+    Deroga la cardinalidad 12×44 de `[LN-QBE-101]` (VAR-3) sin alterar el nombre del DTO ni la
+    forma de sus campos: los consumidores siguen recibiendo `dimensiones` planas.
+    """
 
     model_config = ConfigDict(extra="ignore")
-    total_variables: int = 44
+    total_variables: int = 32
     dimensiones: List[AtribucionDimensionOut] = Field(default_factory=list)
 
 

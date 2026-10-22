@@ -116,6 +116,7 @@
 | `[LN-QBE-117]` | LOGIC | `docs/LOGIC.md` | Proveedores Canónicos de Insumos Factuales (Fase 1 · Integración Maestra) | SELLADO |
 | `[LN-QBE-118]` | LOGIC | `docs/LOGIC.md` | Materialización Anidada de los Cinco Pilares y Resguardo WORM Previo a la DML (Fase 2 · Re-homologación) | SELLADO |
 | `[LN-QBE-119]` | LOGIC | `docs/LOGIC.md` | Ley de Unidad de Volumen & Portería (Tasa Por Partido) y Sonda de Completitud Fáctica del Visor 44V (Fase 3 · Sincronía J13) | SELLADO |
+| `[LN-QBE-120]` | LOGIC | `docs/LOGIC.md` | Catálogo Estructural de 32 Variables PRE-KICKOFF (Reingeniería Macro) y Derogación de la Partición 12×44 | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -238,6 +239,7 @@
 | `[ARCH-1.4.56]` | ARCH | `docs/ARCH.md` | Materialización Anidada de los Cinco Pilares en el Generador Sellado y Resguardo WORM del Lote [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.57]` | ARCH | `docs/ARCH.md` | Frontera de Presentación de los Cards Polimórficos: `variables_44` como Única Fuente y Deuda Declarada de `insumos_factivados` [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.58]` | ARCH | `docs/ARCH.md` | Telemetría Dimensional en el DTO, 19.ª Tarea del Centro de Control y Sonda de Completitud Fáctica 44V [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.59]` | ARCH | `docs/ARCH.md` | Centinela de Macro-Estadísticas FotMob y Congelación Idempotente del Artefacto `cache_macro_stats_liga_mx_2026.json` [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---

@@ -164,7 +164,7 @@ def test_semaforos_salud_datos():
 
 
 def test_catalogo_44_variables():
-    """[INVARIANZA 4 — TAXONOMÍA DE 44 VARIABLES EN 12 DIMENSIONES]:
+    """[INVARIANZA 4 — TAXONOMÍA DE 32 VARIABLES EN 6 DIMENSIONES · [LN-QBE-120]]:
     Partición canónica del dossier §3, sin duplicados, con las columnas del modal forense;
     la evidencia ausente degrada a `None` (prohibido fabricar cifras).
     """
@@ -172,12 +172,12 @@ def test_catalogo_44_variables():
 
     catalogo = estructurar_catalogo_44_variables({})
     dimensiones = catalogo["dimensiones"]
-    assert catalogo["total_variables"] == 44
-    assert len(dimensiones) == 12
+    assert catalogo["total_variables"] == 32, "Catálogo [LN-QBE-120]: 32 variables PRE-KICKOFF."
+    assert len(dimensiones) == 6
 
     ids = [v["id"] for d in dimensiones for v in d["variables"]]
-    assert len(ids) == 44
-    assert len(set(ids)) == 44, "El catálogo contiene variables duplicadas."
+    assert len(ids) == 32
+    assert len(set(ids)) == 32, "El catálogo [LN-QBE-120] contiene variables duplicadas."
 
     for dimension in dimensiones:
         assert dimension["variables"], f"Dimensión vacía: {dimension['dimension']}"
@@ -196,14 +196,14 @@ def test_catalogo_44_variables():
         "away_team_stats": {"pj": 8, "gf": 8, "gc": 12, "xg": 8.0, "xga": 12.8, "opp_box_touches": 64},
     })
     planas = {v["id"]: v for d in con_datos["dimensiones"] for v in d["variables"]}
-    assert abs(planas["V05"]["local"] - (13.2 / 8)) < 1e-9  # ancla = xG por partido
-    assert abs(planas["V10"]["visita"] - (12.8 / 8)) < 1e-9  # ancla defensiva = xGA por partido
-    assert planas["V05"]["origen"] == "OPTA"
-    assert planas["V05"]["estado"] == "VALIDADO"
+    assert abs(planas["V06"]["local"] - (13.2 / 8)) < 1e-9  # ancla xG/PJ (V05→V06 [LN-QBE-120])
+    assert abs(planas["V12"]["visita"] - (12.8 / 8)) < 1e-9  # ancla xGA/PJ (V10→V12 [LN-QBE-120])
+    assert planas["V06"]["origen"] == "OPTA"
+    assert planas["V06"]["estado"] == "VALIDADO"
     assert planas["V02"]["local"] == 96.0  # V02 = toques en área rival (dossier §3)
     assert planas["V02"]["visita"] == 64.0
-    assert planas["V06"]["local"] is None  # SoT no publicado: cero fabricación
-    assert planas["V06"]["estado"] == "SIN EVIDENCIA"
+    assert planas["V07"]["local"] is None  # SoT no publicado: cero fabricación
+    assert planas["V07"]["estado"] == "SIN EVIDENCIA"
 
 
 def test_pureza_del_modulo():

@@ -1830,6 +1830,43 @@ def sincronizar_progol_pipeline_completo(
   Visor heredarlo y certifica que el default sigue siendo `1-11`.
 * **[SHIELD]:** `tests/shield/test_shield_completitud_visor_and_sync_j13.py` · `tests/shield/test_shield_fase2_rehomologacion_and_audit_trace.py`
 
+### [ARCH-1.4.59] Centinela de Macro-Estadísticas FotMob y Congelación Idempotente del Artefacto `cache_macro_stats_liga_mx_2026.json` [ARCH-PILLAR]
+* **Hecho certificado (asimetría de fuente):** la ingesta PRE-KICKOFF sólo transportaba el grano fino por partido
+  (`match_telemetry` / caché Opta) y **no** conservaba los leaderboards torneales que el proveedor sí publica
+  (`fotmob.com · leagues?id=230&tab=stats`). Sin artefacto congelado, toda celda del catálogo `[LN-QBE-120]` que
+  depende de un acumulado de temporada quedaba en `SIN EVIDENCIA` por **ausencia de evidencia**, no por ausencia de
+  magnitud. El extractor materializa esa evidencia en un archivo de sólo lectura, sin abrir una segunda vía de
+  cálculo hacia el motor.
+* **Materialización (`scripts/ingesta/centinela_macro_estadisticas.py`, 615 líneas):** `MAPA_LEADERBOARDS` declara
+  **29 tableros** cuyo destino es el `V01`…`V32` vigente, agrupados por dimensión (`𝒯_Vol` posesión, toques en área,
+  pases precisos, pases largos, faltas; `𝒯_Rem` xG, SoT, big chances creadas/falladas, xGOT y xA de plantilla;
+  `𝒯_Def` xGA, entradas, despejes, intercepciones; `𝒯_Por` goles evitados, `%` de atajadas, salidas del portero,
+  porterías a cero y atajadas/PJ). Cada renglón declara `fuente` (`stats.teams` = equipo, `stats.players` = plantilla
+  agregada por `TeamId`) y `normalizacion` (`publicado` | `entre_pj` | `acumulado` | `suma` | `max`): la unidad se
+  **declara**, jamás se adivina (`expected_goals_team` es acumulado ÷ PJ mientras `possession_percentage_team` ya es
+  porcentaje).
+* **Cero fabricación `[GOVERNANCE-01]`:** si un tablero no existe o la petición falla, la clave se **omite** y el
+  hueco se declara en `huecos` (jamás `0.0` ni un promedio de fantasía). Corrida certificada sobre Liga MX: **18
+  equipos**, 29 tableros solicitados, **0 errores**, **4 huecos** declarados (`necaxa:clean_sheets`,
+  `queretaro-fc:sweeper_actions`, `cruz-azul:red_cards_per_match`, `club-tijuana:red_cards_per_match`), **8 claves**
+  declaradas en `fuera_de_fuente` (magnitudes sin leaderboard torneal) y **2 derivaciones** explícitas.
+* **Guarda de integridad de liga:** el `id` solicitado debe publicar `LIGA_NOMBRE_ESPERADO = "Liga MX"`; el `262`
+  publica Premier League y aborta con **SALIDA 2** (`[LN-QBE-120]` VAR-1). El `TeamId` del proveedor se conserva como
+  llave dura y el club se resuelve por `canonicalize_team_name` → `obtener_slug_club` (cero sinonimia ad-hoc).
+* **Idempotencia verificable:** cuerpo ordenado (`sort_keys`), escritura atómica (`*.tmp` + `os.replace`) y
+  `hash_sha256` sobre el cuerpo canónico **auto-excluyente** (`generado_at` / `hash_sha256`). Dos corridas sobre la
+  misma evidencia producen la misma huella (`942a5597…`) y la segunda **no reescribe** el archivo salvo `--forzar`.
+  Salidas: `0` artefacto congelado · `1` tablero(s) con error (fail-loud, cero imputación) · `2` guarda de liga.
+  CLI: `--liga-id`, `--cache`, `--espera`, `--limite`, `--dry-run`, `--forzar`, `--verbose`.
+* **Jurisdicción:** vive en `scripts/ingesta/` (ni `src/core/` ni `src/storage/`): **congela** evidencia externa, no
+  produce matemática ni muta la bóveda. El artefacto `data/cache_macro_stats_liga_mx_2026.json`
+  (`esquema: macro_stats_v1`, `catalogo_version: 32V-2026`) es dato de entrada versionado, no caché efímera.
+* **Enmienda de frontera sobre `[ARCH-1.4.58]`:** la sonda `scripts/auditoria/auditar_completitud_visor.py` realinea
+  su cardinalidad a `TOTAL_VARIABLES_CATALOGO = 32` y su cota física a `COTA_SOT` sobre `V07`/`V13` (SoT/SoTA por
+  partido), dejando de vigilar `V06`/`V11`; el DTO `Catalogo44Out` conserva nombre y forma con
+  `total_variables: 32`. Cero línea de JavaScript editada.
+* **[SHIELD]:** `tests/shield/test_shield_macro_extraction_phase_a.py` · `tests/shield/test_shield_completitud_visor_and_sync_j13.py`
+
 ---
 
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — ARQUITECTURA TÉCNICA INMUTABLE.**

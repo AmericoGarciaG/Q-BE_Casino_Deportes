@@ -8,7 +8,7 @@ constante matemática sellada cambia.
 
 Qué certifica este Juez
 -----------------------
-1. Los tres contadores dimensionales sobreviven al DTO (`extra="ignore"`) y el catálogo suma 44.
+1. Los tres contadores dimensionales sobreviven al DTO (`extra="ignore"`) y el catálogo suma 32.
 2. La sonda `auditar_completitud_visor` detecta la sumatoria de torneo en una casilla de tasa y
    certifica la tasa limpia; también el `0 de 0`, el badge incoherente y el alias `conteo` roto.
 3. La homologación publica `sot`/`sota` como TASA por partido (3 decimales), no como acumulado.
@@ -28,7 +28,7 @@ from src.models.web_schemas import (
 )
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[2]
-TAMANOS_CATALOGO = (4, 5, 5, 3, 4, 3, 4, 4, 4, 2, 4, 2)  # 44 variables en las 12 dimensiones
+TAMANOS_CATALOGO = (5, 6, 5, 4, 5, 7)  # 32 variables en las 6 dimensiones [LN-QBE-120]
 
 
 # ── Constructores de casillas sintéticas (cero base de datos) ─────────────────────────────────
@@ -64,16 +64,16 @@ def _dimension(nombre: str, tamano: int, variables: list, **sobrescrituras) -> d
 
 
 def _casilla(sot=(None, None), poss=(None, None)) -> dict:
-    """Casilla micro con el catálogo íntegro de 44 variables repartidas en 12 dimensiones."""
+    """Casilla micro con el catálogo íntegro de 32 variables repartidas en 6 dimensiones."""
     dimensiones = []
     for indice, tamano in enumerate(TAMANOS_CATALOGO):
         variables = []
         if indice == 0:
             variables.append(_variable("V01", *poss))
         elif indice == 1:
-            variables.append(_variable("V06", *sot))
+            variables.append(_variable("V07", *sot))
         elif indice == 2:
-            variables.append(_variable("V11", *sot))
+            variables.append(_variable("V13", *sot))
         while len(variables) < tamano:
             variables.append(_variable(f"R{indice}{len(variables)}", None, None))
         dimensiones.append(_dimension(f"𝒯_{indice}", tamano, variables))
@@ -97,9 +97,9 @@ def test_arch_1_4_58_telemetria_dimensional_sobrevive_al_dto():
     assert campos["tiene_datos"].default is False
 
     catalogo = Catalogo44Out.model_validate(estructurar_catalogo_44_variables({}))
-    assert catalogo.total_variables == 44
-    assert len(catalogo.dimensiones) == 12
-    assert sum(dimension.total_variables for dimension in catalogo.dimensiones) == 44
+    assert catalogo.total_variables == 32
+    assert len(catalogo.dimensiones) == 6
+    assert sum(dimension.total_variables for dimension in catalogo.dimensiones) == 32
     for dimension in catalogo.dimensiones:
         # Cero `0 de 0`: toda dimensión declara denominador real y `conteo` lo espeja.
         assert dimension.total_variables > 0, f"`{dimension.dimension}` publica denominador nulo."
@@ -116,7 +116,7 @@ def test_ln_qbe_119_sonda_detecta_sumatoria_de_torneo_en_casilla_de_tasa():
 
     acumulada = _auditar_partido(_casilla(sot=(41.0, 56.0), poss=(52.0, 48.0)))
     codigos = [anomalia["codigo"] for anomalia in acumulada["anomalias"]]
-    assert "COTA_SOT" in codigos, "La sonda debe detectar la sumatoria de torneo en V06/V11."
+    assert "COTA_SOT" in codigos, "La sonda debe detectar la sumatoria de torneo en V07/V13."
     assert acumulada["anomalias"], "Una casilla con sumatoria no puede salir limpia."
     assert acumulada["sot"] == pytest.approx(48.5)
 
@@ -124,7 +124,7 @@ def test_ln_qbe_119_sonda_detecta_sumatoria_de_torneo_en_casilla_de_tasa():
     assert limpia["anomalias"] == [], f"Tasa limpia con anomalías: {limpia['anomalias']}"
     assert limpia["sot"] == pytest.approx(6.0)
     assert limpia["poss"] == pytest.approx(50.0)
-    assert limpia["evaluadas"] == 3 and limpia["total"] == 44
+    assert limpia["evaluadas"] == 3 and limpia["total"] == 32
 
 
 def test_ln_qbe_119_sonda_certifica_cero_sobre_cero_y_badge_coherente():

@@ -442,12 +442,12 @@ _PLANAS_DEL_CONTRATO = (
     ("h2h", "h2h_stats"),
 )
 
-# Celdas del catálogo de 44 variables que la Fase 1 enciende con evidencia REAL (cero fabricación):
-# posesión (V01), xG (V05), SoT (V06), xGA (V10), SoT recibidos (V11), Δdescanso (V27),
-# Δaltitud (V28) y los tres agregados H2H (V39/V40/V41). V29–V32 viven en trayectoria y no se
+# Celdas del catálogo de 32 variables [LN-QBE-120] que la Fase 1 enciende con evidencia REAL:
+# posesión (V01), xG (V06), SoT (V07), xGA (V12), SoT recibidos (V13), Δdescanso (V30),
+# Δaltitud (V29) y el conteo H2H (V26). El remapeo [LN-QBE-120] no altera magnitud alguna.
 # transcriben al paquete plano (su proveedor las publica en `dimension_8_trayectoria`).
 _EVALUADAS_FASE_1 = frozenset(
-    {"V01", "V05", "V06", "V10", "V11", "V27", "V28", "V39", "V40", "V41"}
+    {"V01", "V06", "V07", "V12", "V13", "V26", "V27", "V28", "V29", "V30"}
 )
 
 
@@ -494,9 +494,9 @@ def test_paquete_sin_bloques_degrada_sin_fabricar():
 
 
 def test_catalogo_44_enciende_exactamente_las_celdas_consumidas(boveda):
-    """V01/V05/V06/V10/V11/V27/V28 (+V39/V40/V41 del H2H) y NINGUNA otra celda se enciende."""
+    """V01/V06/V07/V12/V13/V26/V27/V28/V29/V30 ([LN-QBE-120]) y NINGUNA otra celda se enciende."""
     catalogo = estructurar_catalogo_44_variables({"insumos_factivados": _paquete(boveda)})
-    assert catalogo["total_variables"] == 44
+    assert catalogo["total_variables"] == 32
     evaluadas = {
         fila["id"]
         for dimension in catalogo["dimensiones"]
@@ -505,8 +505,9 @@ def test_catalogo_44_enciende_exactamente_las_celdas_consumidas(boveda):
     }
     assert evaluadas == set(_EVALUADAS_FASE_1)
     assert catalogo["total_evaluadas"] == len(evaluadas)
-    # Fase 6: el xGOT y demás métricas sin feed permanecen apagadas tras la integración.
-    for identificador in ("V07", "V08", "V09", "V12", "V13", "V14"):
+    # Fase 6: el xGOT y demás métricas sin feed permanecen apagadas tras la integración
+    # ([LN-QBE-120] V08/V09/V10 relevan a V07/V08/V09; V14/V15/V16 relevan a V12/V13/V14).
+    for identificador in ("V08", "V09", "V10", "V14", "V15", "V16"):
         assert identificador not in evaluadas
 
 
@@ -647,7 +648,7 @@ def test_atribucion_factorial_unificada_sobre_el_paquete(boveda):
         "ctx": "VERDE",
     }
     catalogo = atribucion["variables_44"]
-    assert catalogo["total_variables"] == 44
+    assert catalogo["total_variables"] == 32
     evaluadas = {
         fila["id"]
         for dimension in catalogo["dimensiones"]
