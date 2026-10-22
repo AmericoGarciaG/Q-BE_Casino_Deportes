@@ -335,6 +335,59 @@ _CATALOGO_44: Tuple[Tuple[str, str, str, Tuple[str, ...], str, str, str], ...] =
 # Alias semántico de lectura: el catálogo vigente es de 32 variables ([LN-QBE-120]).
 _CATALOGO_32 = _CATALOGO_44
 
+# ── [LN-QBE-122] Derivación de taxonomías locales desde el catálogo ÚNICO ─────────────────────
+# Materializa `[ARCH-1.4.60]` §4-§5: el catálogo manda en NOMBRE y ORDEN (fidelidad FotMob
+# `[LN-QBE-120]`); el proveedor sólo aporta la unidad canónica y la nota de procedencia. Las
+# magnitudes sin celda viajan con prefijo `AUX_` y jamás usurpan un identificador `V\\d\\d`.
+PREFIJO_AUXILIAR = "AUX_"
+
+_NOMBRES_CATALOGO: Dict[str, str] = {fila[0]: fila[1] for fila in _CATALOGO_44}
+
+
+def es_identificador_auxiliar(identificador: Any) -> bool:
+    """`True` si el identificador es una magnitud auxiliar sin celda (`AUX_*`, `[LN-QBE-122]`)."""
+    return str(identificador or "").startswith(PREFIJO_AUXILIAR)
+
+
+def nombre_de_celda(identificador: str, respaldo: str = "") -> str:
+    """[LN-QBE-122] Nombre forense canónico de la celda; `respaldo` para los `AUX_*` huérfanos."""
+    return _NOMBRES_CATALOGO.get(str(identificador), respaldo)
+
+
+def derivar_taxonomia(
+    dimension: str,
+    locales: Dict[str, Tuple[str, str, str]],
+) -> Tuple[Tuple[str, str, str, str], ...]:
+    """[LN-QBE-122] Taxonomía de una familia `𝒯_*` derivada del catálogo único.
+
+    `locales[identificador] = (nombre_respaldo, unidad, nota)`. Las celdas del catálogo toman
+    NOMBRE y POSICIÓN de `_CATALOGO_32`; del proveedor se conservan la unidad canónica y la nota
+    de procedencia. Los `AUX_*` no habitan el catálogo: se anexan al final en el orden declarado.
+    Un identificador `V\\d\\d` ausente de la familia es un error de contrato y se rechaza en voz
+    alta: la taxonomía local no puede inventar celdas ni robarle una a otra dimensión.
+    """
+    canonicos: List[Tuple[str, str]] = [
+        (identificador, nombre)
+        for identificador, nombre, familia, _claves, _modo, _origen, _espacio in _CATALOGO_44
+        if familia == dimension
+    ]
+    orden: Dict[str, int] = {identificador: posicion for posicion, (identificador, _) in enumerate(canonicos)}
+    nombres: Dict[str, str] = {identificador: nombre for identificador, nombre in canonicos}
+    derivadas: List[Tuple[str, str, str, str]] = []
+    auxiliares: List[Tuple[str, str, str, str]] = []
+    for identificador, (nombre_local, unidad, nota) in locales.items():
+        if es_identificador_auxiliar(identificador):
+            auxiliares.append((identificador, nombre_local, unidad, nota))
+            continue
+        if identificador not in nombres:
+            raise ValueError(
+                f"[LN-QBE-122] `{identificador}` no pertenece a `{dimension}` en el catálogo "
+                f"`{CATALOGO_VERSION}`: la taxonomía local no puede inventar celdas."
+            )
+        derivadas.append((identificador, nombres[identificador], unidad, nota))
+    derivadas.sort(key=lambda fila: orden[fila[0]])
+    return tuple(derivadas + auxiliares)
+
 _ESTADO_VALIDADO = "VALIDADO"
 _ESTADO_DERIVADO = "DERIVADO"
 _ESTADO_SIN_EVIDENCIA = "SIN EVIDENCIA"
@@ -412,6 +465,137 @@ def _celda_h2h_stats(
     }
 
 
+# ── [LN-QBE-121] Aduana de Exhibición Macro-Torneal ───────────────────────────────────────────
+# La verdad torneal (`data/cache_macro_stats_liga_mx_2026.json`, `[ARCH-1.4.59]`) llega YA
+# RESUELTA por slug desde el orquestador de ingesta. Jurisdicción: EXHIBICIÓN. Enciende celdas
+# del catálogo que el corte N−1 dejó apagadas y JAMÁS sustituye una magnitud que alimente λ:
+# las cinco celdas insumidas (V01, V06, V07, V12, V13) conservan el corte certificado y su
+# cotejo torneal se publica aparte. Cero imputación: una clave ausente apaga la celda.
+CLAVE_MACRO_STATS = "macro_stats"
+PROCEDENCIA_MACRO_TORNEAL = "MACRO_TORNEAL"
+
+# (claves del bloque del club, formato de transcripción, nota de procedencia)
+_CLAVES_MACRO_STATS: Dict[str, Tuple[Tuple[str, ...], str, str]] = {
+    "V02": (("touches_opp_box_per_match",), "num2",
+            "Agregado torneal: toques en área rival por partido [LN-QBE-121]."),
+    "V03": (("accurate_passes_per_match",), "num1",
+            "Agregado torneal: pases precisos por partido [LN-QBE-121]."),
+    "V04": (("accurate_long_balls_per_match",), "num1",
+            "Agregado torneal: pases largos precisos por partido [LN-QBE-121]."),
+    "V05": (("fouls_per_match",), "num1",
+            "Agregado torneal: faltas cometidas por partido [LN-QBE-121]."),
+    "V08": (("big_chances_created_per_match",), "num2",
+            "Agregado torneal: big chances creadas por partido [LN-QBE-121]."),
+    "V09": (("big_chances_missed_per_match",), "num2",
+            "Agregado torneal: big chances falladas por partido [LN-QBE-121]."),
+    "V10": (("xgot_squad",), "num1",
+            "Agregado torneal: xGOT acumulado de plantilla [LN-QBE-121]."),
+    "V11": (("xa_squad",), "num1",
+            "Agregado torneal: xA acumulada de plantilla [LN-QBE-121]."),
+    "V14": (("defensive_actions_per_match",), "num1",
+            "Agregado torneal: acciones defensivas por partido [LN-QBE-121]."),
+    "V15": (("interceptions_per_match",), "num1",
+            "Agregado torneal: intercepciones por partido [LN-QBE-121]."),
+    "V17": (("goals_prevented_squad",), "num1",
+            "Agregado torneal: goles evitados de plantilla [LN-QBE-121]."),
+    "V18": (("save_percentage",), "pct",
+            "Agregado torneal: Save % del club [LN-QBE-121]."),
+    "V19": (("sweeper_actions",), "num1",
+            "Agregado torneal: salidas del portero por partido [LN-QBE-121]."),
+    "V20": (("clean_sheets",), "num0",
+            "Agregado torneal: porterías a cero acumuladas [LN-QBE-121]."),
+    "V21": (("set_piece_goals_per_match",), "num2",
+            "Agregado torneal: goles a favor de pelota parada por partido [LN-QBE-121]."),
+    "V22": (("set_piece_goals_conceded_per_match",), "num2",
+            "Agregado torneal: goles recibidos de pelota parada por partido [LN-QBE-121]."),
+    "V23": (("corners_per_match",), "num2",
+            "Agregado torneal: córners por partido [LN-QBE-121]."),
+    "V24": (("penalties_won_total", "penalties_conceded_total"), "penales",
+            "Agregado torneal: penales a favor/en contra acumulados [LN-QBE-121]."),
+    "V25": (("yellow_cards_per_match", "red_cards_per_match"), "tarjetas",
+            "Agregado torneal: amarillas y rojas por partido [LN-QBE-121]."),
+}
+
+# Celdas que el MOTOR ya consume: la macro sólo las exhibe como control cruzado, jamás las pisa.
+CELDAS_INSUMIDAS: Tuple[str, ...] = ("V01", "V06", "V07", "V12", "V13")
+# Claves del artefacto que se publican en `macro_stats.cotejo` (control cruzado de exhibición).
+_CLAVES_COTEJO_MACRO: Dict[str, str] = {
+    "V01": "possession_pct",
+    "V06": "xg_per_match",
+    "V07": "sot_per_match",
+    "V12": "xga_per_match",
+    "V13": "sota_per_match",
+}
+
+
+def _formatear_macro(
+    bloque: Any, claves: Sequence[str], formato: str
+) -> Optional[str]:
+    """Transcribe el agregado torneal de UN club (`None` si falta cualquier clave: cero imputación)."""
+    if not isinstance(bloque, dict):
+        return None
+    valores: Dict[str, float] = {}
+    for clave in claves:
+        numero = _num(bloque.get(clave))
+        if numero is None:
+            return None
+        valores[clave] = numero
+    if formato == "penales":
+        return f"{valores[claves[0]]:.0f} a favor · {valores[claves[1]]:.0f} en contra"
+    if formato == "tarjetas":
+        return f"{valores[claves[0]]:.2f} amarillas/PJ · {valores[claves[1]]:.2f} rojas/PJ"
+    return _formatear_insumo(valores[claves[0]], formato)
+
+
+def _celda_macro_stats(
+    identificador: str,
+    nombre: str,
+    origen: str,
+    espacio: str,
+    z_scores: Dict[str, Any],
+    macro_stats: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Celda `EVALUADO` de exhibición torneal (`None` si la celda no tiene receta o no hay dato)."""
+    receta = _CLAVES_MACRO_STATS.get(identificador)
+    if receta is None:
+        return None
+    claves, formato, nota = receta
+    local = _formatear_macro(macro_stats.get("local"), claves, formato)
+    visita = _formatear_macro(macro_stats.get("visita"), claves, formato)
+    if local is None and visita is None:
+        return None
+    return {
+        "id": identificador,
+        "variable": nombre,
+        "local": local,
+        "visita": visita,
+        "z_score": _num(z_scores.get(identificador)),
+        "origen": origen,
+        "estado": _ESTADO_EVALUADO,
+        "impacto": espacio,
+        "nota": nota,
+    }
+
+
+def _cotejo_macro(macro_stats: Dict[str, Any]) -> Dict[str, Any]:
+    """[LN-QBE-121] Control cruzado: agregado torneal de las celdas que SÍ manda el corte.
+
+    Sólo transcribe valores publicados por el artefacto; no calcula, no compara y no altera la
+    celda. Es evidencia de exhibición para el Visor (`macro_stats.cotejo`).
+    """
+    cotejo: Dict[str, Any] = {}
+    for identificador, clave in _CLAVES_COTEJO_MACRO.items():
+        entrada: Dict[str, Any] = {"clave": clave}
+        for lado in ("local", "visita"):
+            bloque = macro_stats.get(lado)
+            valor = _num(bloque.get(clave)) if isinstance(bloque, dict) else None
+            if valor is not None:
+                entrada[lado] = valor
+        if "local" in entrada or "visita" in entrada:
+            cotejo[identificador] = entrada
+    return cotejo
+
+
 def _celda_telemetria(
     identificador: str,
     nombre: str,
@@ -424,7 +608,9 @@ def _celda_telemetria(
 
     Precedencia: `[LN-QBE-105]` el bloque `h2h_stats` manda cuando está presente (V26/V27/V28);
     si no llegó, rige la receta primaria de `_FORMATO_INSUMO` (ruta heredada byte-idéntica) y,
-    en su ausencia, el respaldo legislado de `_RESPALDO_INSUMO` (Axioma 4).
+    en su ausencia, el respaldo legislado de `_RESPALDO_INSUMO` (Axioma 4). Como ÚLTIMO recurso
+    de exhibición —nunca de motor— rige `_CLAVES_MACRO_STATS` (`[LN-QBE-121]`): la verdad torneal
+    sólo enciende celdas que el corte certificado dejó apagadas.
     """
     estadisticas_h2h = insumos.get("h2h_stats")
     if isinstance(estadisticas_h2h, dict):
@@ -455,24 +641,31 @@ def _celda_telemetria(
             }
 
     respaldo = _RESPALDO_INSUMO.get(identificador)
-    if respaldo is None:
-        return None
-    (clave_local, clave_visita), formato, nota = respaldo
-    local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
-    visita_insumo = _formatear_insumo(insumos.get(clave_visita), formato)
-    if local_insumo is None and visita_insumo is None:
-        return None
-    return {
-        "id": identificador,
-        "variable": nombre,
-        "local": local_insumo,
-        "visita": visita_insumo,
-        "z_score": _num(z_scores.get(identificador)),
-        "origen": origen,
-        "estado": _ESTADO_EVALUADO,
-        "impacto": espacio,
-        "nota": nota,
-    }
+    if respaldo is not None:
+        (clave_local, clave_visita), formato, nota = respaldo
+        local_insumo = _formatear_insumo(insumos.get(clave_local), formato)
+        visita_insumo = _formatear_insumo(insumos.get(clave_visita), formato)
+        if local_insumo is not None or visita_insumo is not None:
+            return {
+                "id": identificador,
+                "variable": nombre,
+                "local": local_insumo,
+                "visita": visita_insumo,
+                "z_score": _num(z_scores.get(identificador)),
+                "origen": origen,
+                "estado": _ESTADO_EVALUADO,
+                "impacto": espacio,
+                "nota": nota,
+            }
+
+    macro_stats = insumos.get(CLAVE_MACRO_STATS)
+    if isinstance(macro_stats, dict):
+        celda_macro = _celda_macro_stats(
+            identificador, nombre, origen, espacio, z_scores, macro_stats
+        )
+        if celda_macro is not None:
+            return celda_macro
+    return None
 
 
 # ── [ARCH-1.4.55] Orquestación ANIDADA del paquete `insumos_factivados` ───────────────────────
@@ -565,6 +758,7 @@ def empaquetar_insumos_factivados(
     volumen_porteria: Optional[Dict[str, Any]] = None,
     ataque_defensa: Optional[Dict[str, Any]] = None,
     claves_heredadas: Optional[Dict[str, Any]] = None,
+    macro_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """[ARCH-1.4.55] Paquete `insumos_factivados` ANIDADO + claves planas heredadas.
 
@@ -592,6 +786,10 @@ def empaquetar_insumos_factivados(
                 # La ignorancia declarada en la raíz no destruye la magnitud REAL ya derivada.
                 continue
             paquete[clave] = valor
+    # [LN-QBE-121] Bloque de EXHIBICIÓN torneal: se anida tal cual llega (ya resuelto por slug).
+    # No entra en `_MAPA_NIDOS_A_PLANO` ni en `_FORMATO_INSUMO`: la ruta plana queda intacta.
+    if isinstance(macro_stats, dict) and macro_stats:
+        paquete[CLAVE_MACRO_STATS] = dict(macro_stats)
     return paquete
 
 
@@ -633,6 +831,8 @@ def _formatear_insumo(valor: Any, formato: str) -> Optional[str]:
         return f"{numero:+.1f} d"
     if formato == "partidos":
         return f"{int(round(numero))} partidos"
+    if formato == "num1":                       # [LN-QBE-121] Aggregados torneales de un decimal
+        return f"{numero:.1f}"
     return f"{numero:.2f}"
 
 

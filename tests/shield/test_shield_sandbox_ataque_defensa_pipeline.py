@@ -22,24 +22,24 @@ def test_invarianza_sandbox_ataque_defensa_resuelve_variables_nucleares():
     assert "dimension_2_ataque" in res
     assert "dimension_3_defensa" in res
     
-    # 2. Verificar variables clave (V05 npxG y V10 xGA)
-    v05 = res["dimension_2_ataque"]["V05"]
-    v10 = res["dimension_3_defensa"]["V10"]
+    # 2. Verificar variables clave (V06 npxG y V12 xGA)
+    v06 = res["dimension_2_ataque"]["V06"]
+    v12 = res["dimension_3_defensa"]["V12"]
     
-    assert v05["estado"] == "EVALUADO"
-    assert v10["estado"] == "EVALUADO"
-    assert v05["local"] > 0.0 and v05["visita"] > 0.0, "V05 debe contener tasas positivas para ambos clubes"
-    assert v10["local"] > 0.0 and v10["visita"] > 0.0, "V10 debe contener tasas positivas para ambos clubes"
+    assert v06["estado"] == "EVALUADO"
+    assert v12["estado"] == "EVALUADO"
+    assert v06["local"] > 0.0 and v06["visita"] > 0.0, "V06 debe contener tasas positivas para ambos clubes"
+    assert v12["local"] > 0.0 and v12["visita"] > 0.0, "V12 debe contener tasas positivas para ambos clubes"
 
 def test_invarianza_bipartita_simetrica_independencia():
     """[INVARIANZA 2 - BIPARTITA]: Cada club debe tener su propio valor numérico independiente."""
     res = ejecutar_sandbox_ataque_defensa_partido(match_id="LIGAMX-J11-07")
-    v05 = res["dimension_2_ataque"]["V05"]
+    v06 = res["dimension_2_ataque"]["V06"]
     
     # San Luis (Local) y Santos (Visita) deben tener valores distintos
-    assert v05["local"] != v05["visita"], "Las métricas bipartitas no deben colapsar a valores idénticos arbitrarios"
-    assert "unidad" in v05
-    assert v05["unidad"] == "npxG/90"
+    assert v06["local"] != v06["visita"], "Las métricas bipartitas no deben colapsar a valores idénticos arbitrarios"
+    assert "unidad" in v06
+    assert v06["unidad"] == "xG/PJ"
 
 def test_invarianza_colision_cruzada_conservacion_factores():
     """[INVARIANZA 3 - COLISIÓN]: La colisión cruzada (A_H - D_A) debe ser matemáticamente exacta."""

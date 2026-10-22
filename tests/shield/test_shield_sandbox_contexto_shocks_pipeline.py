@@ -13,7 +13,7 @@ from scripts.laboratorio.sandbox_contexto_shocks_pipeline import (
 )
 
 def test_invarianza_sandbox_contexto_resuelve_variables_dim7():
-    """[INVARIANZA 1 - E2E]: El sandbox debe procesar un partido y extraer V25, V26, V27, V28."""
+    """[INVARIANZA 1 - E2E]: El sandbox debe procesar un partido y extraer V29/V30 + los AUX de bajas."""
     # Probar con San Luis vs Santos en J11
     res = ejecutar_sandbox_contexto_partido(match_id="LIGAMX-J11-07")
     
@@ -22,13 +22,13 @@ def test_invarianza_sandbox_contexto_resuelve_variables_dim7():
     assert "dimension_7_contexto" in res
     
     dim7 = res["dimension_7_contexto"]
-    assert "V25" in dim7 and "V26" in dim7 and "V27" in dim7 and "V28" in dim7
+    assert "AUX_Q_MOD_H" in dim7 and "AUX_Q_MOD_A" in dim7 and "V30" in dim7 and "V29" in dim7
     
-    # V27 (Descanso) y V28 (Altitud) deben estar evaluadas con unidades
-    assert dim7["V27"]["estado"] == "EVALUADO"
-    assert dim7["V28"]["estado"] == "EVALUADO"
-    assert "d" in str(dim7["V27"]["local"])
-    assert "m" in str(dim7["V28"]["local"])
+    # V30 (Descanso) y V29 (Altitud) deben estar evaluadas con unidades
+    assert dim7["V30"]["estado"] == "EVALUADO"
+    assert dim7["V29"]["estado"] == "EVALUADO"
+    assert "d" in str(dim7["V30"]["local"])
+    assert "m" in str(dim7["V29"]["local"])
 
 def test_invarianza_altitud_fisiologica_unidireccional():
     """[INVARIANZA 2 - ALTITUD]: Jugar a mayor altitud otorga bono; jugar más bajo no penaliza al local."""

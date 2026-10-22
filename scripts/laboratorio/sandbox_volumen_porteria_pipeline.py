@@ -5,8 +5,8 @@
 Misión
 ------
 Aislar en consola las dos dimensiones que hoy NO entran a la proyección λ y que por eso nunca se
-auditan: el **Volumen y Dominio Territorial** (Dimensión 1, 𝒯_Vol, V01-V04) y el **Rendimiento de
-Guardametas** (Dimensión 4, 𝒯_Gk, V15-V17). Ejecuta la cadena REAL —corte N−1 de la 3NF + caché
+auditan: el **Volumen y Dominio Territorial** (Dimensión 1, 𝒯_Vol, V01/V02 + `AUX_*`) y el **Rendimiento de
+Guardametas** (Dimensión 4, 𝒯_Por, V17/V18/V19). Ejecuta la cadena REAL —corte N−1 de la 3NF + caché
 Opta congelada → celdas bipartitas → residuo de volumen ortogonal → tablero ASCII— sin FastAPI,
 sin DOM y sin Playwright.
 
@@ -33,7 +33,7 @@ Axiomas operativos
    contrario — jamás un cero ficticio.
 6. **El residuo es diagnóstico:** `v_Vol⊥` NO se reinyecta a λ; el motor sellado ya consume la señal
    directora `xG` (`[VAULT-CORE-001/005]` no se tocan).
-7. **Contrato tri-estado (varianza `VAR-2026-LAB5-EVIDENCIA`):** V01 y V16 certifican `EVALUADO` con
+7. **Contrato tri-estado (varianza `VAR-2026-LAB5-EVIDENCIA`):** V01 y V18 certifican `EVALUADO` con
    evidencia fáctica o degradan a `SIN EVIDENCIA (FASE 6)` publicando la cobertura `cubiertos/total`
    de ambos cortes.
 
@@ -63,6 +63,7 @@ from sqlalchemy import or_, select
 
 # ── Plano sellado (cero reimplementación del FCF) ──────────────────────────────────────────────
 from src.core.metrics import SyntheticMetricsEngine
+from src.core.sovereign.factor_attribution import derivar_taxonomia
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, Match, MatchTelemetry
 
@@ -96,26 +97,29 @@ _POSS_DEFAULT = 50.0
 _SOT_DEFAULT = 0.0
 _SOTA_DEFAULT = 0.0
 
-# ── Taxonomía bipartita de las dimensiones ([LN-QBE-111] · 𝒯_Vol / 𝒯_Gk) ───────────────────────
-# (id, nombre forense, unidad canónica, nota de procedencia)
-_TAXONOMIA_DIM_1: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V01", "Posesión efectiva de balón", "%",
-     "Posesión media del corte N−1; fuente: match_telemetry.possession_pct con cobertura íntegra."),
-    ("V02", "Toques en el área rival", "toques/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica toques en área."),
-    ("V03", "Pases progresivos completados", "pases/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica pases progresivos."),
-    ("V04", "Entradas al último tercio", "entradas/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica entradas al último tercio."),
-)
-_TAXONOMIA_DIM_4: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V15", "Goles prevenidos (xGOT − GC)", "xGOT−GC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT (post-shot)."),
-    ("V16", "Porcentaje de atajadas (Save %)", "%",
-     "Save% = 100·(SoTA − GC)/SoTA sobre el corte N−1, cobertura íntegra de SoTA."),
-    ("V17", "Salidas exitosas por alto", "salidas/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica high claims."),
-)
+# ── Taxonomía bipartita de las dimensiones ([LN-QBE-122] · 𝒯_Vol / 𝒯_Por) ─────────────────────
+# [LN-QBE-122] NOMBRE y ORDEN vienen del catálogo único `[LN-QBE-120]`; aquí sólo viven la unidad
+# canónica y la nota de procedencia. `AUX_*` = magnitud sin celda (jamás usurpa un `VXX`).
+_LOCALES_DIM_1: Dict[str, Tuple[str, str, str]] = {
+    "V01": ("Posesión Promedio (%)", "%",
+            "Posesión media del corte N−1; fuente: match_telemetry.possession_pct con cobertura íntegra."),
+    "V02": ("Toques en Área Rival", "toques/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica toques en área."),
+    "AUX_PASES_PROG": ("Pases progresivos completados", "pases/PJ",
+                       "SIN EVIDENCIA (FASE 6): el sensor congelado no publica pases progresivos."),
+    "AUX_ENTRADAS_UT": ("Entradas al último tercio", "entradas/PJ",
+                        "SIN EVIDENCIA (FASE 6): el sensor congelado no publica entradas al último tercio."),
+}
+_LOCALES_DIM_4: Dict[str, Tuple[str, str, str]] = {
+    "V17": ("Goles Evitados", "xGOT−GC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT (post-shot)."),
+    "V18": ("Save % (Porcentaje de Atajadas)", "%",
+            "Save% = 100·(SoTA − GC)/SoTA sobre el corte N−1, cobertura íntegra de SoTA."),
+    "V19": ("Salidas/Líbero por Partido", "salidas/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica high claims."),
+}
+_TAXONOMIA_DIM_1: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Vol", _LOCALES_DIM_1)
+_TAXONOMIA_DIM_4: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Por", _LOCALES_DIM_4)
 
 # ── Trazabilidad y contrato ───────────────────────────────────────────────────────────────────
 REGLA_CORTE = "matchday_num < N ∧ estado ∈ {FINALIZADO, FINISHED} (futuro-ceguera N−1)"
@@ -485,18 +489,19 @@ def _nota_cobertura(
 def _dimension_volumen(
     acum_local: Dict[str, Any], acum_visita: Dict[str, Any]
 ) -> Dict[str, Dict[str, Any]]:
-    """𝒯_Vol · DIM 1 (V01-V04): sólo V01 tiene feed en esta fase del corpus."""
-    nota_v01 = _TAXONOMIA_DIM_1[0][3]
+    """𝒯_Vol · DIM 1 (taxonomía `[LN-QBE-122]`): sólo `V01` tiene feed en esta fase del corpus."""
+    nota_v01 = _LOCALES_DIM_1["V01"][2]
     if acum_local["poss_pct"] is None or acum_visita["poss_pct"] is None:
         nota_v01 = _nota_cobertura(acum_local, acum_visita, "match_telemetry.possession_pct")
-    celdas: Dict[str, Dict[str, Any]] = {
-        "V01": _celda(
-            "V01", _TAXONOMIA_DIM_1[0][1], _TAXONOMIA_DIM_1[0][2],
-            acum_local["poss_pct"], acum_visita["poss_pct"], nota_v01, formato="pct",
-        )
-    }
-    for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_1[1:]:
-        celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
+    celdas: Dict[str, Dict[str, Any]] = {}
+    for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_1:
+        if identificador == "V01":
+            celdas["V01"] = _celda(
+                "V01", nombre, unidad,
+                acum_local["poss_pct"], acum_visita["poss_pct"], nota_v01, formato="pct",
+            )
+        else:
+            celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
     return celdas
 
 
@@ -511,17 +516,17 @@ def _save_de_corte(acumulado: Dict[str, Any]) -> Optional[float]:
 def _dimension_porteria(
     acum_local: Dict[str, Any], acum_visita: Dict[str, Any]
 ) -> Dict[str, Dict[str, Any]]:
-    """𝒯_Gk · DIM 4 (V15-V17): sólo V16 tiene feed (Save % sobre SoTA del corte)."""
+    """𝒯_Por · DIM 4 (taxonomía `[LN-QBE-122]`): sólo `V18` tiene feed (Save % sobre SoTA)."""
     save_local = _save_de_corte(acum_local)
     save_visita = _save_de_corte(acum_visita)
-    nota_v16 = _TAXONOMIA_DIM_4[1][3]
+    nota_v18 = _LOCALES_DIM_4["V18"][2]
     if save_local is None or save_visita is None:
-        nota_v16 = _nota_cobertura(acum_local, acum_visita, "match_telemetry.sota")
+        nota_v18 = _nota_cobertura(acum_local, acum_visita, "match_telemetry.sota")
     celdas: Dict[str, Dict[str, Any]] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_4:
-        if identificador == "V16":
+        if identificador == "V18":
             celdas[identificador] = _celda(
-                identificador, nombre, unidad, save_local, save_visita, nota_v16, formato="pct"
+                identificador, nombre, unidad, save_local, save_visita, nota_v18, formato="pct"
             )
         else:
             celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
@@ -737,7 +742,7 @@ def _semaforos(
     elif cubiertos > 0:
         salud["cobertura_posesion"] = _semaforo(
             NIVEL_AMARILLO,
-            f"{cubiertos}/{total} partidos cubiertos: V01/V16 degradan a SIN EVIDENCIA (FASE 6).",
+            f"{cubiertos}/{total} partidos cubiertos: V01/V18 degradan a SIN EVIDENCIA (FASE 6).",
         )
     else:
         salud["cobertura_posesion"] = _semaforo(
@@ -870,7 +875,7 @@ def _veredicto(
     if len(evaluadas) == total:
         return (
             "EXITO",
-            f"{total}/{total} celdas EVALUADO: V01-V04 y V15-V17 con evidencia fáctica íntegra.",
+            f"{total}/{total} celdas EVALUADO: V01/V02 y V17/V18/V19 + `AUX_*` con evidencia fáctica íntegra.",
         )
     if evaluadas:
         return (
@@ -890,7 +895,7 @@ def ejecutar_sandbox_volumen_porteria_partido(
     temporada: str = TEMPORADA_DEFAULT,
     jornada: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Audita DIM 1 (𝒯_Vol · V01-V04) y DIM 4 (𝒯_Gk · V15-V17) de un fixture, sólo lectura.
+    """Audita DIM 1 (𝒯_Vol · V01/V02) y DIM 4 (𝒯_Por · V17/V18/V19) de un fixture, sólo lectura.
 
     Cadena: `PersistenceGateway.read_session()` → fixture (snapshot o `matches`) → corte futuro-ciego
     N−1 por club → telemetría 3NF con cobertura íntegra → caché Opta congelada → celdas bipartitas →
@@ -1139,11 +1144,11 @@ def _bloque_contexto_volumen(reporte: Dict[str, Any]) -> None:
         ),
         _linea(
             "CONTRATO",
-            f"tri-estado {VARIANZA_RATIFICADA} · V01/V16 EVALUADO ⇔ evidencia fáctica íntegra",
+            f"tri-estado {VARIANZA_RATIFICADA} · V01/V18 EVALUADO ⇔ evidencia fáctica íntegra",
         ),
         _linea(
             "MODELO",
-            "DIM 1 (𝒯_Vol · V01-V04) × DIM 4 (𝒯_Gk · V15-V17) · "
+            "DIM 1 (𝒯_Vol · V01/V02) × DIM 4 (𝒯_Por · V17/V18/V19) · "
             f"v_Vol⊥ = FCF − 1 ∈ [{COTA_RESIDUO[0]:+.2f}, {COTA_RESIDUO[1]:+.2f}]",
         ),
         _linea(
@@ -1250,7 +1255,7 @@ def imprimir_tablero_volumen_porteria_consola(reporte: Dict[str, Any]) -> None:
     ])
     _bloque_contexto_volumen(reporte)
     _bloque_dimension(
-        reporte, "dimension_1_volumen", "DIM 1 · VOLUMEN Y DOMINIO TERRITORIAL (𝒯_Vol · V01-V04)"
+        reporte, "dimension_1_volumen", "DIM 1 · VOLUMEN Y DOMINIO TERRITORIAL (𝒯_Vol · V01/V02 + AUX)"
     )
     _bloque_dimension(
         reporte, "dimension_4_porteria", "DIM 4 · RENDIMIENTO DE GUARDAMETAS (𝒯_Gk · V15-V17)"
@@ -1323,19 +1328,19 @@ def ejecutar_sandbox_volumen_porteria_jornada(
 
 
 def imprimir_tablero_jornada_volumen_porteria_consola(resumen: Dict[str, Any]) -> None:
-    """Tablero compacto de la jornada: V01 · V16 · Δ v_Vol⊥ por fixture ([ARCH-1.4.50])."""
+    """Tablero compacto de la jornada: V01 · V18 · Δ v_Vol⊥ por fixture ([ARCH-1.4.50])."""
     jornada = resumen.get("jornada")
     separador = "─" * (ANCHO_TABLERO - 4)
     filas: List[str] = [
         f"{_pad('FIXTURE', 16)}{_pad('LOCAL vs VISITA', 28)}"
-        f"{'V01 L'.rjust(8)}{'V01 V'.rjust(8)}{'V16 L'.rjust(8)}{'V16 V'.rjust(8)}"
+        f"{'V01 L'.rjust(8)}{'V01 V'.rjust(8)}{'V18 L'.rjust(8)}{'V18 V'.rjust(8)}"
         f"{'Δv_Vol⊥'.rjust(9)}  ST",
         separador,
     ]
     for reporte in resumen.get("reportes") or []:
         fixture = reporte.get("match") or {}
         v01 = (reporte.get("dimension_1_volumen") or {}).get("V01") or {}
-        v16 = (reporte.get("dimension_4_porteria") or {}).get("V16") or {}
+        v16 = (reporte.get("dimension_4_porteria") or {}).get("V18") or {}
         residuo = reporte.get("residuo_volumen") or {}
         duelo = (
             f"{str(fixture.get('local') or '—')[:13]} v "
@@ -1376,7 +1381,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sandbox_volumen_porteria_pipeline",
         description=(
-            "Sandbox CLI-first de Volumen Territorial (DIM 1 · V01-V04) y Portería (DIM 4 · V15-V17): "
+            "Sandbox CLI-first de Volumen Territorial (DIM 1 · V01/V02) y Portería (DIM 4 · V17/V18/V19): "
             "corte N−1 real → telemetría íntegra → residuo de volumen ortogonal (FCF delegado) → "
             "ΔPosición → tablero tri-estado. Sólo lectura."
         ),

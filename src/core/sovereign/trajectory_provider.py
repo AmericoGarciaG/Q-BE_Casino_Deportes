@@ -7,11 +7,13 @@ Régimen: `[HÍBRIDO DUAL-TRACK]`
 * `[DIRGEN-STRICT]`: la pendiente OLS de la ventana móvil (`m = Σ(t−t̄)(y_t−ȳ)/Σ(t−t̄)²`, con
   denominador exacto `10.0` para n = 5 y `t = 1..5`) y el diagnóstico ΔxPTS = PTS − xPTS con cota
   `±3.0` se transcriben sin una sola coma de diferencia del plano sellado.
-* `[DBBD-FUNGIBLE]`: composición del bloque, celdas V29-V32 y notas de cobertura.
+* `[DBBD-FUNGIBLE]`: composición del bloque, celdas `V31`/`V32` (catálogo `[LN-QBE-122]`) con sus
+  auxiliares sin código (`AUX_M_XG`, `AUX_M_XGA`) y notas de cobertura.
 
 Contrato público:
   * `obtener_metricas_trayectoria(sesion, match_id, ...)` → bloque `trayectoria` del paquete
-    `insumos_factivados` con V29 (forma 5P), V30 (pendiente xG), V31 (pendiente xGA) y V32 (ΔxPTS).
+    `insumos_factivados` con `V31` (forma 5P), `AUX_M_XG` (pendiente xG), `AUX_M_XGA` (pendiente
+    xGA) y `V32` (ΔxPTS).
   * `calcular_pendiente_lineal_5p(serie)` / `evaluar_diagnostico_xpts(pts, xpts)` → aritmética pura.
   * `cargar_corpus_opta(temporada, ...)` → lectura de sólo lectura del corpus xG/xGA congelado
     (compartida con `attack_defense_core`; una sola implementación, cero duplicación).
@@ -24,8 +26,8 @@ paquete puro jamás importa `sqlalchemy` ni `src.storage`, `[ARCH-1.4.26]`):
      `match_telemetry.xg` / `xga` están vacíos en la bóveda viva: no se imputan.
 
 Axioma de degradación ([LN-QBE-117].P.4): con menos de `VENTANA_TRAYECTORIA = 5` partidos
-terminales, o con una sola ausencia de xG/xGA en la ventana, V29/V30/V31 se declaran
-`SIN EVIDENCIA`. Jamás se rellena la ventana ni se extrapola una pendiente.
+terminales, o con una sola ausencia de xG/xGA en la ventana, `V31` y los dos auxiliares de
+pendiente se declaran `SIN EVIDENCIA`. Jamás se rellena la ventana ni se extrapola una pendiente.
 """
 
 from __future__ import annotations
@@ -45,6 +47,7 @@ from src.core.sovereign.context_provider import (
     leer_fixture_cartelera,
     partidos_terminales_de_club,
 )
+from src.core.sovereign.factor_attribution import nombre_de_celda
 from src.core.sovereign_reads import leer_snapshots_posiciones
 
 __all__ = [
@@ -530,8 +533,9 @@ def obtener_metricas_trayectoria(
 ) -> Dict[str, Any]:
     """Bloque `trayectoria` del paquete `insumos_factivados` (sólo lectura, cero red).
 
-    Migración VERBATIM de `[LN-QBE-110]`: V29 (forma 5P), V30 (pendiente xG), V31 (pendiente
-    xGA) y V32 (ΔxPTS), con corte futuro-ciego N−1 y degradación íntegra a `SIN EVIDENCIA`.
+    Migración VERBATIM de `[LN-QBE-110]`: `V31` (forma 5P), `AUX_M_XG` (pendiente xG),
+    `AUX_M_XGA` (pendiente xGA) y `V32` (ΔxPTS), con corte futuro-ciego N−1 y degradación íntegra
+    a `SIN EVIDENCIA`.
     """
     temporada = str(temporada or TEMPORADA_DEFAULT)
     fixture = leer_fixture_cartelera(sesion, match_id) if sesion is not None else None
@@ -578,7 +582,7 @@ def obtener_metricas_trayectoria(
     entrada_local = _entrada_posiciones(entradas, local)
     entrada_visita = _entrada_posiciones(entradas, visita)
 
-    # ── V29 · Forma 5P (puntos reales de la ventana) ────────────────────────────────────────
+    # ── V31 · Forma 5P (puntos reales de la ventana) ────────────────────────────────────────
     forma_local = _forma_5p(ventana_local["partidos"])
     forma_visita = _forma_5p(ventana_visita["partidos"])
     evidencia_forma = (
@@ -586,8 +590,8 @@ def obtener_metricas_trayectoria(
         and forma_visita["muestra"] == VENTANA_TRAYECTORIA
     )
     v29 = {
-        "id": "V29",
-        "variable": "Forma 5P (ΔPts últimos 5)",
+        "id": "V31",
+        "variable": nombre_de_celda("V31", "Forma 5P (Puntos Recientes)"),
         "unidad": "puntos",
         "estado": ESTADO_EVALUADO if evidencia_forma else ESTADO_SIN_EVIDENCIA,
         "puntos_local": forma_local["puntos"] if forma_local["muestra"] else None,
@@ -615,7 +619,7 @@ def obtener_metricas_trayectoria(
         ),
     }
 
-    # ── V30 · Pendiente de peligro ofensivo (xG) ───────────────────────────────────────────
+    # ── AUX_M_XG · Pendiente de peligro ofensivo (xG, sin celda en el catálogo) ───────────────────────────────────────────
     m_xg_local = ventana_local["pendiente_xg"]
     m_xg_visita = ventana_visita["pendiente_xg"]
     direccion_xg_local = _direccion_xg(m_xg_local)
@@ -627,7 +631,7 @@ def obtener_metricas_trayectoria(
         and ventana_visita["integro"]
     )
     v30 = {
-        "id": "V30",
+        "id": "AUX_M_XG",
         "variable": "Pendiente xG 5P (m_xG)",
         "unidad": "xG/partido",
         "estado": ESTADO_EVALUADO if evidencia_xg else ESTADO_SIN_EVIDENCIA,
@@ -651,7 +655,7 @@ def obtener_metricas_trayectoria(
         ),
     }
 
-    # ── V31 · Pendiente de vulnerabilidad defensiva (xGA) ──────────────────────────────────
+    # ── AUX_M_XGA · Pendiente de vulnerabilidad defensiva (xGA, sin celda) ──────────────────────────────────
     m_xga_local = ventana_local["pendiente_xga"]
     m_xga_visita = ventana_visita["pendiente_xga"]
     direccion_xga_local = _direccion_xga(m_xga_local)
@@ -663,7 +667,7 @@ def obtener_metricas_trayectoria(
         and ventana_visita["integro"]
     )
     v31 = {
-        "id": "V31",
+        "id": "AUX_M_XGA",
         "variable": "Pendiente xGA 5P (m_xGA)",
         "unidad": "xGA/partido",
         "estado": ESTADO_EVALUADO if evidencia_xga else ESTADO_SIN_EVIDENCIA,
@@ -705,7 +709,7 @@ def obtener_metricas_trayectoria(
     )
     v32 = {
         "id": "V32",
-        "variable": "ΔxPTS (PTS − xPTS)",
+        "variable": nombre_de_celda("V32", "Varianza ΔxPTS"),
         "unidad": "puntos",
         "estado": ESTADO_EVALUADO if evidencia_xpts else ESTADO_SIN_EVIDENCIA,
         "puntos_local": _r(pts_local, 4),
@@ -776,14 +780,19 @@ def obtener_metricas_trayectoria(
         ),
     }
 
-    dimension_8 = {"V29": v29, "V30": v30, "V31": v31, "V32": v32}
+    # `[LN-QBE-122]` Claves del bloque: `V31`/`V32` son celdas del catálogo; las pendientes
+    # `m_xG`/`m_xGA` no tienen casilla y viajan como auxiliares sin código.
+    dimension_8 = {"V31": v29, "AUX_M_XG": v30, "AUX_M_XGA": v31, "V32": v32}
     sintesis = _sintesis_momento(v29, v30, v31, v32)
     evaluadas = sum(
         1 for celda in dimension_8.values() if celda["estado"] == ESTADO_EVALUADO
     )
     if evaluadas == len(dimension_8):
         status = ESTADO_EXITO
-        motivo = "Las 4 variables V29-V32 quedaron evaluadas con evidencia íntegra."
+        motivo = (
+            "Las 4 celdas de trayectoria (V31 · AUX_M_XG · AUX_M_XGA · V32) quedaron "
+            "evaluadas con evidencia íntegra."
+        )
     elif evaluadas:
         status = ESTADO_PARCIAL
         motivo = f"{evaluadas}/4 variables evaluadas; el resto degradó a SIN EVIDENCIA."
@@ -818,7 +827,7 @@ def obtener_metricas_trayectoria(
     )
     semaforos = {
         "TRAYECTORIA": _semaforo(
-            nivel_trayectoria, f"{evaluadas}/4 celdas V29-V32 evaluadas."
+            nivel_trayectoria, f"{evaluadas}/4 celdas de trayectoria evaluadas."
         ),
         "CORTE": _semaforo(
             nivel_corte,

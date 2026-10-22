@@ -27,7 +27,7 @@ MATCH_ID = "LIGAMX-J11-07"
 ESTADOS_VALIDOS = ("EXITO", "PARCIAL")
 JORNADA_OBJETIVO = 11
 ESTADOS_TERMINALES = ("FINALIZADO", "FINISHED")
-CELDAS_SIN_SENSOR = ("V02", "V03", "V04", "V15", "V17")
+CELDAS_SIN_SENSOR = ("V02", "AUX_PASES_PROG", "AUX_ENTRADAS_UT", "V17", "V19")
 RAIZ_PROYECTO = Path(__file__).resolve().parents[2]
 RUTA_TELEMETRIA = RAIZ_PROYECTO / "data" / "cache_telemetria_liga_mx_2026.json"
 
@@ -74,10 +74,10 @@ def _posesiones_de_corte(slug: str, identidades: dict, partidos: dict) -> list:
 
 
 def test_invarianza_1_contrato_factico_volumen_y_porteria():
-    """[INVARIANZA 1 - E2E]: V01 y V16 publican magnitudes REALES desde `match_telemetry`.
+    """[INVARIANZA 1 - E2E]: V01 y V18 publican magnitudes REALES desde `match_telemetry`.
 
     DoD ratificado (decreto `D1`, 2026-10-19): con la telemetría óptica congelada el veredicto es
-    `PARCIAL` (V01 y V16 `EVALUADO`); `EXITO` es inalcanzable por contrato porque V02/V03/V04/V15/V17
+    `PARCIAL` (V01 y V18 `EVALUADO`); `EXITO` es inalcanzable por contrato porque V02/AUX_PASES_PROG/AUX_ENTRADAS_UT/V17/V19
     no tienen sensor en `[LN-QBE-111]`. Se certifica además que esas cinco celdas degradan en
     `SIN EVIDENCIA (FASE 6)` sin imputar una sola cifra (`[GOVERNANCE-01]`).
     """
@@ -87,18 +87,18 @@ def test_invarianza_1_contrato_factico_volumen_y_porteria():
     assert res["status"] in ESTADOS_VALIDOS
     assert res["status"] == "PARCIAL", (
         "Con evidencia fáctica el techo es PARCIAL: EXITO exigiría 7/7 celdas EVALUADO y "
-        "V02/V03/V04/V15/V17 carecen de sensor por contrato (decreto D1)."
+        "V02/AUX_PASES_PROG/AUX_ENTRADAS_UT/V17/V19 carecen de sensor por contrato (decreto D1)."
     )
     assert res["escritura_bd"] is False
     assert res["llamadas_red"] is False
     assert "dimension_1_volumen" in res
     assert "dimension_4_porteria" in res
-    assert len(res["dimension_1_volumen"]) == 4, "DIM 1 debe publicar V01-V04"
-    assert len(res["dimension_4_porteria"]) == 3, "DIM 4 debe publicar V15-V17"
+    assert len(res["dimension_1_volumen"]) == 4, "DIM 1 debe publicar V01/V02 + AUX_*"
+    assert len(res["dimension_4_porteria"]) == 3, "DIM 4 debe publicar V17/V18/V19"
 
     for dimension, identificador in (
         (res["dimension_1_volumen"], "V01"),
-        (res["dimension_4_porteria"], "V16"),
+        (res["dimension_4_porteria"], "V18"),
     ):
         celda = dimension[identificador]
         assert celda["id"] == identificador
@@ -128,10 +128,12 @@ def test_invarianza_1_contrato_factico_volumen_y_porteria():
 
     # Celdas sin sensor: degradación honesta, cero imputación.
     for identificador in CELDAS_SIN_SENSOR:
-        dimension = (
-            res["dimension_1_volumen"]
-            if identificador.startswith("V0")
-            else res["dimension_4_porteria"]
+        # `[LN-QBE-122]` El destino se resuelve por pertenencia, no por el prefijo del id
+        # (`AUX_PASES_PROG`/`AUX_ENTRADAS_UT` viven en DIM 1 aunque no empiecen por `V0`).
+        dimension = next(
+            bloque
+            for bloque in (res["dimension_1_volumen"], res["dimension_4_porteria"])
+            if identificador in bloque
         )
         celda = dimension[identificador]
         assert celda["estado"] == "SIN EVIDENCIA"

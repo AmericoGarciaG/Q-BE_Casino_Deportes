@@ -700,6 +700,7 @@ def _empaquetar_insumos_factivados(
     q_mod_h: float,
     q_mod_a: float,
     xg_es_real_opta: Optional[bool] = None,
+    cache_macro_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """[LN-QBE-102] Telemetría fáctica de los insumos consumidos por el generador soberano.
 
@@ -720,7 +721,7 @@ def _empaquetar_insumos_factivados(
         pj_sede_local = _magnitud_insumo(split_local, ("pj",))
     if pj_sede_visita is None:
         pj_sede_visita = _magnitud_insumo(split_visita, ("pj",))
-    return {
+    paquete: Dict[str, Any] = {
         "xg_local_rate": _tasa_insumo(local, "xg"),
         "xg_visita_rate": _tasa_insumo(visita, "xg"),
         "xga_local_rate": xga_local_rate,
@@ -741,6 +742,34 @@ def _empaquetar_insumos_factivados(
         "delta_alt_metros": round(float(delta_alt_metros), 4),
         "delta_descanso_dias": round(float(delta_descanso_dias), 4),
         "xg_es_real_opta": _sello_opta(raw_match_data, xg_es_real_opta),
+    }
+    # [LN-QBE-121] Aduana de Exhibición: el agregado torneal NO alimenta λ; sólo enciende celdas.
+    if cache_macro_stats is not None:
+        bloque_macro = _bloque_macro_stats(cache_macro_stats)
+        if bloque_macro:
+            paquete["macro_stats"] = bloque_macro
+    return paquete
+
+
+def _bloque_macro_stats(cache_macro_stats: Any) -> Dict[str, Any]:
+    """[LN-QBE-121] Bloque `macro_stats` resuelto (sólo lectura; `{}` si no hay artefacto).
+
+    El llamador (orquestador de ingesta) entrega `{"local": {...}, "visita": {...}}` ya resuelto
+    por slug: el generador **no** conoce identidades de club. Cada lado se copia tal cual llega
+    —cero derivación, cero imputación— y se sella la procedencia torneal.
+    """
+    if not isinstance(cache_macro_stats, dict):
+        return {}
+    local = cache_macro_stats.get("local")
+    visita = cache_macro_stats.get("visita")
+    if not isinstance(local, dict) and not isinstance(visita, dict):
+        return {}
+    return {
+        "procedencia": str(cache_macro_stats.get("procedencia") or "MACRO_TORNEAL"),
+        "catalogo_version": str(cache_macro_stats.get("catalogo_version") or ""),
+        "local": dict(local) if isinstance(local, dict) else {},
+        "visita": dict(visita) if isinstance(visita, dict) else {},
+        "cotejo": dict(cache_macro_stats.get("cotejo") or {}),
     }
 
 
@@ -771,7 +800,8 @@ def generar_distribucion_soberana(
     rho: float = -0.05,
     origen_captura: str = ORIGEN_CAPTURA_HISTORICO,
     timestamp_captura: Optional[str] = None,
-    xg_es_real_opta: Optional[bool] = None
+    xg_es_real_opta: Optional[bool] = None,
+    cache_macro_stats: Optional[Dict[str, Any]] = None
 ) -> SovereignDistributionOutput:
     """
     [TRATADO VOLUMEN I] Generador Soberano Universal de la Distribución del Partido.
@@ -783,7 +813,8 @@ def generar_distribucion_soberana(
     delta_alt_efectivo = _contexto_efectivo(delta_alt_metros, raw_match_data, "delta_alt_metros")
     delta_descanso_efectivo = _contexto_efectivo(delta_descanso_dias, raw_match_data, "delta_descanso_dias")
     insumos_factivados = _empaquetar_insumos_factivados(
-        raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta
+        raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta,
+        cache_macro_stats=cache_macro_stats,
     )
 
     # 1. Comprobación de Suficiencia Fáctica S(I_i)
@@ -1161,6 +1192,78 @@ partido sin telemetría se declara `SIN EVIDENCIA` en vez de completarse con otr
    **exactamente igual** a su clave plana heredada.
 4. **Orden del resguardo:** `crear_backup_boveda_sqlite` precede por AST a toda DML del lote
    (`sincronizar_distribuciones_soberanas_partidos` y `write_transaction`), una sola invocación.
+
+---
+
+### Adenda protocolaria `[LN-QBE-121]` — Aduana de Exhibición Macro-Torneal y Purga Nominal 44V
+
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DIRGEN-STRICT]` (orquestador y precedencia) · `[DBBD-FUNGIBLE]` (transcripción de exhibición)  
+**Firma:** SHA256-VAULT-CORE-005-LN-QBE-121-MACRO-EXHIBITION-GATE
+
+**Alcance:** delta **aditivo** sobre el orquestador sellado. `derivar_factores_con_procedencia`,
+`estimar_intensidades_loglineal`, Dixon-Coles, el operador de André y la fusión `[LN-QBE-104]`
+permanecen **bit-idénticos**: lo que se legisla es la **conexión** del artefacto congelado
+`data/cache_macro_stats_liga_mx_2026.json` (`[ARCH-1.4.59]`) al paquete `insumos_factivados` con
+jurisdicción de **exhibición** —enciende celdas del catálogo de 32 variables (`[LN-QBE-120]`)— y
+**sin** jurisdicción sobre λ. La verdad torneal (temporada completa) y el corte N−1 futuro-ciego
+(`[LN-QBE-020-B]`) son regímenes irreconciliables: la macro **jamás** sustituye una magnitud que el
+motor consumió. Opción A ratificada por la Tríada (`VAR-2026-FASEB-C3`): la $P'$ histórica de los
+117 partidos re-homologados queda **bit-idéntica**.
+
+```python
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# [LN-QBE-121] ADUANA DE EXHIBICIÓN MACRO-TORNEAL
+# `cache_macro_stats` llega YA RESUELTO por slug desde el orquestador de ingesta (C5): el
+# generador no conoce identidades de club. La clave `macro_stats` es ANIDADA y no participa de
+# `_MAPA_NIDOS_A_PLANO` ni de `_FORMATO_INSUMO`: sin artefacto, el paquete es byte-idéntico.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+CLAVE_MACRO_STATS = "macro_stats"
+PROCEDENCIA_MACRO_TORNEAL = "MACRO_TORNEAL"
+
+# (claves del bloque del club, formato de transcripción, nota de procedencia)
+_CLAVES_MACRO_STATS: Dict[str, Tuple[Tuple[str, ...], str, str]] = {
+    "V02": (("touches_opp_box_per_match",), "num2", "Agregado torneal: toques en área rival por partido [LN-QBE-121]."),
+    "V03": (("accurate_passes_per_match",), "num1", "Agregado torneal: pases precisos por partido [LN-QBE-121]."),
+    "V04": (("accurate_long_balls_per_match",), "num1", "Agregado torneal: pases largos precisos por partido [LN-QBE-121]."),
+    "V05": (("fouls_per_match",), "num1", "Agregado torneal: faltas cometidas por partido [LN-QBE-121]."),
+    "V08": (("big_chances_created_per_match",), "num2", "Agregado torneal: big chances creadas por partido [LN-QBE-121]."),
+    "V09": (("big_chances_missed_per_match",), "num2", "Agregado torneal: big chances falladas por partido [LN-QBE-121]."),
+    "V10": (("xgot_squad",), "num1", "Agregado torneal: xGOT acumulado de plantilla [LN-QBE-121]."),
+    "V11": (("xa_squad",), "num1", "Agregado torneal: xA acumulada de plantilla [LN-QBE-121]."),
+    "V14": (("defensive_actions_per_match",), "num1", "Agregado torneal: acciones defensivas por partido [LN-QBE-121]."),
+    "V15": (("interceptions_per_match",), "num1", "Agregado torneal: intercepciones por partido [LN-QBE-121]."),
+    "V17": (("goals_prevented_squad",), "num1", "Agregado torneal: goles evitados de plantilla [LN-QBE-121]."),
+    "V18": (("save_percentage",), "pct", "Agregado torneal: Save % del club [LN-QBE-121]."),
+    "V19": (("sweeper_actions",), "num1", "Agregado torneal: salidas del portero por partido [LN-QBE-121]."),
+    "V20": (("clean_sheets",), "num0", "Agregado torneal: porterías a cero acumuladas [LN-QBE-121]."),
+    "V21": (("set_piece_goals_per_match",), "num2", "Agregado torneal: goles a favor de pelota parada por partido [LN-QBE-121]."),
+    "V22": (("set_piece_goals_conceded_per_match",), "num2", "Agregado torneal: goles recibidos de pelota parada por partido [LN-QBE-121]."),
+    "V23": (("corners_per_match",), "num2", "Agregado torneal: córners por partido [LN-QBE-121]."),
+    "V24": (("penalties_won_total", "penalties_conceded_total"), "penales", "Agregado torneal: penales a favor/en contra acumulados [LN-QBE-121]."),
+    "V25": (("yellow_cards_per_match", "red_cards_per_match"), "tarjetas", "Agregado torneal: amarillas y rojas por partido [LN-QBE-121]."),
+}
+```
+
+**Precedencia legislada (una sola dirección):** `h2h_stats` (`[LN-QBE-105]`) → `_FORMATO_INSUMO`
+(insumo realmente consumido por λ) → `_RESPALDO_INSUMO` (Axioma 4) → `_CLAVES_MACRO_STATS`
+(exhibición torneal). La macro **sólo rellena celdas apagadas**: `V01`, `V06`, `V07`, `V12` y `V13`
+conservan el corte certificado y su cotejo torneal se publica aparte en `macro_stats.cotejo`.
+
+**Invariantes sellados por esta adenda (custodiados por
+`tests/shield/test_shield_macro_consumption_phase_b.py`):**
+
+1. **Invariancia de λ:** con `cache_macro_stats=None` y con artefacto conectado, `lambda_home`,
+   `lambda_away`, `p_local`/`p_empate`/`p_visitante`, `discrepancia_epist` y `phi_lead2` son
+   **idénticos** (la macro no toca el espacio de tasas).
+2. **Identidad del paquete:** sin artefacto, `insumos_factivados` no publica `macro_stats` y es
+   igual al paquete previo a esta adenda (cero clave fantasma).
+3. **Fidelidad de la transcripción:** cada celda encendida reproduce la clave publicada del
+   artefacto; una clave ausente deja la celda en `SIN EVIDENCIA` (cero imputación, `V16` sin fuente).
+4. **No canibalización:** ninguna celda encendida por el corte certificado cambia de valor ni de
+   nota por la presencia del artefacto.
+5. **Auxiliares sin código:** las magnitudes sin celda (`m_xG`, `m_xGA`, impacto de bajas) viajan
+   como `AUX_*` y **ninguna** porta un identificador `V\\d\\d`.
 
 ---
 
@@ -2872,4 +2975,76 @@ def clasificar_morfologia_simplex(
         gamma_utilizado=g
     )
 ```
+
+---
+
+### Adenda protocolaria `[LN-QBE-122]` — Purga Nominal ALT-B: Taxonomías Derivadas y Auxiliares `AUX_*`
+
+**Estado:** `[ESTADO: CANON CRISTALIZADO / SELLADO]`  
+**Régimen:** `[DBBD-FUNGIBLE]` (renombre nominal de exhibición; **cero** mutación de fórmulas)  
+**Firma:** SHA256-VAULT-CORE-005-LN-QBE-122-NOMINAL-PURGE-AUX
+
+**Alcance:** delta **estrictamente nominal** sobre `[VAULT-CORE-005]`. `estimar_intensidades_loglineal`,
+Dixon-Coles, el operador de André, `derivar_factores_estructurales` y la fusión `[LN-QBE-104]`
+permanecen **bit-idénticos**: lo que se legisla es la **identidad forense** de las celdas de
+exhibición. La casilla del catálogo (`[LN-QBE-120]`) se reserva a la evidencia que la sostiene con su
+misma granularidad; toda magnitud sin casilla viaja como auxiliar sin código (`AUX_*`) y **jamás**
+usurpa un `VXX`. La tabla de remapeo es la que `_FORMATO_INSUMO` ya leía (`V05→V06`, `V06→V07`,
+`V10→V12`, `V11→V13`, `V27→V30`, `V28→V29`, `V39→V26`, `V16→V18`, `V29→V31`): la magnitud no cambia,
+cambia de casilla cuando la casilla es suya. Verificación de campo: re-homologación `1-13` con
+`idénticas=117` contra la captura previa y **492 jueces en verde**.
+
+```python
+# ── [LN-QBE-122] Derivación de taxonomías locales desde el catálogo ÚNICO ─────────────────────
+PREFIJO_AUXILIAR = "AUX_"
+
+_NOMBRES_CATALOGO: Dict[str, str] = {fila[0]: fila[1] for fila in _CATALOGO_44}
+
+
+def es_identificador_auxiliar(identificador: Any) -> bool:
+    """`True` si el identificador es una magnitud auxiliar sin celda (`AUX_*`, `[LN-QBE-122]`)."""
+    return str(identificador or "").startswith(PREFIJO_AUXILIAR)
+
+
+def nombre_de_celda(identificador: str, respaldo: str = "") -> str:
+    """[LN-QBE-122] Nombre forense canónico de la celda; `respaldo` para los `AUX_*` huérfanos."""
+    return _NOMBRES_CATALOGO.get(str(identificador), respaldo)
+
+
+def derivar_taxonomia(
+    dimension: str,
+    locales: Dict[str, Tuple[str, str, str]],
+) -> Tuple[Tuple[str, str, str, str], ...]:
+    """[LN-QBE-122] Taxonomía de una familia `𝒯_*` derivada del catálogo único.
+
+    `locales[identificador] = (nombre_respaldo, unidad, nota)`. Las celdas del catálogo toman
+    NOMBRE y POSICIÓN de `_CATALOGO_32`; del proveedor se conservan la unidad canónica y la nota
+    de procedencia. Los `AUX_*` no habitan el catálogo: se anexan al final en el orden declarado.
+    """
+    canonicos = [
+        (identificador, nombre)
+        for identificador, nombre, familia, _claves, _modo, _origen, _espacio in _CATALOGO_44
+        if familia == dimension
+    ]
+    orden = {identificador: posicion for posicion, (identificador, _) in enumerate(canonicos)}
+    nombres = {identificador: nombre for identificador, nombre in canonicos}
+    derivadas, auxiliares = [], []
+    for identificador, (nombre_local, unidad, nota) in locales.items():
+        if es_identificador_auxiliar(identificador):
+            auxiliares.append((identificador, nombre_local, unidad, nota))
+            continue
+        if identificador not in nombres:
+            raise ValueError(f"[LN-QBE-122] `{identificador}` no pertenece a `{dimension}`.")
+        derivadas.append((identificador, nombres[identificador], unidad, nota))
+    derivadas.sort(key=lambda fila: orden[fila[0]])
+    return tuple(derivadas + auxiliares)
+```
+
+**Auxiliares legislados (sin celda):** `AUX_XGOT_90`, `AUX_PPDA`, `AUX_PASES_PROG`,
+`AUX_ENTRADAS_UT`, `AUX_XG_BAJAS`, `AUX_XGA_BAJAS`, `AUX_Q_MOD_H`, `AUX_Q_MOD_A`, `AUX_M_XG`,
+`AUX_M_XGA`, `AUX_XG_HIST`.
+
+**Deuda declarada:** `sandbox_micro_dinamicas_pipeline.py` conserva las dimensiones 5/6/9/10/12 del
+régimen 44V derogado (fuera del alcance ratificado; exige varianza propia).
+
 

@@ -129,7 +129,9 @@ def sincronizar_distribuciones_soberanas_partidos(
                 delta_descanso_dias=float(item.get("delta_descanso_dias", 0.0) or 0.0),
                 q_mod_h=float(item.get("q_mod_h", 1.0) or 1.0),
                 q_mod_a=float(item.get("q_mod_a", 1.0) or 1.0),
-                origen_captura=origen_captura
+                origen_captura=origen_captura,
+                # [LN-QBE-121] Bloque torneal de EXHIBICIÓN ya resuelto por slug (C5).
+                cache_macro_stats=item.get("macro_stats") or None,
             )
 
             # 3. Persistencia atómica en la tabla 3NF 'sovereign_distributions'

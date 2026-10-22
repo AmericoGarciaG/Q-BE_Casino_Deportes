@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-🏆 THE SHIELD — SANDBOX MICRO-DINÁMICAS & CIERRE (DIM 5, 6, 9, 10, 12) SUITE
-Juez Inmutable: [LN-QBE-112] / [ARCH-1.4.51]
+🏆 THE SHIELD — SANDBOX MICRO-DINÁMICAS ESPEJO (`𝒯_Spc`, V21-V25) SUITE
+Juez Inmutable: [LN-QBE-112] / [ARCH-1.4.51] / [ARCH-1.4.62]
 Base de Gobierno: Kybern Framework v13.5 [GOV-TEST-01] (Pure Read-Only / In-Memory Test)
 """
 
@@ -12,32 +12,21 @@ from scripts.laboratorio.sandbox_micro_dinamicas_pipeline import (
     evaluar_alerta_fragilidad_cierre
 )
 
-def test_invarianza_sandbox_micro_dinamicas_resuelve_15_variables():
-    """[INVARIANZA 1 - E2E]: El sandbox debe procesar un partido y contener las 15 variables de las 5 dimensiones."""
+def test_invarianza_sandbox_micro_dinamicas_resuelve_5_celdas_canonicas():
+    """[INVARIANZA 1 - E2E]: El sandbox emite UNA dimensión canónica con sus 5 celdas (V21-V25)."""
     res = ejecutar_sandbox_micro_dinamicas_partido(match_id="LIGAMX-J11-07")
     
     assert res is not None
     assert res["status"] in ("EXITO", "PARCIAL", "SIN_EVIDENCIA")
     
-    # 1. Comprobar presencia de las 5 dimensiones
-    assert "dimension_5_balon_parado" in res
-    assert "dimension_6_disciplina" in res
-    assert "dimension_9_cronometria" in res
-    assert "dimension_10_banca" in res
-    assert "dimension_12_cierre" in res
+    # 1. Comprobar presencia de la única dimensión del catálogo de 32 ([ARCH-1.4.62]).
+    assert "dimension_5_balon_parado_y_disciplina" in res
     
-    # 2. Comprobar presencia de las 15 variables
-    d5 = res["dimension_5_balon_parado"]
-    d6 = res["dimension_6_disciplina"]
-    d9 = res["dimension_9_cronometria"]
-    d10 = res["dimension_10_banca"]
-    d12 = res["dimension_12_cierre"]
-    
-    assert all(k in d5 for k in ["V18", "V19", "V20", "V21"])
-    assert all(k in d6 for k in ["V22", "V23", "V24"])
-    assert all(k in d9 for k in ["V33", "V34", "V35", "V36"])
-    assert all(k in d10 for k in ["V37", "V38"])
-    assert all(k in d12 for k in ["V43", "V44"])
+    # 2. Comprobar presencia de las 5 celdas canónicas de `𝒯_Spc`.
+    d5 = res["dimension_5_balon_parado_y_disciplina"]
+    assert all(k in d5 for k in ["V21", "V22", "V23", "V24", "V25"])
+    assert len(d5) == 5
+    assert res["celdas_totales"] == 5
 
 def test_invarianza_ratios_cronometria_no_negativos():
     """[INVARIANZA 2 - CRONOMETRÍA]: Ratios 1T/2T deben ser no negativos con guardas de división por cero."""
@@ -69,8 +58,8 @@ def test_invarianza_alerta_fragilidad_cierre_pago_anticipado():
 def test_invarianza_degradacion_fiduciaria_sin_feed_granular():
     """[INVARIANZA 4 - ZERO MOCKS]: Variables sin feed específico degradan a SIN EVIDENCIA con None."""
     res = ejecutar_sandbox_micro_dinamicas_partido(match_id="LIGAMX-J11-07")
-    v37 = res["dimension_10_banca"]["V37"]  # xG de suplentes (sin feed granular)
+    v25 = res["dimension_5_balon_parado_y_disciplina"]["V25"]  # Tarjetas (sin feed granular)
     
-    assert v37["estado"] == "SIN EVIDENCIA"
-    assert v37["local"] is None and v37["visita"] is None
-    assert "FASE 6" in str(v37["nota"])
+    assert v25["estado"] == "SIN EVIDENCIA"
+    assert v25["local"] is None and v25["visita"] is None
+    assert "FASE 6" in str(v25["nota"])

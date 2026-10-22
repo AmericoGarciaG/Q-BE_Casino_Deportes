@@ -7,11 +7,11 @@ Régimen: `[HÍBRIDO DUAL-TRACK]`
 * `[DIRGEN-STRICT]`: el Factor de Control de Cancha y el Save % NO se reimplementan. El FCF se
   consume VERBATIM de `SyntheticMetricsEngine._compute_fcf` (`[LN-QBE-030]`, clamps inmutables
   `[0.65, 1.35]`) y de él se deriva el residuo ortogonal `v_Vol⊥ = FCF − 1.0 ∈ [−0.35, +0.35]`.
-* `[DBBD-FUNGIBLE]`: composición del corte N−1, celdas V01/V16 y notas de cobertura.
+* `[DBBD-FUNGIBLE]`: composición del corte N−1, celdas V01/V18 y notas de cobertura.
 
 Contrato público:
   * `obtener_metricas_volumen_porteria(sesion, match_id, ...)` → bloque `volumen_porteria` del
-    paquete `insumos_factivados` con V01 (posesión media), V16 (Save %) y el residuo ortogonal.
+    paquete `insumos_factivados` con V01 (posesión media), V18 (Save %) y el residuo ortogonal.
   * `telemetria_de_club(sesion, partidos, slug)` → capa de lectura compartida de la fase sobre
     `match_telemetry` (la consumen también los proveedores de trayectoria y ataque/defensa).
 
@@ -33,6 +33,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from src.core.metrics import SyntheticMetricsEngine
+from src.core.sovereign.factor_attribution import derivar_taxonomia
 from src.core.sovereign.context_provider import (
     ESTADO_EXITO,
     ESTADO_PARCIAL,
@@ -72,26 +73,29 @@ _SOTA_DEFAULT = 0.0
 UMBRAL_DELTA_POSESION = 5.0     # lectura forense del ΔPosición (puntos porcentuales)
 UMBRAL_RESIDUO = 0.05           # banda neutra del residuo ortogonal
 
-# ── Taxonomía bipartita de las dimensiones ([LN-QBE-111] · 𝒯_Vol / 𝒯_Gk) ──────────────────────
-# (id, nombre forense, unidad canónica, nota de procedencia)
-_TAXONOMIA_DIM_1: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V01", "Posesión efectiva de balón", "%",
-     "Posesión media del corte N−1; fuente: match_telemetry.possession_pct con cobertura íntegra."),
-    ("V02", "Toques en el área rival", "toques/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica toques en área."),
-    ("V03", "Pases progresivos completados", "pases/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica pases progresivos."),
-    ("V04", "Entradas al último tercio", "entradas/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica entradas al último tercio."),
-)
-_TAXONOMIA_DIM_4: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V15", "Goles prevenidos (xGOT − GC)", "xGOT−GC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT (post-shot)."),
-    ("V16", "Porcentaje de atajadas (Save %)", "%",
-     "Save% = 100·(SoTA − GC)/SoTA sobre el corte N−1, cobertura íntegra de SoTA."),
-    ("V17", "Salidas exitosas por alto", "salidas/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica high claims."),
-)
+# ── Taxonomía bipartita de las dimensiones ([LN-QBE-122] · 𝒯_Vol / 𝒯_Por) ─────────────────────
+# [LN-QBE-122] NOMBRE y ORDEN vienen del catálogo único `[LN-QBE-120]`; aquí sólo viven la unidad
+# canónica y la nota de procedencia. `AUX_*` = magnitud sin celda (jamás usurpa un `VXX`).
+_LOCALES_DIM_1: Dict[str, Tuple[str, str, str]] = {
+    "V01": ("Posesión Promedio (%)", "%",
+            "Posesión media del corte N−1; fuente: match_telemetry.possession_pct con cobertura íntegra."),
+    "V02": ("Toques en Área Rival", "toques/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica toques en área."),
+    "AUX_PASES_PROG": ("Pases progresivos completados", "pases/PJ",
+                       "SIN EVIDENCIA (FASE 6): el sensor congelado no publica pases progresivos."),
+    "AUX_ENTRADAS_UT": ("Entradas al último tercio", "entradas/PJ",
+                        "SIN EVIDENCIA (FASE 6): el sensor congelado no publica entradas al último tercio."),
+}
+_LOCALES_DIM_4: Dict[str, Tuple[str, str, str]] = {
+    "V17": ("Goles Evitados", "xGOT−GC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT (post-shot)."),
+    "V18": ("Save % (Porcentaje de Atajadas)", "%",
+            "Save% = 100·(SoTA − GC)/SoTA sobre el corte N−1, cobertura íntegra de SoTA."),
+    "V19": ("Salidas/Líbero por Partido", "salidas/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica high claims."),
+}
+_TAXONOMIA_DIM_1: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Vol", _LOCALES_DIM_1)
+_TAXONOMIA_DIM_4: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Por", _LOCALES_DIM_4)
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -268,7 +272,7 @@ def _corte_club(
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-# [LN-QBE-117] CELDAS V01/V16, RESIDUO ORTOGONAL Y ΔPOSICIÓN
+# [LN-QBE-117] CELDAS V01/V18, RESIDUO ORTOGONAL Y ΔPOSICIÓN
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 def _celda(
     identificador: str,
@@ -414,35 +418,36 @@ def _bloque_delta_posesion(
 def _dimension_volumen(
     corte_local: Dict[str, Any], corte_visita: Dict[str, Any]
 ) -> Dict[str, Dict[str, Any]]:
-    """𝒯_Vol · DIM 1 (V01-V04): sólo V01 tiene feed en esta fase del corpus."""
-    nota_v01 = _TAXONOMIA_DIM_1[0][3]
+    """𝒯_Vol · DIM 1 (taxonomía `[LN-QBE-122]`): sólo `V01` tiene feed en esta fase del corpus."""
+    nota_v01 = _LOCALES_DIM_1["V01"][2]
     if corte_local.get("poss_pct") is None or corte_visita.get("poss_pct") is None:
         nota_v01 = _nota_cobertura(corte_local, corte_visita, "match_telemetry.possession_pct")
-    celdas: Dict[str, Dict[str, Any]] = {
-        "V01": _celda(
-            "V01", _TAXONOMIA_DIM_1[0][1], _TAXONOMIA_DIM_1[0][2],
-            corte_local.get("poss_pct"), corte_visita.get("poss_pct"), nota_v01, formato="pct",
-        )
-    }
-    for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_1[1:]:
-        celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
+    celdas: Dict[str, Dict[str, Any]] = {}
+    for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_1:
+        if identificador == "V01":
+            celdas["V01"] = _celda(
+                "V01", nombre, unidad,
+                corte_local.get("poss_pct"), corte_visita.get("poss_pct"), nota_v01, formato="pct",
+            )
+        else:
+            celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
     return celdas
 
 
 def _dimension_porteria(
     corte_local: Dict[str, Any], corte_visita: Dict[str, Any]
 ) -> Dict[str, Dict[str, Any]]:
-    """𝒯_Gk · DIM 4 (V15-V17): sólo V16 tiene feed (Save % sobre SoTA del corte)."""
+    """𝒯_Por · DIM 4 (taxonomía `[LN-QBE-122]`): sólo `V18` tiene feed (Save % sobre SoTA)."""
     save_local = _save_de_corte(corte_local)
     save_visita = _save_de_corte(corte_visita)
-    nota_v16 = _TAXONOMIA_DIM_4[1][3]
+    nota_v18 = _LOCALES_DIM_4["V18"][2]
     if save_local is None or save_visita is None:
-        nota_v16 = _nota_cobertura(corte_local, corte_visita, "match_telemetry.sota")
+        nota_v18 = _nota_cobertura(corte_local, corte_visita, "match_telemetry.sota")
     celdas: Dict[str, Dict[str, Any]] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_4:
-        if identificador == "V16":
+        if identificador == "V18":
             celdas[identificador] = _celda(
-                identificador, nombre, unidad, save_local, save_visita, nota_v16, formato="pct"
+                identificador, nombre, unidad, save_local, save_visita, nota_v18, formato="pct"
             )
         else:
             celdas[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
@@ -458,7 +463,7 @@ def _insumos_volumen(
     """Insumos planos que consume el motor + el transcriptor de 44 variables (`[LN-QBE-102]`).
 
     Claves heredadas respetadas al carácter (`poss_local`, `sot_local`, `sota_local`, ...) para que
-    `_FORMATO_INSUMO` de `factor_attribution` encienda V01/V06/V11 sin traducción adicional.
+    `_FORMATO_INSUMO` de `factor_attribution` encienda V01/V06/V07 sin traducción adicional.
     """
     poss_local = corte_local.get("poss_pct")
     poss_visita = corte_visita.get("poss_pct")
@@ -479,7 +484,7 @@ def _insumos_volumen(
         "poss_local": _r(poss_local),
         "poss_visita": _r(poss_visita),
         "poss_diff": _r(delta_poss),
-        # [LN-QBE-102] V06/V11 · tiros a puerta por partido (tasa del corte)
+        # [LN-QBE-102] V07/V13 · tiros a puerta por partido (tasa del corte)
         "sot_local": _r(corte_local.get("sot_rate")),
         "sot_visita": _r(corte_visita.get("sot_rate")),
         "sota_local": _r(corte_local.get("sota_rate")),
@@ -493,7 +498,7 @@ def _insumos_volumen(
         "pj_visita": int(corte_visita.get("pj") or 0),
         "gc_local": int(corte_local.get("gc") or 0),
         "gc_visita": int(corte_visita.get("gc") or 0),
-        # V16 · Save % saturado [0, 100]
+        # V18 · Save % saturado [0, 100]
         "save_local": _r(_save_de_corte(corte_local)),
         "save_visita": _r(_save_de_corte(corte_visita)),
         # Residuo ortogonal (FCF sellado − 1.0)
@@ -590,7 +595,7 @@ def obtener_metricas_volumen_porteria(
     """[LN-QBE-117] Bloque `volumen_porteria` del paquete `insumos_factivados` (sólo lectura).
 
     Migración VERBATIM de `[LN-QBE-111]` desde el sandbox de laboratorio: V01 (posesión media),
-    V16 (Save %) y el residuo ortogonal `v_Vol⊥ = FCF − 1.0` sobre el corte futuro-ciego N−1.
+    V18 (Save %) y el residuo ortogonal `v_Vol⊥ = FCF − 1.0` sobre el corte futuro-ciego N−1.
 
     * `jornada` ausente ⇒ se toma de `matches.matchday_num` (`kickoff` nunca se lee).
     * `local_slug`/`visita_slug` ausentes ⇒ se toman del fixture de cartelera.
@@ -643,7 +648,7 @@ def obtener_metricas_volumen_porteria(
     ]
     if len(publicadas) >= 2:
         status = ESTADO_EXITO
-        motivo = "V01 y V16 publicadas con cobertura íntegra bilateral [LN-QBE-117]."
+        motivo = "V01 y V18 publicadas con cobertura íntegra bilateral [LN-QBE-117]."
     elif publicadas:
         status = ESTADO_PARCIAL
         motivo = "Cobertura parcial: sólo una de las tasas tiene feed íntegro [LN-QBE-117]."

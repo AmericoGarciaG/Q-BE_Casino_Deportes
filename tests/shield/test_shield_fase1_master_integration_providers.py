@@ -287,7 +287,7 @@ def _bloque_h2h() -> dict:
                 "record_sede": "1-0-0",
             },
         },
-        "variables": {"V39": {"id": "V39", "estado": "EVALUADO"}},
+        "variables": {"V26": {"id": "V26", "estado": "EVALUADO"}},
     }
 
 
@@ -353,7 +353,7 @@ def test_bloques_proveedores_publican_contrato_legislado(boveda):
         assert isinstance(bloques[nombre]["variables"], dict) and bloques[nombre]["variables"]
     trayectoria = bloques["trayectoria"]
     assert trayectoria["proveedor"] == "TRAJECTORY_PROVIDER"
-    assert set(trayectoria["dimension_8_trayectoria"]) == {"V29", "V30", "V31", "V32"}
+    assert set(trayectoria["dimension_8_trayectoria"]) == {"V31", "AUX_M_XG", "AUX_M_XGA", "V32"}
 
     ataque = bloques["ataque_defensa"]
     assert ataque["status"] == "EXITO", ataque.get("motivo")
@@ -362,12 +362,12 @@ def test_bloques_proveedores_publican_contrato_legislado(boveda):
     assert ataque["insumos"]["cobertura_telemetria_local"]["cubiertos"] == 6
     assert ataque["insumos"]["xg_es_real_opta"] is True
     # Las 4 celdas de la fase con feed íntegro en AMBOS cortes quedan EVALUADAS.
-    for identificador in ("V05", "V06", "V10", "V11"):
+    for identificador in ("V06", "V07", "V12", "V13"):
         assert ataque["variables"][identificador]["estado"] == "EVALUADO"
         assert ataque["variables"][identificador]["local"] is not None
         assert ataque["variables"][identificador]["visita"] is not None
-    # Fase 6: sin feed en la bóveda ⇒ apagadas, con la nota honesta.
-    for identificador in ("V07", "V08", "V09", "V12", "V13", "V14"):
+    # Fase 6: sin feed en la bóveda ⇒ apagadas, con la nota honesta (los AUX_* sin celda incluidos).
+    for identificador in ("V08", "V09", "AUX_XGOT_90", "AUX_PPDA", "V15", "V16"):
         celda = ataque["variables"][identificador]
         assert celda["estado"] == "SIN EVIDENCIA", identificador
         assert celda["local"] is None and celda["visita"] is None
@@ -389,13 +389,13 @@ def test_cobertura_integra_declara_cero_faltantes(boveda):
 
 
 def test_trayectoria_y_contexto_publican_sus_celdas(boveda):
-    """V29–V32 (trayectoria) y V25–V28 (contexto) viven en sus proveedores, no en el sellado."""
+    """`V31`/`V32` + `AUX_*` (trayectoria) y `V29`/`V30` + `AUX_*` (contexto) viven en sus proveedores."""
     bloques = _bloques(boveda)
     trayectoria = bloques["trayectoria"]
     assert trayectoria["proveedor"] == "TRAJECTORY_PROVIDER"
     assert trayectoria["escritura_bd"] is False and trayectoria["llamadas_red"] is False
     propias = trayectoria["dimension_8_trayectoria"]
-    assert set(propias) == {"V29", "V30", "V31", "V32"}
+    assert set(propias) == {"V31", "AUX_M_XG", "AUX_M_XGA", "V32"}
     for identificador, celda in propias.items():
         assert celda["id"] == identificador
         assert celda["estado"] in ("EVALUADO", "SIN EVIDENCIA")
@@ -407,7 +407,7 @@ def test_trayectoria_y_contexto_publican_sus_celdas(boveda):
 
     contexto = bloques["contexto"]
     assert contexto["bloque"] == "contexto"
-    assert set(contexto["variables"]) == {"V25", "V26", "V27", "V28"}
+    assert set(contexto["variables"]) == {"AUX_XG_BAJAS", "AUX_XGA_BAJAS", "V30", "V29"}
     for clave in (
         "delta_descanso_dias",
         "delta_alt_metros",
@@ -530,7 +530,7 @@ def test_catalogo_identico_con_paquete_solo_anidado(boveda):
 
 
 def test_volumen_porteria_hereda_claves_planas(boveda):
-    """V01/V06/V11 se encienden con las claves heredadas del bloque de telemetría."""
+    """V01/V06/V07 se encienden con las claves heredadas del bloque de telemetría."""
     volumen = _bloques(boveda)["volumen_porteria"]
     insumos = volumen["insumos"]
     assert insumos["poss_local"] == pytest.approx(53.0, abs=1e-6)
@@ -575,10 +575,10 @@ def test_motor_sellado_paridad_verbatim_y_xga_fuera_del_crudo(boveda):
         for i in range(4)
     ), "El decreto §E1 exige que `xga` altere el resultado: si no altera, la prueba es vacua."
 
-    # El xGA SÍ se publica como evidencia V10 (no entra al motor, pero no se oculta).
+    # El xGA SÍ se publica como evidencia V12 (no entra al motor, pero no se oculta).
     pj_local = ataque["cortes"]["local"]["pj"]
-    assert ataque["variables"]["V10"]["estado"] == "EVALUADO"
-    assert ataque["variables"]["V10"]["local"] == pytest.approx(
+    assert ataque["variables"]["V12"]["estado"] == "EVALUADO"
+    assert ataque["variables"]["V12"]["local"] == pytest.approx(
         round(ataque["cortes"]["local"]["xga_total"] / pj_local, 6), abs=1e-4
     )
     assert "xga" not in ataque["factores"]["mezcla_sellada"]
@@ -666,7 +666,7 @@ def test_atribucion_factorial_unificada_sobre_el_paquete(boveda):
 # LEY 4 · Degradación honesta: cobertura rota ⇒ tasa completa apagada (cero promedio parcial)
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 def test_una_fila_faltante_apaga_la_tasa_completa(boveda):
-    """Una sola fila del corpus sin `xg`/`xga` deja V05 y V10 SIN EVIDENCIA (sin promedio parcial)."""
+    """Una sola fila del corpus sin `xg`/`xga` deja V06 y V12 SIN EVIDENCIA (sin promedio parcial)."""
     gw, ruta_corpus = boveda
     corpus = json.loads(ruta_corpus.read_text(encoding="utf-8"))
     victima = "HIST-PUEBLA-J13"
@@ -689,12 +689,12 @@ def test_una_fila_faltante_apaga_la_tasa_completa(boveda):
     assert corte_local["xg_total"] is None and corte_local["xga_total"] is None
     assert ataque["insumos"]["xg_local_rate"] is None
     assert ataque["insumos"]["xga_local_rate"] is None
-    assert ataque["variables"]["V05"]["estado"] == "SIN EVIDENCIA"
-    assert ataque["variables"]["V05"]["local"] is None
-    assert ataque["variables"]["V10"]["estado"] == "SIN EVIDENCIA"
-    # La telemetría 3NF sigue íntegra: V06/V11 NO se apagan por un hueco de otra fuente.
-    assert ataque["variables"]["V06"]["estado"] == "EVALUADO"
-    assert ataque["variables"]["V11"]["estado"] == "EVALUADO"
+    assert ataque["variables"]["V06"]["estado"] == "SIN EVIDENCIA"
+    assert ataque["variables"]["V06"]["local"] is None
+    assert ataque["variables"]["V12"]["estado"] == "SIN EVIDENCIA"
+    # La telemetría 3NF sigue íntegra: V07/V13 NO se apagan por un hueco de otra fuente.
+    assert ataque["variables"]["V07"]["estado"] == "EVALUADO"
+    assert ataque["variables"]["V13"]["estado"] == "EVALUADO"
     assert ataque["status"] == "PARCIAL"
     # Cero fabricación: el motor sellado sólo recibe `xg` presente o nada.
     assert "xg" not in _crudo_del_motor(ataque, incluir_xga=False)["home_team_stats"]

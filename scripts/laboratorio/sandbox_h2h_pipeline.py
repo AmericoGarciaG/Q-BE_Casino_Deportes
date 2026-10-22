@@ -10,7 +10,7 @@ Ejecuta de punta a punta la cadena REAL del servidor —ingesta (SQLite + corpus
 sin DOM y sin Playwright.
 
 Régimen: `[HÍBRIDO DUAL-TRACK]`
-* `[DIRGEN-STRICT]`: el modelado relacional de la Dimensión 11 (V39/V40/V41), la ley de mezcla
+* `[DIRGEN-STRICT]`: el modelado relacional de la Dimensión 11 (V26/V27/V28), la ley de mezcla
   `[LN-QBE-104]`/`[VAULT-CORE-005]` y la métrica `Δ_epist` NO se reimplementan: se invocan
   `calcular_matriz_h2h_empirica`, `fusionar_simplex_con_h2h` y `derivar_discrepancia_epistemica`
   tal como están sellados.
@@ -26,7 +26,7 @@ Axiomas operativos
 3. **Clave canónica `p_visitante` (H-3 ratificado):** el símplex emitido porta SIEMPRE
    `p_local` / `p_empate` / `p_visitante`; nunca `p_visita` (evita `NameError` en el juez).
 4. **Ley Zero-H2H (H-4 ratificado):** sin duelos el kernel NO se invoca; `w_H2H = 0.0`,
-   fusión = identidad y `Δ_epist` en el piso R-1 (`0.02`), con V39/V40/V41 en `SIN EVIDENCIA`.
+   fusión = identidad y `Δ_epist` en el piso R-1 (`0.02`), con V26/V27/V28 en `SIN EVIDENCIA`.
    Jamás se fabrica un récord `0-0-0` ni un `ΔG = 0` (ausencia de evidencia no es empate).
 5. **Futuro-ceguera declarada:** si la ventana incluye un duelo con `dias_antiguedad == 0`
    (el propio día del kickoff) se declara en el semáforo; el comportamiento del proveedor
@@ -90,7 +90,7 @@ def _semaforo(nivel: str, motivo: str) -> Dict[str, str]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-# DIMENSIÓN 11 — MODELADO RELACIONAL DE LA MEMORIA H2H (V39 / V40 / V41 / V42)
+# DIMENSIÓN 11 — MODELADO RELACIONAL DE LA MEMORIA H2H (V26 / V27 / V28 / AUX_XG_HIST)
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 def calcular_metricas_relacionales_h2h(
     duelos: Sequence[Dict[str, Any]],
@@ -102,12 +102,12 @@ def calcular_metricas_relacionales_h2h(
     Transcripción aritmética del agregado sellado `[LN-QBE-105]` (`_agregar_h2h_stats`),
     enriquecida con la ATRIBUCIÓN del bando beneficiario:
 
-    * **V39** — multiconjunto de resultados desde la perspectiva del local evaluado: `W-D-L`.
-    * **V40** — magnitud diferencial `ΔG = Σ(GL − GV)` con bando beneficiario explícito
+    * **V26** — multiconjunto de resultados desde la perspectiva del local evaluado: `W-D-L`.
+    * **V27** — magnitud diferencial `ΔG = Σ(GL − GV)` con bando beneficiario explícito
       (`LOCAL` / `VISITANTE` / `EQUILIBRADO`) y saldo descriptivo firmado.
-    * **V41** — rendimiento del VISITANTE condicionado a la sede evaluada: sólo acreditan
+    * **V28** — rendimiento del VISITANTE condicionado a la sede evaluada: sólo acreditan
       las filas con `es_local_sede is True` (cero fabricación de sede).
-    * **V42** — Fase 6 (Deep Opta Cache): permanece `SIN EVIDENCIA`, jamás simulada.
+    * **AUX_XG_HIST** — Fase 6 (Deep Opta Cache): permanece `SIN EVIDENCIA`, jamás simulada.
 
     Sin evidencia verificable devuelve las cuatro variables en `SIN EVIDENCIA` (Ley Zero-H2H).
     """
@@ -147,8 +147,8 @@ def calcular_metricas_relacionales_h2h(
         else:
             visitante_derrotas += 1
 
-    v42 = {
-        "id": "V42",
+    aux_xg_hist = {
+        "id": "AUX_XG_HIST",
         "estado": ESTADO_SIN_EVIDENCIA,
         "fase": 6,
         "nota": "xG histórico: Deep Opta Cache (Fase 6). No se simula.",
@@ -156,26 +156,26 @@ def calcular_metricas_relacionales_h2h(
 
     if evaluados == 0:
         return {
-            "V39": {
-                "id": "V39", "estado": ESTADO_SIN_EVIDENCIA, "record_general": None,
+            "V26": {
+                "id": "V26", "estado": ESTADO_SIN_EVIDENCIA, "record_general": None,
                 "victorias": 0, "empates": 0, "derrotas": 0, "duelos_evaluados": 0,
                 "nota": SIN_ANTECEDENTES_DIRECTOS,
             },
-            "V40": {
-                "id": "V40", "estado": ESTADO_SIN_EVIDENCIA,
+            "V27": {
+                "id": "V27", "estado": ESTADO_SIN_EVIDENCIA,
                 "delta_goles": None, "delta_goles_local": None, "delta_goles_visita": None,
                 "magnitud_absoluta": None, "beneficiario": None,
                 "saldo_descriptivo": SIN_ANTECEDENTES_DIRECTOS,
                 "goles_favor": 0, "goles_contra": 0,
                 "nota": "Ley Zero-H2H [LN-QBE-020-B]: ausencia de evidencia no es empate.",
             },
-            "V41": {
-                "id": "V41", "estado": ESTADO_SIN_EVIDENCIA,
+            "V28": {
+                "id": "V28", "estado": ESTADO_SIN_EVIDENCIA,
                 "record_sede": SIN_ANTECEDENTES_SEDE, "duelos_con_sede": 0,
                 "visitante_victorias": 0, "visitante_empates": 0, "visitante_derrotas": 0,
                 "nota": "Ningún duelo acredita la sede evaluada.",
             },
-            "V42": v42,
+            "AUX_XG_HIST": aux_xg_hist,
         }
 
     delta = goles_favor - goles_contra
@@ -190,15 +190,15 @@ def calcular_metricas_relacionales_h2h(
         saldo = "EQUILIBRADO (0)"
 
     return {
-        "V39": {
-            "id": "V39", "estado": ESTADO_EVALUADO,
+        "V26": {
+            "id": "V26", "estado": ESTADO_EVALUADO,
             "record_general": f"{victorias}V - {empates}E - {derrotas}D",
             "victorias": victorias, "empates": empates, "derrotas": derrotas,
             "duelos_evaluados": evaluados,
             "nota": "Récord del local evaluado (perspectiva del fixture) [LN-QBE-105].",
         },
-        "V40": {
-            "id": "V40", "estado": ESTADO_EVALUADO,
+        "V27": {
+            "id": "V27", "estado": ESTADO_EVALUADO,
             # `delta_goles` es el alias público del DTO de inspección; ambos valores son la
             # MISMA magnitud (cero doble fuente de verdad).
             "delta_goles": delta,
@@ -210,8 +210,8 @@ def calcular_metricas_relacionales_h2h(
             "goles_favor": goles_favor, "goles_contra": goles_contra,
             "nota": "ΔG = Σ(GL − GV); ventaja atribuida al bando beneficiario [LN-QBE-106].",
         },
-        "V41": {
-            "id": "V41", "estado": ESTADO_EVALUADO,
+        "V28": {
+            "id": "V28", "estado": ESTADO_EVALUADO,
             "record_sede": (
                 f"{visitante_victorias}V - {visitante_empates}E - {visitante_derrotas}D (Visita)"
                 if con_sede else SIN_ANTECEDENTES_SEDE
@@ -222,7 +222,7 @@ def calcular_metricas_relacionales_h2h(
             "visitante_derrotas": visitante_derrotas,
             "nota": "Récord del visitante en la sede evaluada (es_local_sede is True) [LN-QBE-105].",
         },
-        "V42": v42,
+        "AUX_XG_HIST": aux_xg_hist,
     }
 
 
@@ -727,17 +727,17 @@ def imprimir_tablero_consola(reporte: Dict[str, Any]) -> None:
         print("   ⚪ Sin enfrentamientos directos verificables (Ley Zero-H2H).")
 
     variables = reporte.get("variables_h2h") or {}
-    v39 = variables.get("V39") or {}
-    v40 = variables.get("V40") or {}
-    v41 = variables.get("V41") or {}
-    v42 = variables.get("V42") or {}
+    v26 = variables.get("V26") or {}
+    v27 = variables.get("V27") or {}
+    v28 = variables.get("V28") or {}
+    aux_xg_hist = variables.get("AUX_XG_HIST") or {}
     print()
-    print(_seccion("DIMENSIÓN 11 · MODELADO RELACIONAL (V39 / V40 / V41)"))
-    print(f"   V39  Récord del local evaluado        {v39.get('record_general') or ESTADO_SIN_EVIDENCIA}")
-    print(f"   V40  ΔG = {str(v40.get('delta_goles_local') if v40.get('delta_goles_local') is not None else '—'):<4}"
-          f" · Beneficiario {str(v40.get('beneficiario') or '—'):<12} {v40.get('saldo_descriptivo')}")
-    print(f"   V41  Resistencia en sede (visita)     {v41.get('record_sede') or ESTADO_SIN_EVIDENCIA}")
-    print(f"   V42  xG histórico                     {v42.get('estado') or ESTADO_SIN_EVIDENCIA} (Fase 6)")
+    print(_seccion("DIMENSIÓN 11 · MODELADO RELACIONAL (V26 / V27 / V28)"))
+    print(f"   V26  Récord del local evaluado        {v26.get('record_general') or ESTADO_SIN_EVIDENCIA}")
+    print(f"   V27  ΔG = {str(v27.get('delta_goles_local') if v27.get('delta_goles_local') is not None else '—'):<4}"
+          f" · Beneficiario {str(v27.get('beneficiario') or '—'):<12} {v27.get('saldo_descriptivo')}")
+    print(f"   V28  Resistencia en sede (visita)     {v28.get('record_sede') or ESTADO_SIN_EVIDENCIA}")
+    print(f"   AUX_XG_HIST  xG histórico                     {aux_xg_hist.get('estado') or ESTADO_SIN_EVIDENCIA} (Fase 6)")
 
     poisson = reporte.get("distribucion_poisson")
     h2h = reporte.get("distribucion_h2h") or {}
@@ -797,7 +797,7 @@ def imprimir_tablero_consola(reporte: Dict[str, Any]) -> None:
 
 
 def imprimir_tablero_jornada(jornada: int, reportes: Sequence[Dict[str, Any]]) -> None:
-    """Cartelera compacta de la jornada: una fila por fixture con V39/V40 y Δ_epist."""
+    """Cartelera compacta de la jornada: una fila por fixture con V26/V27 y Δ_epist."""
     _cabecera_tablero([
         f"CARTELERA DE MEMORIA H2H · JORNADA {jornada}",
         "[LN-QBE-106] · contraste Poisson ∪ Kernel H2H por fixture (sólo lectura)",
@@ -807,21 +807,21 @@ def imprimir_tablero_jornada(jornada: int, reportes: Sequence[Dict[str, Any]]) -
         return
 
     print()
-    print("   PARTIDO          ENCUENTRO                              N   V39          "
-          "V40                          Δ_epist   SEM · ESTADO")
+    print("   PARTIDO          ENCUENTRO                              N   V26          "
+          "V27                          Δ_epist   SEM · ESTADO")
     print("   " + "─" * (ANCHO_TABLERO - 4))
     for reporte in reportes:
         fixture = reporte.get("match") or {}
         variables = reporte.get("variables_h2h") or {}
-        v39 = (variables.get("V39") or {}).get("record_general") or ESTADO_SIN_EVIDENCIA
-        v40 = (variables.get("V40") or {}).get("saldo_descriptivo") or SIN_ANTECEDENTES_DIRECTOS
+        v26 = (variables.get("V26") or {}).get("record_general") or ESTADO_SIN_EVIDENCIA
+        v27 = (variables.get("V27") or {}).get("saldo_descriptivo") or SIN_ANTECEDENTES_DIRECTOS
         conteo = (reporte.get("ventana_h2h") or {}).get("conteo", 0)
         delta = (reporte.get("impacto_delta") or {}).get("delta_epist_infinito")
         celda = (reporte.get("semaforos") or {}).get("cuarentena_epist") or {}
         encuentro = f"{fixture.get('local') or '—'} vs {fixture.get('visitante') or '—'}"
         print(
             f"   {str(fixture.get('match_id') or '—'):<16} {encuentro[:38]:<38} {conteo:<3} "
-            f"{v39:<12} {v40[:28]:<28} {('—' if delta is None else f'{delta:.6f}'):<9} "
+            f"{v26:<12} {v27[:28]:<28} {('—' if delta is None else f'{delta:.6f}'):<9} "
             f"{celda.get('glifo', '⚪')} {reporte.get('status')}"
         )
 

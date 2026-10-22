@@ -395,6 +395,8 @@ def _proyectar_valores(
             raw_match_data=item,
             mu_liga=mu_liga,
             gamma_home_base=gamma_home,
+            # [LN-QBE-121] Mismo bloque torneal que el puente: la paridad dry-run ↔ 3NF se sostiene.
+            cache_macro_stats=item.get("macro_stats") or None,
         )
         valores[item["match_id"]] = {clave: float(getattr(dist_out, clave)) for clave in CLAVES_CAPTURA_P_PRIMA}
         suficiencias[item["match_id"]] = _suficiencia_de_traza(dist_out)

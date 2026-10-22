@@ -1,18 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-[LN-QBE-112] / [ARCH-1.4.51] SANDBOX MICRO-DINÁMICAS & CIERRE — PIPELINE AUTÓNOMO CLI-FIRST.
+[LN-QBE-112] / [ARCH-1.4.51] / [ARCH-1.4.62] SANDBOX MICRO-DINÁMICAS ESPEJO — `𝒯_Spc` EN FASE 6.
 
 Misión
 ------
-Cerrar el soporte de laboratorio de las 12 dimensiones del Tratado Vol. I modelando las 15
-variables restantes: Balón Parado (Dimensión 5, 𝒯_Spc, V18-V21), Fricción Disciplinaria
-(Dimensión 6, 𝒯_Dsc, V22-V24), Cronometría (Dimensión 9, 𝒯_Time, V33-V36), Banca
-(Dimensión 10, 𝒯_Sub, V37-V38) y Cierre Tardío (Dimensión 12, 𝒯_Cls, V43-V44).
+Espejar en el laboratorio la ÚNICA casilla que el catálogo de 32 variables (`[ARCH-1.4.60]` /
+`[ARCH-1.4.61]`) le asigna a `[LN-QBE-112]`: `dimension_5_balon_parado_y_disciplina` (`𝒯_Spc`,
+`V21`-`V25`: goles a favor/contra de pelota parada, córners, penales y tarjetas).
+
+El corpus congelado NO publica feed de pelota parada, córners, penales ni tarjetas granulares, por
+lo que las cinco celdas se declaran `SIN EVIDENCIA` / `FASE 6` con `local = visita = None`: este
+sandbox certifica la AUSENCIA declarada, jamás una magnitud imputada (`[GOVERNANCE-01]`).
+
+Purga de régimen ([ARCH-1.4.62])
+-------------------------------
+El reporte emite UNA sola dimensión con CINCO celdas. Las cinco dimensiones del régimen derogado
+(5/6/9/10/12) y sus 15 celdas quedan fuera: la purga nominal de `[ARCH-1.4.61]` reasignó sus ids
+(córners ⇒ `V23`, penales ⇒ `V24`, tarjetas ⇒ `V25`) y el bloque de cierre tardío no tiene casilla
+en el catálogo vigente. En consecuencia se retiran del reporte `ratios_cronometria` (leía `V33`/
+`V34`) e `indice_riesgo_roja` (leía `V24` con semántica de rojas), y la salpicadura `[LN-QBE-083]`
+sobrevive como lectura NO COMPUTABLE declarada.
 
 Régimen: `[HÍBRIDO DUAL-TRACK]`
-* `[DIRGEN-STRICT]`: la aritmética legislada por `[LN-QBE-112]` —ratio 1T/2T con guardas y
-  clamp, índice de rotación del XI y umbral de fragilidad de cierre `xGA₈₀₋₉₀ ≥ 0.35`— vive en
-  funciones puras. No se toca `src/core/` ni se reimplementa λ.
+* `[DIRGEN-STRICT]`: `calcular_ratio_cronometria` (ratio 1T/2T con guardas y clamp),
+  `evaluar_alerta_fragilidad_cierre` (umbral `xGA₈₀₋₉₀ ≥ 0.35`) y `calcular_indice_rotacion_xi`
+  (1 − Jaccard) permanecen BYTE-IDÉNTICAS: son el instrumental puro de `[LN-QBE-112]` y sus Jueces
+  de unidad las ejercitan directamente. Se retira su INYECCIÓN al reporte, no su código.
 * `[DBBD-FUNGIBLE]`: composición del corte, celdas bipartitas, semáforos, CLI y tablero ASCII.
 
 Axiomas operativos
@@ -21,13 +34,11 @@ Axiomas operativos
    Prohibido escribir en `data/qbe_database.db`; prohibido abrir red.
 2. **Futuro-ceguera (N−1):** el corte de cada club son los partidos con `matchday_num < N` en
    estado terminal. El fixture evaluado jamás alimenta su propia acumulación.
-3. **Cobertura íntegra:** una variable sólo publica magnitud si TODOS los partidos del corte de
-   AMBOS clubes traen la clave granular. Una sola ausencia ⇒ `None`.
-4. **Cero defaults como evidencia:** `0` de `fouls`/`red_cards` y `50.0` de posesión son
+3. **Cero defaults como evidencia:** `0` de `fouls`/`red_cards` y `50.0` de posesión son
    centinelas del esquema ORM, no mediciones (`[GOVERNANCE-01]`).
-5. **Bipartita simétrica:** `EVALUADO` exige magnitud real en AMBOS clubes; en caso contrario
-   `SIN EVIDENCIA (FASE 6)` con `local = visita = None`. Prohibida la imputación.
-6. **Sin señal a λ:** las 15 variables son diagnóstico; `[VAULT-CORE-001/005]` no se tocan.
+4. **Bipartita simétrica:** `EVALUADO` exigiría magnitud real en AMBOS clubes; en `𝒯_Spc` ninguna
+   celda la tiene, de modo que todas degradan a `SIN EVIDENCIA (FASE 6)` con `local = visita = None`.
+5. **Sin señal a λ:** estas cinco variables son diagnóstico; `[VAULT-CORE-001/005]` no se tocan.
 
 Uso:
     python -m scripts.laboratorio.sandbox_micro_dinamicas_pipeline --partido LIGAMX-J11-07
@@ -91,111 +102,50 @@ UMBRAL_XGA_CIERRE = 0.35         # xGA 80'-90'+ ⇒ alerta de quiebre del Pago A
 UMBRAL_INDICE_ROJA = 0.25        # rojas/PJ ⇒ alerta de asimetría numérica
 
 REGLA_CORTE = "matchday_num < N ∧ estado ∈ {FINALIZADO, FINISHED} (futuro-ceguera N−1)"
-NODOS_GOBERNANZA = ("LN-QBE-112", "ARCH-1.4.51")
+NODOS_GOBERNANZA = ("LN-QBE-112", "ARCH-1.4.51", "ARCH-1.4.62")
 NODO_PAGO_ANTICIPADO = "LN-QBE-083"
 
-# ── Taxonomía de las 15 micro-dinámicas (`[LN-QBE-112]`) ───────────────────────────────────────
-# `claves` son las llaves granulares ACEPTADAS del corpus congelado; la primera publicada gana.
+# ── Taxonomía de las 5 micro-dinámicas canónicas de `𝒯_Spc` (`[LN-QBE-112]` / `[ARCH-1.4.62]) ────
+# `claves` documenta las llaves granulares que el corpus debería publicar para salir de Fase 6;
+# mientras no existan, la celda se declara SIN EVIDENCIA y NUNCA se imputa una magnitud.
 _TAXONOMIA: Dict[str, Dict[str, Any]] = {
-    "V18": {
-        "variable": "xG a balón parado", "unidad": "xG/90",
-        "claves": ("xg_set_piece", "xg_balon_parado"),
-        "nota_evidencia": "xG a balón parado por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus congelado sólo publica xG total; no existe split de balón parado.",
-    },
-    "V19": {
-        "variable": "xGA a balón parado", "unidad": "xGA/90",
-        "claves": ("xga_set_piece", "xga_balon_parado"),
-        "nota_evidencia": "xGA concedido a balón parado por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus congelado sólo publica xGA total; no existe split de balón parado.",
-    },
-    "V20": {
-        "variable": "Córners a favor", "unidad": "córners/90",
-        "claves": ("corners", "corneres", "corners_90"),
-        "nota_evidencia": "Córners por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica córners.",
-    },
     "V21": {
-        "variable": "Penales a favor", "unidad": "pen/PJ",
-        "claves": ("penalties_won", "penales_favor", "penales"),
-        "nota_evidencia": "Penales a favor por partido del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica penales.",
+        "variable": "Goles a Favor de Pelota Parada", "unidad": "goles/PJ",
+        "claves": ("set_piece_goals", "xg_setpiece", "xg_set_piece", "xg_balon_parado"),
+        "nota_evidencia": "Goles a favor de pelota parada por partido del corte N−1 (cobertura íntegra).",
+        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus congelado no publica goles de pelota parada.",
     },
     "V22": {
-        "variable": "Faltas en tercio defensivo", "unidad": "faltas/90",
-        "claves": ("fouls_def_third", "faltas_tercio_defensivo"),
-        "nota_evidencia": "Faltas en tercio defensivo por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): no existe feed de faltas por tercio; `match_telemetry.fouls` permanece en el default del esquema y no es evidencia.",
+        "variable": "Goles Recibidos de Pelota Parada", "unidad": "goles/PJ",
+        "claves": ("set_piece_goals_conceded", "xga_setpiece", "xga_set_piece", "xga_balon_parado"),
+        "nota_evidencia": "Goles recibidos de pelota parada por partido del corte N−1 (cobertura íntegra).",
+        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus congelado no publica goles concedidos de pelota parada.",
     },
     "V23": {
-        "variable": "Tarjetas amarillas", "unidad": "TA/90",
-        "claves": ("yellow_cards", "tarjetas_amarillas"),
-        "nota_evidencia": "Amarillas por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica tarjetas amarillas.",
+        "variable": "Córners por Partido", "unidad": "córners/PJ",
+        "claves": ("corners", "corner_taken_team", "tiros_esquina"),
+        "nota_evidencia": "Córners por partido del corte N−1 (cobertura íntegra).",
+        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica córners.",
     },
     "V24": {
-        "variable": "Índice de expulsión", "unidad": "rojas/PJ",
-        "claves": ("red_cards", "tarjetas_rojas"),
-        "nota_evidencia": "Rojas por partido del corte N−1 (cobertura íntegra); alerta si > 0.25.",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): `match_telemetry.red_cards` no es evidencia (default 0 sin ingestión) y el corpus no publica rojas granulares.",
+        "variable": "Penales Favor/Contra", "unidad": "pen/PJ",
+        "claves": ("penalty_rate", "penalty_won_team", "penalty_conceded_team", "penales_tasa"),
+        "nota_evidencia": "Penales a favor/contra por partido del corte N−1 (cobertura íntegra).",
+        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica penales.",
     },
-    "V33": {
-        "variable": "Ratio xG 1T/2T", "unidad": "ratio",
-        "claves": ("xg_1t", "xg_2t"),
-        "nota_evidencia": "Ratio xG 1T/2T con clamp [0.1, 10.0] y guarda de división por cero.",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus no publica reparto de xG por tiempo.",
-    },
-    "V34": {
-        "variable": "Ratio xGA 1T/2T", "unidad": "ratio",
-        "claves": ("xga_1t", "xga_2t"),
-        "nota_evidencia": "Ratio xGA 1T/2T con clamp [0.1, 10.0] y guarda de división por cero.",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus no publica reparto de xGA por tiempo.",
-    },
-    "V35": {
-        "variable": "Goles anotados 0-15'", "unidad": "goles/90",
-        "claves": ("goals_0_15", "goles_0_15"),
-        "nota_evidencia": "Goles anotados en 0-15' por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): `matches` sólo publica marcador final; no hay goles por intervalo.",
-    },
-    "V36": {
-        "variable": "Goles concedidos 0-15'", "unidad": "goles/90",
-        "claves": ("goals_conceded_0_15", "goles_concedidos_0_15"),
-        "nota_evidencia": "Goles concedidos en 0-15' por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): `matches` sólo publica marcador final; no hay goles por intervalo.",
-    },
-    "V37": {
-        "variable": "xG de suplentes", "unidad": "xG/90",
-        "claves": ("subs_xg", "xg_suplentes"),
-        "nota_evidencia": "xG aportado por suplentes por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): no existe feed de xG por suplente ni acta de cambios.",
-    },
-    "V38": {
-        "variable": "Rotación del XI", "unidad": "índice 0-1",
-        "claves": ("lineup", "xi"),
-        "nota_evidencia": "Índice 1 − Jaccard promedio entre alineaciones consecutivas del corte N−1.",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): no existe feed de alineaciones titulares.",
-    },
-    "V43": {
-        "variable": "xG 80'-90'+ (clutch)", "unidad": "xG/90",
-        "claves": ("xg_80_90", "xg_clutch"),
-        "nota_evidencia": "xG producido en 80'-90'+ por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus no publica reparto de xG por minuto.",
-    },
-    "V44": {
-        "variable": "xGA 80'-90'+ (fragilidad)", "unidad": "xGA/90",
-        "claves": ("xga_80_90", "xga_tardio"),
-        "nota_evidencia": "xGA permitido en 80'-90'+ por 90' del corte N−1 (cobertura íntegra).",
-        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el corpus no publica reparto de xGA por minuto.",
+    "V25": {
+        "variable": "Tarjetas Amarillas/Rojas", "unidad": "TA+RJ/PJ",
+        "claves": ("yellow_cards", "total_yel_card_team", "red_card_risk", "amarillas"),
+        "nota_evidencia": "Tarjetas por partido del corte N−1 (cobertura íntegra).",
+        "nota_fase_6": "SIN EVIDENCIA (FASE 6): el sensor congelado no publica tarjetas amarillas ni rojas.",
     },
 }
 
 # ── Agrupación por dimensión (contrato de salida del Juez) ─────────────────────────────────────
+# Una sola casilla del catálogo de 32: `𝒯_Spc` (V21-V25). Las dimensiones 5/6/9/10/12 del régimen
+# derogado quedan FUERA del reporte ([ARCH-1.4.62]).
 _DIMENSIONES: Dict[str, Tuple[str, ...]] = {
-    "dimension_5_balon_parado": ("V18", "V19", "V20", "V21"),
-    "dimension_6_disciplina": ("V22", "V23", "V24"),
-    "dimension_9_cronometria": ("V33", "V34", "V35", "V36"),
-    "dimension_10_banca": ("V37", "V38"),
-    "dimension_12_cierre": ("V43", "V44"),
+    "dimension_5_balon_parado_y_disciplina": ("V21", "V22", "V23", "V24", "V25"),
 }
 TOTAL_VARIABLES = sum(len(ids) for ids in _DIMENSIONES.values())
 
@@ -211,13 +161,6 @@ def _clamp(valor: float, minimo: float, maximo: float) -> float:
 def _redondear(valor: Optional[float], decimales: int = 4) -> Optional[float]:
     """Redondeo de presentación; `None` atraviesa intacto (cero invención)."""
     return None if valor is None else round(float(valor), decimales)
-
-
-def _tasa(total: Optional[float], pj: int) -> Optional[float]:
-    """Tasa por partido (≈ por 90 min). `None` sin total o sin muestra."""
-    if total is None or pj <= 0:
-        return None
-    return float(total) / float(pj)
 
 
 def _celda(identificador: str, local: Optional[float], visita: Optional[float]) -> Dict[str, Any]:
@@ -343,70 +286,6 @@ def _partidos_de_club(sesion: Any, slug: str, jornada_corte: int) -> List[Dict[s
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
 # AGREGACIÓN GRANULAR DE CORTE (cobertura íntegra obligatoria)
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
-def _serie_club(
-    partidos: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-    claves: Sequence[str],
-) -> Dict[str, Any]:
-    """Suma una clave granular con cobertura ÍNTEGRA sobre el corte de un club.
-
-    Publica `total` sólo si TODOS los partidos del corte traen la clave; cualquier ausencia deja
-    `total = None` y enumera los `faltantes` (trazabilidad de la degradación, no imputación).
-    """
-    suma = 0.0
-    faltantes: List[str] = []
-    for partido in partidos:
-        lado = "home" if partido["es_local"] else "away"
-        valor = _magnitud(_registro(cache, partido["match_id"], lado), claves)
-        if valor is None:
-            faltantes.append(partido["match_id"])
-            continue
-        suma += valor
-    completo = bool(partidos) and not faltantes
-    return {
-        "claves": list(claves),
-        "pj": len(partidos),
-        "cubiertos": len(partidos) - len(faltantes),
-        "total": round(suma, 6) if completo else None,
-        "faltantes": faltantes,
-    }
-
-
-def _alineaciones_club(
-    partidos: Sequence[Dict[str, Any]], cache: Dict[str, Any]
-) -> List[Tuple[str, ...]]:
-    """XI titular de cada partido del corte en orden cronológico; `[]` si falta UNA alineación."""
-    alineaciones: List[Tuple[str, ...]] = []
-    for partido in partidos:
-        lado = "home" if partido["es_local"] else "away"
-        bloque = _registro(cache, partido["match_id"], lado)
-        xi = bloque.get("lineup") or bloque.get("xi")
-        if not isinstance(xi, (list, tuple)) or len(xi) < 11:
-            return []
-        alineaciones.append(tuple(str(jugador) for jugador in list(xi)[:11]))
-    return alineaciones
-
-
-def _ratio_de_club(
-    partidos: Sequence[Dict[str, Any]], cache: Dict[str, Any], clave_1t: str, clave_2t: str
-) -> Tuple[Optional[float], Dict[str, Any]]:
-    """Ratio 1T/2T de un club con doble cobertura íntegra (numerador y denominador)."""
-    serie_1t = _serie_club(partidos, cache, (clave_1t,))
-    serie_2t = _serie_club(partidos, cache, (clave_2t,))
-    detalle: Dict[str, Any] = {
-        clave_1t: serie_1t["total"],
-        clave_2t: serie_2t["total"],
-        "pj": serie_1t["pj"],
-        "cubiertos": min(serie_1t["cubiertos"], serie_2t["cubiertos"]),
-        "faltantes": sorted(set(serie_1t["faltantes"]) | set(serie_2t["faltantes"])),
-    }
-    if serie_1t["total"] is None or serie_2t["total"] is None:
-        detalle["ratio"] = None
-        return None, detalle
-    ratio = calcular_ratio_cronometria(serie_1t["total"], serie_2t["total"])
-    detalle["ratio"] = ratio
-    return ratio, detalle
-
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
 # ARITMÉTICA [DIRGEN-STRICT] — `[LN-QBE-112]` (pura, determinista, sin I/O)
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
@@ -571,132 +450,33 @@ def _cobertura_xg_base(
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
-# CONSTRUCCIÓN DE DIMENSIONES (composición DBBD; aritmética DIRGEN delegada)
+# CONSTRUCCIÓN DE LA DIMENSIÓN CANÓNICA (composición DBBD; `𝒯_Spc` en régimen FASE 6)
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
-def _celdas_por_tasa(
-    partidos_local: Sequence[Dict[str, Any]],
-    partidos_visita: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-    identificadores: Sequence[str],
-) -> Dict[str, Dict[str, Any]]:
-    """Celdas tasa/90 o /partido: cobertura íntegra en los DOS cortes o degradación honesta."""
-    celdas: Dict[str, Dict[str, Any]] = {}
-    for identificador in identificadores:
-        claves = _TAXONOMIA[identificador]["claves"]
-        serie_local = _serie_club(partidos_local, cache, claves)
-        serie_visita = _serie_club(partidos_visita, cache, claves)
-        celdas[identificador] = _celda(
-            identificador,
-            _tasa(serie_local["total"], serie_local["pj"]),
-            _tasa(serie_visita["total"], serie_visita["pj"]),
-        )
-    return celdas
-
-
-def _construir_dimension_5(
+def _construir_dimension_5_balon_parado_y_disciplina(
     partidos_local: Sequence[Dict[str, Any]],
     partidos_visita: Sequence[Dict[str, Any]],
     cache: Dict[str, Any],
 ) -> Dict[str, Dict[str, Any]]:
-    """Dimensión 5 (`𝒯_Spc`): balón parado y penales (V18-V21)."""
-    return _celdas_por_tasa(
-        partidos_local, partidos_visita, cache, _DIMENSIONES["dimension_5_balon_parado"]
-    )
+    """`𝒯_Spc` (V21-V25) en régimen FASE 6: cinco celdas SIN EVIDENCIA, cero imputación.
 
-
-def _construir_dimension_6(
-    partidos_local: Sequence[Dict[str, Any]],
-    partidos_visita: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-) -> Dict[str, Dict[str, Any]]:
-    """Dimensión 6 (`𝒯_Dsc`): fricción disciplinaria y riesgo de expulsión (V22-V24)."""
-    return _celdas_por_tasa(
-        partidos_local, partidos_visita, cache, _DIMENSIONES["dimension_6_disciplina"]
-    )
-
-def _construir_dimension_9(
-    partidos_local: Sequence[Dict[str, Any]],
-    partidos_visita: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
-    """Dimensión 9 (`𝒯_Time`): cronometría de gol y ratios de desgaste (V33-V36)."""
-    celdas = _celdas_por_tasa(partidos_local, partidos_visita, cache, ("V35", "V36"))
-    ratio_33_local, detalle_33_local = _ratio_de_club(partidos_local, cache, "xg_1t", "xg_2t")
-    ratio_33_visita, detalle_33_visita = _ratio_de_club(partidos_visita, cache, "xg_1t", "xg_2t")
-    ratio_34_local, detalle_34_local = _ratio_de_club(partidos_local, cache, "xga_1t", "xga_2t")
-    ratio_34_visita, detalle_34_visita = _ratio_de_club(partidos_visita, cache, "xga_1t", "xga_2t")
-    celdas["V33"] = _celda("V33", ratio_33_local, ratio_33_visita)
-    celdas["V34"] = _celda("V34", ratio_34_local, ratio_34_visita)
-    ratios = {
-        "V33": {"local": detalle_33_local, "visita": detalle_33_visita},
-        "V34": {"local": detalle_34_local, "visita": detalle_34_visita},
+    El corpus congelado no publica goles de pelota parada, córners, penales ni tarjetas
+    granulares, de modo que la dimensión NO se deriva de él: se declara ausente. Los argumentos
+    del corte se conservan en la firma para que una futura habilitación (varianza propia) no
+    altere el contrato del orquestador; hoy no se leen.
+    """
+    _ = (partidos_local, partidos_visita, cache)  # corte declarado: no hay feed que consumir
+    return {
+        identificador: _celda(identificador, None, None)
+        for identificador in _DIMENSIONES["dimension_5_balon_parado_y_disciplina"]
     }
-    return celdas, ratios
 
 
-def _construir_dimension_10(
-    partidos_local: Sequence[Dict[str, Any]],
-    partidos_visita: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-) -> Dict[str, Dict[str, Any]]:
-    """Dimensión 10 (`𝒯_Sub`): banca y rotación del XI (V37-V38)."""
-    celdas = _celdas_por_tasa(partidos_local, partidos_visita, cache, ("V37",))
-    rotacion_local = calcular_indice_rotacion_xi(_alineaciones_club(partidos_local, cache))
-    rotacion_visita = calcular_indice_rotacion_xi(_alineaciones_club(partidos_visita, cache))
-    celdas["V38"] = _celda("V38", rotacion_local, rotacion_visita)
-    return celdas
+def _delta_corners(dimension: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """ΔCórners = Córners_H − Córners_A (`[LN-QBE-112]` §1) sobre la celda canónica `V23`.
 
-
-def _construir_dimension_12(
-    partidos_local: Sequence[Dict[str, Any]],
-    partidos_visita: Sequence[Dict[str, Any]],
-    cache: Dict[str, Any],
-) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
-    """Dimensión 12 (`𝒯_Cls`): cierre tardío y salpicadura al Pago Anticipado (V43-V44)."""
-    celdas = _celdas_por_tasa(partidos_local, partidos_visita, cache, ("V43", "V44"))
-    alerta_local = evaluar_alerta_fragilidad_cierre(celdas["V44"]["local_num"])
-    alerta_visita = evaluar_alerta_fragilidad_cierre(celdas["V44"]["visita_num"])
-    riesgos = [
-        alerta["riesgo_quiebre_pa"]
-        for alerta in (alerta_local, alerta_visita)
-        if alerta["riesgo_quiebre_pa"] is not None
-    ]
-    riesgo_global = any(riesgos) if riesgos else None
-    if riesgo_global is None:
-        diagnostico = f"{NOTA_FASE_6}: ningún club publica xGA tardío; cobertura +PA no computable."
-        glifo = GLIFO[NIVEL_NEUTRAL]
-    elif riesgo_global:
-        diagnostico = (
-            "FRAGILIDAD DE CIERRE en al menos un club; +PA bajo vigilancia "
-            f"[{NODO_PAGO_ANTICIPADO}]."
-        )
-        glifo = GLIFO[NIVEL_ROJO]
-    else:
-        diagnostico = "CIERRE SÓLIDO en ambos clubes; sin señal de quiebre del +PA."
-        glifo = GLIFO[NIVEL_VERDE]
-    alerta = {
-        "umbral": UMBRAL_XGA_CIERRE,
-        "local": alerta_local,
-        "visita": alerta_visita,
-        "riesgo_global": None if riesgo_global is None else bool(riesgo_global),
-        "diagnostico": diagnostico,
-        "glifo": glifo,
-        "cobertura_pa": (
-            "NO COMPUTABLE — SIN EVIDENCIA"
-            if riesgo_global is None
-            else (
-                f"DOBLE COBRO (+PA) HABILITADO CON VIGILANCIA [{NODO_PAGO_ANTICIPADO}]"
-                if riesgo_global
-                else "COBERTURA +PA SIN ALERTA"
-            )
-        ),
-    }
-    return celdas, alerta
-
-
-def _delta_corners(dimension_5: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """ΔCórners = Córners_H − Córners_A (`[LN-QBE-112]` §1); `None` sin cobertura doble."""
-    celda = dimension_5.get("V20") or {}
+    Sin cobertura doble la lectura se declara ausente: en `𝒯_Spc` / FASE 6 siempre lo está.
+    """
+    celda = dimension.get("V23") or {}
     local, visita = celda.get("local_num"), celda.get("visita_num")
     if local is None or visita is None:
         return {
@@ -711,24 +491,22 @@ def _delta_corners(dimension_5: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _indice_riesgo_roja(dimension_6: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """Alerta de asimetría numérica: rojas/PJ > 0.25 en cualquiera de los dos clubes."""
-    celda = dimension_6.get("V24") or {}
-    local, visita = celda.get("local_num"), celda.get("visita_num")
-    if local is None or visita is None:
-        return {
-            "umbral": UMBRAL_INDICE_ROJA, "local": None, "visita": None, "alerta": None,
-            "diagnostico": f"{NOTA_FASE_6}: sin rojas por partido no se audita la asimetría numérica.",
-        }
-    alerta = local > UMBRAL_INDICE_ROJA or visita > UMBRAL_INDICE_ROJA
-    diagnostico = (
-        "ALERTA DE ASIMETRÍA NUMÉRICA: al menos un club supera 0.25 rojas/partido."
-        if alerta
-        else "Disciplina contenida: ambos clubes por debajo de 0.25 rojas/partido."
-    )
+def _alerta_cierre_fase_6() -> Dict[str, Any]:
+    """Salpicadura `[LN-QBE-083]` (+PA) en régimen FASE 6: lectura declarada, cero juicio.
+
+    La celda de cierre tardío no tiene casilla en el catálogo de 32, de modo que la única
+    lectura honesta es la que ya legisla `evaluar_alerta_fragilidad_cierre(None)`:
+    «NO COMPUTABLE — SIN EVIDENCIA». Jamás un cero que simule cierre sólido.
+    """
+    alerta = evaluar_alerta_fragilidad_cierre(None)
     return {
-        "umbral": UMBRAL_INDICE_ROJA, "local": local, "visita": visita,
-        "alerta": bool(alerta), "diagnostico": diagnostico,
+        "umbral": alerta["umbral"],
+        "local": dict(alerta),
+        "visita": dict(alerta),
+        "riesgo_global": None,
+        "diagnostico": alerta["diagnostico"],
+        "glifo": alerta["glifo"],
+        "cobertura_pa": alerta["cobertura_pa"],
     }
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
@@ -740,7 +518,6 @@ _ETIQUETAS_SEMAFORO: Dict[str, str] = {
     "corpus_congelado": "CORPUS CONGELADO",
     "degradacion_fase_6": "DEGRADACIÓN FASE 6",
     "alerta_cierre_pa": "ALERTA CIERRE +PA",
-    "disciplina_roja": "DISCIPLINA (ROJAS)",
 }
 
 
@@ -750,7 +527,7 @@ def _semaforo(nivel: str, etiqueta: str, detalle: str) -> Dict[str, Any]:
 
 
 def _semaforos(reporte: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Seis semáforos de gobernanza derivados del reporte ya construido."""
+    """Cinco semáforos de gobernanza derivados del reporte ya construido."""
     total = int(reporte.get("celdas_totales") or TOTAL_VARIABLES)
     evaluadas = int(reporte.get("celdas_evaluadas") or 0)
     degradadas = max(0, total - evaluadas)
@@ -758,12 +535,12 @@ def _semaforos(reporte: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     if evaluadas >= total:
         cobertura = _semaforo(
             NIVEL_VERDE, f"Cobertura granular {evaluadas}/{total}",
-            "Las 15 micro-dinámicas publican magnitud real en ambos clubes.",
+            "Las 5 celdas de `𝒯_Spc` publican magnitud real en ambos clubes.",
         )
     elif evaluadas == 0:
         cobertura = _semaforo(
             NIVEL_NEUTRAL, f"Cobertura granular 0/{total}",
-            "Ningún feed granular presente: las 15 celdas degradan sin imputación.",
+            "Ningún feed granular presente: las 5 celdas degradan sin imputación.",
         )
     else:
         cobertura = _semaforo(
@@ -811,17 +588,17 @@ def _semaforos(reporte: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 
     if degradadas == 0:
         degradacion = _semaforo(
-            NIVEL_VERDE, "Degradación 0/15",
+            NIVEL_VERDE, "Degradación 0/5",
             "Ninguna celda requiere el axioma de degradación fiduciaria.",
         )
     elif evaluadas == 0:
         degradacion = _semaforo(
-            NIVEL_NEUTRAL, f"Degradación {degradadas}/15",
+            NIVEL_NEUTRAL, f"Degradación {degradadas}/5",
             f"Todas las celdas declaran {NOTA_FASE_6}: cero invención de cifras.",
         )
     else:
         degradacion = _semaforo(
-            NIVEL_AMARILLO, f"Degradación {degradadas}/15",
+            NIVEL_AMARILLO, f"Degradación {degradadas}/5",
             f"{evaluadas} celdas con evidencia real; el resto declara {NOTA_FASE_6}.",
         )
 
@@ -844,38 +621,19 @@ def _semaforos(reporte: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             f"{NOTA_FASE_6}: sin xGA tardío no se emite juicio sobre el Pago Anticipado.",
         )
 
-    indice_roja = reporte.get("indice_riesgo_roja") or {}
-    alerta_roja = indice_roja.get("alerta")
-    if alerta_roja is True:
-        disciplina = _semaforo(
-            NIVEL_ROJO, "Asimetría numérica",
-            f"Rojas/partido > {UMBRAL_INDICE_ROJA:.2f} en al menos un club.",
-        )
-    elif alerta_roja is False:
-        disciplina = _semaforo(
-            NIVEL_VERDE, "Disciplina contenida",
-            f"Ambos clubes por debajo de {UMBRAL_INDICE_ROJA:.2f} rojas/partido.",
-        )
-    else:
-        disciplina = _semaforo(
-            NIVEL_NEUTRAL, "Disciplina no computable",
-            f"{NOTA_FASE_6}: sin rojas granulares no hay índice de expulsión.",
-        )
-
     return {
         "cobertura_granular": cobertura,
         "muestra_corte": muestra,
         "corpus_congelado": corpus,
         "degradacion_fase_6": degradacion,
         "alerta_cierre_pa": cierre,
-        "disciplina_roja": disciplina,
     }
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
 # ORQUESTADOR DE PARTIDO (`MicroDinamicasResult` como dict serializable)
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
 def _dimensiones_degradadas() -> Dict[str, Dict[str, Dict[str, Any]]]:
-    """Las 5 dimensiones con las 15 celdas en `SIN EVIDENCIA` (contrato mínimo del reporte)."""
+    """La única dimensión canónica con sus 5 celdas en `SIN EVIDENCIA` (contrato mínimo)."""
     return {
         clave: {
             identificador: _celda(identificador, None, None)
@@ -906,7 +664,6 @@ def _reporte_no_encontrado(
 ) -> Dict[str, Any]:
     """Reporte de degradación total cuando el fixture no puede resolverse (contrato completo)."""
     dimensiones = _dimensiones_degradadas()
-    alerta_nula = evaluar_alerta_fragilidad_cierre(None)
     reporte: Dict[str, Any] = {
         "status": "NO_ENCONTRADO",
         "motivo": motivo or (
@@ -935,18 +692,14 @@ def _reporte_no_encontrado(
         "cache_opta": meta_opta,
         "cache_telemetria": meta_telemetria,
         **dimensiones,
-        "ratios_cronometria": {"V33": {"local": {}, "visita": {}}, "V34": {"local": {}, "visita": {}}},
         "alerta_cierre": {
-            "umbral": UMBRAL_XGA_CIERRE,
-            "local": alerta_nula,
-            "visita": dict(alerta_nula),
-            "riesgo_global": None,
+            **_alerta_cierre_fase_6(),
             "diagnostico": f"{NOTA_FASE_6}: fixture irresoluble; cierre +PA no computable.",
             "glifo": GLIFO[NIVEL_NEUTRAL],
-            "cobertura_pa": "NO COMPUTABLE — SIN EVIDENCIA",
         },
-        "delta_corners": _delta_corners(dimensiones["dimension_5_balon_parado"]),
-        "indice_riesgo_roja": _indice_riesgo_roja(dimensiones["dimension_6_disciplina"]),
+        "delta_corners": _delta_corners(
+            dimensiones["dimension_5_balon_parado_y_disciplina"]
+        ),
         "celdas_evaluadas": 0,
         "celdas_totales": TOTAL_VARIABLES,
         "escritura_bd": False,
@@ -959,7 +712,7 @@ def _reporte_no_encontrado(
 def ejecutar_sandbox_micro_dinamicas_partido(
     match_id: str, temporada: str = TEMPORADA_DEFAULT
 ) -> Dict[str, Any]:
-    """Evalúa las 15 micro-dinámicas de un fixture en corte N−1 (sólo lectura, cero red)."""
+    """Evalúa la dimensión canónica `𝒯_Spc` (V21-V25) de un fixture en corte N−1."""
     identificador = str(match_id)
     cache_opta, meta_opta = cargar_corpus(ruta_cache_opta(temporada), "Opta xG congelado")
     cache_telemetria, meta_telemetria = cargar_corpus(
@@ -999,20 +752,10 @@ def ejecutar_sandbox_micro_dinamicas_partido(
             ),
         }
 
-    dimension_5 = _construir_dimension_5(partidos_local, partidos_visita, cache_opta)
-    dimension_6 = _construir_dimension_6(partidos_local, partidos_visita, cache_opta)
-    dimension_9, ratios = _construir_dimension_9(partidos_local, partidos_visita, cache_opta)
-    dimension_10 = _construir_dimension_10(partidos_local, partidos_visita, cache_opta)
-    dimension_12, alerta_cierre = _construir_dimension_12(
+    dimension_5 = _construir_dimension_5_balon_parado_y_disciplina(
         partidos_local, partidos_visita, cache_opta
     )
-    dimensiones = {
-        "dimension_5_balon_parado": dimension_5,
-        "dimension_6_disciplina": dimension_6,
-        "dimension_9_cronometria": dimension_9,
-        "dimension_10_banca": dimension_10,
-        "dimension_12_cierre": dimension_12,
-    }
+    dimensiones = {"dimension_5_balon_parado_y_disciplina": dimension_5}
 
     celdas = [celda for dimension in dimensiones.values() for celda in dimension.values()]
     evaluadas = sum(1 for celda in celdas if celda["estado"] == ESTADO_EVALUADO)
@@ -1023,9 +766,8 @@ def ejecutar_sandbox_micro_dinamicas_partido(
     elif evaluadas == 0:
         status = "SIN_EVIDENCIA"
         motivo = (
-            f"0/{TOTAL_VARIABLES} celdas con evidencia: el corpus sólo publica xG/xGA agregados; "
-            "no existen feeds de balón parado, córners, penales, faltas por tercio, tarjetas, "
-            "intervalos de gol, suplentes, alineaciones ni tramos 80'-90'+."
+            f"0/{TOTAL_VARIABLES} celdas con evidencia: `𝒯_Spc` está en FASE 6 porque el corpus "
+            "congelado no publica goles de pelota parada, córners, penales ni tarjetas."
         )
     else:
         status = "PARCIAL"
@@ -1084,10 +826,8 @@ def ejecutar_sandbox_micro_dinamicas_partido(
         "cache_opta": meta_opta,
         "cache_telemetria": meta_telemetria,
         **dimensiones,
-        "ratios_cronometria": ratios,
-        "alerta_cierre": alerta_cierre,
+        "alerta_cierre": _alerta_cierre_fase_6(),
         "delta_corners": _delta_corners(dimension_5),
-        "indice_riesgo_roja": _indice_riesgo_roja(dimension_6),
         "celdas_evaluadas": evaluadas,
         "celdas_totales": TOTAL_VARIABLES,
         "escritura_bd": False,
@@ -1298,54 +1038,19 @@ def _bloque_dimension(reporte: Dict[str, Any], clave: str, titulo: str) -> None:
     _caja(titulo, filas)
 
 
-def _bloque_cronometria(reporte: Dict[str, Any]) -> None:
-    """Dimensión 9 con el detalle numérico de los ratios 1T/2T."""
-    dimension = reporte.get("dimension_9_cronometria") or {}
-    filas: List[str] = [_encabezado_dimension("ID"), HORIZONTE]
-    evaluadas = sum(
-        1 for celda in dimension.values() if celda["estado"] == ESTADO_EVALUADO
-    )
-    for identificador in sorted(dimension.keys()):
-        filas.append(_fila_celda(dimension[identificador]))
-    filas.append(HORIZONTE)
-    for clave in ("V33", "V34"):
-        detalle = (reporte.get("ratios_cronometria") or {}).get(clave) or {}
-        for lado in ("local", "visita"):
-            datos = detalle.get(lado) or {}
-            claves_temporales = sorted(
-                k for k in datos if k not in ("pj", "cubiertos", "faltantes", "ratio")
-            )
-            pares = "  ".join(
-                f"{k}={_texto_magnitud(datos.get(k), 8).strip()}" for k in claves_temporales
-            )
-            filas.append(
-                f"{clave} {lado.upper():<6} {pares}  ratio={_texto_magnitud(datos.get('ratio'), 8)}"
-                f"  cobertura={datos.get('cubiertos', 0)}/{datos.get('pj', 0)}"
-            )
-    filas.append(
-        f"COBERTURA: {evaluadas}/{len(dimension)} variables con evidencia fáctica · "
-        "ratio neutro 1.0 y clamp [0.1, 10.0]."
-    )
-    _caja("[D9] 𝒯_Time · CRONOMETRÍA Y RATIOS 1T/2T (V33-V36)", filas)
-
-
 def _bloque_alertas(reporte: Dict[str, Any]) -> None:
-    """ΔCórners, riesgo de expulsión y fragilidad de cierre (+PA)."""
+    """ΔCórners sobre la celda canónica `V23` y fragilidad de cierre (+PA) declarada."""
     delta = reporte.get("delta_corners") or {}
-    roja = reporte.get("indice_riesgo_roja") or {}
     alerta = reporte.get("alerta_cierre") or {}
     filas = [
         f"ΔCÓRNERS  local {_texto_magnitud(delta.get('local'), 8)}  ·  "
         f"visita {_texto_magnitud(delta.get('visita'), 8)}  ·  "
         f"Δ {_texto_magnitud(delta.get('delta'), 9)}  ·  {delta.get('estado')}",
-        f"ROJAS     umbral {UMBRAL_INDICE_ROJA:.2f}  ·  "
-        f"local {_texto_magnitud(roja.get('local'), 8)}  ·  "
-        f"visita {_texto_magnitud(roja.get('visita'), 8)}  ·  {roja.get('diagnostico')}",
         f"CIERRE    umbral {UMBRAL_XGA_CIERRE:.2f}  ·  {alerta.get('glifo')} {alerta.get('diagnostico')}",
         f"+PA       {alerta.get('cobertura_pa')}",
     ]
     filas = [linea for fila in filas for linea in _envolver(fila)]
-    _caja("[ALERTAS] ΔCÓRNERS · RIESGO DE ROJA · FRAGILIDAD DE CIERRE", filas)
+    _caja("[ALERTAS] ΔCÓRNERS (V23) · FRAGILIDAD DE CIERRE +PA", filas)
 
 
 def _bloque_semaforos(reporte: Dict[str, Any]) -> None:
@@ -1369,27 +1074,14 @@ def imprimir_tablero_micro_dinamicas_consola(reporte: Dict[str, Any]) -> None:
         [
             f"REGLA DE CORTE: {REGLA_CORTE}",
             *(_envolver(f"MOTIVO: {reporte.get('motivo')}")),
-            f"Gobernanza: [LN-QBE-112] · [ARCH-1.4.51]",
+            f"Gobernanza: {' · '.join(f'[{nodo}]' for nodo in NODOS_GOBERNANZA)}",
             f"escritura_bd={reporte.get('escritura_bd')} · llamadas_red={reporte.get('llamadas_red')} · temporada={reporte.get('temporada')}",
         ],
     )
     _bloque_contexto(reporte)
     _bloque_dimension(
-        reporte, "dimension_5_balon_parado",
-        "[D5] 𝒯_Spc · BALÓN PARADO Y PENALES (V18-V21)",
-    )
-    _bloque_dimension(
-        reporte, "dimension_6_disciplina",
-        "[D6] 𝒯_Dsc · FRICCIÓN DISCIPLINARIA (V22-V24)",
-    )
-    _bloque_cronometria(reporte)
-    _bloque_dimension(
-        reporte, "dimension_10_banca",
-        "[D10] 𝒯_Sub · BANCA Y ROTACIÓN DEL XI (V37-V38)",
-    )
-    _bloque_dimension(
-        reporte, "dimension_12_cierre",
-        "[D12] 𝒯_Cls · CIERRE TARDÍO (V43-V44)",
+        reporte, "dimension_5_balon_parado_y_disciplina",
+        "[D5] 𝒯_Spc · BALÓN PARADO Y DISCIPLINA (V21-V25) · FASE 6",
     )
     _bloque_alertas(reporte)
     _bloque_semaforos(reporte)
@@ -1400,54 +1092,51 @@ def imprimir_tablero_micro_dinamicas_consola(reporte: Dict[str, Any]) -> None:
             "Futuro-ceguera: el fixture evaluado nunca alimenta su propio corte.",
             "Cobertura íntegra: una ausencia degrada la celda completa a None.",
             "Cero defaults como evidencia: 0 y 50.0 son centinelas, no mediciones.",
-            "Sin señal a λ: estas 15 variables no se reinyectan al motor sellado.",
+            "Sin señal a λ: estas 5 celdas no se reinyectan al motor sellado.",
         ],
     )
 
 
 def imprimir_tablero_jornada(jornada: int, reportes: Sequence[Dict[str, Any]]) -> None:
-    """Tablero-resumen de la jornada: celdas evaluadas por dimensión y estado global."""
+    """Tablero-resumen de la jornada: celdas evaluadas de `𝒯_Spc` y estado global."""
     filas: List[str] = [
         f"{_pad('MATCH ID', 14)}{_pad('LOCAL', 17)}{_pad('VISITA', 17)}"
-        f"{'D5'.rjust(4)}{'D6'.rjust(4)}{'D9'.rjust(4)}{'D10'.rjust(5)}{'D12'.rjust(5)}  ESTADO",
+        f"{'SPC'.rjust(5)}  ESTADO",
         HORIZONTE,
     ]
-    totales = [0] * len(_DIMENSIONES)
+    totales = 0
     for reporte in reportes:
         partido = reporte.get("match") or {}
         local = (partido.get("local") or {}).get("nombre") or "—"
         visita = (partido.get("visita") or {}).get("nombre") or "—"
-        conteo = [
-            sum(
-                1 for celda in (reporte.get(clave) or {}).values()
-                if celda["estado"] == ESTADO_EVALUADO
-            )
-            for clave in _DIMENSIONES
-        ]
-        totales = [acumulado + actual for acumulado, actual in zip(totales, conteo)]
+        # Única dimensión del contrato canónico: `𝒯_Spc` (V21-V25), en régimen FASE 6.
+        conteo = sum(
+            1 for celda in (
+                reporte.get("dimension_5_balon_parado_y_disciplina") or {}
+            ).values()
+            if celda["estado"] == ESTADO_EVALUADO
+        )
+        totales += conteo
         filas.append(
             f"{_pad(_recortar(str(partido.get('match_id') or '—'), 13), 14)}"
             f"{_pad(_recortar(str(local), 16), 17)}{_pad(_recortar(str(visita), 16), 17)}"
-            f"{str(conteo[0]).rjust(4)}{str(conteo[1]).rjust(4)}{str(conteo[2]).rjust(4)}"
-            f"{str(conteo[3]).rjust(5)}{str(conteo[4]).rjust(5)}  {reporte.get('status')}"
+            f"{str(conteo).rjust(5)}  {reporte.get('status')}"
         )
     filas.append(HORIZONTE)
     sin_evidencia = sum(
         1 for reporte in reportes if reporte.get("status") == "SIN_EVIDENCIA"
     )
     filas.append(
-        f"{_pad('TOTAL JORNADA', 48)}"
-        f"{str(totales[0]).rjust(4)}{str(totales[1]).rjust(4)}{str(totales[2]).rjust(4)}"
-        f"{str(totales[3]).rjust(5)}{str(totales[4]).rjust(5)}  "
+        f"{_pad('TOTAL JORNADA', 48)}{str(totales).rjust(5)}  "
         f"{sin_evidencia}/{len(reportes)} SIN EVIDENCIA"
     )
     _caja(
-        f"[J{jornada}] MICRO-DINÁMICAS · {len(reportes)} PARTIDOS · CELDAS EVALUADAS POR DIMENSIÓN",
+        f"[J{jornada}] 𝒯_Spc (V21-V25) · {len(reportes)} PARTIDOS · CELDAS EVALUADAS",
         filas,
     )
     print(
-        "   D5 = 𝒯_Spc (4) · D6 = 𝒯_Dsc (3) · D9 = 𝒯_Time (4) · "
-        "D10 = 𝒯_Sub (2) · D12 = 𝒯_Cls (2)  ·  corte N−1 futuro-ciego"
+        "   𝒯_Spc = 5 celdas del catálogo de 32 · régimen FASE 6 declarado · "
+        "corte N−1 futuro-ciego"
     )
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1458,8 +1147,9 @@ def _construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sandbox_micro_dinamicas_pipeline",
         description=(
-            "[LN-QBE-112] Laboratorio de micro-dinámicas: D5 balón parado, D6 disciplina, "
-            "D9 cronometría, D10 banca y D12 cierre. Sólo lectura."
+            "[LN-QBE-112] / [ARCH-1.4.62] Laboratorio espejo de la dimensión canónica `𝒯_Spc` "
+            "(V21-V25: balón parado, córners, penales y disciplina). En FASE 6 por ausencia de "
+            "feed granular. Sólo lectura, cero red."
         ),
     )
     grupo = parser.add_mutually_exclusive_group(required=True)

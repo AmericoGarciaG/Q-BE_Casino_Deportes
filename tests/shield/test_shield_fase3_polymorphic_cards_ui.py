@@ -6,7 +6,7 @@ Gobierno: `docs/DESIGN.md` [DES-QBE-070] / [DES-QBE-071] / `docs/ARCH.md` [ARCH-
 Régimen declarado: [DBBD-FUNGIBLE] — capa de presentación (`src/web/static/**`, `src/web/templates/**`).
 Ninguna aserción toca `src/core/**`, `src/storage/**` ni el DTO `AtribucionFactorialOut`: el Hallazgo
 Maestro de la Fase 3 certificó que las magnitudes de los Cards ya viajan al cliente dentro de
-`atribucion_factorial.variables_44` (incluidas las celdas en cadena `V39`/`V40`/`V41`), por lo que la
+`atribucion_factorial.variables_44` (incluidas las celdas en cadena `V26`/`V27`/`V28`), por lo que la
 ÚNICA fuente legislada es ese bloque servido.
 
 [GOV-TEST-01] Aislamiento hermético: sólo lectura de archivos del repositorio. Cero red, cero navegador.
@@ -73,7 +73,7 @@ def test_retiro_visual_de_epist_y_tetralogia_factica():
     assert '"epist"' not in tira, "EPIST sigue formando parte de la tira visible del micro-HUD."
 
     # 3) El catálogo de rótulos del modal tampoco rotula EPIST.
-    inicio_etiquetas = app_js.index("const ETIQUETAS_SEMAFORO_44 = {")
+    inicio_etiquetas = app_js.index("const ETIQUETAS_SEMAFORO_32 = {")
     etiquetas = app_js[inicio_etiquetas:app_js.index("};", inicio_etiquetas)]
     for clave in TETRALOGIA:
         assert f"{clave}:" in etiquetas, f"Rótulo ausente en el modal: {clave}"
@@ -127,10 +127,10 @@ def test_cards_consumen_variables_44_sin_recalculo_en_cliente():
     """El Card se compone de celdas SERVIDAS: prohibido derivar λ, Δlog o récords en el cliente."""
     app_js = _fuente(RUTA_APP_JS)
 
-    assert "function _cardDimension44(" in app_js, "Falta el despachador polimórfico del Card."
-    assert "_cardDimension44(dimension)" in app_js, "El acordeón no invoca el Card por dimensión."
+    assert "function _cardDimension32(" in app_js, "Falta el despachador polimórfico del Card."
+    assert "_cardDimension32(dimension)" in app_js, "El acordeón no invoca el Card por dimensión."
 
-    inicio = app_js.index("   [DES-QBE-070] CARDS SEMÁNTICOS")
+    inicio = app_js.index("   [DES-QBE-070-B] CARDS SEMÁNTICOS")
     fin = app_js.index("function abrirModal44Variables(", inicio)
     bloque = app_js[inicio:fin]
 
@@ -147,12 +147,12 @@ def test_cards_consumen_variables_44_sin_recalculo_en_cliente():
             f"El Card derivó magnitud en cliente (`{prohibido}`): [GOVERNANCE-01] exige transcripción pura."
         )
 
-    # Las celdas en cadena (`V39` — `'3V - 1E - 0D'`) sobreviven gracias a `_valor44`.
-    assert "_valor44(" in bloque, "El Card debe transcribir las celdas servidas vía `_valor44`."
+    # Las celdas en cadena (`V26` — `'3V - 1E - 0D'`) sobreviven gracias a `_valor32`.
+    assert "_valor32(" in bloque, "El Card debe transcribir las celdas servidas vía `_valor32`."
     assert "(Fase 6)" in bloque, "El Card atenuado debe rotular su Fase 6 sin fabricar ceros."
 
     # Enmienda, no deroga: la tabla numérica de 7 columnas de [DES-QBE-064] sobrevive.
-    assert "dimensiones.map(_tablaDimension44)" in app_js, (
-        "La tabla forense fue demolida: [DES-QBE-070] la conserva como soporte de auditoría."
+    assert "dimensiones.map(_tablaDimension32)" in app_js, (
+        "La tabla forense fue demolida: [DES-QBE-070-B] la conserva como soporte de auditoría."
     )
     assert "vars44-tabla" in app_js, "El soporte tabular debe seguir presente."

@@ -919,7 +919,7 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_cartera_shield')" title="Qué hace: Verifica las invarianzas financieras de cartera (hard caps 8% individual / 25% jornada, piso de boleto). Cuándo usar: Tras modificar reglas de capital o estrategias.">🔍 Invarianzas de Cartera · Shield</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_coherencia_cartelera')" title="Qué hace: Ejecuta el pre-vuelo diagnóstico de coherencia relacional de la cartelera activa (paridad de vector p, overround, piso/techo, coherencia Capa 0 y divergencia de mercado). Cuándo usar: Antes de exponer la jornada en la Mesa de Apuestas o cuando el semáforo marque integridad en rojo.">🧭 Coherencia de Cartelera · Pre-Vuelo</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_pipeline_backtesting')" title="Qué hace: Audita de punta a punta el pipeline de calibración histórica (cortes anti-leakage, Brier multicategórico y paridad de la evidencia sellada). Cuándo usar: Antes de certificar cambios en el motor de calibración o al validar la temporada homologada.">🧪 Auditoría E2E · Pipeline de Backtesting</button>
-                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_completitud_visor')" title="Qué hace: Barre la salida REAL del Visor de Calibración (Pydantic validado) jornada por jornada y certifica la completitud fáctica del catálogo de 44 variables: cero «0 de 0», cotas físicas de SoT por partido (≤ 15) y posesión (0-100), coherencia de los badges del acordeón y sincronía de las jornadas publicadas. Cuándo usar: Tras homologar una jornada nueva o cuando un badge del acordeón marque SIN EVALUAR con evidencia sellada.">🔍 Auditoría de Completitud Fáctica (44V)</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('auditar_completitud_visor')" title="Qué hace: Barre la salida REAL del Visor de Calibración (Pydantic validado) jornada por jornada y certifica la completitud fáctica del catálogo de 32 variables: cero «0 de 0», cotas físicas de SoT por partido (≤ 15) y posesión (0-100), coherencia de los badges del acordeón y sincronía de las jornadas publicadas. Cuándo usar: Tras homologar una jornada nueva o cuando un badge del acordeón marque SIN EVALUAR con evidencia sellada.">🔍 Auditoría de Completitud Fáctica (32V)</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('consultar_uso_llm')" title="Qué hace: Reporta el consumo de tokens y la salud del pool de llaves Gemini. Cuándo usar: Antes de lanzar la cadena de ingesta o ante errores de cuota.">🔑 Salud de Llaves Gemini y Tokens</button>
                         </div>
                     </div>
@@ -967,7 +967,7 @@
         </div>
     </div>
 
-    <!-- MODAL: INSPECCIÓN FORENSE DE 44 VARIABLES [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064]
+    <!-- MODAL: INSPECCIÓN FORENSE DEL CATÁLOGO DE 32 VARIABLES [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064 / DES-QBE-070-B]
          Régimen DBBD-FUNGIBLE. El cuerpo `#vars44-cuerpo` lo hidrata app.js
          (`abrirModal44Variables`) transcribiendo el bloque `atribucion_factorial`
          servido por `/api/markets/backtesting/calibration-report`. Cierre por
@@ -976,10 +976,10 @@
         <div class="modal-content vars44-modal" style="max-width: 980px; width: 96%; max-height: 90vh; overflow-y: auto; background: #0F172A; border: 1px solid #334155; border-radius: 12px; padding: 22px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);">
             <div class="vars44-cabecera">
                 <div>
-                    <h3 id="vars44-titulo" class="vars44-titulo">🔬 Inspección forense · 44 variables</h3>
+                    <h3 id="vars44-titulo" class="vars44-titulo">🔬 Inspección forense · catálogo de 32 variables</h3>
                     <span class="vars44-subtitulo">
                         Descomposición Δη = ln(λ_H/λ_A) ≡ Δ Ofensiva + Δ Defensiva + Δ Contexto ·
-                        catálogo canónico del dossier §3 en 12 dimensiones · [LN-QBE-101]
+                        catálogo canónico de 32 variables en 6 dimensiones canónicas · [LN-QBE-101]
                     </span>
                     <!-- [LN-QBE-102 / DES-QBE-065] Sello de procedencia de la evidencia.
                          Lo hidrata `abrirModal44Variables` con `createElement`/`textContent`:

@@ -5,8 +5,8 @@
 Misión
 ------
 Aislar en consola el núcleo de mayor peso de la distribución soberana (>70 % de λ): la
-Calidad de Remate (Dimensión 2, 𝒯_Fin, V05-V09) y la Contención Defensiva (Dimensión 3,
-𝒯_Def, V10-V14). Ejecuta la cadena REAL —corte N−1 de la 3NF + caché Opta congelada →
+Calidad de Remate (Dimensión 2, 𝒯_Rem, V06-V09) y la Contención Defensiva (Dimensión 3,
+𝒯_Def, V12-V16). Ejecuta la cadena REAL —corte N−1 de la 3NF + caché Opta congelada →
 factores estructurales → colisión cruzada → intensidades log-lineales → tablero ASCII—
 sin FastAPI, sin DOM y sin Playwright.
 
@@ -29,7 +29,7 @@ Axiomas operativos
 4. **Contrato homologado (Decreto `VAR-2026-J7-HOMOLOGACION` §E1):** el `raw_match_data` que
    alimenta el motor publica `xg` y NUNCA `xga`; el xGA sólo se exhibe como evidencia.
    Publicarlo invertía el diagnóstico defensivo medido (0.5102 → 0.4825).
-5. **Bipartita simétrica:** V05-V14 son independientes por club (`local`, `visita`); el choque
+5. **Bipartita simétrica:** las celdas de 𝒯_Rem/𝒯_Def son independientes por club (`local`, `visita`); el choque
    ocurre sólo en la ecuación log-lineal, jamás restando ataques.
 
 Uso:
@@ -63,6 +63,7 @@ from src.core.intensity_canonical_loglink import (
     estimar_intensidades_loglineal,
     obtener_bono_fortaleza_plaza,
 )
+from src.core.sovereign.factor_attribution import derivar_taxonomia
 from src.core.sovereign_pipeline import derivar_factores_estructurales
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, Match, MatchTelemetry
@@ -89,32 +90,35 @@ GLIFO = {
 }
 ANCHO_TABLERO = 94
 
-# ── Taxonomía bipartita de las dimensiones nucleares ([LN-QBE-101] · 𝒯_Fin / 𝒯_Def) ────────
-# (id, nombre forense, unidad canónica, nota de procedencia)
-_TAXONOMIA_DIM_2: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V05", "xG por 90 minutos (ancla npxG)", "npxG/90",
-     "xG Opta de shotmap (agregación factual de disparos) por 90 min, corte N−1."),
-    ("V06", "Tiros a puerta (SoT)", "SoT/90",
-     "SoT por 90 min; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
-    ("V07", "xG a puerta (xGOT)", "xGOT/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT. No se simula."),
-    ("V08", "Grandes oportunidades creadas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances creadas."),
-    ("V09", "Grandes oportunidades falladas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances falladas."),
-)
-_TAXONOMIA_DIM_3: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V10", "xGA por 90 minutos (ancla defensiva)", "xGA/90",
-     "xGA Opta de shotmap por 90 min, corte N−1 (evidencia exhibida, no insumo del motor)."),
-    ("V11", "Tiros a puerta concedidos (SoTA)", "SoTA/90",
-     "SoTA por 90 min; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
-    ("V12", "PPDA (presión defensiva)", "índice",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica PPDA."),
-    ("V13", "Recuperaciones en tercio medio", "rec/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica recuperaciones."),
-    ("V14", "Grandes oportunidades concedidas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances concedidas."),
-)
+# ── Taxonomía bipartita de las dimensiones nucleares ([LN-QBE-122] · 𝒯_Rem / 𝒯_Def) ──────────
+# [LN-QBE-122] NOMBRE y ORDEN vienen del catálogo único `[LN-QBE-120]`; aquí sólo viven la unidad
+# canónica y la nota de procedencia. `AUX_*` = magnitud sin celda (jamás usurpa un `VXX`).
+_LOCALES_DIM_2: Dict[str, Tuple[str, str, str]] = {
+    "V06": ("xG por Partido (ancla npxG)", "xG/PJ",
+            "xG Opta de shotmap por partido del corte N−1 (acumulado del club / PJ)."),
+    "V07": ("Tiros al Arco por Partido (SoT)", "SoT/PJ",
+            "SoT por partido; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
+    "AUX_XGOT_90": ("xG a puerta (xGOT)", "xGOT/90",
+                    "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT. No se simula."),
+    "V08": ("Big Chances Creadas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances creadas."),
+    "V09": ("Big Chances Falladas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances falladas."),
+}
+_LOCALES_DIM_3: Dict[str, Tuple[str, str, str]] = {
+    "V12": ("xGA por Partido (ancla defensiva)", "xGA/PJ",
+            "xGA Opta de shotmap por partido del corte N−1 (evidencia exhibida, no insumo del motor)."),
+    "V13": ("Tiros al Arco Recibidos por Partido (SoTA)", "SoTA/PJ",
+            "SoTA por partido; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
+    "AUX_PPDA": ("PPDA (presión defensiva)", "índice",
+                 "SIN EVIDENCIA (FASE 6): el sensor congelado no publica PPDA."),
+    "V15": ("Intercepciones por Partido", "rec/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica recuperaciones."),
+    "V16": ("Big Chances Concedidas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances concedidas."),
+}
+_TAXONOMIA_DIM_2: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Rem", _LOCALES_DIM_2)
+_TAXONOMIA_DIM_3: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Def", _LOCALES_DIM_3)
 NOTA_FASE_6 = "SIN EVIDENCIA (FASE 6)"
 
 
@@ -441,7 +445,7 @@ def calcular_colision_fuerzas_cruzadas(
         diferencial_neto       = empuje_local − empuje_visita = (A_H − D_A) − (A_A − D_H)
 
     El signo del diferencial identifica al bando dominante. NO se restan ataques entre sí
-    (eso violaría la estructura bipartita de V05-V14): sólo se cruzan fuerzas complementarias.
+    (eso violaría la estructura bipartita de 𝒯_Rem/𝒯_Def): sólo se cruzan fuerzas complementarias.
     """
     empuje_local = float(A_h) - float(D_a)
     empuje_visita = float(A_a) - float(D_h)
@@ -511,10 +515,10 @@ def _resumen_corte(acumulado: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _dimensiones(acum_local: Dict[str, Any], acum_visita: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Materializa V05-V09 (𝒯_Fin) y V10-V14 (𝒯_Def) en celdas bipartitas simétricas.
+    """Materializa las celdas de 𝒯_Rem y 𝒯_Def (taxonomía `[LN-QBE-122]`) en celdas bipartitas.
 
-    V05/V10 se evalúan con la caché Opta congelada (cobertura íntegra obligatoria).
-    V06/V11 se evalúan sólo si `match_telemetry` cubre TODOS los partidos del corte.
+    `V06`/`V12` se evalúan con la caché Opta congelada (cobertura íntegra obligatoria).
+    `V07`/`V13` se evalúan sólo si `match_telemetry` cubre TODOS los partidos del corte.
     El resto se declara `SIN EVIDENCIA (FASE 6)`: cero cifras inventadas `[GOVERNANCE-01]`.
     """
     pj_h, pj_v = int(acum_local["pj"]), int(acum_visita["pj"])
@@ -541,25 +545,25 @@ def _dimensiones(acum_local: Dict[str, Any], acum_visita: Dict[str, Any]) -> Tup
 
     dim_2: Dict[str, Any] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_2:
-        if identificador == "V05":
-            dim_2["V05"] = _celda(identificador, nombre, unidad, xg_h, xg_v, nota)
-        elif identificador == "V06":
-            nota_v06 = nota if (sot_h is not None and sot_v is not None) else _nota_faltante(
+        if identificador == "V06":
+            dim_2["V06"] = _celda(identificador, nombre, unidad, xg_h, xg_v, nota)
+        elif identificador == "V07":
+            nota_v07 = nota if (sot_h is not None and sot_v is not None) else _nota_faltante(
                 acum_local, acum_visita, "sot"
             )
-            dim_2["V06"] = _celda(identificador, nombre, unidad, sot_h, sot_v, nota_v06)
+            dim_2["V07"] = _celda(identificador, nombre, unidad, sot_h, sot_v, nota_v07)
         else:
             dim_2[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
 
     dim_3: Dict[str, Any] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_3:
-        if identificador == "V10":
-            dim_3["V10"] = _celda(identificador, nombre, unidad, xga_h, xga_v, nota)
-        elif identificador == "V11":
-            nota_v11 = nota if (sota_h is not None and sota_v is not None) else _nota_faltante(
+        if identificador == "V12":
+            dim_3["V12"] = _celda(identificador, nombre, unidad, xga_h, xga_v, nota)
+        elif identificador == "V13":
+            nota_v13 = nota if (sota_h is not None and sota_v is not None) else _nota_faltante(
                 acum_local, acum_visita, "sot"
             )
-            dim_3["V11"] = _celda(identificador, nombre, unidad, sota_h, sota_v, nota_v11)
+            dim_3["V13"] = _celda(identificador, nombre, unidad, sota_h, sota_v, nota_v13)
         else:
             dim_3[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
     return dim_2, dim_3
@@ -719,7 +723,7 @@ def ejecutar_sandbox_ataque_defensa_partido(
 ) -> Dict[str, Any]:
     """Cadena completa Dimensión 2 × Dimensión 3 para un fixture de la cartelera 3NF.
 
-    Secuencia: caché congelada + corte N−1 (sólo lectura) → celdas V05-V14 → factores
+    Secuencia: caché congelada + corte N−1 (sólo lectura) → celdas V06-V16 → factores
     estructurales sellados → colisión cruzada `[LN-QBE-108]` → λ_H/λ_A canónicas → semáforos.
     """
     cache, cache_meta = cargar_cache_opta(temporada)
@@ -816,13 +820,13 @@ def ejecutar_sandbox_ataque_defensa_partido(
     if cobertura_completa:
         status = "EXITO"
         motivo = (
-            "Cobertura Opta íntegra en ambos cortes: V05 y V10 evaluados con evidencia real; "
+            "Cobertura Opta íntegra en ambos cortes: V06 y V12 evaluados con evidencia real; "
             "λ proyectada por los planos sellados."
         )
     else:
         status = "PARCIAL"
         motivo = (
-            "Cobertura Opta incompleta: V05/V10 se declaran SIN EVIDENCIA y el motor cae a la ruta "
+            "Cobertura Opta incompleta: V06/V12 se declaran SIN EVIDENCIA y el motor cae a la ruta "
             "sellada con GF/GC reales [VAULT-CORE-005]. Cero cifras fabricadas."
         )
 
@@ -858,7 +862,7 @@ def _insumos_motor(acum_local: Dict[str, Any], acum_visita: Dict[str, Any]) -> D
         },
         "nota_homologacion": (
             "Decreto VAR-2026-J7-HOMOLOGACION §E1: `xga` permanece fuera del `raw_match_data` para "
-            "preservar el diagnóstico defensivo certificado; el xGA se publica sólo como V10."
+            "preservar el diagnóstico defensivo certificado; el xGA se publica sólo como V12."
         ),
     }
 
@@ -1209,8 +1213,8 @@ def imprimir_tablero_ataque_defensa_consola(reporte: Dict[str, Any]) -> None:
     ])
     _bloque_contexto(reporte)
     _bloque_colision(reporte)
-    _bloque_dimension(reporte, "dimension_2_ataque", "DIM 2 · CALIDAD DE REMATE (T_Fin · V05-V09)")
-    _bloque_dimension(reporte, "dimension_3_defensa", "DIM 3 · CONTENCIÓN DEFENSIVA (T_Def · V10-V14)")
+    _bloque_dimension(reporte, "dimension_2_ataque", "DIM 2 · CALIDAD DE REMATE (T_Rem · V06-V09)")
+    _bloque_dimension(reporte, "dimension_3_defensa", "DIM 3 · CONTENCIÓN DEFENSIVA (T_Def · V12-V16)")
     _bloque_intensidades(reporte)
     _bloque_semaforos(reporte)
     print("─" * ANCHO_TABLERO)
@@ -1331,7 +1335,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sandbox_ataque_defensa_pipeline",
         description=(
-            "Sandbox CLI-first de Ataque (DIM 2 · V05-V09) y Defensa (DIM 3 · V10-V14): "
+            "Sandbox CLI-first de Ataque (DIM 2 · V06-V09) y Defensa (DIM 3 · V12-V16): "
             "corte N−1 real → factores sellados → colisión cruzada → λ_H/λ_A. Sólo lectura."
         ),
     )

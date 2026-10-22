@@ -105,6 +105,10 @@ if PROJECT_ROOT not in sys.path:
 
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import Match
+from src.core.sovereign.factor_attribution import (
+    PROCEDENCIA_MACRO_TORNEAL,
+    _cotejo_macro,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("HomologarTemporadaOptaH2H")
@@ -116,6 +120,11 @@ RANGO_JORNADAS_DEFAULT = "1-17"
 MU_LIGA_DEFAULT = 2.65
 GAMMA_HOME_DEFAULT = 0.15
 RUTA_CACHE_OPTA_DEFAULT = os.path.join("data", "cache_optaxg_liga_mx_2026.json")
+# [LN-QBE-121] Verdad torneal de EXHIBICIÓN (`[ARCH-1.4.59]`): sólo enciende celdas apagadas del
+# catálogo de 32 variables. Jamás alimenta λ ni sustituye una magnitud consumida por el motor.
+RUTA_CACHE_MACRO_DEFAULT = os.path.join("data", "cache_macro_stats_liga_mx_2026.json")
+CATALOGO_VERSION_MACRO = "32V-2026"
+LIGA_NOMBRE_MACRO = "Liga MX"
 # [VAR-2026-J7-HOMOLOGACION §6.2 · E2] Endpoints VIGENTES verificados en esta estación (HTTP 200).
 URL_SENSOR_FOTMOB_FECHA = "https://www.fotmob.com/api/data/matches?date={fecha}"
 URL_SENSOR_FOTMOB_PARTIDO = "https://www.fotmob.com/api/data/matchDetails?matchId={match_id}"
@@ -324,6 +333,71 @@ def _cargar_cache_opta(ruta: str) -> Tuple[Dict[str, Any], str]:
     if not isinstance(partidos, dict) or not partidos:
         return {}, ""
     return partidos, str(datos.get("fuente") or "caché congelada sin rótulo de fuente")
+
+
+def _cargar_cache_macro(ruta: str) -> Dict[str, Any]:
+    """[LN-QBE-121] Artefacto torneal de EXHIBICIÓN (`[ARCH-1.4.59]`); `{}` si no es utilizable.
+
+    La aduana es explícita y sin tolerancia: el artefacto debe declarar el catálogo `32V-2026` y
+    la liga `Liga MX`. Cualquier desvío (otra versión de catálogo, otro torneo, JSON ilegible)
+    devuelve `{}` y el lote se homologa exactamente como antes de la ley (cero imputación).
+    """
+    if not os.path.isfile(ruta):
+        logger.warning("[MACRO] Sin artefacto torneal en %s (exhibición desactivada).", ruta)
+        return {}
+    try:
+        with open(ruta, "r", encoding="utf-8") as fh:
+            datos = json.load(fh)
+    except (OSError, ValueError) as ex:
+        logger.warning("[MACRO] Artefacto torneal ilegible (%s): %s", ruta, ex)
+        return {}
+    if not isinstance(datos, dict):
+        return {}
+    version = str(datos.get("catalogo_version") or "")
+    liga = datos.get("liga") if isinstance(datos.get("liga"), dict) else {}
+    nombre_liga = str(liga.get("nombre") or "")
+    equipos = datos.get("equipos")
+    if version != CATALOGO_VERSION_MACRO:
+        logger.warning("[MACRO] Catálogo %r ≠ %s: exhibición desactivada.", version, CATALOGO_VERSION_MACRO)
+        return {}
+    if nombre_liga != LIGA_NOMBRE_MACRO:
+        logger.warning("[MACRO] Liga %r ≠ %s: exhibición desactivada.", nombre_liga, LIGA_NOMBRE_MACRO)
+        return {}
+    if not isinstance(equipos, dict) or not equipos:
+        logger.warning("[MACRO] Artefacto sin bloque `equipos`: exhibición desactivada.")
+        return {}
+    return datos
+
+
+def _bloque_macro(
+    artefacto: Dict[str, Any], local: str, visitante: str
+) -> Dict[str, Any]:
+    """[LN-QBE-121] Bloque `macro_stats` YA RESUELTO por slug para un fixture (`{}` si no aplica).
+
+    La resolución de identidad vive aquí (C5) y no en el generador sellado: se buscan los slugs
+    canónicos del fixture en `equipos`. Un club ausente de la fuente deja su lado en `{}` y sus
+    celdas permanecen `SIN EVIDENCIA`; no se proyecta, no se promedia y no se rellena.
+    """
+    if not isinstance(artefacto, dict):
+        return {}
+    equipos = artefacto.get("equipos")
+    if not isinstance(equipos, dict) or not equipos:
+        return {}
+    lado_local = equipos.get(local)
+    lado_visita = equipos.get(visitante)
+    if not isinstance(lado_local, dict) and not isinstance(lado_visita, dict):
+        return {}
+    bloque: Dict[str, Any] = {
+        "procedencia": PROCEDENCIA_MACRO_TORNEAL,
+        "catalogo_version": str(artefacto.get("catalogo_version") or ""),
+        "local": dict(lado_local) if isinstance(lado_local, dict) else {},
+        "visita": dict(lado_visita) if isinstance(lado_visita, dict) else {},
+    }
+    # [LN-QBE-121] Control cruzado de las celdas insumidas: transcripción del mismo artefacto.
+    cotejo = _cotejo_macro(bloque)
+    if cotejo:
+        bloque["cotejo"] = cotejo
+    return bloque
 
 
 def _telemetria_3nf(sesion, identidad: Dict[str, Tuple[str, str]]) -> Dict[str, Any]:
@@ -955,6 +1029,7 @@ def _vector_homologo(
     cache: Dict[str, Any],
     etiqueta_respaldo: str,
     cache_volumen: Optional[Dict[str, Any]] = None,
+    cache_macro: Optional[Dict[str, Any]] = None,
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
     """Ensambla el `raw_match_data` homólogo de un fixture (Pilares 1..3) y su traza fáctica.
 
@@ -962,6 +1037,8 @@ def _vector_homologo(
     memoria H2H profunda del Pilar 3. Cero estadística sintética: un corte vacío entra como `{}`.
     `[LN-QBE-118]` `cache_volumen` es el mapa de UNA sola fuente para el Pilar Volumen & Portería
     (la caché congelada de xG no publica la métrica); `None` reutiliza `cache`.
+    `[LN-QBE-121]` `cache_macro` es el artefacto torneal de EXHIBICIÓN: se resuelve por slug aquí
+    y viaja como bloque aparte; `None` deja el paquete exactamente como antes de la ley.
     """
     id_partido = str(fixture.get("id_partido") or "")
     local = str(fixture.get("home_team_slug") or "")
@@ -1023,6 +1100,11 @@ def _vector_homologo(
         "delta_alt_metros": float(contexto.get("delta_alt_metros") or 0.0),
         "delta_descanso_dias": float(contexto.get("delta_descanso_dias") or 0.0),
     }
+    # [LN-QBE-121] Exhibición torneal: bloque YA resuelto por slug (C5). Viaja en el mismo
+    # registro que el motor recibe y se anida en `insumos_factivados`; NO altera λ.
+    bloque_macro = _bloque_macro(cache_macro or {}, local, visitante)
+    if bloque_macro:
+        item["macro_stats"] = bloque_macro
     traza: Dict[str, Any] = {
         "id_partido": id_partido,
         "jornada": int(jornada),
@@ -1142,6 +1224,8 @@ def homologar(
         identidad_fotmob = _identidad_fotmob(sesion)
         nombre_liga = _nombre_canonico_liga(sesion)
         cache_local, fuente_cache = _cargar_cache_opta(ruta_cache)
+        # [LN-QBE-121] Exhibición torneal (aduana `32V-2026` + `Liga MX`): `{}` desactiva.
+        cache_macro = _cargar_cache_macro(RUTA_CACHE_MACRO_DEFAULT)
         telemetria = _telemetria_3nf(sesion, identidad)
         candidatos = [fx for j in jornadas for fx in capturas.get(int(j), [])]
         sensor = _sensor_fotmob_opta(
@@ -1179,6 +1263,7 @@ def homologar(
                     cache,
                     dominante,
                     cache_volumen,
+                    cache_macro,
                 )
                 if armado is None:
                     continue
@@ -1202,6 +1287,15 @@ def homologar(
         },
         "mu_liga": mu_liga,
         "gamma_home": gamma_home,
+        "macro_stats": {
+            "fuente": (
+                os.path.basename(RUTA_CACHE_MACRO_DEFAULT) if cache_macro else "sin artefacto torneal"
+            ),
+            "catalogo_version": str(cache_macro.get("catalogo_version") or ""),
+            "equipos": len(cache_macro.get("equipos") or {}),
+            "huecos": len(cache_macro.get("huecos") or []),
+            "bloques_resueltos": sum(1 for it in items if it.get("macro_stats")),
+        },
         "trazas": trazas,
     }
     # [LN-QBE-118] Resguardo WORM del lote: ruta verificada (`None` en dry-run, que no muta).

@@ -6,7 +6,7 @@ Régimen: [DIRGEN-STRICT] para la aritmética del vector contextual C (cero marg
 
 Contrato público:
   * `obtener_metricas_contexto(sesion, match_id, ...)` → bloque `contexto` del paquete
-    `insumos_factivados` con V27 (ΔDías) y V28 (ΔAltitud⁺), `Q_mod` y `gamma_contextual`.
+    `insumos_factivados` con V30 (ΔDías) y V29 (ΔAltitud⁺), `Q_mod` y `gamma_contextual`.
   * `calcular_vector_contextual_c(...)` → desglose puro (aritmética sellada, sin I/O).
   * `CATALOGO_ALTITUDES_LIGAMX` / `altitud_estadio(...)` → hecho declarado, jamás estimación.
 
@@ -32,6 +32,7 @@ from src.core.intensity_canonical_loglink import (
     estimar_intensidades_loglineal,
     obtener_bono_fortaleza_plaza,
 )
+from src.core.sovereign.factor_attribution import nombre_de_celda
 from src.core.sovereign_reads import leer_calendario, leer_fixture, leer_partidos_corte
 
 __all__ = [
@@ -581,13 +582,13 @@ def _bloque_vacio_contexto(match_id: str, motivo: str, temporada: str) -> Dict[s
             "descanso_visita": None,
         },
         "variables": {
-            "V25": _celda("V25", "Impacto xG de bajas ofensivas", None, None,
-                          ESTADO_SIN_EVIDENCIA, "Q-BE", "H_ctx", motivo),
-            "V26": _celda("V26", "Impacto xGA de bajas defensivas", None, None,
-                          ESTADO_SIN_EVIDENCIA, "Q-BE", "H_ctx", motivo),
-            "V27": _celda("V27", "Diferencial de descanso (ΔDías)", None, None,
+            "AUX_XG_BAJAS": _celda("AUX_XG_BAJAS", "Impacto xG de bajas ofensivas", None, None,
+                                   ESTADO_SIN_EVIDENCIA, "Q-BE", "H_ctx", motivo),
+            "AUX_XGA_BAJAS": _celda("AUX_XGA_BAJAS", "Impacto xGA de bajas defensivas", None, None,
+                                    ESTADO_SIN_EVIDENCIA, "Q-BE", "H_ctx", motivo),
+            "V30": _celda("V30", nombre_de_celda("V30", "Días de Descanso (ΔDías)"), None, None,
                           ESTADO_SIN_EVIDENCIA, "FIXTURE", "H_ctx", motivo),
-            "V28": _celda("V28", "Factor de altitud fisiológica (ΔAltitud+)", None, None,
+            "V29": _celda("V29", nombre_de_celda("V29", "Altitud ΔAlt+ (Factor Fisiológico)"), None, None,
                           ESTADO_SIN_EVIDENCIA, "FIXTURE", "H_ctx", motivo),
         },
     }
@@ -601,11 +602,11 @@ def obtener_metricas_contexto(
     q_mod_h: float = 1.0,
     q_mod_a: float = 1.0,
 ) -> Dict[str, Any]:
-    """[LN-QBE-117] · Bloque `contexto` (V25-V28) del fixture evaluado.
+    """[LN-QBE-117] · Bloque `contexto` (`V29`/`V30` + `AUX_*` de bajas) del fixture evaluado.
 
     Secuencia: fixture en cartelera 3NF → altitud catalogada de ambas plazas → descanso real
     (último partido terminal con `jornada < N`, futuro-ciego) → vector contextual C sellado
-    [LN-QBE-109] → celdas V27/V28 con su estado de evidencia.
+    [LN-QBE-109] → celdas `V30`/`V29` con su estado de evidencia.
 
     Una plaza sin altitud catalogada o un calendario sin fechas reales degradan la celda a
     `SIN EVIDENCIA` (bono 0.0), jamás a "nivel del mar" ni a un descanso inventado.
@@ -668,25 +669,25 @@ def obtener_metricas_contexto(
         status = ESTADO_SIN_EVIDENCIA
         motivo = (
             "Ni la altitud de las plazas ni el descanso previo son reconstruibles: el vector "
-            "contextual se publica neutro (bonos 0.0) y V27/V28 quedan SIN EVIDENCIA."
+            "contextual se publica neutro (bonos 0.0) y V30/V29 quedan SIN EVIDENCIA."
         )
 
     delta_alt = vector["delta_altitud_metros"]
     delta_dias = vector["delta_descanso_dias"]
     variables = {
-        "V25": _celda(
-            "V25", "Impacto xG de bajas ofensivas", None, None, ESTADO_SIN_EVIDENCIA,
+        "AUX_XG_BAJAS": _celda(
+            "AUX_XG_BAJAS", "Impacto xG de bajas ofensivas", None, None, ESTADO_SIN_EVIDENCIA,
             "Q-BE", "H_ctx",
             "SIN EVIDENCIA: el sensor congelado no publica reporte de bajas por club.",
         ),
-        "V26": _celda(
-            "V26", "Impacto xGA de bajas defensivas", None, None, ESTADO_SIN_EVIDENCIA,
+        "AUX_XGA_BAJAS": _celda(
+            "AUX_XGA_BAJAS", "Impacto xGA de bajas defensivas", None, None, ESTADO_SIN_EVIDENCIA,
             "Q-BE", "H_ctx",
             "SIN EVIDENCIA: el sensor congelado no publica reporte de bajas por club.",
         ),
-        "V27": _celda(
-            "V27",
-            "Diferencial de descanso (ΔDías)",
+        "V30": _celda(
+            "V30",
+            nombre_de_celda("V30", "Días de Descanso (ΔDías)"),
             _texto_dias(descanso_local),
             _texto_dias(descanso_visita),
             "EVALUADO" if descanso_evaluado else ESTADO_SIN_EVIDENCIA,
@@ -699,9 +700,9 @@ def obtener_metricas_contexto(
                 else "SIN EVIDENCIA: el calendario no publica fechas previas terminales."
             ),
         ),
-        "V28": _celda(
-            "V28",
-            "Factor de altitud fisiológica (ΔAltitud+)",
+        "V29": _celda(
+            "V29",
+            nombre_de_celda("V29", "Altitud ΔAlt+ (Factor Fisiológico)"),
             _texto_metros(altitud_local),
             _texto_metros(altitud_visita),
             "EVALUADO" if altitud_evaluada else ESTADO_SIN_EVIDENCIA,

@@ -4,9 +4,9 @@
 
 Misión
 ------
-Aislar en consola la Dimensión 7 (𝒯_Shk, V25-V28): el vector contextual (C_H, C_A) que
+Aislar en consola la Dimensión 7 (𝒯_Shk · V29/V30 + `AUX_*`): el vector contextual (C_H, C_A) que
 modula la ventaja territorial de la ecuación log-lineal canónica. Expone el desglose físico
-—altitud (V28), descanso (V27), fortaleza de plaza y shocks de plantilla (V25/V26)— sin
+—altitud (V29), descanso (V30), fortaleza de plaza y shocks de plantilla (`AUX_Q_MOD_H`/`AUX_Q_MOD_A`)— sin
 FastAPI, sin DOM y sin Playwright.
 
 Régimen: `[HÍBRIDO DUAL-TRACK]`
@@ -14,7 +14,7 @@ Régimen: `[HÍBRIDO DUAL-TRACK]`
   `estimar_intensidades_loglineal` y `calcular_alpha_ligadura` [VAULT-CORE-001]; el bono de
   plaza se delega en `obtener_bono_fortaleza_plaza` [LN-QBE-038]. Este sandbox NUNCA es
   fuente de λ: publica además `paridad_motor` como residuo auditable contra el plano sellado.
-* `[DBBD-FUNGIBLE]`: catálogo de altitudes, resolución de calendario, celdas V25-V28,
+* `[DBBD-FUNGIBLE]`: catálogo de altitudes, resolución de calendario, celdas V29/V30 + `AUX_*`,
   tablero ASCII, semáforo CTX y CLI.
 
 Axiomas operativos
@@ -25,9 +25,9 @@ Axiomas operativos
    `jornada < N` y estado terminal. El fixture evaluado jamás alimenta su propio descanso.
 3. **Fuente de fechas:** la tabla `matches` no publica `kickoff_utc` utilizable (100 % NULL en
    la 3NF viva); la fuente fáctica es `fixtures_snapshots.matches_json[].fecha_dt`.
-4. **Cero invención [GOVERNANCE-01]:** altitud no catalogada ⇒ V28 `SIN EVIDENCIA` (jamás
+4. **Cero invención [GOVERNANCE-01]:** altitud no catalogada ⇒ V29 `SIN EVIDENCIA` (jamás
    "nivel del mar"); sin reporte médico auditado ⇒ Q_mod = 1.0000 (`SIN SHOCK`).
-5. **Altitud unidireccional (V28):** sólo bonifica jugar MÁS ALTO; el diferencial negativo se
+5. **Altitud unidireccional (V29):** sólo bonifica jugar MÁS ALTO; el diferencial negativo se
    rectifica a 0 m y no penaliza al local.
 
 Uso:
@@ -485,7 +485,7 @@ def _dias_descanso(kickoff: Optional[datetime], previo: Dict[str, Any]) -> Optio
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-# [LN-QBE-109] CELDAS V25-V28 (taxonomía Dimensión 7 · 𝒯_Shk)
+# [LN-QBE-109] CELDAS DE 𝒯_Shk: V29/V30 + AUX_* (taxonomía Dimensión 7)
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 def _texto_dias(dias: Optional[float]) -> str:
     return "—" if dias is None else f"{float(dias):.1f} d"
@@ -530,7 +530,9 @@ def _celdas_dimension_7(
     q_mod_h: float,
     q_mod_a: float,
 ) -> Dict[str, Dict[str, Any]]:
-    """Construye V25-V28. La evidencia ausente se declara, jamás se imputa."""
+    """Construye las celdas de 𝒯_Shk (`V29`/`V30` + `AUX_*` de bajas, `[LN-QBE-122]`).
+    La evidencia ausente se declara, jamás se imputa.
+    """
     estado_descanso = ESTADO_EVALUADO if ctx["descanso_evaluado"] else ESTADO_SIN_EVIDENCIA
     estado_altitud = ESTADO_EVALUADO if ctx["altitud_evaluada"] else ESTADO_SIN_EVIDENCIA
 
@@ -551,26 +553,26 @@ def _celdas_dimension_7(
     )
 
     return {
-        "V25": _celda(
-            "V25", "Bajas ofensivas del local (Q_mod,H)", "% merma",
+        "AUX_Q_MOD_H": _celda(
+            "AUX_Q_MOD_H", "Bajas ofensivas del local (Q_mod,H)", "% merma",
             _texto_merma(q_mod_h), "—", ESTADO_EVALUADO,
             "SIN SHOCK · Q_mod,H = 1.0000 (no existe reporte médico auditado; se prohíbe inventar bajas)."
             if abs(float(q_mod_h) - 1.0) < 1e-12 else
             f"SHOCK INYECTADO POR CLI (no auditado): Q_mod,H = {float(q_mod_h):.4f}.",
         ),
-        "V26": _celda(
-            "V26", "Bajas defensivas del visitante (Q_mod,A)", "% merma",
+        "AUX_Q_MOD_A": _celda(
+            "AUX_Q_MOD_A", "Bajas defensivas del visitante (Q_mod,A)", "% merma",
             "—", _texto_merma(q_mod_a), ESTADO_EVALUADO,
             "SIN SHOCK · Q_mod,A = 1.0000 (no existe reporte médico auditado; se prohíbe inventar bajas)."
             if abs(float(q_mod_a) - 1.0) < 1e-12 else
             f"SHOCK INYECTADO POR CLI (no auditado): Q_mod,A = {float(q_mod_a):.4f}.",
         ),
-        "V27": _celda(
-            "V27", "Diferencial de descanso (Días_H − Días_A)", "días",
+        "V30": _celda(
+            "V30", "Días de Descanso (ΔDías)", "días",
             _texto_dias(dias_local), _texto_dias(dias_visita), estado_descanso, nota_descanso,
         ),
-        "V28": _celda(
-            "V28", "Factor de altitud fisiológica (ΔAlt⁺)", "metros",
+        "V29": _celda(
+            "V29", "Altitud ΔAlt+ (Factor Fisiológico)", "metros",
             _texto_metros(altitud_local), _texto_metros(altitud_visita), estado_altitud, nota_altitud,
         ),
     }
@@ -623,7 +625,7 @@ def _semaforos_contexto(
     if not faltantes:
         celda_cobertura = _semaforo(
             NIVEL_VERDE,
-            f"V27 y V28 evaluadas · altitud local {_texto_metros(altitud_local)} · "
+            f"V30 y V29 evaluadas · altitud local {_texto_metros(altitud_local)} · "
             f"visita {_texto_metros(altitud_visita)}.",
         )
     else:
@@ -669,7 +671,7 @@ def ejecutar_sandbox_contexto_partido(
     """Cadena completa de la Dimensión 7 para un fixture de la cartelera 3NF.
 
     Secuencia: cartelera 3NF (sólo lectura) → fixture + corte N−1 → altitudes del catálogo
-    inmutable → V25-V28 → vector contextual (C_H, C_A) → λ selladas → semáforos.
+    inmutable → V29/V30 + `AUX_*` → vector contextual (C_H, C_A) → λ selladas → semáforos.
     """
     gateway = PersistenceGateway()
     with gateway.read_session() as sesion:
@@ -714,17 +716,17 @@ def ejecutar_sandbox_contexto_partido(
     )
 
     faltantes = [
-        identificador for identificador in ("V27", "V28")
+        identificador for identificador in ("V30", "V29")
         if dimension_7[identificador]["estado"] != ESTADO_EVALUADO
     ]
     if not faltantes:
-        status, motivo = "EXITO", "V25-V28 resueltas con evidencia fáctica del corte N−1."
+        status, motivo = "EXITO", "V29/V30 resueltas con evidencia fáctica del corte N−1."
     elif len(faltantes) == 1:
         status = "PARCIAL"
         motivo = f"Evidencia parcial: {faltantes[0]} sin sensor; su bono se publica como 0.0."
     else:
         status = "SIN_EVIDENCIA"
-        motivo = "V27 y V28 sin evidencia: no se imputa ningún bono físico."
+        motivo = "V30 y V29 sin evidencia: no se imputa ningún bono físico."
 
     semaforos = _semaforos_contexto(ctx, faltantes, altitud_local, altitud_visita)
     if status == "SIN_EVIDENCIA":
@@ -1008,7 +1010,7 @@ def _bloque_contexto_experimento(reporte: Dict[str, Any]) -> None:
         _linea("REGLA", str(corte.get("regla") or "Corte futuro-ciego N−1")),
         _linea("FECHAS", f"{corte.get('fuente_fechas') or '—'} · "
                          f"{corte.get('partidos_en_calendario', 0)} fixtures en cartelera"),
-        _linea("MODELO", "DIM 7 (T_Shk V25-V28) → (C_H, C_A) → λ [VAULT-CORE-001]"),
+        _linea("MODELO", "DIM 7 (T_Shk V29/V30 + AUX) → (C_H, C_A) → λ [VAULT-CORE-001]"),
     ]
     filas.append("")
     trozos = _envolver(f"{reporte.get('status')} — {reporte.get('motivo')}")
@@ -1019,10 +1021,10 @@ def _bloque_contexto_experimento(reporte: Dict[str, Any]) -> None:
 
 
 def _bloque_dimension_7(reporte: Dict[str, Any]) -> None:
-    """Caja 2: tabla V25-V28 (local · visita · estado) con pie de cobertura."""
+    """Caja 2: tabla V29/V30 + `AUX_*` (local · visita · estado) con pie de cobertura."""
     dimension = reporte.get("dimension_7_contexto") or {}
     if not dimension:
-        _caja("DIM 7 · SHOCKS DE CONTEXTO (T_Shk · V25-V28) [LN-QBE-109]", [
+        _caja("DIM 7 · SHOCKS DE CONTEXTO (T_Shk · V29/V30 + AUX) [LN-QBE-109]", [
             "NO EVALUADA: el fixture no publica evidencia suficiente.",
             f"Motivo: {reporte.get('motivo')}",
         ])
@@ -1039,17 +1041,17 @@ def _bloque_dimension_7(reporte: Dict[str, Any]) -> None:
         f"Evaluadas {evaluadas}/{len(dimension)} · ⚪ SIN EVIDENCIA = sensor ausente; "
         f"jamás se imputa una cifra."
     )
-    _caja("DIM 7 · SHOCKS DE CONTEXTO (T_Shk · V25-V28) [LN-QBE-109]", filas)
+    _caja("DIM 7 · SHOCKS DE CONTEXTO (T_Shk · V29/V30 + AUX) [LN-QBE-109]", filas)
 
 
 def _bloque_altitud(reporte: Dict[str, Any]) -> None:
-    """Caja 3: V28 — ventaja hipóxica unidireccional."""
+    """Caja 3: V29 — ventaja hipóxica unidireccional."""
     altitud = reporte.get("altitud") or {}
     ctx = reporte.get("vector_contextual") or {}
     local = altitud.get("local") or {}
     visita = altitud.get("visita") or {}
     if not altitud:
-        _caja("V28 · ALTITUD FISIOLÓGICA (unidireccional)", ["NO EVALUADA."])
+        _caja("V29 · ALTITUD FISIOLÓGICA (unidireccional)", ["NO EVALUADA."])
         return
     filas: List[str] = [
         f"{_pad('BANDO', 22)}{_pad('SLUG VIVO', 24)}{_pad('CATÁLOGO', 24)}{'MSNM'.rjust(8)}",
@@ -1071,15 +1073,15 @@ def _bloque_altitud(reporte: Dict[str, Any]) -> None:
             f"Bono = {BETA_ALTITUD:.4f} × Δ/1000 = {float(ctx.get('bono_altitud') or 0.0):+.4f}"
         )
         filas.append("Axioma: sólo bonifica jugar MÁS ALTO; la altura menor no penaliza al local.")
-    _caja("V28 · ALTITUD FISIOLÓGICA (unidireccional)", filas)
+    _caja("V29 · ALTITUD FISIOLÓGICA (unidireccional)", filas)
 
 
 def _bloque_calendario(reporte: Dict[str, Any]) -> None:
-    """Caja 4: V27 — fatiga de calendario y descanso real del corte N−1."""
+    """Caja 4: V30 — fatiga de calendario y descanso real del corte N−1."""
     calendario = reporte.get("calendario") or {}
     ctx = reporte.get("vector_contextual") or {}
     if not calendario:
-        _caja("V27 · FATIGA DE CALENDARIO (corte N−1)", ["NO EVALUADA."])
+        _caja("V30 · FATIGA DE CALENDARIO (corte N−1)", ["NO EVALUADA."])
         return
     filas: List[str] = [
         f"{_pad('BANDO', 12)}{_pad('PARTIDO PREVIO', 18)}{_pad('J', 4)}{_pad('FECHA', 22)}"
@@ -1112,18 +1114,18 @@ def _bloque_calendario(reporte: Dict[str, Any]) -> None:
             + str(previo_local.get("motivo") or "falta fecha de kickoff o previo terminal.")
             + " Bono de descanso = 0.0000 (no imputado)."
         )
-    _caja("V27 · FATIGA DE CALENDARIO (corte N−1)", filas)
+    _caja("V30 · FATIGA DE CALENDARIO (corte N−1)", filas)
 
 
 def _bloque_plaza_shocks(reporte: Dict[str, Any]) -> None:
-    """Caja 5: fortaleza de plaza [LN-QBE-038] y shocks de plantilla V25/V26."""
+    """Caja 5: fortaleza de plaza [LN-QBE-038] y shocks de plantilla `AUX_Q_MOD_H`/`AUX_Q_MOD_A`."""
     plaza = reporte.get("fortaleza_plaza") or {}
     dimension = reporte.get("dimension_7_contexto") or {}
     ctx = reporte.get("vector_contextual") or {}
     if not plaza:
-        _caja("PLAZA & SHOCKS DE PLANTILLA (V25/V26)", ["NO EVALUADO."])
+        _caja("PLAZA & SHOCKS DE PLANTILLA (AUX_Q_MOD_H/AUX_Q_MOD_A)", ["NO EVALUADO."])
         return
-    shocks = [dimension.get("V25") or {}, dimension.get("V26") or {}]
+    shocks = [dimension.get("AUX_Q_MOD_H") or {}, dimension.get("AUX_Q_MOD_A") or {}]
     filas: List[str] = [
         _linea("PLAZA", f"{plaza.get('slug') or '—'} · Δγ_plaza = "
                         f"{float(plaza.get('bono') or 0.0):+.4f} (techo {float(plaza.get('techo') or 0.1):.2f})"),
@@ -1135,13 +1137,13 @@ def _bloque_plaza_shocks(reporte: Dict[str, Any]) -> None:
         filas.append(
             f"{_pad(str(celda.get('id') or '—'), 5)}"
             f"{_pad(str(celda.get('variable') or '—')[:33], 34)}"
-            f"{_pad(str(celda.get('local') if celda.get('id') == 'V25' else celda.get('visita')), 10)}"
+            f"{_pad(str(celda.get('local') if celda.get('id') == 'AUX_Q_MOD_H' else celda.get('visita')), 10)}"
             f"{_num(q_mod, 4, 10)}  🟢 {celda.get('estado') or '—'}"
         )
     filas.append("─" * (ANCHO_TABLERO - 4))
     filas.append("Sin reporte médico auditado ⇒ Q_mod = 1.0000 (SIN SHOCK): se prohíbe inventar bajas.")
     filas.append("El shock inyectado por CLI es una HIPÓTESIS del operador, no evidencia.")
-    _caja("PLAZA & SHOCKS DE PLANTILLA (V25/V26)", filas)
+    _caja("PLAZA & SHOCKS DE PLANTILLA (AUX_Q_MOD_H/AUX_Q_MOD_A)", filas)
 
 
 def _bloque_vector_contextual(reporte: Dict[str, Any]) -> None:
@@ -1161,11 +1163,11 @@ def _bloque_vector_contextual(reporte: Dict[str, Any]) -> None:
         "─" * (ANCHO_TABLERO - 4),
         f"{_pad('Δγ_plaza', 26)}{_num(ctx.get('bono_plaza'), 4, 14)}"
         f"{_pad('[LN-QBE-038]', 38)}{'catálogo sellado'}",
-        f"{_pad('Bono altitud (V28)', 26)}{_num(ctx.get('bono_altitud'), 4, 14)}"
+        f"{_pad('Bono altitud (V29)', 26)}{_num(ctx.get('bono_altitud'), 4, 14)}"
         f"{_pad('0.03 · ΔAlt⁺/1000', 38)}{'unidireccional'}",
-        f"{_pad('Bono descanso (V27)', 26)}{_num(ctx.get('bono_descanso'), 4, 14)}"
+        f"{_pad('Bono descanso (V30)', 26)}{_num(ctx.get('bono_descanso'), 4, 14)}"
         f"{_pad('0.02 · clamp(Δ, ±3)', 38)}{'futuro-ciego N−1'}",
-        f"{_pad('ln Q_mod,H (V25)', 26)}{_num(math.log(float(ctx.get('q_mod_h') or 1.0)), 4, 14)}"
+        f"{_pad('ln Q_mod,H (AUX_Q_MOD_H)', 26)}{_num(math.log(float(ctx.get('q_mod_h') or 1.0)), 4, 14)}"
         f"{_pad('clamp [0.90, 1.05]', 38)}{'sin reporte = 1.0'}",
         f"{_pad('ln Q_mod,A (V26)', 26)}{_num(math.log(float(ctx.get('q_mod_a') or 1.0)), 4, 14)}"
         f"{_pad('clamp [0.90, 1.05]', 38)}{'sin reporte = 1.0'}",
@@ -1210,7 +1212,7 @@ def _bloque_semaforos_contexto(reporte: Dict[str, Any]) -> None:
 def imprimir_tablero_contexto_consola(reporte: Dict[str, Any]) -> None:
     """Renderiza el tablero completo de un partido ([ARCH-1.4.48]). Presentación pura."""
     print()
-    _caja("Q-BE · LABORATORIO CONTEXTO & SHOCKS · DIM 7 (T_Shk · V25-V28)", [
+    _caja("Q-BE · LABORATORIO CONTEXTO & SHOCKS · DIM 7 (T_Shk · V29/V30 + AUX)", [
         f"[{NODOS_GOBIERNO[0]}] / [{NODOS_GOBIERNO[1]}] · SÓLO LECTURA · corte N−1 (futuro-ciego)",
         f"γ̄_base = {GAMMA_BASE:.4f} · β_alt = {BETA_ALTITUD:.4f} · β_rec = {BETA_DESCANSO:.4f} · "
         f"clamp Q ∈ [{Q_MOD_MIN:.2f}, {Q_MOD_MAX:.2f}]",
@@ -1295,7 +1297,7 @@ def _construir_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action="store_true", help="Activa logging DEBUG.")
     parser.add_argument(
         "--q-mod-h", type=float, default=1.0, dest="q_mod_h", metavar="Q",
-        help="Shock ofensivo del local V25 (default 1.00 = SIN SHOCK; clamp [0.90, 1.05]).",
+        help="Shock ofensivo del local AUX_Q_MOD_H (default 1.00 = SIN SHOCK; clamp [0.90, 1.05]).",
     )
     parser.add_argument(
         "--q-mod-a", type=float, default=1.0, dest="q_mod_a", metavar="Q",

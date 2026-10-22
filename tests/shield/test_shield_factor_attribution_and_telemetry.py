@@ -242,7 +242,7 @@ def test_ui_micro_hud_y_modal_forense():
     # 1) Micro-HUD: tira de semáforos + badge + acceso al desglose.
     for marcador in ('class="bt-micro-hud"', 'class="hud-tira-semaforos"',
                      'class="badge-driver-principal"', 'class="btn-ver-44-vars"',
-                     '🔬 44 Variables'):
+                     '🔬 Catálogo Fáctico (32V)'):
         assert marcador in app_js, f"Micro-HUD incompleto: falta '{marcador}'."
     for semaforo in ("opta", "sede", "h2h", "epist"):
         assert f'"{semaforo}"' in app_js, f"Semáforo ausente en la tira: {semaforo}"
@@ -262,7 +262,7 @@ def test_ui_micro_hud_y_modal_forense():
     for columna in ("Variable", "Local", "Visita", "Z-Score", "Origen", "Estado", "Impacto"):
         assert f"<th>{columna}</th>" in app_js, f"Columna forense ausente: {columna}"
     assert 'class="vars44-dimension"' in app_js
-    assert "dimensiones.map(_tablaDimension44)" in app_js
+    assert "dimensiones.map(_tablaDimension32)" in app_js
 
     # 5) Colorimetría Dark Fintech legislada.
     for color in ("#10B981", "#F59E0B", "#EF4444", "#94A3B8"):

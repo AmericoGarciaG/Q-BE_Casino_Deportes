@@ -4,16 +4,16 @@
 
 Misión
 ------
-Aislar en consola la Dimensión 8 (𝒯_Traj, V29-V32): el momento competitivo de cada club en
-una ventana móvil de 5 partidos. Expone la forma reciente (V29), las pendientes de peligro
-ofensivo (V30) y defensivo (V31) y el diferencial de puntos esperados (V32), que separa el
+Aislar en consola la Dimensión 8 (𝒯_Traj, V31/V32 + AUX_M_XG/AUX_M_XGA): el momento competitivo de cada club en
+una ventana móvil de 5 partidos. Expone la forma reciente (V31), las pendientes de peligro
+ofensivo (AUX_M_XG) y defensivo (AUX_M_XGA) y el diferencial de puntos esperados (V32), que separa el
 sobre-rendimiento por suerte de la calidad estructural. Sin FastAPI, sin DOM y sin Playwright.
 
 Régimen: `[HÍBRIDO DUAL-TRACK]`
 * `[DIRGEN-STRICT]`: la pendiente de mínimos cuadrados y los umbrales de ΔxPTS se transcriben
   VERBATIM de [LN-QBE-110]. Cero margen creativo en la aritmética.
 * `[DBBD-FUNGIBLE]`: resolución del fixture, normalización de identidad para el *lookup*,
-  celdas V29-V32, semáforos, tablero ASCII y CLI.
+  celdas V31/V32 + AUX_M_XG/AUX_M_XGA, semáforos, tablero ASCII y CLI.
 
 Axiomas operativos
 ------------------
@@ -26,7 +26,7 @@ Axiomas operativos
 4. **Identidad normalizada:** los slugs de `matches` viajan sin acento y los nombres de
    `standings_snapshots` con acento. El *lookup* usa NFKD + minúsculas + guiones; es una
    regla de identidad, no una regla de negocio.
-5. **V29 desde marcadores reales:** la racha se computa con los goles de `matches`; el campo
+5. **V31 desde marcadores reales:** la racha se computa con los goles de `matches`; el campo
    `forma` del snapshot se publica únicamente como testigo de contraste.
 
 Uso:
@@ -569,7 +569,7 @@ def _entrada_posiciones(
 
 
 def _forma_5p(partidos: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """V29 desde marcadores reales: puntos y racha de la ventana (máximo 15)."""
+    """V31 desde marcadores reales: puntos y racha de la ventana (máximo 15)."""
     puntos = 0
     for partido in partidos:
         if partido["resultado"] == "G":
@@ -585,7 +585,7 @@ def _forma_5p(partidos: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-# [LN-QBE-110] CELDAS V29-V32 Y SÍNTESIS DE MOMENTO
+# [LN-QBE-110] CELDAS V31/V32 + AUX_M_XG/AUX_M_XGA Y SÍNTESIS DE MOMENTO
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 def _bando(
     valor_local: Optional[float],
@@ -671,7 +671,7 @@ def _reporte_no_encontrado(match_id: str, temporada: str) -> Dict[str, Any]:
 def ejecutar_sandbox_trayectoria_partido(
     match_id: str, temporada: str = TEMPORADA_DEFAULT
 ) -> Dict[str, Any]:
-    """Orquesta un fixture: corte N−1, ventanas 5P, celdas V29-V32 y síntesis. Sólo lectura."""
+    """Orquesta un fixture: corte N−1, ventanas 5P, celdas V31/V32 + AUX_M_XG/AUX_M_XGA y síntesis. Sólo lectura."""
     temporada = str(temporada)
     partidos_cache, cache_meta = cargar_cache_opta(temporada)
     gateway = PersistenceGateway()
@@ -716,7 +716,7 @@ def ejecutar_sandbox_trayectoria_partido(
         entrada_local = _entrada_posiciones(entradas, fixture["local_slug"])
         entrada_visita = _entrada_posiciones(entradas, fixture["visita_slug"])
 
-        # ── V29 · Forma 5P (puntos reales de la ventana) ────────────────────────────────
+        # ── V31 · Forma 5P (puntos reales de la ventana) ────────────────────────────────
         forma_local = _forma_5p(ventana_local["partidos"])
         forma_visita = _forma_5p(ventana_visita["partidos"])
         evidencia_forma = (
@@ -724,7 +724,7 @@ def ejecutar_sandbox_trayectoria_partido(
             and forma_visita["muestra"] == VENTANA_TRAYECTORIA
         )
         v29 = {
-            "id": "V29",
+            "id": "V31",
             "variable": "Forma 5P (ΔPts últimos 5)",
             "unidad": "puntos",
             "estado": ESTADO_EVALUADO if evidencia_forma else ESTADO_SIN_EVIDENCIA,
@@ -753,7 +753,7 @@ def ejecutar_sandbox_trayectoria_partido(
             ),
         }
 
-        # ── V30 · Pendiente de peligro ofensivo (xG) ────────────────────────────────────
+        # ── AUX_M_XG · Pendiente de peligro ofensivo (xG) ────────────────────────────────────
         m_xg_local = ventana_local["pendiente_xg"]
         m_xg_visita = ventana_visita["pendiente_xg"]
         direccion_xg_local = _direccion_xg(m_xg_local)
@@ -765,7 +765,7 @@ def ejecutar_sandbox_trayectoria_partido(
             and ventana_visita["integro"]
         )
         v30 = {
-            "id": "V30",
+            "id": "AUX_M_XG",
             "variable": "Pendiente xG 5P (m_xG)",
             "unidad": "xG/partido",
             "estado": ESTADO_EVALUADO if evidencia_xg else ESTADO_SIN_EVIDENCIA,
@@ -789,7 +789,7 @@ def ejecutar_sandbox_trayectoria_partido(
             ),
         }
 
-        # ── V31 · Pendiente de vulnerabilidad defensiva (xGA) ───────────────────────────
+        # ── AUX_M_XGA · Pendiente de vulnerabilidad defensiva (xGA) ───────────────────────────
         m_xga_local = ventana_local["pendiente_xga"]
         m_xga_visita = ventana_visita["pendiente_xga"]
         direccion_xga_local = _direccion_xga(m_xga_local)
@@ -801,7 +801,7 @@ def ejecutar_sandbox_trayectoria_partido(
             and ventana_visita["integro"]
         )
         v31 = {
-            "id": "V31",
+            "id": "AUX_M_XGA",
             "variable": "Pendiente xGA 5P (m_xGA)",
             "unidad": "xGA/partido",
             "estado": ESTADO_EVALUADO if evidencia_xga else ESTADO_SIN_EVIDENCIA,
@@ -921,14 +921,14 @@ def ejecutar_sandbox_trayectoria_partido(
             ),
         }
 
-        dimension_8 = {"V29": v29, "V30": v30, "V31": v31, "V32": v32}
+        dimension_8 = {"V31": v29, "AUX_M_XG": v30, "AUX_M_XGA": v31, "V32": v32}
         sintesis = _sintesis_momento(v29, v30, v31, v32)
         evaluadas = sum(
             1 for celda in dimension_8.values() if celda["estado"] == ESTADO_EVALUADO
         )
         if evaluadas == len(dimension_8):
             status = "EXITO"
-            motivo = "Las 4 variables V29-V32 quedaron evaluadas con evidencia íntegra."
+            motivo = "Las 4 variables V31/V32 + AUX_M_XG/AUX_M_XGA quedaron evaluadas con evidencia íntegra."
         elif evaluadas:
             status = "PARCIAL"
             motivo = (
@@ -965,7 +965,7 @@ def ejecutar_sandbox_trayectoria_partido(
         )
         semaforos = {
             "TRAYECTORIA": _semaforo(
-                nivel_trayectoria, f"{evaluadas}/4 celdas V29-V32 evaluadas."
+                nivel_trayectoria, f"{evaluadas}/4 celdas V31/V32 + AUX_M_XG/AUX_M_XGA evaluadas."
             ),
             "CORTE": _semaforo(
                 nivel_corte,
@@ -1212,13 +1212,13 @@ def _bloque_experimento_trayectoria(reporte: Dict[str, Any]) -> None:
     if fidelidad.get("advertencia"):
         filas.append("─" * (ANCHO_TABLERO - 4))
         filas.extend(_envolver(f"⚠ CORTE: {fidelidad['advertencia']}"))
-    _caja("TRAYECTORIA & MOMENTO · DIM 8 (V29-V32) · [LN-QBE-110]", filas)
+    _caja("TRAYECTORIA & MOMENTO · DIM 8 (V31/V32 + AUX_M_XG/AUX_M_XGA) · [LN-QBE-110]", filas)
 
 
 def _bloque_forma_5p(reporte: Dict[str, Any]) -> None:
-    """Caja 2: V29 · puntos y racha de los últimos 5 partidos por club."""
+    """Caja 2: V31 · puntos y racha de los últimos 5 partidos por club."""
     fixture = reporte.get("match") or {}
-    celda = (reporte.get("dimension_8_trayectoria") or {}).get("V29") or {}
+    celda = (reporte.get("dimension_8_trayectoria") or {}).get("V31") or {}
     filas: List[str] = [
         f"{_pad('EQUIPO', 18)}{_pad('RACHA', 10)}{'PTS/15'.rjust(8)}{'MUESTRA'.rjust(9)}  ESTADO",
         "─" * (ANCHO_TABLERO - 4),
@@ -1243,15 +1243,15 @@ def _bloque_forma_5p(reporte: Dict[str, Any]) -> None:
         f"(local − visita; cota [−15, +15])"
     )
     filas.extend(_envolver(str(celda.get("nota") or "")))
-    _caja("V29 · FORMA 5P (MOMENTO DE PUNTOS)", filas)
+    _caja("V31 · FORMA 5P (MOMENTO DE PUNTOS)", filas)
 
 
 def _bloque_pendientes(reporte: Dict[str, Any]) -> None:
-    """Caja 3: V30/V31 · pendientes OLS de xG y xGA con su lectura direccional."""
+    """Caja 3: AUX_M_XG/AUX_M_XGA · pendientes OLS de xG y xGA con su lectura direccional."""
     fixture = reporte.get("match") or {}
     dimension = reporte.get("dimension_8_trayectoria") or {}
-    v30 = dimension.get("V30") or {}
-    v31 = dimension.get("V31") or {}
+    v30 = dimension.get("AUX_M_XG") or {}
+    v31 = dimension.get("AUX_M_XGA") or {}
     filas: List[str] = [
         f"{_pad('EQUIPO', 16)}{'m_xG'.rjust(8)}  {_pad('DIRECCIÓN xG', 18)}"
         f"{'m_xGA'.rjust(8)}  DIRECCIÓN xGA",
@@ -1299,7 +1299,7 @@ def _bloque_pendientes(reporte: Dict[str, Any]) -> None:
     filas.extend(
         _envolver("Pendiente OLS exacta [LN-QBE-110]: m = Σ(t−3)(y_t−ȳ)/10 con t=1..5.")
     )
-    _caja("V30/V31 · PENDIENTES DE PELIGRO (5P)", filas)
+    _caja("AUX_M_XG/AUX_M_XGA · PENDIENTES DE PELIGRO (5P)", filas)
 
 
 def _bloque_varianza_xpts(reporte: Dict[str, Any]) -> None:
@@ -1352,7 +1352,7 @@ def _bloque_sintesis(reporte: Dict[str, Any]) -> None:
     filas.append("─" * (ANCHO_TABLERO - 4))
     filas.extend(_envolver(sintesis.get("lectura") or ""))
     filas.extend(_envolver(sintesis.get("nota") or ""))
-    _caja("SÍNTESIS DE MOMENTO (V29-V32)", filas)
+    _caja("SÍNTESIS DE MOMENTO (V31/V32 + AUX_M_XG/AUX_M_XGA)", filas)
 
 
 def _bloque_semaforos_trayectoria(reporte: Dict[str, Any]) -> None:
@@ -1373,7 +1373,7 @@ def imprimir_tablero_trayectoria_consola(reporte: Dict[str, Any]) -> None:
     """Renderiza el tablero completo de un partido ([ARCH-1.4.49]). Presentación pura."""
     print()
     _caja(
-        "Q-BE · LABORATORIO TRAYECTORIA & MOMENTO · DIM 8 (V29-V32)",
+        "Q-BE · LABORATORIO TRAYECTORIA & MOMENTO · DIM 8 (V31/V32 + AUX_M_XG/AUX_M_XGA)",
         [
             f"[{NODOS_GOBIERNO[0]}] / [{NODOS_GOBIERNO[1]}] · SÓLO LECTURA · corte N−1 (futuro-ciego)",
             f"Ventana móvil 5P · pendiente OLS exacta (denominador 10) · umbral ΔxPTS ±{UMBRAL_XPTS:.1f}",
@@ -1428,9 +1428,9 @@ def imprimir_tablero_jornada_trayectoria_consola(resumen: Dict[str, Any]) -> Non
     for reporte in resumen.get("partidos") or []:
         fixture = reporte.get("match") or {}
         dimension = reporte.get("dimension_8_trayectoria") or {}
-        v29 = dimension.get("V29") or {}
-        v30 = dimension.get("V30") or {}
-        v31 = dimension.get("V31") or {}
+        v29 = dimension.get("V31") or {}
+        v30 = dimension.get("AUX_M_XG") or {}
+        v31 = dimension.get("AUX_M_XGA") or {}
         v32 = dimension.get("V32") or {}
         filas.append(
             f"{_pad(str(fixture.get('id') or '—')[:13], 14)}"

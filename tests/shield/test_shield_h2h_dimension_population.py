@@ -199,15 +199,15 @@ def test_acordeon_forense_sin_rotulo_literal_en_la_plantilla():
     raiz = Path(__file__).resolve().parents[2]
     fuente = (raiz / "src" / "web" / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
-    inicio = fuente.index("function _tablaDimension44(")
-    fin = fuente.index("function _hidratarBadgesDimension44(")
+    inicio = fuente.index("function _tablaDimension32(")
+    fin = fuente.index("function _hidratarBadgesDimension32(")
     plantilla = fuente[inicio:fin]
     assert "SIN EVALUAR" not in plantilla, (
         "El rótulo de ausencia debe venir del badge servido, no de la plantilla del acordeón."
     )
     assert "vars44-badge-slot" in plantilla
 
-    constructor = fuente[fuente.index("function _badgeDimension44("):inicio]
+    constructor = fuente[fuente.index("function _badgeDimension32("):inicio]
     assert "variables_evaluadas" in constructor and "total_variables" in constructor
     assert "textContent" in constructor and "innerHTML" not in constructor
 

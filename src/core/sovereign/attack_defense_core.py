@@ -6,7 +6,7 @@ Régimen: [DIRGEN-STRICT] para la colisión cruzada de fuerzas (cero margen crea
 
 Contrato público:
   * `obtener_metricas_ataque_defensa(sesion, match_id, ...)` → bloque `ataque_defensa` del paquete
-    `insumos_factivados` con V05 (xG/90), V06 (SoT/90), V10 (xGA/90) y V11 (SoTA/90), los factores
+    `insumos_factivados` con V06 (xG/PJ), V07 (SoT/PJ), V12 (xGA/PJ) y V13 (SoTA/PJ), los factores
     estructurales sellados `[VAULT-CORE-005]` y la colisión cruzada `[LN-QBE-108]`.
   * `calcular_colision_fuerzas_cruzadas(A_h, D_a, A_a, D_h)` → choque complementario puro (sin I/O).
 
@@ -16,7 +16,7 @@ Fuentes de evidencia (SÓLO LECTURA, cero escritura, cero red):
   3. `match_telemetry` para SoT/SoTA vía la capa compartida de `telemetry_provider`.
 
 Decreto VAR-2026-J7-HOMOLOGACION §E1: `xga` permanece FUERA del `raw_match_data` que consume el
-motor sellado —el diagnóstico defensivo certificado no se altera—; el xGA se publica sólo como V10
+motor sellado —el diagnóstico defensivo certificado no se altera—; el xGA se publica sólo como V12
 (evidencia exhibida). El motor jamás ve una cifra que no esté homologada.
 """
 
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from src.core.sovereign.factor_attribution import derivar_taxonomia
 from src.core.sovereign.context_provider import (
     ESTADO_EXITO,
     ESTADO_PARCIAL,
@@ -63,32 +64,35 @@ GLIFO: Dict[str, str] = {
     ESTADO_PARCIAL: "🟡",
 }
 
-# ── Taxonomía bipartita de las dimensiones nucleares ([LN-QBE-101] · 𝒯_Fin / 𝒯_Def) ──────────
-# (id, nombre forense, unidad canónica, nota de procedencia)
-_TAXONOMIA_DIM_2: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V05", "xG por 90 minutos (ancla npxG)", "npxG/90",
-     "xG Opta de shotmap (agregación factual de disparos) por 90 min, corte N−1."),
-    ("V06", "Tiros a puerta (SoT)", "SoT/90",
-     "SoT por 90 min; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
-    ("V07", "xG a puerta (xGOT)", "xGOT/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT. No se simula."),
-    ("V08", "Grandes oportunidades creadas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances creadas."),
-    ("V09", "Grandes oportunidades falladas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances falladas."),
-)
-_TAXONOMIA_DIM_3: Tuple[Tuple[str, str, str, str], ...] = (
-    ("V10", "xGA por 90 minutos (ancla defensiva)", "xGA/90",
-     "xGA Opta de shotmap por 90 min, corte N−1 (evidencia exhibida, no insumo del motor)."),
-    ("V11", "Tiros a puerta concedidos (SoTA)", "SoTA/90",
-     "SoTA por 90 min; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
-    ("V12", "PPDA (presión defensiva)", "índice",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica PPDA."),
-    ("V13", "Recuperaciones en tercio medio", "rec/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica recuperaciones."),
-    ("V14", "Grandes oportunidades concedidas", "BC/90",
-     "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances concedidas."),
-)
+# ── Taxonomía bipartita de las dimensiones nucleares ([LN-QBE-122] · 𝒯_Rem / 𝒯_Def) ───────────
+# [LN-QBE-122] NOMBRE y ORDEN vienen del catálogo único `[LN-QBE-120]`; aquí sólo viven la unidad
+# canónica y la nota de procedencia. `AUX_*` = magnitud sin celda (jamás usurpa un `VXX`).
+_LOCALES_DIM_2: Dict[str, Tuple[str, str, str]] = {
+    "V06": ("xG por Partido (ancla npxG)", "xG/PJ",
+            "xG Opta de shotmap por partido del corte N−1 (acumulado del club / PJ)."),
+    "V07": ("Tiros al Arco por Partido (SoT)", "SoT/PJ",
+            "SoT por partido; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
+    "AUX_XGOT_90": ("xG a puerta (xGOT)", "xGOT/90",
+                    "SIN EVIDENCIA (FASE 6): el sensor congelado no publica xGOT. No se simula."),
+    "V08": ("Big Chances Creadas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances creadas."),
+    "V09": ("Big Chances Falladas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances falladas."),
+}
+_LOCALES_DIM_3: Dict[str, Tuple[str, str, str]] = {
+    "V12": ("xGA por Partido (ancla defensiva)", "xGA/PJ",
+            "xGA Opta de shotmap por partido del corte N−1 (evidencia exhibida, no insumo del motor)."),
+    "V13": ("Tiros al Arco Recibidos por Partido (SoTA)", "SoTA/PJ",
+            "SoTA por partido; fuente: match_telemetry 3NF (hoy vacía) / caché congelada."),
+    "AUX_PPDA": ("PPDA (presión defensiva)", "índice",
+                 "SIN EVIDENCIA (FASE 6): el sensor congelado no publica PPDA."),
+    "V15": ("Intercepciones por Partido", "rec/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica recuperaciones."),
+    "V16": ("Big Chances Concedidas", "BC/PJ",
+            "SIN EVIDENCIA (FASE 6): el sensor congelado no publica big chances concedidas."),
+}
+_TAXONOMIA_DIM_2: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Rem", _LOCALES_DIM_2)
+_TAXONOMIA_DIM_3: Tuple[Tuple[str, str, str, str], ...] = derivar_taxonomia("𝒯_Def", _LOCALES_DIM_3)
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -144,7 +148,7 @@ def calcular_colision_fuerzas_cruzadas(
         diferencial_neto       = empuje_local − empuje_visita = (A_H − D_A) − (A_A − D_H)
 
     El signo del diferencial identifica al bando dominante. NO se restan ataques entre sí
-    (eso violaría la estructura bipartita de V05-V14): sólo se cruzan fuerzas complementarias.
+    (eso violaría la estructura bipartita de 𝒯_Rem/𝒯_Def): sólo se cruzan fuerzas complementarias.
     """
     empuje_local = float(A_h) - float(D_a)
     empuje_visita = float(A_a) - float(D_h)
@@ -303,10 +307,10 @@ def _nota_faltante(
 def _dimensiones(
     acum_local: Dict[str, Any], acum_visita: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Materializa V05-V09 (𝒯_Fin) y V10-V14 (𝒯_Def) en celdas bipartitas simétricas.
+    """Materializa las celdas de 𝒯_Rem y 𝒯_Def (taxonomía `[LN-QBE-122]`) en celdas bipartitas.
 
-    V05/V10 se evalúan con la caché Opta congelada (cobertura íntegra obligatoria).
-    V06/V11 se evalúan sólo si `match_telemetry` cubre TODOS los partidos del corte.
+    `V06`/`V12` se evalúan con la caché Opta congelada (cobertura íntegra obligatoria).
+    `V07`/`V13` se evalúan sólo si `match_telemetry` cubre TODOS los partidos del corte.
     El resto se declara `SIN EVIDENCIA (FASE 6)`: cero cifras inventadas `[GOVERNANCE-01]`.
     """
     pj_h, pj_v = int(acum_local["pj"]), int(acum_visita["pj"])
@@ -321,27 +325,27 @@ def _dimensiones(
 
     dim_2: Dict[str, Any] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_2:
-        if identificador == "V05":
-            dim_2["V05"] = _celda(identificador, nombre, unidad, xg_h, xg_v, nota)
-        elif identificador == "V06":
-            nota_v06 = (
+        if identificador == "V06":
+            dim_2["V06"] = _celda(identificador, nombre, unidad, xg_h, xg_v, nota)
+        elif identificador == "V07":
+            nota_v07 = (
                 nota if (sot_h is not None and sot_v is not None)
                 else _nota_faltante(acum_local, acum_visita, "sot")
             )
-            dim_2["V06"] = _celda(identificador, nombre, unidad, sot_h, sot_v, nota_v06)
+            dim_2["V07"] = _celda(identificador, nombre, unidad, sot_h, sot_v, nota_v07)
         else:
             dim_2[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
 
     dim_3: Dict[str, Any] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_3:
-        if identificador == "V10":
-            dim_3["V10"] = _celda(identificador, nombre, unidad, xga_h, xga_v, nota)
-        elif identificador == "V11":
-            nota_v11 = (
+        if identificador == "V12":
+            dim_3["V12"] = _celda(identificador, nombre, unidad, xga_h, xga_v, nota)
+        elif identificador == "V13":
+            nota_v13 = (
                 nota if (sota_h is not None and sota_v is not None)
                 else _nota_faltante(acum_local, acum_visita, "sot")
             )
-            dim_3["V11"] = _celda(identificador, nombre, unidad, sota_h, sota_v, nota_v11)
+            dim_3["V13"] = _celda(identificador, nombre, unidad, sota_h, sota_v, nota_v13)
         else:
             dim_3[identificador] = _celda(identificador, nombre, unidad, None, None, nota)
     return dim_2, dim_3
@@ -398,7 +402,7 @@ def _semaforo(nivel: str, detalle: str) -> Dict[str, str]:
 
 
 def _semaforos(corte_local: Dict[str, Any], corte_visita: Dict[str, Any]) -> Dict[str, Any]:
-    """Semáforos de cobertura: Opta (V05/V10) y telemetría 3NF (V06/V11)."""
+    """Semáforos de cobertura: Opta (`V06`/`V12`) y telemetría 3NF (`V07`/`V13`)."""
     opta_h = int(corte_local["cobertura_xg"]["cubiertos"])
     opta_v = int(corte_visita["cobertura_xg"]["cubiertos"])
     total_h = int(corte_local["cobertura_xg"]["total"])
@@ -421,7 +425,7 @@ def _semaforos(corte_local: Dict[str, Any], corte_visita: Dict[str, Any]) -> Dic
 
 
 def _dimensiones_vacias(motivo: str) -> Dict[str, Any]:
-    """Celdas apagadas de V05-V14 (taxonomía completa, cero cifras: `SIN EVIDENCIA`)."""
+    """Celdas apagadas de 𝒯_Rem y 𝒯_Def (taxonomía completa, cero cifras: `SIN EVIDENCIA`)."""
     vacias: Dict[str, Any] = {}
     for identificador, nombre, unidad, nota in _TAXONOMIA_DIM_2 + _TAXONOMIA_DIM_3:
         vacias[identificador] = _celda(identificador, nombre, unidad, None, None, motivo or nota)
@@ -482,8 +486,8 @@ def obtener_metricas_ataque_defensa(
 ) -> Dict[str, Any]:
     """Bloque `ataque_defensa` del paquete `insumos_factivados` (sólo lectura, cero red).
 
-    Migración VERBATIM de `[LN-QBE-108]` desde el sandbox de laboratorio: V05 (xG/90), V06 (SoT/90),
-    V10 (xGA/90) y V11 (SoTA/90) sobre el corte futuro-ciego N−1, más los factores estructurales
+    Migración VERBATIM de `[LN-QBE-108]` desde el sandbox de laboratorio: V06 (xG/PJ),
+    V07 (SoT/PJ), V12 (xGA/PJ) y V13 (SoTA/PJ) sobre el corte futuro-ciego N−1, más los factores estructurales
     sellados `[VAULT-CORE-005]` y la colisión cruzada de fuerzas.
 
     * `jornada` ausente ⇒ se toma del snapshot de cartelera (`kickoff` nunca se lee).
@@ -563,13 +567,13 @@ def obtener_metricas_ataque_defensa(
     if cobertura_completa and len(publicadas) == 4:
         status = ESTADO_EXITO
         motivo = (
-            "Cobertura íntegra: V05, V06, V10 y V11 evaluadas con evidencia real y la colisión "
+            "Cobertura íntegra: V06, V07, V12 y V13 evaluadas con evidencia real y la colisión "
             "cruzada calculada por los planos sellados."
         )
     elif publicadas:
         status = ESTADO_PARCIAL
         motivo = (
-            "Cobertura parcial: sólo una parte de V05/V06/V10/V11 tiene feed íntegro en ambos "
+            "Cobertura parcial: sólo una parte de V06/V07/V12/V13 tiene feed íntegro en ambos "
             "cortes; las celdas faltantes se declaran SIN EVIDENCIA (cero cifras fabricadas)."
         )
     else:
@@ -604,7 +608,7 @@ def obtener_metricas_ataque_defensa(
             "mezcla_sellada": "0.65·xG/90 + 0.35·GF/90 → log(tasa / (μ_liga/2)) [VAULT-CORE-005]",
             "nota_homologacion": (
                 "Decreto VAR-2026-J7-HOMOLOGACION §E1: `xga` permanece fuera del `raw_match_data` "
-                "para preservar el diagnóstico defensivo certificado; el xGA se publica sólo como V10."
+                "para preservar el diagnóstico defensivo certificado; el xGA se publica sólo como V12."
             ),
         },
         "colision": colision,

@@ -145,14 +145,14 @@ def _contexto_efectivo(explicito: float, raw_match_data: Dict[str, Any], clave: 
     return 0.0
 
 
-# ── [LN-QBE-105] Agregación fáctica de la ventana H2H (V39/V40/V41 del catálogo forense) ──────
+# ── [LN-QBE-105] Agregación fáctica de la ventana H2H (V26/V27/V28 del catálogo forense) ──────
 SIN_ANTECEDENTES_SEDE = "Sin antecedentes locales"
 
 
 def _agregar_h2h_stats(h2h_matches: Any) -> Optional[Dict[str, str]]:
     """`[LN-QBE-105]` Agregado fáctico de la ventana H2H desde la perspectiva del local evaluado.
 
-    Emite `record_general` (V39), `dif_goles` (V40) y `record_sede` (V41) sobre las filas
+    Emite `record_general` (V26), `dif_goles` (V27) y `record_sede` (V28) sobre las filas
     verificables (`goles_local`/`goles_visita` enteros). Sin duelos ⇒ `None`: la Ley Zero-H2H no
     fabrica un récord 0-0-0 (ausencia de evidencia no es un empate). Sólo `es_local_sede is True`
     acredita la sede evaluada; una fila histórica sin bandera no se cuenta (cero fabricación).
@@ -351,17 +351,22 @@ def _empaquetar_insumos_factivados(
     q_mod_a: float,
     xg_es_real_opta: Optional[bool] = None,
     h2h_stats: Optional[Dict[str, str]] = None,
+    cache_macro_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """[LN-QBE-102] Telemetría fáctica de los insumos consumidos por el generador soberano.
 
     Cada clave es la magnitud REALMENTE usada por la matemática (tasas canónicas [ARCH-1.4.41],
     splits de sede [LN-QBE-038] y parámetros contextuales efectivos). `None` = no publicado.
     `[LN-QBE-105]` `h2h_stats` se anexa de forma aditiva SÓLO cuando la ventana publicó duelos
-    verificables; en su ausencia la clave no existe y la ruta heredada de V39 queda intacta.
+    verificables; en su ausencia la clave no existe y la ruta heredada de V26 queda intacta.
 
     `[LN-QBE-118]` Sobre esas MISMAS magnitudes se anidan los cinco pilares (`h2h`, `contexto`,
     `trayectoria`, `volumen_porteria`, `ataque_defensa`): el anidamiento es una PROYECCIÓN, no un
     cálculo, y ninguna de sus claves alimenta λ, Dixon-Coles, André ni la fusión `[LN-QBE-104]`.
+
+    `[LN-QBE-121]` `cache_macro_stats` (agregado torneal YA resuelto por slug) se anida como
+    bloque de EXHIBICIÓN: enciende celdas apagadas del catálogo de 32 variables y jamás sustituye
+    una magnitud consumida. Sin artefacto el paquete es byte-idéntico al previo.
     """
     local = _bloque_factico(raw_match_data, "home_team_stats")
     visita = _bloque_factico(raw_match_data, "away_team_stats")
@@ -401,9 +406,36 @@ def _empaquetar_insumos_factivados(
     }
     if h2h_stats is not None:
         paquete["h2h_stats"] = dict(h2h_stats)
+    # [LN-QBE-121] Aduana de Exhibición: el agregado torneal NO alimenta λ; sólo enciende celdas.
+    if cache_macro_stats is not None:
+        bloque_macro = _bloque_macro_stats(cache_macro_stats)
+        if bloque_macro:
+            paquete["macro_stats"] = bloque_macro
     # [LN-QBE-118] Los cinco pilares se anidan sobre las MISMAS magnitudes planas (aditivo).
     paquete.update(_paquete_anidado_cinco_pilares(paquete, raw_match_data))
     return paquete
+
+
+def _bloque_macro_stats(cache_macro_stats: Any) -> Dict[str, Any]:
+    """[LN-QBE-121] Bloque `macro_stats` resuelto (sólo lectura; `{}` si no hay artefacto).
+
+    El llamador (orquestador de ingesta) entrega `{"local": {...}, "visita": {...}}` ya resuelto
+    por slug: el generador **no** conoce identidades de club. Cada lado se copia tal cual llega
+    —cero derivación, cero imputación— y se sella la procedencia torneal.
+    """
+    if not isinstance(cache_macro_stats, dict):
+        return {}
+    local = cache_macro_stats.get("local")
+    visita = cache_macro_stats.get("visita")
+    if not isinstance(local, dict) and not isinstance(visita, dict):
+        return {}
+    return {
+        "procedencia": str(cache_macro_stats.get("procedencia") or "MACRO_TORNEAL"),
+        "catalogo_version": str(cache_macro_stats.get("catalogo_version") or ""),
+        "local": dict(local) if isinstance(local, dict) else {},
+        "visita": dict(visita) if isinstance(visita, dict) else {},
+        "cotejo": dict(cache_macro_stats.get("cotejo") or {}),
+    }
 
 
 class StochasticAuditTrace(BaseModel):
@@ -804,7 +836,8 @@ def generar_distribucion_soberana(
     rho: float = -0.05,
     origen_captura: str = ORIGEN_CAPTURA_HISTORICO,
     timestamp_captura: Optional[str] = None,
-    xg_es_real_opta: Optional[bool] = None
+    xg_es_real_opta: Optional[bool] = None,
+    cache_macro_stats: Optional[Dict[str, Any]] = None
 ) -> SovereignDistributionOutput:
     """
     [TRATADO VOLUMEN I] Generador Soberano Universal de la Distribución del Partido.
@@ -818,6 +851,7 @@ def generar_distribucion_soberana(
     insumos_factivados = _empaquetar_insumos_factivados(
         raw_match_data, delta_alt_efectivo, delta_descanso_efectivo, q_mod_h, q_mod_a, xg_es_real_opta,
         h2h_stats=_agregar_h2h_stats(raw_match_data.get("h2h_matches")),
+        cache_macro_stats=cache_macro_stats,
     )
 
     # 1. Comprobación de Suficiencia Fáctica S(I_i)

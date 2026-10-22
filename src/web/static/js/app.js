@@ -4023,11 +4023,11 @@ function mostrarMicroJornadaBacktesting(idx) {
             ? ((pPrimaPorClave[favQbeClave] + pPrimaPorClave[clavesPorPRima[1]]) * 100).toFixed(1)
             : Number(masaDto).toFixed(1);
         const triadaProv = [p.r_max, p.r_mid, p.r_low].filter(Boolean).join(" ≥ ");
-        // [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064 / DES-QBE-071] Micro-HUD soberano de la tarjeta:
-        // tetralogía fáctica de salud de insumos (OPTA · SEDE · H2H · CTX), badge del driver principal
-        // y acceso al desglose forense de 44 variables. El pintor NO deriva nada: consume el bloque
-        // `atribucion_factorial` servido por el endpoint. Payload legado o `disponible=false`
-        // degrada a gris NEUTRO (cero semáforo inventado, [GOVERNANCE-01]).
+        // [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064 / DES-QBE-070-B / DES-QBE-071] Micro-HUD
+        // soberano de la tarjeta: tetralogía fáctica de salud de insumos (OPTA · SEDE · H2H · CTX),
+        // badge del driver principal y acceso al catálogo forense de 32 variables. El pintor NO
+        // deriva nada: consume el bloque `atribucion_factorial` servido por el endpoint. Payload
+        // legado o `disponible=false` degrada a gris NEUTRO (cero semáforo inventado).
         const atribucion = p.atribucion_factorial || null;
         const semaforosHud = (atribucion && atribucion.semaforos) || {};
         // [DES-QBE-071] EPIST sale de la vista, no del payload: el veto anti-cuarentena lo consume.
@@ -4048,7 +4048,7 @@ function mostrarMicroJornadaBacktesting(idx) {
             <div class="bt-micro-hud">
                 <div class="hud-tira-semaforos">${tiraSemaforos}</div>
                 <span class="badge-driver-principal" title="Driver principal: argmax |Δ_k| de la descomposición logarítmica">${textoDriver}</span>
-                <button class="btn-ver-44-vars" data-partido-id="${p.id_partido || ""}" title="Inspección forense del vector de 44 variables">🔬 44 Variables</button>
+                <button class="btn-ver-44-vars" data-partido-id="${p.id_partido || ""}" title="Inspección forense del catálogo de 32 variables">🔬 Catálogo Fáctico (32V)</button>
             </div>`;
         const casillas = [
             { titulo: "1 LOCAL", clave: "LOCAL", p: p.p_local, q: p.q_local, o: momios.L },
@@ -4124,7 +4124,7 @@ function mostrarMicroJornadaBacktesting(idx) {
 }
 
 /* ==========================================================================
-   [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064] MODAL FORENSE DE 44 VARIABLES
+   [LN-QBE-101 / ARCH-1.4.42 / DES-QBE-064 / DES-QBE-070-B] MODAL FORENSE DEL CATÁLOGO DE 32V
    Régimen [DBBD-FUNGIBLE]: el pintor sólo transcribe el bloque servido por el
    endpoint (`atribucion_factorial`). Cero derivación local, cero cifra inventada:
    la evidencia ausente se declara `SIN EVIDENCIA` tal como la bóveda la publica.
@@ -4178,14 +4178,14 @@ function _badgeProcedenciaHtml(origen) {
 // [DES-QBE-071] Tetralogía fáctica del panel de salud de datos del modal. `epist` se retira de la
 // vitrina: el backend lo sigue publicando y el filtro anti-cuarentena ([DES-QBE-067]) lo lee por
 // acceso indexado, de modo que el veredicto epistémico gobierna sin exhibirse.
-const ETIQUETAS_SEMAFORO_44 = {
+const ETIQUETAS_SEMAFORO_32 = {
     opta: "OPTA",
     sede: "SEDE",
     h2h: "H2H",
     ctx: "CTX",
 };
 
-const COLORES_ESTADO_44 = {
+const COLORES_ESTADO_32 = {
     // [LN-QBE-102 / DES-QBE-065] `EVALUADO` = insumo fáctico publicado y consumido por el motor
     // (iluminación verde). Los tres estados preexistentes conservan su colorimetría sellada.
     EVALUADO: "#10B981",
@@ -4204,13 +4204,13 @@ function _partidoBacktestingCache(idPartido) {
     return null;
 }
 
-function _valor44(valor) {
+function _valor32(valor) {
     if (valor === null || valor === undefined) return '<span style="color:#475569;">—</span>';
     const numero = Number(valor);
     return Number.isFinite(numero) ? numero.toFixed(2) : String(valor);
 }
 
-function _delta44(valor) {
+function _delta32(valor) {
     if (valor === null || valor === undefined) return '<span style="color:#475569;">—</span>';
     const numero = Number(valor);
     if (!Number.isFinite(numero)) return String(valor);
@@ -4218,17 +4218,17 @@ function _delta44(valor) {
     return `<span style="color:${color}; font-family:monospace;">${numero >= 0 ? "+" : ""}${numero.toFixed(4)}</span>`;
 }
 
-function _bloqueSemaforos44(semaforos) {
-    return Object.keys(ETIQUETAS_SEMAFORO_44).map(clave => {
+function _bloqueSemaforos32(semaforos) {
+    return Object.keys(ETIQUETAS_SEMAFORO_32).map(clave => {
         const estado = (semaforos && semaforos[clave]) || "NEUTRO";
         const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
-        return `<span class="vars44-semaforo" data-semaforo="${ETIQUETAS_SEMAFORO_44[clave]}" ` +
-            `data-estado="${estado}" style="color:${color};">● ${ETIQUETAS_SEMAFORO_44[clave]} ` +
+        return `<span class="vars44-semaforo" data-semaforo="${ETIQUETAS_SEMAFORO_32[clave]}" ` +
+            `data-estado="${estado}" style="color:${color};">● ${ETIQUETAS_SEMAFORO_32[clave]} ` +
             `<strong>${estado}</strong></span>`;
     }).join("");
 }
 
-function _badgeDimension44(dimension) {
+function _badgeDimension32(dimension) {
     // [DES-QBE-066 / LN-QBE-104] Badge bicolor del acordeón forense. Construcción DOM pura: los
     // contadores llegan servidos y se validan antes de pintarse; cero hidratación por marcado crudo.
     // «EVALUADA» exige evidencia REALMENTE evaluada: `tiene_datos` por sí solo no basta. Una
@@ -4245,16 +4245,16 @@ function _badgeDimension44(dimension) {
     return badge;
 }
 
-function _tablaDimension44(dimension) {
+function _tablaDimension32(dimension) {
     const filas = (dimension.variables || []).map(variable => {
-        const colorEstado = COLORES_ESTADO_44[variable.estado] || "#94A3B8";
+        const colorEstado = COLORES_ESTADO_32[variable.estado] || "#94A3B8";
         return `
             <tr>
                 <td class="vars44-col-id">${variable.id}</td>
                 <td class="vars44-col-variable">${variable.variable}</td>
-                <td class="vars44-col-num">${_valor44(variable.local)}</td>
-                <td class="vars44-col-num">${_valor44(variable.visita)}</td>
-                <td class="vars44-col-num">${_valor44(variable.z_score)}</td>
+                <td class="vars44-col-num">${_valor32(variable.local)}</td>
+                <td class="vars44-col-num">${_valor32(variable.visita)}</td>
+                <td class="vars44-col-num">${_valor32(variable.z_score)}</td>
                 <td class="vars44-col-origen">${variable.origen || "—"}</td>
                 <td class="vars44-col-estado" style="color:${colorEstado};">${variable.estado || "—"}</td>
                 <td class="vars44-col-impacto">${variable.impacto || "—"}</td>
@@ -4270,7 +4270,7 @@ function _tablaDimension44(dimension) {
                     <span class="vars44-dim-conteo">${dimension.conteo} variables · ${dimension.dimension}</span>
                 </span>
             </summary>
-            ${_cardDimension44(dimension)}
+            ${_cardDimension32(dimension)}
             <table class="vars44-tabla">
                 <thead>
                     <tr>
@@ -4289,7 +4289,7 @@ function _tablaDimension44(dimension) {
         </details>`;
 }
 
-function _hidratarBadgesDimension44(contenedor, dimensiones) {
+function _hidratarBadgesDimension32(contenedor, dimensiones) {
     // [DES-QBE-066] Clase bicolor + badge construidos en DOM sobre la geometría sellada de
     // [DES-QBE-064]: la transcripción del bloque servido nunca se hidrata por `innerHTML`.
     if (!contenedor) return;
@@ -4300,7 +4300,7 @@ function _hidratarBadgesDimension44(contenedor, dimensiones) {
     contenedor.querySelectorAll(".vars44-badge-slot").forEach(ranura => {
         const dimension = porIndice[ranura.dataset.indiceBadge];
         if (!dimension) return;
-        ranura.replaceWith(_badgeDimension44(dimension));
+        ranura.replaceWith(_badgeDimension32(dimension));
     });
     contenedor.querySelectorAll("details.vars44-dimension").forEach(acordeon => {
         const dimension = porIndice[acordeon.dataset.dimension];
@@ -4315,37 +4315,39 @@ function _hidratarBadgesDimension44(contenedor, dimensiones) {
 }
 
 /* ==========================================================================
-   [DES-QBE-070] CARDS SEMÁNTICOS POLIMÓRFICOS DEL CATÁLOGO FORENSE (FASE 3)
+   [DES-QBE-070-B] CARDS SEMÁNTICOS POLIMÓRFICOS DEL CATÁLOGO DE 32V (FASE C)
    --------------------------------------------------------------------------
    Hero Card que antecede a la tabla de 7 columnas sellada por [DES-QBE-064]: la
    tabla SOBREVIVE como soporte de auditoría (enmienda, no deroga). El Card sólo
    TRANSCRIBE las celdas servidas de `atribucion_factorial.variables_44`; tiene
    prohibido derivar λ, Δlog, xG, récords o altitudes absolutas ([GOVERNANCE-01] /
    [ARCH-1.4.57]). Cero hidratación de datos de red por marcado crudo: todo el
-   marcado sale de literales de plantilla y de `_valor44`, que preserva las celdas
+   marcado sale de literales de plantilla y de `_valor32`, que preserva las celdas
    en cadena servidas (`'54.0%'`, `'+0.0 d'`, `'105m'`, `'3V - 1E - 0D'`).
+   SEIS familias canónicas: 𝒯_Vol, 𝒯_Rem, 𝒯_Def, 𝒯_Por, 𝒯_Spc (FASE 6 atenuada)
+   y 𝒯_Ctx (consolida las extintas 𝒯_Shk y 𝒯_H2H).
    ========================================================================== */
 
 /** Sufijo latino de la familia canónica: `𝒯_Vol` ⇒ `Vol` ([LN-QBE-101].P.4). */
-function _familiaCard44(dimension) {
+function _familiaCard32(dimension) {
     const codigo = String((dimension && dimension.dimension) || "");
     return codigo.slice(-3);
 }
 
-/** Variable del catálogo servido por id canónico (`V01`…`V44`); `null` si no se publicó. */
-function _variable44(dimension, id) {
+/** Variable del catálogo servido por id canónico (`V01`…`V32`); `null` si no se publicó. */
+function _variable32(dimension, id) {
     const variables = (dimension && dimension.variables) || [];
     return variables.find(variable => String(variable.id) === id) || null;
 }
 
-/** Celda `local` transcrita por `_valor44` (preserva los `str` servidos, degrada `null` a `—`). */
-function _celda44(dimension, id) {
-    const variable = _variable44(dimension, id);
-    return variable ? _valor44(variable.local) : '<span style="color:#475569;">—</span>';
+/** Celda `local` transcrita por `_valor32` (preserva los `str` servidos, degrada `null` a `—`). */
+function _celda32(dimension, id) {
+    const variable = _variable32(dimension, id);
+    return variable ? _valor32(variable.local) : '<span style="color:#475569;">—</span>';
 }
 
 /** Porcentaje YA servido (`'54.0%'`): lectura del carril, cero normalización. `null` si no lo publica. */
-function _porcentaje44(variable) {
+function _porcentaje32(variable) {
     if (!variable) return null;
     const numero = parseFloat(String(variable.local));
     return Number.isFinite(numero) ? numero : null;
@@ -4356,9 +4358,9 @@ function _porcentaje44(variable) {
  * los dos carriles no suman 100 (±1.0 de tolerancia de redondeo) la barra se declara `Posesión
  * s/d` en lugar de fingir una proporcionalidad que la evidencia no sostiene ([GOVERNANCE-01]).
  */
-function _cardPosesion44(dimension) {
-    const variable = _variable44(dimension, "V01");
-    const local = _porcentaje44(variable);
+function _cardPosesion32(dimension) {
+    const variable = _variable32(dimension, "V01");
+    const local = _porcentaje32(variable);
     const visita = variable ? parseFloat(String(variable.visita)) : null;
     const coherente = local !== null && Number.isFinite(visita) &&
         Math.abs((local + visita) - 100) <= 1.0;
@@ -4376,12 +4378,12 @@ function _cardPosesion44(dimension) {
 }
 
 /**
- * 𝒯_Rem / 𝒯_Def / 𝒯_Por — balanza bilateral de una variable servida (`V05` xG, `V10` xGA, `V16`
+ * 𝒯_Rem / 𝒯_Def / 𝒯_Por — balanza bilateral de una variable servida (`V06` xG, `V12` xGA, `V18`
  * atajadas). El signo se LEE comparando las dos celdas servidas: el cliente no calcula
  * diferenciales ni normaliza unidades. Sin dos celdas numéricas la balanza declara `s/d`.
  */
-function _balanzaGoles44(dimension, id, etiqueta) {
-    const variable = _variable44(dimension, id);
+function _balanzaGoles32(dimension, id, etiqueta) {
+    const variable = _variable32(dimension, id);
     const celdaLocal = variable ? variable.local : null;
     const celdaVisita = variable ? variable.visita : null;
     const numeroLocal = parseFloat(String(celdaLocal));
@@ -4398,22 +4400,23 @@ function _balanzaGoles44(dimension, id, etiqueta) {
         : (signo === ">" ? "favorece local" : (signo === "<" ? "favorece visita" : "paridad"));
     return `
         <div class="balanza-goles-badge ${clase}" title="Balanza de ${etiqueta} · celdas servidas ${id}">
-            <span class="balanza-celda balanza-local">${_valor44(celdaLocal)}</span>
+            <span class="balanza-celda balanza-local">${_valor32(celdaLocal)}</span>
             <span class="balanza-signo">${etiqueta} · ${lectura}</span>
-            <span class="balanza-celda balanza-visita">${_valor44(celdaVisita)}</span>
+            <span class="balanza-celda balanza-visita">${_valor32(celdaVisita)}</span>
         </div>`;
 }
 
 /**
- * 𝒯_H2H — memoria longitudinal transcrita VERBATIM: `V39` (`3V - 1E - 0D`), `V40` (Δgoles H2H) y
- * `V41` (récord del visitante en la sede). El cliente no suma ni resta un solo gol [LN-QBE-105].
+ * `𝒯_Ctx` — memoria longitudinal consolidada: `V26` (`3V - 1E - 0D`), `V27` (Δgoles H2H) y `V28`
+ * (récord del visitante en la sede) transcritos VERBATIM. El cliente no suma ni resta un solo gol
+ * ([LN-QBE-105] / [ARCH-1.4.61]).
  */
-function _recordH2HCard44(dimension) {
-    const record = _celda44(dimension, "V39");
-    const goles = _celda44(dimension, "V40");
-    const sede = _celda44(dimension, "V41");
+function _recordH2HCard32(dimension) {
+    const record = _celda32(dimension, "V26");
+    const goles = _celda32(dimension, "V27");
+    const sede = _celda32(dimension, "V28");
     return `
-        <div class="balanza-goles-badge balanza-neutra" title="Memoria H2H servida (V39 · V40 · V41) [LN-QBE-105]">
+        <div class="balanza-goles-badge balanza-neutra" title="Memoria H2H servida (V26 · V27 · V28) [LN-QBE-105]">
             <span class="balanza-celda balanza-local">${record}</span>
             <span class="balanza-signo">H2H · Δgoles ${goles}</span>
             <span class="balanza-celda balanza-visita">${sede}</span>
@@ -4421,80 +4424,95 @@ function _recordH2HCard44(dimension) {
 }
 
 /**
- * 𝒯_Shk — shocks REALMENTE aplicados por el motor: ΔDescanso (`V27`) y Altitud (`V28` = ΔAlt⁺).
- * La altitud ABSOLUTA de la sede no cruza el DTO ([ARCH-1.4.57], deuda declarada): no se finge.
+ * `𝒯_Ctx` — shocks REALMENTE aplicados por el motor (`V29` = ΔAlt⁺, `V30` = ΔDías) y la varianza
+ * de puntos esperados (`V32` = ΔxPTS). La altitud ABSOLUTA de la sede no cruza el DTO
+ * ([ARCH-1.4.57], deuda declarada): no se finge. Absorbe la extinta familia `𝒯_Shk`.
  */
-function _fichaShockCard44(dimension) {
-    const descanso = _celda44(dimension, "V27");
-    const altitud = _celda44(dimension, "V28");
+function _fichasContextoCard32(dimension) {
+    const altitud = _celda32(dimension, "V29");
+    const descanso = _celda32(dimension, "V30");
+    const xpts = _celda32(dimension, "V32");
     return `
         <div class="card-fichas-contexto">
-            <div class="card-ficha card-ficha-descanso" title="V27 · ΔDías realmente aplicado al modelo">
+            <div class="card-ficha card-ficha-altitud" title="V29 · ΔAltitud⁺ realmente aplicado al modelo">
+                <span class="card-ficha-rotulo">Altitud</span>
+                <span class="card-ficha-valor">${altitud}</span>
+            </div>
+            <div class="card-ficha card-ficha-descanso" title="V30 · ΔDías realmente aplicado al modelo">
                 <span class="card-ficha-rotulo">Descanso</span>
                 <span class="card-ficha-valor">${descanso}</span>
             </div>
-            <div class="card-ficha card-ficha-altitud" title="V28 · ΔAltitud⁺ realmente aplicado al modelo">
-                <span class="card-ficha-rotulo">Altitud</span>
-                <span class="card-ficha-valor">${altitud}</span>
+            <div class="card-ficha" title="V32 · varianza ΔxPTS servida por el motor">
+                <span class="card-ficha-rotulo">ΔxPTS</span>
+                <span class="card-ficha-valor">${xpts}</span>
             </div>
         </div>`;
 }
 
 /** Rejilla de transcripción de los ids indicados: los no publicados se omiten en silencio. */
-function _rejillaCard44(dimension, ids) {
+function _rejillaCard32(dimension, ids) {
     const filas = (ids || []).map(id => {
-        const variable = _variable44(dimension, id);
+        const variable = _variable32(dimension, id);
         if (!variable) return "";
-        const color = COLORES_ESTADO_44[variable.estado] || "#94A3B8";
+        const color = COLORES_ESTADO_32[variable.estado] || "#94A3B8";
         return `
             <div class="card-dato" title="${variable.variable || ""}">
                 <span class="card-dato-id">${variable.id}</span>
                 <span class="card-dato-nombre">${variable.variable || "—"}</span>
-                <span class="card-dato-valor" style="color:${color};">${_valor44(variable.local)}</span>
-                <span class="card-dato-valor">${_valor44(variable.visita)}</span>
+                <span class="card-dato-valor" style="color:${color};">${_valor32(variable.local)}</span>
+                <span class="card-dato-valor">${_valor32(variable.visita)}</span>
             </div>`;
     }).join("");
     return filas ? `<div class="card-rejilla-datos">${filas}</div>` : "";
 }
 
 /** Rejilla genérica de la dimensión: hasta seis insumos servidos, sin fabricar renglones. */
-function _rejillaCardTodos44(dimension) {
+function _rejillaCardTodos32(dimension) {
     const ids = ((dimension && dimension.variables) || []).slice(0, 6).map(variable => variable.id);
-    return _rejillaCard44(dimension, ids);
+    return _rejillaCard32(dimension, ids);
 }
 
 /**
- * [DES-QBE-070] Despachador polimórfico del Hero Card: la anatomía depende de la familia `𝒯_*` de
- * la dimensión. La tabla forense de [DES-QBE-064] se pinta DEBAJO (`_tablaDimension44`) y sigue
+ * [DES-QBE-070-B] Despachador polimórfico del Hero Card: la anatomía depende de la familia `𝒯_*` de
+ * la dimensión. La tabla forense de [DES-QBE-064] se pinta DEBAJO (`_tablaDimension32`) y sigue
  * siendo el soporte de auditoría. Sin una sola variable `EVALUADO` el Card se atenúa
  * (`card-fase6-muted`) y declara `○ 0 de N (Fase 6)`: jamás un cero fabricado ni un porcentaje
  * aparente sobre denominador vacío ([GOVERNANCE-01] / [DES-QBE-066]).
  */
-function _cardDimension44(dimension) {
+function _cardDimension32(dimension) {
     if (!dimension) return "";
-    const familia = _familiaCard44(dimension);
+    const familia = _familiaCard32(dimension);
     const evaluadas = Number(dimension.variables_evaluadas);
     const total = Number(dimension.total_variables);
     const conEvidencia = Number.isFinite(evaluadas) && Number.isFinite(total) &&
         evaluadas > 0 && total > 0;
     const clases = ["card-semantico-dimension", `card-familia-${familia.toLowerCase()}`];
     if (!conEvidencia) clases.push("card-fase6-muted");
-    let anatomia = _rejillaCardTodos44(dimension);
+    let anatomia = _rejillaCardTodos32(dimension);
     if (familia === "Vol") {
-        anatomia = _cardPosesion44(dimension) + _rejillaCard44(dimension, ["V02", "V03", "V04"]);
+        anatomia = _cardPosesion32(dimension) + _rejillaCard32(dimension, ["V02", "V03", "V04", "V05"]);
     } else if (familia === "Rem") {
-        anatomia = _balanzaGoles44(dimension, "V05", "xG") +
-            _rejillaCard44(dimension, ["V06", "V07"]);
+        anatomia = _balanzaGoles32(dimension, "V06", "xG") +
+            _rejillaCard32(dimension, ["V07", "V08", "V09", "V10", "V11"]);
     } else if (familia === "Def") {
-        anatomia = _balanzaGoles44(dimension, "V10", "xGA") +
-            _rejillaCard44(dimension, ["V11"]);
+        anatomia = _balanzaGoles32(dimension, "V12", "xGA") +
+            _rejillaCard32(dimension, ["V13", "V14", "V15", "V16"]);
     } else if (familia === "Por") {
-        anatomia = _balanzaGoles44(dimension, "V16", "Atajadas") +
-            _rejillaCard44(dimension, ["V17", "V18"]);
-    } else if (familia === "Shk") {
-        anatomia = _fichaShockCard44(dimension);
-    } else if (familia === "H2H") {
-        anatomia = _recordH2HCard44(dimension);
+        anatomia = _balanzaGoles32(dimension, "V18", "Atajadas") +
+            _rejillaCard32(dimension, ["V17", "V19", "V20"]);
+    } else if (familia === "Spc") {
+        // [DES-QBE-070-B] `𝒯_Spc` (V21-V25) está en FASE 6: el Card se atenúa SIEMPRE —régimen de
+        // evidencia, no conteo servido— y exhibe la rejilla de transcripción de las cinco celdas
+        // sin fabricar un solo cero. Es el espejo del sandbox `[ARCH-1.4.62]`.
+        anatomia = _rejillaCard32(dimension, ["V21", "V22", "V23", "V24", "V25"]);
+        if (!clases.includes("card-fase6-muted")) clases.push("card-fase6-muted");
+    } else if (familia === "Ctx") {
+        // `𝒯_Ctx` consolida las familias extintas `𝒯_Shk` y `𝒯_H2H`: memoria longitudinal
+        // (V26-V28), shocks aplicados (V29 altitud, V30 descanso), varianza ΔxPTS (V32) y la
+        // forma 5P (V31) como rejilla. Todas las celdas son del catálogo de 32.
+        anatomia = _recordH2HCard32(dimension) +
+            _fichasContextoCard32(dimension) +
+            _rejillaCard32(dimension, ["V31"]);
     }
     const denominador = Number.isFinite(total) && total > 0 ? total : 0;
     const conteo = conEvidencia
@@ -4581,7 +4599,7 @@ function abrirModal44Variables(idPartido) {
     ].map(([etiqueta, valor]) => `
         <tr>
             <td class="vars44-col-variable">${etiqueta}</td>
-            <td class="vars44-col-num">${_delta44(valor)}</td>
+            <td class="vars44-col-num">${_delta32(valor)}</td>
         </tr>`).join("");
 
     const total = (variables44 && variables44.total_variables) || 0;
@@ -4597,7 +4615,7 @@ function abrirModal44Variables(idPartido) {
             </div>
             <div class="vars44-panel">
                 <div class="vars44-panel-titulo">Semáforos de salud de datos</div>
-                <div class="vars44-semaforos">${_bloqueSemaforos44(atribucion && atribucion.semaforos)}</div>
+                <div class="vars44-semaforos">${_bloqueSemaforos32(atribucion && atribucion.semaforos)}</div>
                 <div class="vars44-panel-titulo" style="margin-top:14px;">Catálogo forense</div>
                 <div class="vars44-resumen">
                     <strong>${total}</strong> variables en <strong>${dimensiones.length}</strong>
@@ -4607,12 +4625,12 @@ function abrirModal44Variables(idPartido) {
         </div>
         <div class="vars44-acordeon">
             ${dimensiones.length
-                ? dimensiones.map(_tablaDimension44).join("")
-                : `<div class="vars44-aviso">⚪ El endpoint no publicó el catálogo de 44 variables de este partido.</div>`}
+                ? dimensiones.map(_tablaDimension32).join("")
+                : `<div class="vars44-aviso">⚪ El endpoint no publicó el catálogo de 32 variables de este partido.</div>`}
         </div>`;
 
     // [DES-QBE-066] Hidratación del badge bicolor: se pinta en DOM tras transcribir el bloque.
-    _hidratarBadgesDimension44(cuerpo, dimensiones);
+    _hidratarBadgesDimension32(cuerpo, dimensiones);
 
     modal.style.display = "block";
 }

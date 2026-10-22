@@ -243,4 +243,4 @@ def test_ln_qbe_119_visor_barre_j17_sin_techo_de_jornada():
     html = (RAIZ_PROYECTO / "src" / "web" / "templates" / "index.html").read_text(encoding="utf-8")
     assert "🎯 Calibración y Distribuciones" in html
     assert "ejecutarTareaAdmin('auditar_completitud_visor')" in html
-    assert "🔍 Auditoría de Completitud Fáctica (44V)" in html
+    assert "🔍 Auditoría de Completitud Fáctica (32V)" in html

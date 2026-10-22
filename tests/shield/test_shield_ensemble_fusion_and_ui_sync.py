@@ -427,7 +427,7 @@ def test_des_qbe_067_badge_sin_evaluar_sin_maquillaje():
     por marcado crudo) y la etiqueta de ausencia es exactamente `SIN EVALUAR`.
     """
     fuente = _fuente_app()
-    cuerpo = _cuerpo_funcion(fuente, "_badgeDimension44")
+    cuerpo = _cuerpo_funcion(fuente, "_badgeDimension32")
 
     assert "createElement(\"span\")" in cuerpo or "createElement('span')" in cuerpo
     assert "textContent" in cuerpo

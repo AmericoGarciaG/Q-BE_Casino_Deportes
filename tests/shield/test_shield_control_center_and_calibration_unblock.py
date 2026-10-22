@@ -19,11 +19,11 @@ def test_invarianza_dto_variable44_acepta_strings_con_unidades():
     """[INVARIANZA 1 - UNBLOCK 500]: AtribucionVariableOut debe aceptar strings con unidades sin fallar."""
     # Simular exactamente las entradas que provocaron el ResponseValidationError
     items_patologicos = [
-        {"id": "V27", "variable": "Diferencial de descanso", "local": "+0.0 d", "visita": "-1.5 d"},
-        {"id": "V28", "variable": "Factor de altitud", "local": "0m", "visita": "2660m"},
-        {"id": "V39", "variable": "H2H Reciente", "local": "0 partidos", "visita": "4 partidos"},
+        {"id": "V30", "variable": "Diferencial de descanso", "local": "+0.0 d", "visita": "-1.5 d"},
+        {"id": "V29", "variable": "Factor de altitud", "local": "0m", "visita": "2660m"},
+        {"id": "V26", "variable": "H2H Reciente", "local": "0 partidos", "visita": "4 partidos"},
         {"id": "V01", "variable": "Posesión", "local": "54.2%", "visita": "45.8%"},
-        {"id": "V05", "variable": "xG por partido", "local": 1.45, "visita": 0.88}  # Floats legítimos
+        {"id": "V06", "variable": "xG por partido", "local": 1.45, "visita": 0.88}  # Floats legítimos
     ]
 
     for item in items_patologicos:

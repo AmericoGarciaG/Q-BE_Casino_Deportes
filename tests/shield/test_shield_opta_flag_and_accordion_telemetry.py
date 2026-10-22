@@ -402,9 +402,9 @@ def test_ui_acordeon_bicolor():
 
     # El badge se construye sin `innerHTML` (datos de red jamás interpolados en crudo).
     constructor = re.search(
-        r"function _badgeDimension44[\s\S]{0,1200}?\n}", app_js
+        r"function _badgeDimension32[\s\S]{0,1200}?\n}", app_js
     )
-    assert constructor is not None, "Falta el constructor `_badgeDimension44` del badge bicolor."
+    assert constructor is not None, "Falta el constructor `_badgeDimension32` del badge bicolor."
     cuerpo = constructor.group(0)
     assert "innerHTML" not in cuerpo, "El badge bicolor no puede hidratarse por `innerHTML`."
     assert "createElement" in cuerpo and "textContent" in cuerpo

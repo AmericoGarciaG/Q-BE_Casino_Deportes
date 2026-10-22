@@ -14,7 +14,7 @@ from scripts.laboratorio.sandbox_trayectoria_momento_pipeline import (
 
 
 def test_invarianza_sandbox_trayectoria_resuelve_variables_dim8():
-    """[INVARIANZA 1 - E2E]: El sandbox debe procesar un partido y extraer V29, V30, V31, V32."""
+    """[INVARIANZA 1 - E2E]: El sandbox debe procesar un partido y extraer V31, AUX_M_XG, AUX_M_XGA y V32."""
     res = ejecutar_sandbox_trayectoria_partido(match_id="LIGAMX-J11-07")
 
     assert res is not None
@@ -22,19 +22,19 @@ def test_invarianza_sandbox_trayectoria_resuelve_variables_dim8():
     assert "dimension_8_trayectoria" in res
 
     dim8 = res["dimension_8_trayectoria"]
-    assert "V29" in dim8 and "V30" in dim8 and "V31" in dim8 and "V32" in dim8
+    assert "V31" in dim8 and "AUX_M_XG" in dim8 and "AUX_M_XGA" in dim8 and "V32" in dim8
 
     # Comprobar estados
-    assert dim8["V29"]["estado"] == "EVALUADO"
-    assert dim8["V30"]["estado"] == "EVALUADO"
     assert dim8["V31"]["estado"] == "EVALUADO"
+    assert dim8["AUX_M_XG"]["estado"] == "EVALUADO"
+    assert dim8["AUX_M_XGA"]["estado"] == "EVALUADO"
     assert dim8["V32"]["estado"] == "EVALUADO"
 
 
 def test_invarianza_forma_5p_acotada_entre_0_y_15():
     """[INVARIANZA 2 - FORMA 5P]: Los puntos de los últimos 5 partidos deben pertenecer a [0, 15]."""
     res = ejecutar_sandbox_trayectoria_partido(match_id="LIGAMX-J11-07")
-    v29 = res["dimension_8_trayectoria"]["V29"]
+    v29 = res["dimension_8_trayectoria"]["V31"]
 
     pts_local = v29["puntos_local"]
     pts_visita = v29["puntos_visita"]
