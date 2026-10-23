@@ -791,7 +791,14 @@ def test_backup_rechaza_bovedas_sin_archivo_fisico(tmp_path):
 
 
 def test_backup_rechaza_motores_no_sqlite(tmp_path):
-    """Un motor no SQLite declara su rechazo en vez de fabricar un respaldo ficticio."""
+    """Un motor no SQLite declara su rechazo en vez de fabricar un respaldo ficticio.
+
+    Aislamiento V-2 (Dictamen del Director, `SPRINT-SANDBOX-ARQUETIPOS-VECTORES-29`): el motor
+    PostgreSQL es un artefacto de ENTORNO (`psycopg2` puede no estar instalado y no es dependencia
+    del producto SQLite). El Juez certifica la frontera `sqlite:rechazo` sin acoplar The Shield a
+    un driver ausente: si el driver no existe, la invarianza se declara omitida, no se finge verde.
+    """
+    pytest.importorskip("psycopg2", reason="Driver PostgreSQL ausente en el entorno; frontera no ejecutable.")
     gateway = _gateway_huerfano("postgresql+psycopg2://usuario:clave@localhost:5432/qbe")
     try:
         with pytest.raises(RuntimeError, match="SQLite"):

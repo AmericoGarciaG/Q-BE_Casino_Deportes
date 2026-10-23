@@ -1952,6 +1952,21 @@ def sincronizar_progol_pipeline_completo(
 * **Deuda declarada:** la muestra calibrada y la global comparten el filtro anti-cuarentena (`[LN-QBE-104]`); si el filtro se activa, el agregado del subconjunto se recalcula sobre la muestra activa y el estado lo declara.
 * **[SHIELD]:** `tests/shield/test_shield_cold_start_and_indifference_band.py`.
 
+### [ARCH-1.4.66] Sandbox de Arquetipos y Vectores: Instrumento CLI-First de Lectura Pura para la Inducción de Firmas por Clase
+
+* **Ω (Resumen):** `[LN-QBE-126]` legisla la inducción de firmas por clase; este nodo fija **dónde vive** y **cómo se ejecuta**: un módulo de laboratorio CLI-FIRST, sin FastAPI, sin DOM y sin Playwright, que lee la 3NF en modo read-only y publica centroides Z-Score, contraste de ruptura y ranking de Fisher en consola o JSON.
+* **Ubicación canónica:** `scripts/laboratorio/sandbox_arquetipos_vectores.py` (nuevo) — **fuera de la ruta de producción**: no alimenta $\lambda$, no sirve HTTP, no toca `src/web/` ni la bóveda.
+* **Dependencias selladas (cero reimplementación):**
+  1. `resolver_orden_fiduciario_con_indiferencia` (`src/core/contracts/portfolio_math.py`, `[LN-QBE-124]`) — única autoridad del orden $P_{max}/P_{mid}/P_{low}$.
+  2. `_CATALOGO_32` / `nombre_de_celda` (`factor_attribution`, `[LN-QBE-120]`/`[LN-QBE-122]`) — nombres forenses y orden canónico de las celdas.
+  3. `_FORMATO_INSUMO`, `_RESPALDO_INSUMO`, `_CLAVES_MACRO_STATS`, `_CLAVES_H2H_STATS` (`[LN-QBE-102]`/`[LN-QBE-105]`/`[LN-QBE-121]`) — **precedencia de transcripción**: primero lo que el motor consumió, después el agregado torneal de exhibición.
+* **Contrato IPO:** `ejecutar_extraccion_arquetipos(exportar_json: bool = False) -> Dict[str, Any]`; funciones puras `calcular_centroide_zscore` y `calcular_fisher_ratio`; presentación `imprimir_tablero_arquetipos_consola` (ancho 94, 6 bloques, linaje visual de `sandbox_h2h_pipeline`).
+* **CLI:** `python -m scripts.laboratorio.sandbox_arquetipos_vectores [--json] [--top N] [--exportar]`; `--json` emite el reporte estructurado a stdout y `--exportar` materializa `data/output/arquetipos_vectores_reporte.json`; código de salida `0` sólo con `status == "EXITO"`.
+* **Aislamiento:** sólo `PersistenceGateway.read_session()`; cero red, cero navegador. El **espejo de la partición** contra el Visor de calibración lo ejerce el Juez Inmutable, nunca el sandbox (que jamás importa `src/web/`).
+* **Frontera de régimen:** el álgebra (Z-Score, centroides, contraste, Fisher) es `[DIRGEN-STRICT]` —determinista, sin I/O, sin estado—; la composición de la matriz, el tablero y la CLI son `[DBBD-FUNGIBLE]`.
+* **Deuda declarada:** el tablero no pagina (no imprime las 97 filas: sólo agregados y `--top N`); la matriz completa viaja únicamente en `--json`/`--exportar`; el instrumento es **descriptivo**, no certifica significancia estadística; $D$ es **medido, no legislado** (hoy 34 = 27 del catálogo con evidencia + 7 metadatos, porque V27 no tiene fuente en el snapshot vigente).
+* **[SHIELD]:** `tests/shield/test_shield_sandbox_arquetipos_vectores.py` (nuevo, 4 jueces).
+
 ---
 
 

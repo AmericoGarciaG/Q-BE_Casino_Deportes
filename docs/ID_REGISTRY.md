@@ -122,6 +122,7 @@
 | `[LN-QBE-123]` | LOGIC | `docs/LOGIC.md` | Saneamiento de Trayectoria Fáctica, Cuarentena Declarada de V16 y Guardián de Presencia del Descanso (Régimen Opción B) | SELLADO |
 | `[LN-QBE-124]` | LOGIC | `docs/LOGIC.md` | Banda de Indiferencia Fiduciaria en la Cobertura Ordinal y Desempate por Altitud del Anfitrión | SELLADO |
 | `[LN-QBE-125]` | LOGIC | `docs/LOGIC.md` | Cold Start Sincero: Derogación de la Sustitución por Prior de Mercado y Segmentación Declarada de la Muestra Calibrada | SELLADO |
+| `[LN-QBE-126]` | LOGIC | `docs/LOGIC.md` | Sandbox de Arquetipos y Vectores: Extracción Inducida de Firmas por Clase en el Espacio Z-Score | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -249,6 +250,7 @@
 | `[ARCH-1.4.63]` | ARCH | `docs/ARCH.md` | Saneamiento de Vitrina: Derogación de la Tabla Duplicada por Dimensión, Soporte Forense Único y Normalización de la Barra de Posesión | SELLADO |
 | `[ARCH-1.4.64]` | ARCH | `docs/ARCH.md` | Delegación del Orden Fiduciario del Visor a la Función Pura Canónica y Resolución Declarada del Desnivel de Altitud | SELLADO |
 | `[ARCH-1.4.65]` | ARCH | `docs/ARCH.md` | Vitrina de Muestra Declarada: Selector Calibrada/Global en el Visor de Calibración | SELLADO |
+| `[ARCH-1.4.66]` | ARCH | `docs/ARCH.md` | Sandbox de Arquetipos y Vectores: Instrumento CLI-First de Lectura Pura para la Inducción de Firmas por Clase | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---
