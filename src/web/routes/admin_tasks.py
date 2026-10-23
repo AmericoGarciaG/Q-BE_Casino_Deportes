@@ -128,6 +128,29 @@ TAREAS_PERMITIDAS: Dict[str, Dict[str, Any]] = {
         "descripcion": "Extracción del dataset de investigación a CSV (data/output/)",
         "comandos": [["scripts", "utilidades", "exportar_dataset_investigacion.py"]],
     },
+    # ── [ARCH-1.4.67] MATRIZ CANÓNICA DE INVESTIGACIÓN (20ª tarea certificada) ─────────────────
+    # Instrumento CLI-FIRST de SÓLO LECTURA: publica `data/output/research_feature_matrix.csv` con
+    # las cuatro zonas disjuntas (identidad · 64 celdas fácticas PRE-KICKOFF · distribución soberana
+    # PRE-KICKOFF · etiquetas consumadas). Sin argumentos obligatorios: invocable desde el cockpit.
+    "generar_matriz_investigacion": {
+        "descripcion": "Matriz canónica de investigación de 4 zonas, sin fuga de etiquetas (solo lectura)",
+        "comandos": [["scripts", "investigacion", "generar_matriz_investigacion.py"]],
+    },
+    # ── [ARCH-1.4.69] PRIOR CONGELADO DE APERTURA 2025 (21ª tarea certificada) ────────────────
+    # Sembrador idempotente: congela el agregado físico REAL del torneo previo. De sólo lectura
+    # sobre la bóveda (fuente = corpus H2H) y con generación explícita (`--regen`): sin banderas
+    # publica/verifica el artefacto existente sin re-escribirlo.
+    "sembrar_prior_apertura2025": {
+        "descripcion": "Congela el prior de Apertura 2025 (agregado físico del torneo previo)",
+        "comandos": [["scripts", "ingesta", "sembrar_prior_apertura2025.py"]],
+    },
+    # ── [ARCH-1.4.70] MINERÍA DE SHANNON Y ÁRBOL ESPARSO (22ª tarea certificada) ──────────────
+    # Instrumento de SÓLO LECTURA sobre `research_feature_matrix.csv`: publica el ranking de
+    # información mutua y las reglas de veto SUGERIDAS (no ejecutan triaje).
+    "mineria_factores_shannon": {
+        "descripcion": "Minería de información mutua y árbol esparso de veto (solo lectura)",
+        "comandos": [["scripts", "investigacion", "mineria_factores_shannon.py"]],
+    },
     "cadena_pre_jornada": {
         "descripcion": "Secuencia pre-jornada: Deportivo ➔ Mercado ➔ Pre-Vuelo de Coherencia",
         "pasos": ("centinela_deportivo", "centinela_mercado", "auditar_coherencia_cartelera"),
@@ -217,7 +240,10 @@ COMANDOS_TAREAS: Dict[str, List[List[str]]] = {
 # por [ARCH-1.4.29], a 15 con los dos sensores individuales y las tres cadenas temporales
 # homologadas de [ARCH-1.4.12-C], a 18 con los tres ejecutores de la Enmienda 2026-10-17
 # (`homologar_temporada_optah2h`, `auditar_pipeline_backtesting`, `exportar_dataset_investigacion`)
-# y a 19 con la sonda de sólo lectura `auditar_completitud_visor` de [ARCH-1.4.58]; ninguna otra
+# y a 19 con la sonda de sólo lectura `auditar_completitud_visor` de [ARCH-1.4.58], a 20 con la
+# matriz canónica de investigación `generar_matriz_investigacion` de [ARCH-1.4.67] y a 22 con el
+# sembrador del prior congelado `sembrar_prior_apertura2025` de [ARCH-1.4.69] y la minería de
+# Shannon `mineria_factores_shannon` de [ARCH-1.4.70]; ninguna otra
 # tarea se añade. `TAREAS_PIPELINE_INTEGRADO`
 # sólo certifica qué identificadores YA AUTORIZADOS publican además una ruta in-process
 # hacia el Data Nexus Bus; cualquier otra combinación se rechaza de forma explícita.

@@ -6,6 +6,9 @@ __pycache__/
 data/qbe_database.db
 data/output/*
 !data/output/.gitkeep
+# [ARCH-1.4.67] La matriz canónica de investigación SÍ se versiona: es el artefacto contractual
+# que consume el Data Scientist aislado (cuatro zonas, sin fuga de etiquetas).
+!data/output/research_feature_matrix.csv
 data/input/*
 !data/input/.gitkeep
 # [ARCH-1.4.55 / LN-QBE-118] Resguardos WORM del lote: copias de la bóveda, jamás artefactos de código.

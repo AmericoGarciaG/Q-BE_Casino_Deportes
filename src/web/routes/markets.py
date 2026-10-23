@@ -9,6 +9,8 @@ prohibida toda constante quemada de equipos, probabilidades o venta pública.
 Base de Gobierno: Kybern Framework v12.0
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional, Tuple
@@ -26,6 +28,10 @@ from src.core.contracts.progol_math import (
 )
 
 router = APIRouter(prefix="/api/markets", tags=["Financial Markets"])
+
+# [LN-QBE-127] Registro de degradaciones DECLARADAS: una resolución al vuelo imposible se
+# escribe aquí en vez de omitirse en silencio [GOVERNANCE-01].
+logger = logging.getLogger(__name__)
 
 
 # ── CARGA FÁCTICA DEL SLATE PROGOL DESDE LA BÓVEDA 3NF [ARCH-1.5.1-C] ────────
@@ -1474,6 +1480,79 @@ def _p_prima_del_fixture(fx: Dict[str, Any]) -> Optional[Tuple[float, float, flo
         return None
 
 
+# ── [LN-QBE-127] RESOLUCIÓN DINÁMICA DE P′ PARA EL UNIVERSO AUDITABLE ─────────
+# Sellos de procedencia publicados por la casilla micro (`origen_p_prima`). Se declaran como
+# constantes para que ningún literal suelto pueda divergir entre el productor y los consumidores.
+ORIGEN_P_PRIMA_CAPTURA = "CAPTURA"
+ORIGEN_P_PRIMA_SOBERANA = "SOBERANA"
+ORIGEN_P_PRIMA_AL_VUELO = "AL_VUELO"
+
+# Lista CERRADA de insumos PRE-KICKOFF que la resolución al vuelo puede tomar de la bóveda. Se
+# ciñe a las claves que el plano canónico realmente consume (`_datos_partido_para_atribucion`,
+# `_extraer_bloque_forma_10p`, V29 de altitud): no se inventa un campo que la captura no publica.
+_CLAVES_RESOLUCION_AL_VUELO = (
+    "home_team_stats",
+    "away_team_stats",
+    "home_split_stats",
+    "away_split_stats",
+    "form_10p",
+    "h2h_matches",
+    "h2h_partidos",
+    "gamma_home",
+    "xg_disponible",
+    "xg_calibrado",
+    "q_mod_home",
+    "q_mod_away",
+    "delta_alt_metros",
+)
+
+
+def _p_prima_al_vuelo(
+    fila: Match,
+    fixture: Optional[Dict[str, Any]],
+    traza: Optional[Dict[str, Any]],
+) -> Optional[Tuple[float, float, float]]:
+    """
+    [LN-QBE-127] Resolución DINÁMICA de P′ para un partido concluido sin distribución sellada.
+
+    `matches` es la fuente única de verdad de la calibración: descartar en silencio un partido
+    concluido porque su jornada no capturó cuotas es una ceguera de universo, no una salvaguarda.
+    El vector se pide AL MOTOR SOBERANO SELLADO (`generar_distribucion_soberana`,
+    [DIRGEN-STRICT]) —cero reimplementación del prior, cero matemática local— con los insumos
+    fácticos PRE-KICKOFF que la bóveda realmente porta: precedencia declarada
+    **traza soberana → snapshot de captura** (lo que el motor consumió manda sobre lo exhibido).
+
+    Sin un solo insumo el motor publica el prior de ignorancia fiduciario R-1
+    (0.3333, 0.3333, 0.3334); el llamador lo declara `AL_VUELO` con `suficiencia_S_I = 0`.
+
+    La resolución es EFÍMERA: no se persiste (una segunda fila en `sovereign_distributions` sería
+    una segunda verdad). Devuelve `None` sólo si el motor falla; el llamador lo contabiliza como
+    pendiente y lo registra en el log (cero descarte mudo).
+    """
+    from src.core.sovereign_pipeline import generar_distribucion_soberana
+
+    datos: Dict[str, Any] = {
+        "home_team_slug": getattr(fila, "home_team_slug", None),
+        "away_team_slug": getattr(fila, "away_team_slug", None),
+    }
+    for origen in (traza, fixture):
+        if not isinstance(origen, dict):
+            continue
+        for clave in _CLAVES_RESOLUCION_AL_VUELO:
+            if datos.get(clave) is None and origen.get(clave) is not None:
+                datos[clave] = origen[clave]
+
+    try:
+        salida = generar_distribucion_soberana(match_id=str(fila.id), raw_match_data=datos)
+    except Exception as exc:
+        logger.warning(
+            f"⚠️ [LN-QBE-127] Resolución al vuelo imposible para el partido {fila.id}: {exc}"
+        )
+        return None
+
+    return (float(salida.p_local), float(salida.p_empate), float(salida.p_visitante))
+
+
 def _cuotas_1x2_factuales(fx: Dict[str, Any]) -> Dict[str, float]:
     """
     [ARCH-1.4.38] Trío 1X2 factual para el desmarque: captura CANÓNICA del snapshot
@@ -1627,6 +1706,12 @@ def _agregar_resumen_calibracion(
     p_low_ruptura_pct = _pct(total_p_low)
     bs_qbe = calcular_brier_multicategorico(registros_qbe)
     bs_mkt = calcular_brier_multicategorico(registros_mkt)
+    # [LN-QBE-127] Resoluciones dinámicas del universo recibido: se DERIVAN del propio micro-DTO
+    # (cero parámetro extra, cero segunda contabilidad). En el segmento informado (S=1) vale 0 por
+    # construcción: una resolución al vuelo jamás declara suficiencia.
+    total_resueltos_al_vuelo = sum(
+        1 for p in partidos if p.get("origen_p_prima") == ORIGEN_P_PRIMA_AL_VUELO
+    )
 
     return {
         "total_partidos": total,
@@ -1653,6 +1738,9 @@ def _agregar_resumen_calibracion(
         "brier_score_mercado": bs_mkt,
         "alpha_calibracion_pct": _alpha_calibracion_pct(bs_qbe, bs_mkt),
         "partidos_pendientes_captura": partidos_pendientes,
+        # [LN-QBE-127] Partidos concluidos cuyo P′ se resolvió dinámicamente (sin distribución
+        # sellada). Declarados y contados: la ceguera de captura se mide, jamás se esconde.
+        "partidos_resueltos_al_vuelo": total_resueltos_al_vuelo,
         "jornadas_auditadas": sorted(jornadas_auditadas),
     }
 
@@ -1661,12 +1749,14 @@ def _construir_reporte_calibracion(
     session: Session, league_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    [ARCH-1.4.38 / LN-QBE-100] Reporte macro/meso/micro de calibración factual de temporada.
+    [ARCH-1.4.38 / LN-QBE-100 / LN-QBE-127] Reporte macro/meso/micro de calibración factual.
 
-    Universo auditable: partidos de la bóveda 3NF con estado concluido y marcador consumado
-    que portan P' sellada (captura del snapshot o, en su defecto, tabla soberana). Un partido
-    concluido sin captura P' NO se evalúa ni se repara: se contabiliza como
-    "Pendiente de captura" [GOVERNANCE-01].
+    Universo auditable: partidos de la bóveda 3NF con estado concluido y marcador consumado.
+    `matches` es la fuente ÚNICA de verdad: un partido que no porta P′ sellada (ni en la captura
+    del snapshot ni en la tabla soberana) se resuelve AL VUELO por el motor soberano sellado y se
+    declara `origen_p_prima = "AL_VUELO"` con `suficiencia_S_I = 0` [LN-QBE-127]. El descarte
+    silencioso queda derogado: sólo se contabiliza como "Pendiente de captura" el partido en el
+    que el motor no pudo emitir vector alguno (fallo declarado en el log) [GOVERNANCE-01].
     """
     from src.core.contracts.portfolio_math import (
         desmarcar_cuotas_proporcional,
@@ -1683,6 +1773,8 @@ def _construir_reporte_calibracion(
     registros_qbe: Dict[int, List[Dict[str, Any]]] = {}
     registros_mkt: Dict[int, List[Dict[str, Any]]] = {}
     partidos_pendientes = 0
+    # [LN-QBE-127] Contador entero de las resoluciones dinámicas: la ceguera de captura se MIDE.
+    resoluciones_al_vuelo = 0
     # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Conteos enteros de la taxonomía de vértices
     # por jornada: acierto primario (P_MAX), rescate secundario (P_MID, desglosado en empate vs
     # rival) y ruptura residual (P_LOW). Conteos puros: cero ponderación, cero cifra fabricada.
@@ -1706,12 +1798,25 @@ def _construir_reporte_calibracion(
         # con momios de cierre y distribución sellada sólo en la tabla soberana): sin él, una
         # jornada con cuotas reales quedaría invisible al Visor (Decreto del Director, 2026-10-14).
         p_prima = _p_prima_del_fixture(fixture) if fixture else None
+        # [LN-QBE-127] Sello de procedencia del vector P′ servido (`CAPTURA` · `SOBERANA` ·
+        # `AL_VUELO`): la vitrina y la matriz de investigación declaran de dónde sale cada P′.
+        origen_p_prima = ORIGEN_P_PRIMA_CAPTURA if p_prima is not None else None
         if p_prima is None:
             p_prima = soberanas.get(id_partido)
+            if p_prima is not None:
+                origen_p_prima = ORIGEN_P_PRIMA_SOBERANA
         if p_prima is None:
-            # Sin captura sellada de P' el partido no es auditable: cero invención.
-            partidos_pendientes += 1
-            continue
+            # [LN-QBE-127] UNIVERSO SIN DESCARTE SILENCIOSO: un partido CONCLUIDO con marcador
+            # consumado JAMÁS se omite en silencio. Se resuelve AL VUELO por el motor soberano
+            # sellado y la resolución se DECLARA (`AL_VUELO` · S(I)=0), de modo que la ceguera de
+            # captura se mide en vez de esconderse [GOVERNANCE-01].
+            p_prima = _p_prima_al_vuelo(fila, fixture, trazas_soberanas.get(id_partido))
+            if p_prima is None:
+                # Único descarte admitido: el motor no pudo emitir vector (fallo ya registrado).
+                partidos_pendientes += 1
+                continue
+            resoluciones_al_vuelo += 1
+            origen_p_prima = ORIGEN_P_PRIMA_AL_VUELO
 
         p_local, p_empate, p_visitante = p_prima
         goles_local, goles_visitante = int(fila.score_home), int(fila.score_away)
@@ -1732,6 +1837,10 @@ def _construir_reporte_calibracion(
         # (`es_cold_start` · `❄️ Cold Start (S=0)`), jamás se maquilla [GOVERNANCE-01].
         _s_i = (fixture or {}).get("suficiencia_S_I")
         suficiencia_s_i = 1 if _s_i is None else int(_s_i)
+        if origen_p_prima == ORIGEN_P_PRIMA_AL_VUELO:
+            # [LN-QBE-127] El vector emitido sin distribución sellada ES el prior de ignorancia:
+            # declararlo informado fabricaría una calibración inexistente [GOVERNANCE-01].
+            suficiencia_s_i = 0
 
         favorito, tipo_resultado = _clasificacion_factual(desenlace, p_local, p_visitante)
 
@@ -1815,6 +1924,9 @@ def _construir_reporte_calibracion(
             # [LN-QBE-102] Sello de procedencia de la evidencia (badge de la casilla micro).
             "origen_captura": _origen_captura_de_traza(trazas_soberanas.get(id_partido))
             or (fixture or {}).get("origen_captura"),
+            # [LN-QBE-127] Sello de procedencia del VECTOR: `CAPTURA` (snapshot) · `SOBERANA`
+            # (tabla 3NF) · `AL_VUELO` (resuelto dinámicamente por el motor soberano).
+            "origen_p_prima": origen_p_prima,
             # [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² sellados por
             # partido (R_(1) ≥ R_(2) ≥ R_(3)) y vértice que consumó el resultado de la cancha.
             "r_max": r_max,
@@ -1921,6 +2033,16 @@ def _construir_reporte_calibracion(
          if any(p["suficiencia_S_I"] == 1 for p in j["partidos"])],
         partidos_pendientes,
     )
+
+    if resoluciones_al_vuelo or partidos_pendientes:
+        # [LN-QBE-127] Declaración operativa: la ceguera de captura se MIDE (partidos resueltos al
+        # vuelo) y el único descarte admitido —el motor no pudo emitir vector— se publica. Ninguno
+        # de los dos es mudo, y ninguno viaja como cifra que la vitrina no pueda auditar.
+        logger.info(
+            "🏳️ [LN-QBE-127] Calibración: %d resueltos AL VUELO · %d pendientes de captura (motor sin vector)",
+            resoluciones_al_vuelo,
+            partidos_pendientes,
+        )
 
     return {
         # [ARCH-1.4.38] Alias SELLADO de la temporada (tres consumidores lo leen): byte-idéntico al

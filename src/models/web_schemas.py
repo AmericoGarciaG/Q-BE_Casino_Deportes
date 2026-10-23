@@ -285,6 +285,10 @@ class CalibrationMatchOut(BaseModel):
     # [LN-QBE-102] Sello de procedencia de la evidencia que sostiene P′: "EN_VIVO" (captura en
     # ventanilla, blindada por el candado) | "HISTORICO_RECONSTRUIDO" (reconstrucción posterior).
     origen_captura: Optional[str] = None
+    # [LN-QBE-127] Sello de procedencia del VECTOR P′ servido: "CAPTURA" (snapshot congelado) |
+    # "SOBERANA" (tabla 3NF) | "AL_VUELO" (resuelto dinámicamente por el motor soberano porque el
+    # partido concluido no portaba distribución sellada). `None` en payloads legados.
+    origen_p_prima: Optional[str] = None
     # [ARCH-1.4.38 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Vértices del símplex Δ² ordenados por
     # probabilidad fiduciaria descendente (P_max ≥ P_mid ≥ P_low) y vértice consumado en cancha.
     r_max: Optional[Literal["LOCAL", "EMPATE", "VISITANTE"]] = None
@@ -357,6 +361,10 @@ class CalibrationSummaryOut(BaseModel):
     brier_score_mercado: float
     alpha_calibracion_pct: float
     partidos_pendientes_captura: int = 0
+    # [LN-QBE-127] Partidos concluidos cuyo P′ se resolvió AL VUELO (sin distribución sellada).
+    # Declarado y contado: la ceguera de captura se mide, jamás se esconde. En `resumen_calibrado`
+    # vale 0 por construcción (una resolución al vuelo nunca declara suficiencia).
+    partidos_resueltos_al_vuelo: int = 0
     jornadas_auditadas: List[int] = Field(default_factory=list)
 
 

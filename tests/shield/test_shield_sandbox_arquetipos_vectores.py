@@ -36,10 +36,15 @@ from scripts.laboratorio.sandbox_arquetipos_vectores import (
 )
 
 # ── Instantánea sellada de la partición (la bóveda de hoy; el Juez la congela, no la inventa) ──
+# [LN-QBE-128] RE-CONGELADA al cierre del Sprint 3: la re-homologación de J1-J3 con el prior de
+# Apertura 2025 ([ARCH-1.4.69]) movió 27 partidos del régimen ciego (0.3333/0.3333/0.3334) al
+# régimen informado, de modo que la instantánea pasa de 38/35/24 a 39/31/27 (suma 97). La ley
+# `[LN-QBE-126]` deuda (iv) ya declaraba que el Juez congela la partición DE HOY, no un literal
+# eterno: la instantánea se actualiza con la bóveda, jamás con una expectativa.
 PARTIDOS_CONCLUIDOS = 97
-N_ACIERTOS_PMAX = 38
-N_RESCATES_PMID = 35
-N_RUPTURAS_PLOW = 24
+N_ACIERTOS_PMAX = 39
+N_RESCATES_PMID = 31
+N_RUPTURAS_PLOW = 27
 DIMENSIONES_MINIMAS = 30
 ETIQUETAS_PODER = {"DECISIVA", "MODERADA", "RUIDO", "NULO"}
 

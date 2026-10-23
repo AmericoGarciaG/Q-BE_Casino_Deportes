@@ -79,8 +79,13 @@ class AbstractTestPurgaTotalBoveda3NF(ABC):
         )
 
         assert TAREA_PURGA_TOTAL_DB == "purga_total_db"
-        assert len(TAREAS_PERMITIDAS) == 19, (
-            "Violación [ARCH-1.4.12-C]: la whitelist debe ser de exactamente 19 tareas certificadas."
+        # [ARCH-1.4.67] 19 ➔ 20 exactas: la matriz canónica de investigación entra a la whitelist
+        # solo lectura; la igualdad estricta (cero tareas fantasma) permanece intacta.
+        # [ARCH-1.4.69 / ARCH-1.4.70] 20 ➔ 22 exactas: el sembrador del prior congelado y la
+        # minería de Shannon entran como instrumentos de sólo lectura.
+        assert len(TAREAS_PERMITIDAS) == 22, (
+            "Violación [ARCH-1.4.12-C / ARCH-1.4.67 / ARCH-1.4.69 / ARCH-1.4.70]: la whitelist debe "
+            "ser de exactamente 22 tareas certificadas."
         )
 
         especificacion = TAREAS_PERMITIDAS[TAREA_PURGA_TOTAL_DB]

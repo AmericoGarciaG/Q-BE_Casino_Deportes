@@ -705,6 +705,30 @@
 * **Alcance estrictamente visual:** el backend **sigue publicando** `semaforos.epist` (`[ARCH-1.4.42]`, `[LN-QBE-070-B]`) y el filtro anti-cuarentena `#chk-excluir-vetados` de `[DES-QBE-067]` lo sigue leyendo por acceso indexado (`semaforos["epist"]`). El veto es **lógica de datos**, no semáforo de presentación: retirarlo de la vitrina no lo retira del gobierno.
 * **Prohibiciones:** prohibido el pilón `● EPIST` en el micro-HUD y en el panel `.vars44-semaforos`; prohibida la clase `card-semaforo-epist`; prohibido reintroducir el veredicto epistémico bajo otro rótulo o como quinto semáforo encubierto.
 * **Criterio de aceptación:** `tests/shield/test_shield_fase3_polymorphic_cards_ui.py` (Test 1) certifica la ausencia de `● EPIST` y de `card-semaforo-epist`, la presencia de los cuatro rótulos de la tetralogía y la **supervivencia** de `SEMAFORO_EPIST_VETO` y del literal `"epist"` en el cuerpo del filtro de veto.
+### [DES-QBE-072] Glosario Autodescriptivo de la Vitrina y Arquitectura de Cuatro Capas del Visor de Calibración [UX-MANDATE]
+* **Objetivo:** el Director no debe descifrar siglas para leer su propia temporada. Toda magnitud del Visor de Calibración se rotula con **concepto autodescriptivo en español** y el Visor se convierte en un instrumento de filtrado en **cuatro capas**, con propagación **atómica** a la cartelera macro, meso y micro y con el **denominador siempre declarado**.
+* **Glosario vinculante (rótulo público ↔ magnitud sellada).** El rótulo cambia; el hecho y su clave de contrato **no**:
+
+  | Rótulo público vigente | Sigla derogada en la vitrina | Magnitud sellada (clave de contrato intacta) |
+  |---|---|---|
+  | **Acierto Primario** | `P_max` / `ACIERTO P_MAX` | `p_max_aciertos_pct`, `total_p_max`, vértice `P_MAX` |
+  | **Rescate de Cobertura** | `P_mid` / `RESCATE P_MID` | `p_mid_rescate_pct`, `total_p_mid`, `total_p_mid_empate/rival`, vértice `P_MID` |
+  | **Ruptura Residual** | `P_low` / `RUPTURA P_LOW` | `p_low_ruptura_pct`, `total_p_low`, vértice `P_LOW` |
+  | **Tasa de Acierto de Cobertura** | `H_fid` | lectura factual ex-post de la temporada |
+  | **Masa Probabilística Ex-Ante** | `Masa de Cobertura` | `masa_cobertura_pct` (= % `P_max` + % `P_mid`) |
+  | **Suficiencia de Datos** | `S(I)` | `suficiencia_S_I` (0 ⇒ ceguera declarada) |
+  | **Asedio Territorial Neto** | `v_Vol^perp` | `delta_alt_metros` (sin superficie visible hoy: se legisla preventivamente) |
+
+* **Frontera de régimen:** las claves de contrato (`p_max_aciertos_pct`, `masa_cobertura_pct`, `suficiencia_S_I`, `clasificacion_triada`, `VERTICES_TRIADA_BACKTESTING`, clases `badge-fav/badge-emp/badge-dog`) y los `id` del DOM sellados (`kpi-bt-pmax`, `kpi-bt-pmid`, `kpi-bt-plow`, `cuerpo-meso-jornadas`) **no se renombran**: son contrato de datos y de anclaje del Shield. La derogación es **nominal y exclusivamente visible**.
+* **Arquitectura de Cuatro Capas (idempotente, cero refetch):**
+  1. **Capa 0 — Línea Base Pura:** `window._calibracionPayloadOriginal` es la referencia inmutable al payload certificado de `/api/markets/backtesting/calibration-report`. Todo filtrado es una **proyección** derivada; la caché jamás se reescribe (`[GOVERNANCE-01]`).
+  2. **Capa 1 — Selector de Alcance:** `CALIBRADA` (partidos con **Suficiencia de Datos** ≠ 0 y jornadas sin sello de Cold Start) ↔ `GLOBAL` (torneo completo). Materializa el conmutador ya legislado en `[ARCH-1.4.65]`; el criterio es el **DATO** servido, jamás el número de jornada.
+  3. **Capa 2 — Toggles Fiduciarios combinables:** `#chk-filtro-epist` (**Alta Discrepancia**: `Δ_epist > 0.12`, leído del semáforo `epist` servido — el DTO no publica `delta_epist` crudo); `#chk-filtro-altitud` (**Asedio Territorial Neto**: `delta_alt_metros ≥ 1000`); `#chk-filtro-fragil` (favorito con `P′ máx < 0.50`).
+  4. **Capa 3 — Propagación atómica:** una sola pasada repinta las cuatro tarjetas macro (agregado re-derivado de conteos enteros), la tabla meso (jornada sin partidos activos ⇒ fila `.meso-inactiva` con guiones y su "Ver partidos" intacto) y la parrilla micro (`.partido-excluido-filtro` + `.badge-excluido-motivo` con el motivo acumulado). Filtro inerte ⇒ agregado servido tal cual (idempotencia estricta).
+* **Transparencia de denominador:** `#visor-denominador-texto` declara en cada conmutación `Mostrando X de N partidos concluidos (Y excluidos por filtros activos) · N = <denominador>`, donde `N` es el universo del **alcance declarado** y `Y = N − X`. El badge `#visor-filtro-activo-badge` declara el régimen (`Línea Base Pura` / `Línea Base Calibrada` / `N filtros fiduciarios activos`).
+* **Prohibiciones:** prohibido rotular la vitrina con `P_max`/`P_mid`/`P_low`/`H_fid`/`S(I)`/`v_Vol^perp`/`Masa de Cobertura`; prohibido refetchear el reporte al conmutar; prohibido ocultar una jornada en lugar de declararla inactiva; prohibido reintroducir el pilón `● EPIST` (`[DES-QBE-071]` intacto) o el semáforo epistémico como quinto canal visual.
+* **Criterio de aceptación:** `tests/shield/test_shield_sprint2_visor_4_capas_nomenclatura.py` (4 jueces) certifica la nomenclatura de la capa visible, la presencia de las cuatro capas, la propagación atómica con denominador declarado y la **inmutabilidad de la línea base** (el filtro no reasigna el payload ni dispara red), más la atenuación CSS legislada.
+
 
 
 ---

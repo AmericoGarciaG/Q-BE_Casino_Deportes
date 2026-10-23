@@ -1232,6 +1232,67 @@ table.fintech-table {
 /* [LN-QBE-124] Rescate territorial: el LOCAL se promueve a P_mid por el desnivel del anfitrión. */
 .bt-badge-rescate-alt { white-space: nowrap; }
 
+/* ── [DES-QBE-072 · ARCH-1.4.68] VISOR DE CALIBRACIÓN EN CUATRO CAPAS ── */
+/* Capa 1 (alcance) y Capa 2 (filtros fiduciarios) comparten contenedor: una sola lectura visual. */
+.visor-capas-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    align-items: flex-end;
+    margin: 4px 0 10px 0;
+    padding: 10px 12px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.visor-capa { display: flex; flex-direction: column; gap: 2px; }
+.visor-capa-titulo {
+    font-size: 7.2pt;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.visor-capa .visor-segmentacion { margin: 2px 0 0 0; }
+.visor-filtros-fiduciarios { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.visor-filtros-fiduciarios .bt-filtro-vetados { margin-top: 4px; }
+/* Espejo de compatibilidad sellado por [DES-QBE-067]: vive oculto, sin segunda verdad de estado. */
+.visor-espejo-oculto { display: none !important; }
+/* [DES-QBE-072 §Denominador] Transparencia: X activos sobre N del alcance declarado. */
+.visor-denominador {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 8.2pt;
+    color: var(--text-muted);
+}
+.visor-filtro-activo-badge {
+    padding: 2px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: 7.4pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+}
+.visor-denominador-texto { font-family: var(--font-mono); }
+/* [DES-QBE-072] El partido excluido se ATENÚA, jamás se oculta: sigue siendo auditable. */
+.partido-excluido-filtro { opacity: 0.35; filter: grayscale(0.5); transition: opacity 0.15s ease; }
+.partido-excluido-filtro:hover { opacity: 0.85; filter: grayscale(0.1); }
+.badge-excluido-motivo {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border: 1px dashed #F59E0B;
+    border-radius: 999px;
+    font-size: 7pt;
+    letter-spacing: 0.04em;
+    color: #F59E0B;
+    white-space: nowrap;
+}
+
 .bt-macro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .bt-kpi-card {
     background: var(--bg-main);

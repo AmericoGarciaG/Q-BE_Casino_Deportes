@@ -649,61 +649,98 @@
                 <h3 style="margin-top: 0;">🔬 Visor de Backtesting — Calibración Factual de Temporada</h3>
                 <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 14px;">
                     Auditoría <strong>de solo lectura</strong> contra la bóveda 3NF (<code>matches</code> ·
-                    <code>fixtures_snapshots</code>): mide la Tasa de Coincidencia Fiduciaria (H_fid), el
-                    Brier Score Multicategórico de Q-BE contra el consenso del mercado y el Alpha de
-                    Calibración de la temporada. Cero cifras fabricadas: sin captura sellada de P' el
-                    partido se rotula <em>Pendiente de captura</em>
-                    <span style="opacity: 0.85;">[LN-QBE-100] / [ARCH-1.4.38]</span>.
+                    <code>fixtures_snapshots</code>): mide la <strong>Tasa de Acierto de Cobertura</strong>
+                    (factual ex-post de la temporada), el Brier Score Multicategórico de Q-BE contra el
+                    consenso del mercado y el Alpha de Calibración. Cero cifras fabricadas: sin captura
+                    sellada de P′ el partido se rotula <em>Pendiente de captura</em>
+                    <span style="opacity: 0.85;">[LN-QBE-100] / [ARCH-1.4.38] / [DES-QBE-072]</span>.
                 </p>
 
                 <!-- [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cuatro métricas PURAS de la
                      taxonomía de vértices del símplex Δ² (P_max ≥ P_mid ≥ P_low). Queda extirpada
                      la falsa equivalencia «Empate = Cobertura» (H_fid / FAS · FES · FUS). -->
-                <!-- [LN-QBE-125 · ARCH-1.4.65] SELECTOR DE MUESTRA DECLARADA. El Visor sirve dos
-                     universos con la MISMA aritmética: la muestra CALIBRADA (partidos con
-                     suficiencia fáctica S(I)=1 — donde el modelo operó con evidencia) y el TORNEO
-                     COMPLETO (incluye las jornadas de Cold Start, cuya ignorancia se declara con
-                     ❄️ en la tabla meso). Conmutar no refetchea: re-pinta la caché certificada. -->
-                <div class="visor-segmentacion" id="visor-segmentacion" role="tablist"
-                     aria-label="Muestra del visor de calibración">
-                    <button type="button" class="visor-muestra-btn active" data-muestra="CALIBRADA"
-                            role="tab" aria-selected="true">🎯 Muestra Calibrada (J4–J13)</button>
-                    <button type="button" class="visor-muestra-btn" data-muestra="GLOBAL"
-                            role="tab" aria-selected="false">🌐 Torneo Completo (J1–J13)</button>
+                <!-- [DES-QBE-072 · ARCH-1.4.68] VISOR EN CUATRO CAPAS. Capa 0: el payload certificado se
+                     guarda inmutable (`window._calibracionPayloadOriginal`). Capa 1: ALCANCE declarado
+                     (muestra calibrada con Suficiencia de Datos ≠ 0 ↔ torneo completo). Capa 2: tres
+                     filtros fiduciarios combinables. Capa 3: una sola pasada propaga la selección a
+                     macro, meso y micro. Conmutar NO refetchea: se re-pinta la caché certificada. -->
+                <div class="visor-capas-container" id="visor-capas-container">
+                    <div class="visor-capa">
+                        <span class="visor-capa-titulo">Capa 1 · Alcance de la muestra</span>
+                        <div class="visor-segmentacion" id="visor-segmentacion" role="tablist"
+                             aria-label="Alcance de la muestra del visor de calibración">
+                            <button type="button" id="btn-alcance-calibrada"
+                                    class="visor-muestra-btn active" data-muestra="CALIBRADA"
+                                    role="tab" aria-selected="true"
+                                    onclick="conmutarAlcanceMuestra('CALIBRADA')">🎯 Muestra Calibrada (J4–J13)</button>
+                            <button type="button" id="btn-alcance-global"
+                                    class="visor-muestra-btn" data-muestra="GLOBAL"
+                                    role="tab" aria-selected="false"
+                                    onclick="conmutarAlcanceMuestra('GLOBAL')">🌐 Torneo Completo (J1–J13)</button>
+                        </div>
+                    </div>
+                    <div class="visor-capa">
+                        <span class="visor-capa-titulo">Capa 2 · Filtros fiduciarios combinables</span>
+                        <div class="visor-filtros-fiduciarios">
+                            <label class="bt-filtro-vetados" for="chk-filtro-epist">
+                                <input type="checkbox" id="chk-filtro-epist"
+                                       onchange="conmutarFiltrosVisorCalibracion()">
+                                <span>Alta Discrepancia (Δ_epist &gt; 0.12)</span>
+                            </label>
+                            <label class="bt-filtro-vetados" for="chk-filtro-altitud">
+                                <input type="checkbox" id="chk-filtro-altitud"
+                                       onchange="conmutarFiltrosVisorCalibracion()">
+                                <span>Asedio Territorial Neto (ΔAlt ≥ 1,000 m)</span>
+                            </label>
+                            <label class="bt-filtro-vetados" for="chk-filtro-fragil">
+                                <input type="checkbox" id="chk-filtro-fragil"
+                                       onchange="conmutarFiltrosVisorCalibracion()">
+                                <span>Favorito Frágil (P′ máx &lt; 0.50)</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- [DES-QBE-072 · R2] ESPEJO DE COMPATIBILIDAD: `#chk-excluir-vetados` es el ancla
+                     sellada por [DES-QBE-067] y la lee `_universoCalibracion`. Permanece en el DOM,
+                     OCULTO y sincronizado con `#chk-filtro-epist` (una sola verdad de estado). El
+                     filtro es de PRESENTACIÓN: jamás reescribe la bóveda. -->
+                <label class="bt-filtro-vetados visor-espejo-oculto" for="chk-excluir-vetados"
+                       aria-hidden="true">
+                    <input type="checkbox" id="chk-excluir-vetados" tabindex="-1">
+                    <span>Excluir partidos vetados (EPIST 🔴 · Δ_epist &gt; 0.12)</span>
+                </label>
+
+                <!-- [DES-QBE-072 §Denominador] Transparencia: X activos sobre N del alcance declarado. -->
+                <div class="visor-denominador" role="status" aria-live="polite">
+                    <span class="visor-filtro-activo-badge" id="visor-filtro-activo-badge">Línea Base Calibrada</span>
+                    <span class="visor-denominador-texto" id="visor-denominador-texto">Mostrando -- de -- partidos concluidos (0 excluidos por filtros activos) · N = --</span>
+                </div>
+
+                <!-- [DES-QBE-072] CUATRO INDICADORES MACRO con glosario autodescriptivo: la sigla
+                     derogada (P_max / P_mid / P_low) sólo sobrevive en la legislación [LN-QBE-100]. -->
                 <div class="bt-macro-grid">
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">MASA DE COBERTURA</span>
+                        <span class="bt-kpi-label">MASA PROBABILÍSTICA EX-ANTE</span>
                         <span class="bt-kpi-value" id="kpi-bt-masa-cobertura">--</span>
                         <span class="bt-kpi-sub" id="kpi-bt-masa-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">ACIERTO P_MAX</span>
+                        <span class="bt-kpi-label">ACIERTO PRIMARIO</span>
                         <span class="bt-kpi-value" id="kpi-bt-pmax">--</span>
                         <span class="bt-kpi-sub" id="kpi-bt-pmax-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">RESCATE P_MID</span>
+                        <span class="bt-kpi-label">RESCATE DE COBERTURA</span>
                         <span class="bt-kpi-value" id="kpi-bt-pmid">--</span>
                         <span class="bt-kpi-sub" id="kpi-bt-pmid-detalle">--</span>
                     </div>
                     <div class="bt-kpi-card">
-                        <span class="bt-kpi-label">RUPTURA P_LOW</span>
+                        <span class="bt-kpi-label">RUPTURA RESIDUAL</span>
                         <span class="bt-kpi-value" id="kpi-bt-plow">--</span>
                         <span class="bt-kpi-sub" id="kpi-bt-plow-detalle">--</span>
                     </div>
                 </div>
-
-                <!-- [LN-QBE-104 · DES-QBE-067] FILTRO ANTI-CUARENTENA DE LA CARTELERA.
-                     El partido cuyo semáforo EPIST está en ROJO (Δ_epist(∞) > 0.12 ⇒ Cuarentena
-                     Fiduciaria [LN-QBE-070-B]) no recibe capital de la cartera: exhibirlo como
-                     acierto/fallo de Q-BE sobreestima la calibración con evidencia que el motor
-                     declaró inservible. El filtro es de PRESENTACIÓN: jamás reescribe la bóveda. -->
-                <label class="bt-filtro-vetados" for="chk-excluir-vetados">
-                    <input type="checkbox" id="chk-excluir-vetados">
-                    <span>Excluir partidos vetados (EPIST 🔴 · Δ_epist &gt; 0.12)</span>
-                </label>
 
                 <div id="bt-estado" class="bt-estado">Lectura pendiente: abre la pestaña para consultar la bóveda.</div>
             </div>
@@ -711,12 +748,16 @@
             <div class="card" style="margin-bottom: 1.5rem;">
                 <h4 style="margin-top: 0;">📅 Calibración por Jornada (Tabla Meso)</h4>
                 <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
-                    🟢 Masa de cobertura = P_max + P_mid (100% − P_low) · 🔴 Ruptura = P_low no
-                    cubierto. El desglose porcentual (P_max · P_mid · P_low) con sus conteos enteros
-                    es la lectura vigente de la cobertura; la sub-etiqueta
-                    <code>[P_mid: X Emp · Y Riv]</code> mide de dónde rescató la cobertura (empate o
-                    rival). La sigla derogada queda archivada en la legislación (`[LN-QBE-100]`),
-                    jamás en la cartelera.
+                    🟢 <strong>Masa Probabilística Ex-Ante</strong> = Acierto Primario + Rescate de
+                    Cobertura (100 % − Ruptura Residual) · 🔴 <strong>Ruptura Residual</strong> = el
+                    desenlace real quedó fuera de la cobertura. El desglose porcentual
+                    (<em>Acierto Primario · Rescate de Cobertura · Ruptura Residual</em>) con sus
+                    conteos enteros es la lectura vigente; la sub-etiqueta
+                    <code>[Rescate: X Emp · Y Riv]</code> mide de dónde rescató la cobertura (empate o
+                    rival). La jornada cuya <strong>Suficiencia de Datos</strong> es 0 se declara con
+                    ❄️ <em>Cold Start</em> y permanece visible, jamás oculta. Glosario vinculante
+                    <code>[DES-QBE-072]</code>: la sigla derogada se archiva en la legislación
+                    (<code>[LN-QBE-100]</code>), jamás en la cartelera.
                 </p>
                 <div style="overflow-x: auto;">
                     <table class="bt-table">
@@ -724,8 +765,8 @@
                             <tr>
                                 <th>JORNADA</th>
                                 <th>PARTIDOS</th>
-                                <th>MASA COBERTURA</th>
-                                <th>DESGLOSE (P_max · P_mid · P_low)</th>
+                                <th>MASA PROBABILÍSTICA EX-ANTE</th>
+                                <th>DESGLOSE (Acierto Primario · Rescate de Cobertura · Ruptura Residual)</th>
                                 <th>BRIER Q-BE</th>
                                 <th>BRIER MERCADO</th>
                                 <th>ALPHA</th>
@@ -922,6 +963,9 @@
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purgar_base_datos')" title="Qué hace: Purga atómica de snapshots, partidos y estados en SQLite. Qué implica: Deja la base de datos en blanco (preserva ligas y equipos). Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo).">🧹 Purga Selectiva de Snapshots</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('purga_total_db')" title="Qué hace: Purga TOTAL de la bóveda 3NF [ARCH-1.4.29] bajo una única Unit of Work: vacía las 15 tablas (ligas, equipos, partidos, snapshots, distribuciones soberanas, slates y bitácoras) preservando intacto el libro mayor de tokens llm_token_ledger. Qué implica: Deja la base virgen, sin catálogo alguno. Cómo se restaura: Pulsando la cadena certificada 'Pre-Jornada' (Deportivo ➔ Mercado ➔ Pre-Vuelo) y, si la quiniela quedó vacía, la cadena 'Quiniela'.">🧨 Purga Total de la Bóveda 3NF</button>
                             <button class="cc-task-btn" onclick="ejecutarTareaAdmin('exportar_dataset_investigacion')" title="Qué hace: Exporta el dataset de investigación de la temporada a CSV en data/output/ (una fila por partido con marcadores, cuotas de cierre, vector soberano e insumos fácticos). Cuándo usar: Para análisis externo o para congelar la evidencia de un experimento.">📤 Exportar Dataset de Investigación · CSV</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('generar_matriz_investigacion')" title="Qué hace: Publica la matriz canónica de investigación (data/output/research_feature_matrix.csv) con cuatro zonas disjuntas: identidad del partido, 64 celdas fácticas PRE-KICKOFF del catálogo de 32 variables, distribución soberana PRE-KICKOFF y etiquetas consumadas al final (sin fuga). Cuándo usar: Antes de entrenar o auditar un modelo externo; es de sólo lectura y su universo es el MISMO que sirve el Visor de Calibración.">🛰️ Matriz Canónica de Investigación · 4 Zonas</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('sembrar_prior_apertura2025')" title="Qué hace: Congela (o verifica, sin re-escribir) el artefacto data/cache_prior_apertura2025_liga_mx.json con el agregado físico REAL de la fase regular de Apertura 2025: partidos jugados, goles a favor y en contra y puntos factuales, más el xG calibrado declarado [ARCH-1.4.39]. Cuándo usar: Al abrir temporada o tras una purga total, para que las jornadas 1 a 3 dejen de ser ciegas (Suficiencia de Datos = 0) sin sustituir la probabilidad soberana por el mercado. Qué implica: la posesión y el xGA de 2025 no existen como medición y se declaran así; el artefacto es un dato congelado y su regeneración exige la bandera explícita --regen.">🧊 Prior Congelado · Apertura 2025</button>
+                            <button class="cc-task-btn" onclick="ejecutarTareaAdmin('mineria_factores_shannon')" title="Qué hace: Mide la información mutua de Shannon (en bits) de las 64 celdas fácticas pre-kickoff sobre la etiqueta consumada e induce, con un árbol de decisión esparso, reglas de veto para la Ruptura Residual (pureza mínima 60%, soporte mínimo 5, lift mínimo 2). Cuándo usar: Para descubrir interacciones que la razón de Fisher univariada no ve. Qué implica: es de sólo lectura, sus reglas están rotuladas 'SUGERIDA · NO EJECUTA TRIAJE' y publica data/output/mineria_shannon_reporte.json.">🧠 Minería de Shannon · Árbol de Veto</button>
                         </div>
                     </div>
 

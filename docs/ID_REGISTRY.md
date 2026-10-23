@@ -123,6 +123,9 @@
 | `[LN-QBE-124]` | LOGIC | `docs/LOGIC.md` | Banda de Indiferencia Fiduciaria en la Cobertura Ordinal y Desempate por Altitud del Anfitrión | SELLADO |
 | `[LN-QBE-125]` | LOGIC | `docs/LOGIC.md` | Cold Start Sincero: Derogación de la Sustitución por Prior de Mercado y Segmentación Declarada de la Muestra Calibrada | SELLADO |
 | `[LN-QBE-126]` | LOGIC | `docs/LOGIC.md` | Sandbox de Arquetipos y Vectores: Extracción Inducida de Firmas por Clase en el Espacio Z-Score | SELLADO |
+| `[LN-QBE-127]` | LOGIC | `docs/LOGIC.md` | Fuente Única de Verdad en la Calibración: Resolución al Vuelo de $P'$ y Derogación del Descarte Silencioso | SELLADO |
+| `[LN-QBE-128]` | LOGIC | `docs/LOGIC.md` | Prior Congelado de Apertura 2025 y Ley de Mezcla Monótona del Corte (Erradicación del Cold Start Estructural) | SELLADO |
+| `[LN-QBE-129]` | LOGIC | `docs/LOGIC.md` | Minería de Información Mutua de Shannon y Árbol Esparso de Veto (Descubrimiento de Rupturas P_LOW) | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -251,6 +254,10 @@
 | `[ARCH-1.4.64]` | ARCH | `docs/ARCH.md` | Delegación del Orden Fiduciario del Visor a la Función Pura Canónica y Resolución Declarada del Desnivel de Altitud | SELLADO |
 | `[ARCH-1.4.65]` | ARCH | `docs/ARCH.md` | Vitrina de Muestra Declarada: Selector Calibrada/Global en el Visor de Calibración | SELLADO |
 | `[ARCH-1.4.66]` | ARCH | `docs/ARCH.md` | Sandbox de Arquetipos y Vectores: Instrumento CLI-First de Lectura Pura para la Inducción de Firmas por Clase | SELLADO |
+| `[ARCH-1.4.67]` | ARCH | `docs/ARCH.md` | Matriz Canónica de Investigación: Publicación No-Leakage de Cuatro Zonas Delegada al Reporte de Calibración | SELLADO |
+| `[ARCH-1.4.68]` | ARCH | `docs/ARCH.md` | Motor Cliente de Cuatro Capas del Visor de Calibración: Proyección Pura, Propagación Atómica y Transparencia de Denominador | SELLADO |
+| `[ARCH-1.4.69]` | ARCH | `docs/ARCH.md` | Artefacto Congelado del Prior de Apertura 2025 y Resolvedor de Insumos con Mezcla | SELLADO |
+| `[ARCH-1.4.70]` | ARCH | `docs/ARCH.md` | Instrumento CLI-FIRST de Minería de Shannon y Árbol Esparso de Veto | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---
@@ -276,6 +283,7 @@
 | `VAR-2026-10-21-FASE-B-PURGA-V` | `[LN-QBE-121]` §P.5 exige derivar las taxonomías locales de `_CATALOGO_32`, pero la derivación no es posicional (cardinalidades divergentes) y colisiona en unidad (`xG/90` vs «por Partido», `[LN-QBE-119]`), semántica (`𝒯_Vol`) y saturación (`𝒯_Ctx` reclamada por H2H + macro) | **RATIFICADA ALT-B** por el Director (`SPRINT-REINGENIERIA-MACRO-FASE-B2-24`): la casilla del catálogo se reserva a la evidencia que la sostiene con su misma granularidad y toda magnitud sin casilla viaja como `AUX_*` sin código · materializada en `[LN-QBE-122]` / `[ARCH-1.4.61]` · ver `docs/variances/VAR-2026-10-21-FASE-B-PURGA-V.md` | RESUELTO |
 | `VAR-2026-10-17-H2H-FUSION` | El borrador de diseño citaba `[ARCH-1.6.15]` para el ensemble convexo (identificador SELLADO a Apertura Dinámica de Jornada en Live Board, con sufijo `-C` ocupado por la frontera del sensor en `[ARCH-1.6.21]`) y el puente persistía `epistemic_delta = intensidades.ratio` (magnitud de tasas, no discrepancia) | Ratificada ALT-C + E-2 + E-3: nodo propio `[ARCH-1.6.22]`, mezcla convexa $w_{H2H}=\min(0.25, 0.05N)$ sobre el símplex publicado y persistencia de $\Delta_{epist}(\infty)=\max_k|P_A-P_C|$ (contrato de salida → traza → piso R-1 0.02, acotado a [0,1], sin backfill); Shield `test_shield_ensemble_fusion_and_ui_sync.py` · ver `docs/variances/VAR-2026-10-17-H2H-FUSION.md` | RATIFICADO |
 | `VAR-2026-10-21-FASE-C-UI-32V-MICRO` | La vitrina seguía rotulando «44V» (botón `🔬 44 Variables`, título y subtítulo del modal, aviso del endpoint y botón del Centro de Control) y `sandbox_micro_dinamicas_pipeline.py` emitía cinco dimensiones derogadas (5/6/9/10/12), con el semáforo `disciplina_roja` leyendo `V24` — celda reasignada a **Penales Favor/Contra** en el catálogo de 32 | **RATIFICADA ALT-B**: purga nominal de vitrina con anclas de contrato intactas (`#modal-44-variables`, `vars44-*`, `.btn-ver-44-vars`, `abrirModal44Variables()`, `variables_44`), helpers internos realineados a `*_32` y sandbox espejo de una sola dimensión `dimension_5_balon_parado_y_disciplina` (`𝒯_Spc`, `V21`-`V25`) forzada a `SIN EVIDENCIA` / `FASE 6` · materializada en `[DES-QBE-070-B]` / `[ARCH-1.4.62]` · ver `docs/variances/VAR-2026-10-21-FASE-C-UI-32V-MICRO.md` | RESUELTO |
+| `VAR-2026-SPRINT3-ROI-AGR` | El criterio de aceptación ROI AGR de `[LN-QBE-116]` §O (`+8.0%` / PnL `841.11` / 18 posiciones / drawdown `0.5%`) se certificó sobre la masa ciega de J1–J3 que el Sprint 3 erradicó al sembrar el prior congelado de Apertura 2025 (`[LN-QBE-128]` / `[ARCH-1.4.69]`): el `+8%` era artefacto del prior uniforme explotado por la Familia R, no ventaja medida | **RATIFICADA ALT-B** por el Director Humano (2026-10-23): criterio re-cimentado sobre la física informada en ROI `>= +5.0%`, PnL `>= +$500.00 MXN`, drawdown `<= 2.0%` y `>= 11` jornadas liquidadas sobre J1–J11; piso de dominancia `0.5000` y Escudo de Altitud intactos · medición viva `+5.85% / +$584.59 / 1.50%` · ver `docs/DIRGEN_VARIANCE_REQUEST_SPRINT3_ROI_AGR.md` | RESUELTO |
 
 
 

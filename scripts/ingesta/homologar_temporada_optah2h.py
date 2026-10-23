@@ -156,6 +156,179 @@ def es_procedencia_opta_real(procedencia: Any) -> bool:
     if not isinstance(procedencia, str):
         return False
     return procedencia.strip().lower() in PROCEDENCIAS_OPTA_REALES
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# PILAR 5 — PRIOR CONGELADO DEL TORNEO PREVIO Y LEY DE MEZCLA ([LN-QBE-128] / [ARCH-1.4.69])
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# El prior es EVIDENCIA de entrada, jamás matemática: el plano sellado `sovereign_pipeline` no se
+# toca (ni una coma) y la suficiencia se evalúa con su propia función indicadora. La ley de mezcla
+# `w = min(1, pj_obs/3)` garantiza IDENTIDAD byte-a-byte cuando el corte ya es suficiente (w = 1).
+RUTA_PRIOR_APERTURA_DEFAULT = os.path.join("data", "cache_prior_apertura2025_liga_mx.json")
+# Espejo DECLARADO del umbral de `evaluar_suficiencia_informativa` (Sección 2.13.1). Se certifica
+# en runtime (`verificar_espejo_umbral_suficiencia`): si el plano canónico cambiara su umbral, el
+# espejo lo delata ANTES de escribir una sola fila.
+PJ_SUFICIENCIA_CANONICA = 3
+# Claves que el motor consume del bloque de club. `xga` NO figura: [§6.1·E1] prohíbe publicarlo y
+# la posesión/SOT no existen como medición en Apertura 2025 (cero fabricación).
+CLAVES_VECTOR_CON_PRIOR = ("pj", "gf", "gc", "pts", "xg")
+_PRIOR_APERTURA_CACHE: Dict[str, Any] = {}
+
+
+def verificar_espejo_umbral_suficiencia() -> Dict[str, Any]:
+    """Certifica que `PJ_SUFICIENCIA_CANONICA` reproduce el umbral del plano sellado [DIRGEN-STRICT]."""
+    from src.core.sovereign_pipeline import evaluar_suficiencia_informativa
+
+    def _indicador(pj: int) -> int:
+        return int(
+            bool(
+                evaluar_suficiencia_informativa(
+                    {"home_team_stats": {"pj": pj}, "away_team_stats": {"pj": pj}}
+                )
+            )
+        )
+
+    certificado = {
+        "pj_suficiencia": PJ_SUFICIENCIA_CANONICA,
+        "indicador_pj_2": _indicador(2),
+        "indicador_pj_3": _indicador(3),
+    }
+    certificado["espejo_verificado"] = bool(
+        certificado["indicador_pj_2"] == 0
+        and certificado["indicador_pj_3"] == 1
+        and PJ_SUFICIENCIA_CANONICA == 3
+    )
+    return certificado
+
+
+def _cargar_prior_apertura(ruta: Optional[str] = None) -> Dict[str, Any]:
+    """Carga (o siembra, la primera vez) el artefacto congelado de Apertura 2025.
+
+    Delega ÍNTEGRAMENTE en `scripts.ingesta.sembrar_prior_apertura2025` (import diferido: evita el
+    ciclo de importación con este módulo, del que el sembrador toma la relación calibrada). Un
+    artefacto inexistente se siembra UNA vez y queda congelado por hash.
+    """
+    from scripts.ingesta.sembrar_prior_apertura2025 import (
+        RUTA_PRIOR_DEFAULT,
+        cargar_o_generar_prior_apertura2025,
+    )
+
+    ruta_efectiva = ruta or RUTA_PRIOR_DEFAULT
+    if ruta_efectiva in _PRIOR_APERTURA_CACHE:
+        return _PRIOR_APERTURA_CACHE[ruta_efectiva]
+    prior = cargar_o_generar_prior_apertura2025(ruta_salida=ruta_efectiva)
+    _PRIOR_APERTURA_CACHE[ruta_efectiva] = prior
+    return prior
+def _resolver_insumos_con_prior(
+    team_slug: str,
+    stats_actuales: Optional[Dict[str, Any]],
+    torneo_actual_pj: Optional[int] = None,
+    prior: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """[LN-QBE-128] Resuelve el bloque de club del corte N−1 mezclándolo con el prior congelado.
+
+    Ley de mezcla (D4 ratificado): `w = min(1, pj_obs / 3)` con `pj_obs = torneo_actual_pj`.
+    Para cada tasa `t`: `t_mezcla = w·(t_obs/pj_obs) + (1−w)·(t_prior/pj_prior)` y
+    `T_mezcla = round(t_mezcla · pj_mezcla)`, con `pj_mezcla = pj_obs + round((1−w)·pj_prior)`.
+
+    Garantías:
+      * `pj_obs >= 3 ⇒ w = 1` ⇒ devuelve el bloque observado SIN una sola clave añadida.
+      * Club ausente del prior (Atlante no disputó Apertura 2025) ⇒ bloque observado intacto y
+        `suficiencia_S_I = 0`: la ceguera residual se DECLARA, no se maquilla.
+      * `prior={}` ⇒ prior desactivado (auditoría A/B `--sin-prior`): misma identidad.
+      * `xga` y `possession` JAMÁS viajan al motor: `xga` es telemetría de auditoría (GC factual,
+        [§6.1·E1]) y la posesión no existe como medición en 2025.
+    """
+    observado = dict(stats_actuales or {})
+    pj_obs = int(torneo_actual_pj if torneo_actual_pj is not None else (observado.get("pj") or 0))
+    pj_obs = max(0, pj_obs)
+    if prior is None:
+        prior = _cargar_prior_apertura()
+    nodo_prior = (prior.get("equipos") or {}).get(str(team_slug)) if prior else None
+
+    if not nodo_prior:
+        bloque = dict(observado)
+        bloque["suficiencia_S_I"] = int(pj_obs >= PJ_SUFICIENCIA_CANONICA)
+        return bloque
+
+    peso_observado = min(1.0, pj_obs / float(PJ_SUFICIENCIA_CANONICA)) if pj_obs else 0.0
+    pj_prior = int(nodo_prior.get("pj") or 0)
+    if peso_observado >= 1.0 or pj_prior <= 0:
+        bloque = dict(observado)
+        bloque["suficiencia_S_I"] = int(pj_obs >= PJ_SUFICIENCIA_CANONICA)
+        return bloque
+
+    peso_prior = 1.0 - peso_observado
+    pj_mezcla = pj_obs + int(round(peso_prior * pj_prior))
+
+    def _tasa_mezclada(total_observado: float, campo_prior: str) -> float:
+        tasa_observada = (float(total_observado) / pj_obs) if pj_obs > 0 else 0.0
+        tasa_prior = float(nodo_prior.get(campo_prior) or 0.0)
+        return (peso_observado * tasa_observada) + (peso_prior * tasa_prior)
+
+    gf = int(round(_tasa_mezclada(observado.get("gf") or 0, "gf_per_match") * pj_mezcla))
+    gc = int(round(_tasa_mezclada(observado.get("gc") or 0, "gc_per_match") * pj_mezcla))
+    pts = int(round(_tasa_mezclada(observado.get("pts") or 0, "puntos_por_partido") * pj_mezcla))
+    xg = round(
+        max(
+            XG_MINIMO_CALIBRADO,
+            _tasa_mezclada(observado.get("xg") or 0.0, "xg_per_match") * pj_mezcla,
+        ),
+        3,
+    )
+    # [§6.1·E1] xGA no publicado al motor: telemetría = tasa de GC mezclada (dato factual).
+    xga = round(_tasa_mezclada(observado.get("gc") or 0, "xga_per_match") * pj_mezcla, 3)
+
+    return {
+        "pj": pj_mezcla,
+        "gf": gf,
+        "gc": gc,
+        "pts": pts,
+        "xg": xg,
+        "xga": xga,
+        "suficiencia_S_I": int(pj_mezcla >= PJ_SUFICIENCIA_CANONICA),
+        "prior_apertura2025": {
+            "fuente": str(prior.get("fuente_archivo") or ""),
+            "temporada": prior.get("temporada"),
+            "fase": prior.get("fase"),
+            "peso_observado": round(peso_observado, 6),
+            "peso_prior": round(peso_prior, 6),
+            "pj_observado": pj_obs,
+            "pj_prior": pj_prior,
+            "pj_mezcla": pj_mezcla,
+            "procedencia_xg": nodo_prior.get("procedencia_xg"),
+        },
+    }
+
+
+def _bloque_con_prior(
+    bloque: Dict[str, Any],
+    slug: str,
+    jornada: int,
+    prior: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], int]:
+    """Cablea el resolvedor al vector homólogo: devuelve (bloque_motor, sello, pj_observado).
+
+    Sólo cuando HUBO mezcla se sustituye el bloque y se publica el sello; en cualquier otro caso se
+    devuelve el bloque ORIGINAL (identidad byte-a-byte, cero claves añadidas) — condición necesaria
+    para que J4..J17 permanezcan intactas. `prior is None` ⇒ llamada LEGADA (reconstrucciones que no
+    declaran artefacto): no se resuelve nada y el bloque queda intacto.
+    """
+    pj_observado = int(bloque.get("pj", 0) or 0)
+    if prior is None:
+        return bloque, None, pj_observado
+    resuelto = _resolver_insumos_con_prior(
+        team_slug=slug, stats_actuales=bloque, torneo_actual_pj=pj_observado, prior=prior
+    )
+    sello = resuelto.get("prior_apertura2025")
+    if not sello:
+        return bloque, None, pj_observado
+    mezclado = {clave: resuelto[clave] for clave in CLAVES_VECTOR_CON_PRIOR if clave in resuelto}
+    return mezclado, sello, pj_observado
+
+
+
+
+
+
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -1030,8 +1203,9 @@ def _vector_homologo(
     etiqueta_respaldo: str,
     cache_volumen: Optional[Dict[str, Any]] = None,
     cache_macro: Optional[Dict[str, Any]] = None,
+    prior: Optional[Dict[str, Any]] = None,
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
-    """Ensambla el `raw_match_data` homólogo de un fixture (Pilares 1..3) y su traza fáctica.
+    """Ensambla el `raw_match_data` homólogo de un fixture (Pilares 1..5) y su traza fáctica.
 
     Corte de cada club = jornadas 1..j−1 (futuro-ceguera estricta); splits de sede del Pilar 1;
     memoria H2H profunda del Pilar 3. Cero estadística sintética: un corte vacío entra como `{}`.
@@ -1039,6 +1213,9 @@ def _vector_homologo(
     (la caché congelada de xG no publica la métrica); `None` reutiliza `cache`.
     `[LN-QBE-121]` `cache_macro` es el artefacto torneal de EXHIBICIÓN: se resuelve por slug aquí
     y viaja como bloque aparte; `None` deja el paquete exactamente como antes de la ley.
+    `[LN-QBE-128]` `prior` es el artefacto congelado del torneo previo: se mezcla SÓLO cuando el
+    corte no alcanza el umbral de suficiencia (`pj_obs < 3`), de modo que un corte suficiente
+    conserva el bloque byte-idéntico. `{}` lo desactiva (auditoría A/B `--sin-prior`).
     """
     id_partido = str(fixture.get("id_partido") or "")
     local = str(fixture.get("home_team_slug") or "")
@@ -1059,6 +1236,10 @@ def _vector_homologo(
         etiqueta_respaldo,
         cache_volumen,
     )
+    # [LN-QBE-128] Corte N-1 + prior congelado de Apertura 2025: la mezcla SÓLO ocurre con
+    # `pj_obs < 3`; con muestra suficiente el bloque se devuelve intacto (identidad byte-a-byte).
+    h_st, sello_prior_h, pj_obs_h = _bloque_con_prior(h_st, local, jornada, prior)
+    a_st, sello_prior_a, pj_obs_a = _bloque_con_prior(a_st, visitante, jornada, prior)
     h_split = _bloque_sede_con_opta(
         _partidos_de_club(partidos, local, jornada, "local"), cache, etiqueta_respaldo
     )
@@ -1105,6 +1286,15 @@ def _vector_homologo(
     bloque_macro = _bloque_macro(cache_macro or {}, local, visitante)
     if bloque_macro:
         item["macro_stats"] = bloque_macro
+    # [LN-QBE-128] Sello de mezcla con el prior congelado: se publica SÓLO si hubo mezcla real, de
+    # modo que un fixture de corte suficiente queda byte-idéntico al de la ruta previa.
+    if sello_prior_h or sello_prior_a:
+        item["prior_apertura2025"] = {
+            "fuente": (sello_prior_h or sello_prior_a or {}).get("fuente"),
+            "temporada": (sello_prior_h or sello_prior_a or {}).get("temporada"),
+            "local": sello_prior_h,
+            "visita": sello_prior_a,
+        }
     traza: Dict[str, Any] = {
         "id_partido": id_partido,
         "jornada": int(jornada),
@@ -1137,12 +1327,20 @@ def _vector_homologo(
         "contexto_status": contexto.get("status"),
     }
     # [ARCH-1.4.39] Invariante del Pilar 1: PJ_casa + PJ_gira ≡ PJ_corte (por club, por corte).
+    # [LN-QBE-128] El invariante es del CORTE OBSERVADO: los splits no portan prior, de modo que la
+    # comparación se hace contra `pj_observado_*` (jamás contra el `pj` mezclado).
     traza["invariante_sede"] = all(
         (
-            int(h_split.get("pj", 0) or 0) + int(gira_local.get("pj", 0) or 0) == int(h_st.get("pj", 0) or 0),
-            int(casa_visita.get("pj", 0) or 0) + int(a_split.get("pj", 0) or 0) == int(a_st.get("pj", 0) or 0),
+            int(h_split.get("pj", 0) or 0) + int(gira_local.get("pj", 0) or 0) == pj_obs_h,
+            int(casa_visita.get("pj", 0) or 0) + int(a_split.get("pj", 0) or 0) == pj_obs_a,
         )
     )
+    # [LN-QBE-128] Evidencia declarada de la mezcla: PJ OBSERVADO del torneo (antes del prior) y el
+    # sello completo cuando hubo mezcla. `None` ⇒ el corte no necesitó el prior.
+    traza["pj_observado_local"] = pj_obs_h
+    traza["pj_observado_visita"] = pj_obs_a
+    traza["prior_mezcla_local"] = sello_prior_h
+    traza["prior_mezcla_visita"] = sello_prior_a
     return item, traza
 
 
@@ -1186,6 +1384,8 @@ def homologar(
     permitir_red: bool = False,
     dry_run: bool = False,
     forzar: bool = False,
+    ruta_prior: str = RUTA_PRIOR_APERTURA_DEFAULT,
+    sin_prior: bool = False,
 ) -> Dict[str, Any]:
     """Ejecuta la homologación integral (Pilares 1..4) y retorna el parte de certificación.
 
@@ -1195,6 +1395,10 @@ def homologar(
     `forzar=True` (llave maestra de sobreescritura): la captura `fixtures_snapshots.matches_json`
     deja de preservar P′ preexistente y se sincroniza campo por campo con la relectura bit-idéntica
     de la 3NF. Cero matemática nueva: sólo se propaga la verdad fáctica ya sellada.
+
+    `[LN-QBE-128]` Pilar 5: `ruta_prior` apunta al artefacto congelado de Apertura 2025, que se
+    mezcla SÓLO en los cortes con `pj_obs < 3` (J1..J3). `sin_prior=True` inyecta `{}` y reconstruye
+    byte-a-byte la ruta previa (auditoría A/B).
     """
     from scripts.utilidades.poblar_temporada_completa_backtesting import (
         _leer_suficiencia_3nf,
@@ -1208,6 +1412,10 @@ def homologar(
 
     gateway = PersistenceGateway()
     mu_liga, gamma_home = _macros_de_competencia(gateway)
+    # [LN-QBE-128] Pilar 5: prior congelado del torneo previo y certificado del espejo de umbral.
+    # `sin_prior` ⇒ `{}` (el resolvedor devuelve identidad: auditoría A/B sin ramas muertas).
+    prior = {} if sin_prior else _cargar_prior_apertura(ruta_prior)
+    espejo_umbral = verificar_espejo_umbral_suficiencia()
 
     # [ARCH-1.4.55 / LN-QBE-118] Continuidad de operación: respaldo atómico de la bóveda ANTES de
     # escribir. Resguardo WORM del lote (API online de SQLite, verificada con `PRAGMA quick_check`).
@@ -1264,6 +1472,7 @@ def homologar(
                     dominante,
                     cache_volumen,
                     cache_macro,
+                    prior,
                 )
                 if armado is None:
                     continue
@@ -1295,6 +1504,38 @@ def homologar(
             "equipos": len(cache_macro.get("equipos") or {}),
             "huecos": len(cache_macro.get("huecos") or []),
             "bloques_resueltos": sum(1 for it in items if it.get("macro_stats")),
+        },
+        # [LN-QBE-128] Pilar 5: evidencia declarada de la mezcla con el prior congelado.
+        "prior_apertura2025": {
+            "habilitado": not sin_prior,
+            "artefacto": (
+                os.path.basename(ruta_prior) if (ruta_prior and not sin_prior) else "desactivado (--sin-prior)"
+            ),
+            "temporada": (prior or {}).get("temporada"),
+            "fase": (prior or {}).get("fase"),
+            "equipos_en_prior": len((prior or {}).get("equipos") or {}),
+            "partidos_en_prior": ((prior or {}).get("totales") or {}).get("partidos"),
+            "fixtures_con_mezcla": sum(
+                1 for t in trazas if t.get("prior_mezcla_local") or t.get("prior_mezcla_visita")
+            ),
+            "clubes_mezclados": sorted(
+                {
+                    slug
+                    for t in trazas
+                    for slug, sello in (
+                        (t.get("local"), t.get("prior_mezcla_local")),
+                        (t.get("visitante"), t.get("prior_mezcla_visita")),
+                    )
+                    if sello
+                }
+            ),
+            "lados_sin_mezcla": sum(
+                1
+                for t in trazas
+                for sello in (t.get("prior_mezcla_local"), t.get("prior_mezcla_visita"))
+                if not sello
+            ),
+            "espejo_umbral": espejo_umbral,
         },
         "trazas": trazas,
     }
@@ -1363,6 +1604,14 @@ def _imprimir_parte(parte: Dict[str, Any]) -> None:
     print(f"  fuente de la caché     : {opta['fuente_cache']}")
     print(f"Pilar 1 (splits de sede) : {invariantes}/{len(trazas)} fixtures con PJ_casa + PJ_gira ≡ PJ_corte")
     print(f"Pilar 3 (memoria H2H)    : {con_h2h}/{len(trazas)} fixtures con duelos directos previos")
+    prior_parte = parte.get("prior_apertura2025") or {}
+    print(
+        "Pilar 5 (prior congelado): "
+        f"{prior_parte.get('fixtures_con_mezcla')} fixtures mezclados · "
+        f"lados sin mezcla={prior_parte.get('lados_sin_mezcla')} · "
+        f"{prior_parte.get('temporada') or 'sin artefacto'} ({prior_parte.get('fase') or '-'}) · "
+        f"espejo umbral={'OK' if (prior_parte.get('espejo_umbral') or {}).get('espejo_verificado') else 'FALLA'}"
+    )
     if parte.get("dry_run"):
         print(f"\nPROYECCIÓN --DRY-RUN    : {len(parte.get('p_prima_proyectada', {}))} distribuciones "
               "calculadas por el motor sellado (SIN ESCRITURA).")
@@ -1401,6 +1650,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     analizador.add_argument("--jornadas", default=RANGO_JORNADAS_DEFAULT, help="rango explícito (ej. '1-17')")
     analizador.add_argument("--liga-id", type=int, default=LIGA_ID_CANONICA, help="liga de la captura")
     analizador.add_argument("--cache", default=RUTA_CACHE_OPTA_DEFAULT, help="ruta de la caché Opta")
+    analizador.add_argument(
+        "--prior", default=RUTA_PRIOR_APERTURA_DEFAULT,
+        help="[LN-QBE-128] artefacto congelado del torneo previo (default: %(default)s)",
+    )
+    analizador.add_argument(
+        "--sin-prior", action="store_true",
+        help="desactiva la mezcla del prior (auditoría A/B: reconstrucción byte-idéntica)",
+    )
     analizador.add_argument("--permitir-red", action="store_true", help="habilita el sensor FotMob/Opta")
     analizador.add_argument(
         "--congelar-cache", action="store_true",
@@ -1435,6 +1692,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         permitir_red=bool(argumentos.permitir_red),
         dry_run=bool(argumentos.dry_run),
         forzar=bool(argumentos.forzar),
+        ruta_prior=argumentos.prior,
+        sin_prior=bool(argumentos.sin_prior),
     )
     if argumentos.json:
         print(json.dumps(parte, ensure_ascii=False, indent=2, default=str))

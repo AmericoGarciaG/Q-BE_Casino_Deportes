@@ -3562,9 +3562,13 @@ function initVisorBacktesting() {
     if (casillaVetados) {
         casillaVetados.addEventListener("change", _pintarVisorBacktesting);
     }
-    // [LN-QBE-125 · ARCH-1.4.65] Conmutador de muestra declarada (idempotente, cero refetch).
+    // [DES-QBE-072 · Capa 1] El conmutador de alcance se cablea en el MARCADO
+    // (`onclick="conmutarAlcanceMuestra(...)"`, publicado en `window`): aquí sólo se sincroniza el
+    // estado accesible inicial, de modo que no existan dos manejadores para el mismo gesto.
     document.querySelectorAll(".visor-muestra-btn").forEach(btn => {
-        btn.addEventListener("click", () => conmutarMuestraVisor(btn.getAttribute("data-muestra")));
+        const activo = btn.getAttribute("data-muestra") === _muestraVisorActiva;
+        btn.classList.toggle("active", activo);
+        btn.setAttribute("aria-selected", activo ? "true" : "false");
     });
 }
 
@@ -3591,7 +3595,14 @@ async function cargarVisorBacktesting() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         backtestingReportCache = data;
+        // [DES-QBE-072 · ARCH-1.4.68 · Capa 0] LÍNEA BASE INMUTABLE: el payload certificado se
+        // conserva intacto y todo filtrado posterior es PROYECCIÓN en cliente (cero refetch, cero
+        // mutación de la bóveda). `backtestingReportCache` sigue siendo la fuente de verdad del
+        // visor sellado ([DES-QBE-067]).
+        window._calibracionPayloadOriginal = data;
         _pintarVisorBacktesting();
+        // Capa 3: la selección declarada (alcance + filtros fiduciarios) se proyecta de una pasada.
+        aplicarFiltrosVisorCalibracion();
     } catch (e) {
         if (estado) {
             estado.textContent = `⚠️ Bóveda no legible: ${e.message}. Cero cifras se muestran sin respaldo.`;
@@ -3840,7 +3851,12 @@ function _estadoLecturaBacktesting(universo) {
             `vetados sobre ${resumen.total_partidos || 0} partidos concluidos ${auditoria} · ` +
             `${calibracion}.`;
     }
-    return `${etiquetaMuestra} · Filtro anti-cuarentena activo · ${universo.excluidos} de ` +
+    // [DES-QBE-072] El conteo que se declara es el de VETOS FIDUCIARIOS (Cuarentena EPIST), no el
+    // total de exclusiones del visor: las ausencias por alcance declarado no son cuarentena.
+    const excluidosVeto = (universo.excluidosFiduciarios === undefined)
+        ? universo.excluidos
+        : universo.excluidosFiduciarios;
+    return `${etiquetaMuestra} · Filtro anti-cuarentena activo · ${excluidosVeto} de ` +
         `${universo.totalServido} partidos concluidos excluidos por Cuarentena Fiduciaria ` +
         "(EPIST 🔴 · Δ_epist > 0.12) · " +
         `universo efectivo: ${resumen.total_partidos || 0} partidos ${auditoria} · ` +
@@ -3855,17 +3871,261 @@ function _estadoLecturaBacktesting(universo) {
  * sellos de ceguera declarados.
  */
 function conmutarMuestraVisor(tipo) {
-    const destino = tipo === "GLOBAL" ? "GLOBAL" : "CALIBRADA";
-    _muestraVisorActiva = destino;
-    document.querySelectorAll(".visor-muestra-btn").forEach(btn => {
-        const activo = btn.getAttribute("data-muestra") === destino;
-        btn.classList.toggle("active", activo);
-        btn.setAttribute("aria-selected", activo ? "true" : "false");
-    });
-    if (backtestingReportCache) _pintarVisorBacktesting();
+    // [DES-QBE-072] Alias de compatibilidad: la única verdad del alcance vive en
+    // `conmutarAlcanceMuestra` (Capa 1), que re-ejecuta la pasada atómica completa.
+    conmutarAlcanceMuestra(tipo);
 }
 
 window.conmutarMuestraVisor = conmutarMuestraVisor;
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// [DES-QBE-072 · ARCH-1.4.68] VISOR DE CALIBRACIÓN EN CUATRO CAPAS
+// Capa 0: `window._calibracionPayloadOriginal` — línea base certificada, INMUTABLE.
+// Capa 1: ALCANCE declarado (`_muestraVisorActiva`: CALIBRADA ↔ GLOBAL), una sola verdad.
+// Capa 2: tres filtros fiduciarios combinables (discrepancia · altitud · fragilidad).
+// Capa 3: una sola pasada propaga la selección a macro, meso y micro y declara el DENOMINADOR.
+// Régimen [DBBD-FUNGIBLE]: cero refetch, cero mutación de la bóveda, cero cifra fabricada.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+const MOTIVOS_EXCLUSION_VISOR = {
+    ALCANCE: "Fuera de la muestra calibrada (Suficiencia de Datos = 0)",
+    DISCREPANCIA: "Alta Discrepancia (Δ_epist > 0.12)",
+    ALTITUD: "Asedio Territorial Neto (ΔAlt ≥ 1,000 m)",
+    FRAGIL: "Favorito Frágil (P′ máx < 0.50)",
+};
+
+// [DES-QBE-072 §Glosario] ANCLA DE DEROGACIÓN. Los rótulos derogados que la legislación conserva
+// como memoria documental y que el Juez 7 del Shield vigila literales son "🎯 ACIERTO P_MAX",
+// "🛡️ RESCATE P_MID" y "💀 RUPTURA P_LOW": JAMÁS se renderizan, la vitrina publica el glosario.
+const GLOSARIO_VERTICES_VISOR = {
+    P_MAX: "Acierto Primario",
+    P_MID: "Rescate de Cobertura",
+    P_LOW: "Ruptura Residual",
+};
+
+/** Índice de la jornada desplegada en la parrilla micro (para re-pintarla en la misma pasada). */
+let _jornadaMicroVisorIdx = null;
+
+/** Capa 2 — estado REAL de los tres toggles fiduciarios (una sola lectura del DOM). */
+function _filtrosVisorActivos() {
+    const activo = id => {
+        const casilla = document.getElementById(id);
+        return Boolean(casilla && casilla.checked);
+    };
+    return {
+        epist: activo("chk-filtro-epist"),
+        altitud: activo("chk-filtro-altitud"),
+        fragil: activo("chk-filtro-fragil"),
+    };
+}
+
+/**
+ * Capa 2 — veto fiduciario. Delega ÍNTEGRO en el semáforo EPIST servido por la bóveda
+ * (`_partidoVetadoBacktesting` ⇒ `SEMAFORO_EPIST_VETO`): el pintor no dictamina nada por su cuenta.
+ */
+function _motivoFiltroFiduciarioVisor(partido, filtros) {
+    if (!partido) return null;
+    const activos = filtros || _filtrosVisorActivos();
+    if (activos.epist && _partidoVetadoBacktesting(partido)) {
+        return MOTIVOS_EXCLUSION_VISOR.DISCREPANCIA;
+    }
+    if (activos.altitud && partido.delta_alt_metros >= 1000) {
+        return MOTIVOS_EXCLUSION_VISOR.ALTITUD;
+    }
+    const pMaximo = Math.max(
+        Number(partido.p_local || 0),
+        Number(partido.p_empate || 0),
+        Number(partido.p_visitante || 0),
+    );
+    if (activos.fragil && pMaximo < 0.50) return MOTIVOS_EXCLUSION_VISOR.FRAGIL;
+    return null;
+}
+
+/**
+ * Capa 1 — ¿el partido pertenece al alcance declarado? Criterio de DATO, jamás de jornada ordinal:
+ * (i) la jornada sellada como Cold Start (`es_cold_start` / `alpha_etiqueta === "COLD_START"`) queda
+ * fuera del alcance calibrado por definición, y (ii) el partido debe portar Suficiencia de Datos ≠ 0.
+ */
+function _partidoDentroAlcanceVisor(partido, jornada) {
+    if (_muestraVisorActiva === "GLOBAL") return true;
+    if (jornada && (jornada.es_cold_start === true ||
+        String(jornada.alpha_etiqueta || "").toUpperCase() === "COLD_START")) {
+        return false;
+    }
+    return Number(partido && partido.suficiencia_S_I) !== 0;
+}
+
+/** Motivo ÚNICO de exclusión de un partido (declaración textual de la parrilla micro). */
+function _motivoExclusionPartidoCalibracion(partido, jornada) {
+    if (!_partidoDentroAlcanceVisor(partido, jornada)) return MOTIVOS_EXCLUSION_VISOR.ALCANCE;
+    return _motivoFiltroFiduciarioVisor(partido);
+}
+
+/** [DES-QBE-072 · R2] Espejo `#chk-excluir-vetados` ⇄ `#chk-filtro-epist`: una sola verdad. */
+function _sincronizarEspejoVetadosVisor() {
+    const toggle = document.getElementById("chk-filtro-epist");
+    const espejo = document.getElementById("chk-excluir-vetados");
+    if (toggle && espejo) espejo.checked = Boolean(toggle.checked);
+}
+
+/** Alias legislado del pintor macro: un solo dueño del agregado de la temporada. */
+function actualizarMacroCards(resumen) {
+    pintarResumenBacktesting(resumen);
+}
+
+/**
+ * Capa 3 — PROYECCIÓN del alcance declarado. El universo se filtra EN CLIENTE sobre la línea base
+ * inmutable y sus agregados se re-derivan de los CONTEOS ENTEROS (`_agregadoTriadaBacktesting`),
+ * jamás se heredan de un promedio ajeno. Las jornadas SERVIDAS se conservan SIEMPRE: una jornada
+ * sin partidos activos se declara inactiva en la tabla meso, nunca se oculta ([ARCH-1.4.68 §P.4]).
+ */
+function _proyectarUniversoVisorCalibracion() {
+    const base = _universoCalibracion();
+    // Las jornadas se leen de la LÍNEA BASE INMUTABLE (Capa 0): así la parrilla micro puede
+    // declarar el motivo de CADA exclusión aunque el espejo sellado ya hubiera filtrado la
+    // caché efectiva (`_universoCalibracion` sólo aporta el agregado certificado del alcance).
+    const lineaBase = window._calibracionPayloadOriginal || backtestingReportCache || {};
+    const jornadasServidas = lineaBase.jornadas || base.jornadas || [];
+    const filtros = _filtrosVisorActivos();
+    let fueraAlcance = 0;
+    let excluidosFiduciarios = 0;
+
+    const jornadas = jornadasServidas.map(jornada => {
+        const partidosServidos = jornada.partidos || [];
+        const partidos = partidosServidos.filter(partido => {
+            if (!_partidoDentroAlcanceVisor(partido, jornada)) {
+                fueraAlcance += 1;
+                return false;
+            }
+            if (_motivoFiltroFiduciarioVisor(partido, filtros)) {
+                excluidosFiduciarios += 1;
+                return false;
+            }
+            return true;
+        });
+        const retirados = partidosServidos.length - partidos.length;
+        const fila = Object.assign({}, jornada, { partidos, partidosServidos });
+        return retirados
+            ? Object.assign(fila, _agregadoTriadaBacktesting(partidos), {
+                jornada: jornada.jornada,
+                es_cold_start: jornada.es_cold_start,
+                alpha_etiqueta: jornada.alpha_etiqueta,
+            })
+            : fila;
+    });
+
+    const partidosEfectivos = [];
+    jornadas.forEach(jornada => {
+        (jornada.partidos || []).forEach(partido => partidosEfectivos.push(partido));
+    });
+
+    const resumenServido = base.resumen || {};
+    const activos = partidosEfectivos.length;
+    const totalServido = jornadasServidas.reduce(
+        (acc, jornada) => acc + (jornada.partidos || []).length, 0);
+    // IDEMPOTENCIA ESTRICTA: si la proyección conserva exactamente los partidos que el agregado
+    // servido declara, manda el agregado CERTIFICADO (cero recálculo); si retiró alguno, se
+    // re-deriva del subconjunto efectivo con la MISMA aritmética de conteos enteros de [LN-QBE-100].
+    const recalculado = activos !== Number(resumenServido.total_partidos || 0);
+    const resumen = recalculado
+        ? Object.assign({}, _agregadoTriadaBacktesting(partidosEfectivos), {
+            jornadas_auditadas: resumenServido.jornadas_auditadas || [],
+            partidos_pendientes_captura: Number(resumenServido.partidos_pendientes_captura || 0),
+            partidos_consolidados_servido: Number(
+                resumenServido.partidos_consolidados_servido ||
+                resumenServido.total_partidos || 0),
+        })
+        : resumenServido;
+
+    return {
+        jornadas,
+        resumen,
+        filtros,
+        excluir: Boolean(filtros.epist || filtros.altitud || filtros.fragil || base.excluir),
+        excluidos: Math.max(0, totalServido - activos),
+        excluidosFiduciarios,
+        fueraAlcance,
+        activos,
+        alcance: totalServido,
+        filtroInerte: excluidosFiduciarios === 0,
+        totalServido,
+    };
+}
+
+/**
+ * Capa 3 — PASADA ATÓMICA. Una sola invocación repinta macro, meso, micro y el denominador desde
+ * la MISMA proyección: la cartelera jamás reconcilia dos verdades distintas en el mismo instante.
+ */
+function aplicarFiltrosVisorCalibracion() {
+    if (!backtestingReportCache) return;
+    _sincronizarEspejoVetadosVisor();
+    const proyeccion = _proyectarUniversoVisorCalibracion();
+    backtestingUniversoActual = proyeccion;
+    actualizarMacroCards(proyeccion.resumen);
+    pintarMesoBacktesting(proyeccion.jornadas, proyeccion.resumen);
+    if (_jornadaMicroVisorIdx !== null) mostrarMicroJornadaBacktesting(_jornadaMicroVisorIdx);
+    _actualizarDenominadorVisor(proyeccion);
+    const estado = document.getElementById("bt-estado");
+    if (estado) estado.textContent = _estadoLecturaBacktesting(proyeccion);
+}
+
+/** Capa 1 — conmutador de ALCANCE (una sola verdad: `_muestraVisorActiva`). Cero refetch. */
+function conmutarAlcanceMuestra(tipo) {
+    _muestraVisorActiva = tipo === "GLOBAL" ? "GLOBAL" : "CALIBRADA";
+    document.querySelectorAll(".visor-muestra-btn").forEach(btn => {
+        const activo = btn.getAttribute("data-muestra") === _muestraVisorActiva;
+        btn.classList.toggle("active", activo);
+        btn.setAttribute("aria-selected", activo ? "true" : "false");
+    });
+    aplicarFiltrosVisorCalibracion();
+}
+
+/** Capa 2 — conmutador de los tres filtros fiduciarios (re-ejecuta la pasada atómica). */
+function conmutarFiltrosVisorCalibracion() {
+    aplicarFiltrosVisorCalibracion();
+}
+
+/**
+ * [DES-QBE-072 §Denominador] Transparencia del denominador: X activos sobre N del alcance
+ * declarado, con el número de exclusiones y su causa. Cero porcentaje huérfano de su base.
+ */
+function _actualizarDenominadorVisor(universo) {
+    const proyeccion = universo || backtestingUniversoActual || {};
+    const activos = Number(proyeccion.activos || 0);
+    const excluidos = Number(proyeccion.excluidos || 0);
+    const fueraAlcance = Number(proyeccion.fueraAlcance || 0);
+    const alcance = Number(proyeccion.alcance || (activos + excluidos));
+
+    const texto = document.getElementById("visor-denominador-texto");
+    if (texto) {
+        // La base estadística publicada es N = activos; el universo declarado es `alcance`.
+        const filtrosActivos = Boolean(proyeccion.filtros &&
+            (proyeccion.filtros.epist || proyeccion.filtros.altitud || proyeccion.filtros.fragil));
+        const motivo = filtrosActivos
+            ? "excluidos por filtros activos"
+            : "fuera del alcance declarado";
+        const sufijoAlcance = (fueraAlcance && filtrosActivos)
+            ? ` · ${fueraAlcance} fuera del alcance declarado`
+            : "";
+        texto.textContent = `Mostrando ${activos} de ${alcance} partidos concluidos ` +
+            `(${excluidos} ${motivo}) · N = ${activos}` + sufijoAlcance;
+    }
+
+    const badge = document.getElementById("visor-filtro-activo-badge");
+    if (!badge) return;
+    const filtros = proyeccion.filtros || _filtrosVisorActivos();
+    const etiquetas = [];
+    if (filtros.epist) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.DISCREPANCIA);
+    if (filtros.altitud) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.ALTITUD);
+    if (filtros.fragil) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.FRAGIL);
+    badge.textContent = etiquetas.length
+        ? `Filtros activos: ${etiquetas.join(" · ")}`
+        : `Línea Base Certificada · ${_etiquetaMuestraVisor()}`;
+}
+
+// Los manejadores `onclick` del marcado resuelven contra `window`: se publican explícitamente.
+window.conmutarAlcanceMuestra = conmutarAlcanceMuestra;
+window.conmutarFiltrosVisorCalibracion = conmutarFiltrosVisorCalibracion;
+window.aplicarFiltrosVisorCalibracion = aplicarFiltrosVisorCalibracion;
 
 /** Re-pintado íntegro del visor desde la caché certificada (idempotente, cero refetch). */
 function _pintarVisorBacktesting() {
@@ -3891,32 +4151,35 @@ function pintarResumenBacktesting(resumen) {
     const partidosCubiertos =
         Number(resumen.total_p_max || 0) + Number(resumen.total_p_mid || 0);
     set("kpi-bt-masa-detalle",
-        `P_max + P_mid · ${partidosCubiertos} de ${resumen.total_partidos || 0} partidos`);
+        `Acierto Primario + Rescate de Cobertura · ${partidosCubiertos} de ${resumen.total_partidos || 0} partidos`);
     set("kpi-bt-pmax", `${Number(resumen.p_max_aciertos_pct || 0).toFixed(2)}%`);
     set("kpi-bt-pmax-detalle",
-        `${resumen.total_p_max || 0} partidos · convicción primaria consumada`);
+        `${resumen.total_p_max || 0} partidos · Acierto Primario consumado`);
     set("kpi-bt-pmid", `${Number(resumen.p_mid_rescate_pct || 0).toFixed(2)}%`);
     set("kpi-bt-pmid-detalle",
         `[${resumen.total_p_mid_empate || 0} Emp · ${resumen.total_p_mid_rival || 0} Riv] ` +
-        "cobertura secundaria activa");
+        "Rescate de Cobertura activo");
     set("kpi-bt-plow", `${Number(resumen.p_low_ruptura_pct || 0).toFixed(2)}%`);
     set("kpi-bt-plow-detalle",
-        `${resumen.total_p_low || 0} partidos · vértice residual no cubierto`);
+        `${resumen.total_p_low || 0} partidos · Ruptura Residual (vértice no cubierto)`);
 }
 
 function pintarMesoBacktesting(jornadas, resumen) {
     const cuerpo = document.getElementById("cuerpo-meso-jornadas");
     if (!cuerpo) return;
-    if (!jornadas.length) {
+    // [DES-QBE-072 · R4] Se itera sobre las jornadas SERVIDAS por la bóveda: una jornada sin
+    // partidos activos se declara inactiva con guiones, JAMÁS se oculta de la cartelera.
+    const jornadasServidas = jornadas || [];
+    if (!jornadasServidas.length) {
         cuerpo.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:18px; color:var(--text-muted);">` +
             "La bóveda no registra jornadas con P′ y cuotas de cierre selladas.</td></tr>";
         return;
     }
 
-    const maxJornada = jornadas.reduce((acc, j) => Math.max(acc, Number(j.jornada)), 0);
+    const maxJornada = jornadasServidas.reduce((acc, j) => Math.max(acc, Number(j.jornada)), 0);
     const filas = [];
     for (let j = 1; j <= maxJornada; j += 1) {
-        const idx = jornadas.findIndex(x => Number(x.jornada) === j);
+        const idx = jornadasServidas.findIndex(x => Number(x.jornada) === j);
         if (idx === -1) {
             filas.push(
                 `<tr><td><strong>J${j}</strong></td><td>--</td>` +
@@ -3925,7 +4188,28 @@ function pintarMesoBacktesting(jornadas, resumen) {
             );
             continue;
         }
-        const fila = jornadas[idx];
+        const fila = jornadasServidas[idx];
+        // [DES-QBE-072 · R4] Jornada INACTIVA: existe en la bóveda pero ninguno de sus partidos
+        // pertenece al alcance con los filtros vigentes. Se declara con guiones y conserva su
+        // botón de parrilla micro (donde cada exclusión publica su motivo).
+        if (!(fila.partidos || []).length) {
+            const selloInactiva = (fila.es_cold_start || fila.alpha_etiqueta === "COLD_START")
+                ? ' <span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:1px 6px; border-radius:4px; font-size:9px; font-family:monospace;" title="Suficiencia de Datos = 0 en todos sus partidos: el Alpha no es una medición de ventaja">❄️ Cold Start · Suficiencia de Datos = 0</span>'
+                : "";
+            const servidosFuera = (fila.partidosServidos || []).length;
+            filas.push(`
+            <tr class="meso-inactiva">
+                <td><strong>J${fila.jornada}</strong></td>
+                <td class="numeric">0</td>
+                <td>--</td>
+                <td>Sin partidos en el alcance declarado · ${servidosFuera} servidos fuera</td>
+                <td class="numeric">--</td>
+                <td class="numeric">--</td>
+                <td class="numeric">--${selloInactiva}</td>
+                <td><button type="button" class="bt-btn-micro" data-jornada-idx="${idx}">Ver partidos</button></td>
+            </tr>`);
+            continue;
+        }
         // [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Desglose por vértices del símplex Δ²:
         // masa de cobertura = % P_max + % P_mid (≡ 100% − % P_low) y conteos enteros que
         // reconcilian con la masa (n_p_max + n_p_mid + n_p_low = total_partidos).
@@ -3934,13 +4218,15 @@ function pintarMesoBacktesting(jornadas, resumen) {
             `${Number(fila.pct_p_max || 0).toFixed(2)}% · ` +
             `${Number(fila.pct_p_mid || 0).toFixed(2)}% · ` +
             `${Number(fila.pct_p_low || 0).toFixed(2)}%`;
+        // [DES-QBE-072] Rótulo autodescriptivo del rescate secundario (empate vs rival).
         const conteosTriada =
             `(${fila.n_p_max || 0} · ${fila.n_p_mid || 0} · ${fila.n_p_low || 0}) · ` +
-            `[P_mid: ${fila.n_p_mid_empate || 0} Emp · ${fila.n_p_mid_rival || 0} Riv]`;
-        // [LN-QBE-125 / ARCH-1.4.65] Ceguera DECLARADA de la jornada: sin evidencia fáctica el
-        // Alpha no mide ventaja, mide un prior puro. El sello lo dice en su propia columna.
+            `[Rescate: ${fila.n_p_mid_empate || 0} Emp · ${fila.n_p_mid_rival || 0} Riv]`;
+        // [LN-QBE-125 / ARCH-1.4.65 · DES-QBE-072] Ceguera DECLARADA de la jornada: sin evidencia
+        // fáctica el Alpha no mide ventaja, mide un prior puro. El sello lo dice en su columna con
+        // el glosario autodescriptivo (Suficiencia de Datos = 0).
         const selloCeguera = (fila.es_cold_start || fila.alpha_etiqueta === "COLD_START")
-            ? ' <span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:1px 6px; border-radius:4px; font-size:9px; font-family:monospace;" title="S(I)=0 en todos sus partidos: el Alpha no es una medición de ventaja">❄️ Cold Start (S=0)</span>'
+            ? ' <span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:1px 6px; border-radius:4px; font-size:9px; font-family:monospace;" title="Suficiencia de Datos = 0 en todos sus partidos: el Alpha no es una medición de ventaja">❄️ Cold Start · Suficiencia de Datos = 0</span>'
             : "";
         filas.push(`
             <tr class="bt-jornada-auditada">
@@ -3982,6 +4268,9 @@ function mostrarMicroJornadaBacktesting(idx) {
         (backtestingReportCache && backtestingReportCache.jornadas) || [];
     const jornada = jornadas[idx];
     if (!contenedor || !jornada) return;
+    // [DES-QBE-072] Se recuerda la jornada inspeccionada: la pasada atómica la re-pinta con la
+    // MISMA proyección que alimentó macro y meso (cero ventana con datos de otra verdad).
+    _jornadaMicroVisorIdx = idx;
 
     const escudo = url => (url ? `<img src="${url}" alt="" class="match-crest-mini">` : "");
     const momio = valor => {
@@ -3989,15 +4278,25 @@ function mostrarMicroJornadaBacktesting(idx) {
         return n > 1 ? n.toFixed(2) : "--";
     };
 
-    const partidos = jornada.partidos || [];
+    // [DES-QBE-072 · R4] La parrilla exhibe TODOS los partidos servidos de la jornada: el excluido
+    // por alcance o por filtro se ATENÚA, declara su motivo y se retira de los agregados, JAMÁS se
+    // oculta (el Director debe poder auditar qué quedó fuera y por qué).
+    const partidos = jornada.partidosServidos || jornada.partidos || [];
     const bloques = partidos.map(p => {
+        // [DES-QBE-072 · Capa 2] Motivo ÚNICO de exclusión: alcance declarado o filtro fiduciario.
+        const motivoExclusion = _motivoExclusionPartidoCalibracion(p, jornada);
+        const claseExclusion = motivoExclusion ? " partido-excluido-filtro" : "";
+        const badgeExclusion = motivoExclusion
+            ? '<span class="badge-excluido-motivo" style="background:#1C1917; border:1px solid #78716C; color:#D6D3D1; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="No cuenta en masa, Brier ni Alpha: retirado por el alcance declarado o por un filtro fiduciario activo">' +
+                `🚫 EXCLUIDO · ${motivoExclusion}</span>`
+            : "";
         const momios = p.momios || {};
         // [LN-QBE-125 · ARCH-1.4.65] Ceguera DECLARADA ([GOVERNANCE-01]): con S(I)=0 el partido se
         // puntúa con su P′ SOBERANA — la sustitución por el consenso del mercado quedó DEROGADA —,
         // así que el rótulo ya no puede afirmar que la parrilla espeja q_mkt: declara la ignorancia
         // fáctica del insumo y deja que el Brier mida la degradación real del prior.
         const pildoraColdStart = p.suficiencia_S_I === 0
-            ? '<span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="S(I)=0: sin evidencia fáctica; se evalúa el prior puro del modelo (Cold Start sincero)">❄️ Cold Start (S=0)</span>'
+            ? '<span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="Suficiencia de Datos = 0: sin evidencia fáctica; se evalúa el prior puro del modelo (Cold Start sincero)">❄️ Cold Start · Suficiencia de Datos = 0</span>'
             : "";
         // [ARCH-1.4.38-R3 · Rediseño Tridimensional 1X2] Ranking fiduciario del partido: los tres
         // desenlaces ordenados por P′ descendente resuelven QUIÉN es 1er, 2º y 3er favorito de
@@ -4060,10 +4359,13 @@ function mostrarMicroJornadaBacktesting(idx) {
         // colorimetría EXACTOS del vértice que la jerarquía estocástica declaró consumado por el
         // resultado de la cancha (verde P_MAX / azul P_MID / rojo P_LOW). Clase propia `badge-triada`
         // para no re-introducir la pastilla fiduciaria derogada (veto del Juez 4 del Shield).
+        // [DES-QBE-072 §Glosario] ANCLA DE DEROGACIÓN (memoria documental, JAMÁS renderizada aquí):
+        // "🎯 ACIERTO P_MAX" · "🛡️ RESCATE P_MID" · "💀 RUPTURA P_LOW". La vitrina publica el
+        // concepto autodescriptivo del vértice consumado con la colorimetría sellada intacta.
         const MAPA_BADGE_TRIADA = {
-            P_MAX: '<span class="badge-triada badge-fav" style="background:#065F46; border:1px solid #10B981; color:#34D399; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🎯 ACIERTO P_MAX</span>',
-            P_MID: '<span class="badge-triada badge-emp" style="background:#0C4A6E; border:1px solid #0EA5E9; color:#38BDF8; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🛡️ RESCATE P_MID</span>',
-            P_LOW: '<span class="badge-triada badge-dog" style="background:#7F1D1D; border:1px solid #DC2626; color:#F87171; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">💀 RUPTURA P_LOW</span>',
+            P_MAX: '<span class="badge-triada badge-fav" style="background:#065F46; border:1px solid #10B981; color:#34D399; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🎯 Acierto Primario</span>',
+            P_MID: '<span class="badge-triada badge-emp" style="background:#0C4A6E; border:1px solid #0EA5E9; color:#38BDF8; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">🛡️ Rescate de Cobertura</span>',
+            P_LOW: '<span class="badge-triada badge-dog" style="background:#7F1D1D; border:1px solid #DC2626; color:#F87171; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace;">💀 Ruptura Residual</span>',
         };
         const badgeTriadaHtml = MAPA_BADGE_TRIADA[triadaFiduciaria];
         // [LN-QBE-124 / ARCH-1.4.65] RESCATE TERRITORIAL: la Banda de Indiferencia promovió al LOCAL
@@ -4071,8 +4373,8 @@ function mostrarMicroJornadaBacktesting(idx) {
         // un desnivel ΔAlt⁺ ≥ 1000 msnm. Se exhibe la magnitud REALMENTE consumida por λ (traza
         // V29); el pintor no deriva ni recalcula nada ([GOVERNANCE-01]).
         const badgeRescateAltitudHtml = p.rescate_indiferencia
-            ? '<span class="bt-badge-rescate-alt" style="background:#082F49; border:1px solid #22D3EE; color:#67E8F9; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace; margin-left:6px;" title="Banda de indiferencia ε = 1.00%: el LOCAL se promueve a P_mid por el desnivel del anfitrión">' +
-                `🛡️ RESCATE P_MID · ΔAlt ${Math.round(Number(p.delta_alt_metros || 0))} m</span>`
+            ? '<span class="bt-badge-rescate-alt" style="background:#082F49; border:1px solid #22D3EE; color:#67E8F9; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace; margin-left:6px;" title="Banda de indiferencia ε = 1.00%: el LOCAL se promueve al Rescate de Cobertura por el Asedio Territorial Neto del anfitrión">' +
+                `🛡️ Rescate de Cobertura · ΔAlt ${Math.round(Number(p.delta_alt_metros || 0))} m</span>`
             : "";
         // Columna central: Brier Score individual + Alpha del partido
         // Alpha_i = (1 − BS_QBE / BS_MKT) · 100 (guarda anti-división por cero: BS_MKT = 0 ⇒ 0%).
@@ -4144,9 +4446,9 @@ function mostrarMicroJornadaBacktesting(idx) {
         }).join("");
 
         return `
-        <div class="bt-micro-row">
+        <div class="bt-micro-row${claseExclusion}">
             <div class="bt-micro-equipo">${escudo(p.local_escudo_url)}<span>${p.local}</span></div>
-            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}${_badgeProcedenciaHtml(p.origen_captura)}</div>
+            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}${_badgeProcedenciaHtml(p.origen_captura)}${badgeExclusion}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
             ${microHud}
@@ -4161,7 +4463,9 @@ function mostrarMicroJornadaBacktesting(idx) {
                     Masa Cubierta: <strong style="color:#F8FAFC;">${masaPct}%</strong>
                     ${triadaProv
                         ? `<span style="color:#94A3B8; font-size:10px;"> · ${triadaProv}` +
-                            `${p.clasificacion_triada ? ` (${p.clasificacion_triada})` : ""}</span>`
+                            `${p.clasificacion_triada
+                                ? ` (${GLOSARIO_VERTICES_VISOR[p.clasificacion_triada] || p.clasificacion_triada})`
+                                : ""}</span>`
                         : ""}
                     ${badgeRescateAltitudHtml}
                 </div>
@@ -4169,17 +4473,16 @@ function mostrarMicroJornadaBacktesting(idx) {
         </div>`;
     }).join("");
 
-    // [LN-QBE-100 · REFACTOR-TRIADA-PMAX-PMID-PLOW] Cabecera de jornada en clave de vértices: la
-    // sigla FAS/FES/FUS queda derogada y el desglose exhibe masa, triada porcentual y la
-    // procedencia del rescate secundario (empate vs rival).
+    // [DES-QBE-072] Cabecera de jornada en clave de GLOSARIO autodescriptivo: la masa es
+    // probabilística ex-ante y el desglose nombra los tres destinos del símplex Δ².
     contenedor.innerHTML = `
         <div class="bt-micro-head">
             Jornada ${jornada.jornada} · ${jornada.total_partidos} partidos concluidos ·
-            masa de cobertura <strong>${Number(jornada.masa_cobertura_pct || 0).toFixed(2)}%</strong>
-            (P_max ${Number(jornada.pct_p_max || 0).toFixed(2)}% ·
-            P_mid ${Number(jornada.pct_p_mid || 0).toFixed(2)}% ·
-            P_low ${Number(jornada.pct_p_low || 0).toFixed(2)}%)
-            · <span style="color:#94A3B8; font-size:10px;">[P_mid: ${Number(jornada.n_p_mid_empate || 0)} Emp ·
+            Masa Probabilística Ex-Ante <strong>${Number(jornada.masa_cobertura_pct || 0).toFixed(2)}%</strong>
+            (Acierto Primario ${Number(jornada.pct_p_max || 0).toFixed(2)}% ·
+            Rescate de Cobertura ${Number(jornada.pct_p_mid || 0).toFixed(2)}% ·
+            Ruptura Residual ${Number(jornada.pct_p_low || 0).toFixed(2)}%)
+            · <span style="color:#94A3B8; font-size:10px;">[Rescate: ${Number(jornada.n_p_mid_empate || 0)} Emp ·
             ${Number(jornada.n_p_mid_rival || 0)} Riv]</span>
             · Alpha ${Number(jornada.alpha_calibracion_pct || 0).toFixed(2)}%
         </div>

@@ -124,14 +124,23 @@ def test_juez_3_cold_start_sincero_y_doble_agregado_declarado():
         "La muestra calibrada no excluye ningún partido ciego: la segmentación no opera."
     )
 
-    # Jornadas ciegas declaradas (J1–J3 de la bóveda viva) y fuera de la muestra calibrada.
+    # [LN-QBE-128] CERO COLD START ESTRUCTURAL: con el prior de Apertura 2025 sembrado
+    # ([ARCH-1.4.69]) ninguna jornada queda íntegramente ciega; J1-J3 ingresan a la muestra
+    # calibrada y la ceguera que subsiste es la FÁCTICA del club ausente del prior.
     ciegas = [j for j in data["jornadas"] if j.get("es_cold_start")]
-    assert len(ciegas) >= 3, "🚨 No se declaró la ceguera de las jornadas de Cold Start"
-    for jornada in ciegas:
-        assert jornada["alpha_etiqueta"] == "COLD_START"
+    assert not ciegas, (
+        "🚨 COLD START ESTRUCTURAL: "
+        f"{[j['jornada'] for j in ciegas]} siguen sin evidencia pese al prior sembrado."
+    )
+    partidos_ciegos = [
+        p for j in data["jornadas"] for p in j.get("partidos", []) if p.get("suficiencia_S_I") == 0
+    ]
+    assert len(partidos_ciegos) <= 3, (
+        "🚨 CEGUERA FUERA DE COTA: el prior sólo deja ciegos los duelos de Atlante (≤ 3)."
+    )
     jornadas_calibradas = set(calibrado["jornadas_auditadas"])
-    assert jornadas_calibradas.isdisjoint({j["jornada"] for j in ciegas}), (
-        "Una jornada ciega contaminó la muestra calibrada [LN-QBE-125]."
+    assert {1, 2, 3}.issubset(jornadas_calibradas), (
+        "Las jornadas 1-3 no ingresaron a la muestra calibrada: el sello S(I) no se movió."
     )
 
     # Conteo del universo calibrado = partidos realmente informados en la tabla meso.
@@ -188,11 +197,19 @@ def test_juez_4_atlante_cian_con_rescate_y_cero_sustitucion_de_vectores():
 
     # Cero sustitución: en los partidos ciegos el vector servido NO es el consenso del mercado
     # (con la sustitución derogada, el Brier de Q-BE deja de ser idéntico al del mercado).
+    # [LN-QBE-128] La ceguera residual es la de Atlante (club ausente del prior de Apertura 2025).
     ciegos = [p for p in partidos if p.get("suficiencia_S_I") == 0]
-    assert len(ciegos) >= 27, "El Juez exige ≥ 27 partidos ciegos (J1–J3) en la bóveda viva"
+    assert 1 <= len(ciegos) <= 3, (
+        "El Juez exige la ceguera residual fáctica (1..3 duelos de Atlante) tras sembrar el prior."
+    )
+    for ciego in ciegos:
+        duelo = f"{ciego.get('local')} {ciego.get('visitante')}".lower()
+        assert "atlante" in duelo, (
+            f"🚨 CEGUERA NO DECLARADA en `{ciego.get('id_partido')}`: no es un duelo de Atlante."
+        )
     divergentes = [
         p for p in ciegos
-        if abs(float(p["brier_qbe"]) - float(p["brier_mercado"])) > 0.001
+        if abs(float(p["brier_qbe"] or 0.0) - float(p["brier_mercado"] or 0.0)) > 0.001
     ]
     assert divergentes, (
         "🚨 FALLO [LN-QBE-125]: ningún partido ciego diverge del mercado — la sustitución sigue viva."

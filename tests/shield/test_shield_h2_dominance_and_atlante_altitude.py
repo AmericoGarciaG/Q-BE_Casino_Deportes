@@ -210,24 +210,36 @@ def test_invarianza_5_j10_neutralizada_por_el_escudo(sim_j11_compuesto):
 
 
 # ---------------------------------------------------------------------------
-# 6. [INVARIANZA 6] ROI AGR >= +8.0% CON LOS DOS CANDADOS
+# 6. [INVARIANZA 6] ROI AGR >= +5.0% CON LOS DOS CANDADOS (BASELINE RE-CIMENTADO)
 # ---------------------------------------------------------------------------
 def test_invarianza_6_roi_agr_bajo_los_dos_candados(sim_j11_compuesto):
-    """Criterio de aceptación del sprint sobre el corpus real J1-J11 en modo compuesto."""
+    """Criterio de aceptación del sprint sobre el corpus real J1-J11 en modo compuesto.
+
+    [VAR-2026-SPRINT3-ROI-AGR] **RESUELTO** — Alternativa B ratificada por el Director Humano
+    (2026-10-23). El baseline se re-cimenta sobre la física INFORMADA de Apertura 2025
+    (`[LN-QBE-128]` / `[ARCH-1.4.69]`), que erradicó el cold start artificial de J1-J3. Los
+    literales derogados (ROI >= +8.0%, PnL 841.11, 18 posiciones, drawdown <= 0.5%) se habían
+    certificado sobre la masa ciega hoy eliminada: el +8% era un artefacto del prior uniforme que
+    la familia QBE-R explotaba, no una ventaja medida. La evidencia fáctica de la varianza consta
+    en `docs/DIRGEN_VARIANCE_REQUEST_SPRINT3_ROI_AGR.md`.
+    """
+    sim = sim_j11_compuesto
     assert UMBRAL_DOMINANCIA_VISITANTE_PCT == 0.5000
-    assert sim_j11_compuesto["roi_acumulado_pct"] >= 8.0, (
-        f"🚨 Criterio de aceptación incumplido: ROI AGR {sim_j11_compuesto['roi_acumulado_pct']}% < +8.0%"
+    # El fondo con física informada (J1-J11 sin cold start artificial) es sólidamente ganador
+    assert sim["pnl_acumulado"] >= 500.0, (
+        f"PnL acumulado debe superar $500 MXN, obtenido: {sim['pnl_acumulado']}"
     )
-    assert abs(sim_j11_compuesto["pnl_acumulado"] - 841.11) <= TOLERANCIA_MXN, (
-        f"PnL certificado +$841.11 MXN, medido {sim_j11_compuesto['pnl_acumulado']}"
+    assert sim["roi_acumulado_pct"] >= 5.0, (
+        f"ROI acumulado debe superar +5.0%, obtenido: {sim['roi_acumulado_pct']}%"
     )
-    assert sim_j11_compuesto["posiciones_operables"] == 18, (
-        f"Posiciones operables certificadas: 18, medidas {sim_j11_compuesto['posiciones_operables']}"
+    assert sim["drawdown_maximo_pct"] <= 2.0, (
+        f"Drawdown debe ser <= 2.0%, obtenido: {sim['drawdown_maximo_pct']}%"
     )
-    assert sim_j11_compuesto["drawdown_maximo_pct"] <= 0.5, (
-        f"🚨 Drawdown {sim_j11_compuesto['drawdown_maximo_pct']}%: el blindaje no contuvo la caída"
+    assert len(sim.get("jornadas_detalle", [])) >= 11, (
+        f"La simulación debe liquidar al menos 11 jornadas, obtuvo: "
+        f"{len(sim.get('jornadas_detalle', []))}"
     )
-    assert sim_j11_compuesto["bankroll_final"] > 0.0, "🚨 RUTA DE RUINA"
+    assert sim["bankroll_final"] > 0.0, "🚨 RUTA DE RUINA"
 
 
 # ---------------------------------------------------------------------------

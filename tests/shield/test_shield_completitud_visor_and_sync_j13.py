@@ -196,11 +196,17 @@ def test_ln_qbe_119_homologacion_publica_tasa_por_partido():
 
 # ── 4. CENTRO DE CONTROL: 19ª TAREA CERTIFICADA ([ARCH-1.4.58]) ───────────────────────────────
 def test_arch_1_4_58_centro_control_despacha_la_sonda():
-    """La sonda es tarea gobernada: whitelist de 19 exactas y comando interno sin shell."""
+    """La sonda es tarea gobernada: whitelist de 20 exactas y comando interno sin shell."""
     from src.web.routes.admin_tasks import COMANDOS_TAREAS, TAREAS_PERMITIDAS
 
-    assert len(TAREAS_PERMITIDAS) == 19, (
-        "[ARCH-1.4.58]: la whitelist debe ser de exactamente 19 tareas certificadas."
+    # [ARCH-1.4.67] Enmienda 2026-10-23: 19 ➔ 20 exactas al certificar `generar_matriz_investigacion`
+    # (matriz canónica de investigación de 4 zonas, solo lectura). La igualdad ESTRICTA se conserva:
+    # ninguna otra tarea puede colarse en la whitelist sin una enmienda registrada.
+    # [ARCH-1.4.69 / ARCH-1.4.70] Enmienda Sprint 3: 20 ➔ 22 exactas al certificar
+    # `sembrar_prior_apertura2025` y `mineria_factores_shannon` (instrumentos de sólo lectura).
+    assert len(TAREAS_PERMITIDAS) == 22, (
+        "[ARCH-1.4.58 / ARCH-1.4.67 / ARCH-1.4.69 / ARCH-1.4.70]: la whitelist debe ser de "
+        "exactamente 22 tareas certificadas."
     )
     assert "auditar_completitud_visor" in TAREAS_PERMITIDAS
     assert COMANDOS_TAREAS["auditar_completitud_visor"][-1] == [
