@@ -12,7 +12,7 @@ from src.models.raw_input import (
     RawMatchInput, MasterTableSnapshot, MasterTablePosition,
     IdentidadPartido, ContextoTablaPosiciones, ContextoEquipoTabla,
     MetricasResumenDatos, Promedios10P, RadarCualitativoEntorno, RadarEquipo,
-    MomiosSnapshot, CuotasPagoAnticipado, H2HMatchRaw
+    MomiosSnapshot, CuotasPagoAnticipado, H2HMatchRaw, TrazabilidadConsenso
 )
 
 
@@ -55,6 +55,12 @@ def sample_master_table() -> MasterTableSnapshot:
 def sample_match_input() -> RawMatchInput:
     """Partido canónico de prueba (FC Juárez vs Club Pachuca)."""
     return RawMatchInput(
+        # [LN-QBE-093 · Enmienda Nudo 1] La evidencia se DECLARA, no se supone: sin esta
+        # trazabilidad la aduana de [LN-QBE-010] veta el partido (Fail-Loud).
+        trazabilidad_consenso=TrazabilidadConsenso(
+            confiabilidad_porcentaje=90.0,
+            estado_extraccion="OK"
+        ),
         identidad_partido=IdentidadPartido(
             id_partido="OCR-02",
             local="FC Juárez",

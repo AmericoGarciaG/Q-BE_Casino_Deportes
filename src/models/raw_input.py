@@ -10,8 +10,10 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class TrazabilidadConsenso(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    confiabilidad_porcentaje: float = Field(default=100.0, ge=0.0, le=100.0)
-    estado_extraccion: str = Field(default="OK")
+    # [LN-QBE-093 · Enmienda Nudo 1] Cero confianza fabricada: una ausencia de medición viaja
+    # como `None`. Declarar 100.0 por defecto desactivaba la aduana de `[LN-QBE-010]`.
+    confiabilidad_porcentaje: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    estado_extraccion: Optional[str] = Field(default=None)
 
 
 class IdentidadPartido(BaseModel):
@@ -83,16 +85,19 @@ class RadarCualitativoEntorno(BaseModel):
 
 class CuotasPagoAnticipado(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    L: float = Field(default=2.00, gt=1.0)
-    E: float = Field(default=3.20, gt=1.0)
-    V: float = Field(default=3.50, gt=1.0)
-    disponible: bool = Field(default=True)
+    # [GOVERNANCE-01 · Enmienda Nudo 1] Cero mercado sintético: la ausencia de precio viaja
+    # como `None`. Queda prohibido que el DTO invente una terna 2.00/3.20/3.50.
+    L: Optional[float] = Field(default=None, gt=1.0)
+    E: Optional[float] = Field(default=None, gt=1.0)
+    V: Optional[float] = Field(default=None, gt=1.0)
+    disponible: Optional[bool] = Field(default=None)
 
 
 class MomiosSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
     estandar: Optional[CuotasPagoAnticipado] = None
-    pago_anticipado: CuotasPagoAnticipado = Field(default_factory=CuotasPagoAnticipado)
+    # [GOVERNANCE-01 · Enmienda Nudo 1] Sin captura de Pago Anticipado no hay objeto de mercado.
+    pago_anticipado: Optional[CuotasPagoAnticipado] = Field(default=None)
 
 
 

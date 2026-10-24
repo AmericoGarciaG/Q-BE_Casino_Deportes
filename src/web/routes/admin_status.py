@@ -130,7 +130,7 @@ def _canon_sonda() -> Dict[str, Any]:
     """
     global _CANON_SONDA
     if _CANON_SONDA is None:
-        from scripts.auditoria.auditar_coherencia_cartelera import (
+        from src.core.coherence_auditor import (
             GLIFO_NIVEL,
             _agregar_nivel,
             _expediente_desde_fixture,

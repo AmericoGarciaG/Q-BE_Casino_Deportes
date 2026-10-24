@@ -32,6 +32,8 @@ Si un conector de API externa, scraper o sensor de búsqueda falla en recuperar 
 
 La inyección de datos mockeados o simulados en producción se clasifica como **Violación Crítica de Integridad Institucional**, sujeta a reversión inmediata de código.
 
+> **Enmienda Nudo 1 (Fase 2 · Bloque 1 — Erradicación de Masa Fabricada):** Ningún fallback (incluido `generar_tesis_madlibs_fallback`) puede inyectar cifras numéricas (xG, probabilidades, montos) si el payload no las contiene. La degradación narrativa debe declarar explícitamente su naturaleza determinista (sello Mad-Libs) y ceñirse a los datos fácticos disponibles.
+
 ### 1.5 Axioma de Abstracción Universal y No-Sobreajuste [GOVERNANCE-02] [ANTI-BUG]
 > **"Queda terminantemente prohibido codificar reglas condicionales particulares sobreajustadas a partidos, equipos o resultados específicos de una fecha en disputa."**
 

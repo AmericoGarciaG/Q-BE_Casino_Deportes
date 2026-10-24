@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Kybern Industrial — Portfolio REST Router [ARCH-PILLAR]
-[ARCH-1.3.4] POST /api/portfolio/generate deprecado y desconectado: delega al controlador
-desacoplado 3NF de markets.py. Conserva exclusivamente el servicio /api/portfolio/match-thesis.
+[ARCH-1.3.5 · Enmienda Nudo 3] La ruta legacy `/generate` fue físicamente eliminada.
+Este router conserva exclusivamente el registro de boletos (`/register-ticket`), su
+estado (`/ledger-status`) y la tesis narrativa (`/match-thesis`). Toda generación de
+cartera es gobernada por `src/web/routes/markets.py`.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from src.storage.database import get_db
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import PaperTradingLedger
 from src.models.web_schemas import (
@@ -15,7 +15,6 @@ from src.models.web_schemas import (
     TicketRegistrationRequest,
     TicketRegistrationResponse,
 )
-from src.web.routes.markets import generate_sportsbook_portfolio_endpoint, SportsbookPortfolioRequest
 
 
 router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
@@ -77,16 +76,6 @@ def get_ledger_status():
     """[ARCH-1.4.32 / P3-9] Estado agregado del ledger para hidratar el badge de la SPA."""
     with PersistenceGateway().read_session() as db:
         return _resumen_ledger(db.query(PaperTradingLedger).all())
-
-
-@router.post("/generate")
-def generate_portfolio(req: SportsbookPortfolioRequest, db: Session = Depends(get_db)):
-    """
-    [ARCH-1.3.4] Deprecado y desconectado del monolito legacy.
-    Redirige la ejecución íntegramente al controlador desacoplado 3NF de markets.py,
-    consumiendo el request moderno (SportsbookPortfolioRequest).
-    """
-    return generate_sportsbook_portfolio_endpoint(req, db)
 
 
 import logging

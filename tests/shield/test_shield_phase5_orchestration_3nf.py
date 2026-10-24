@@ -52,6 +52,8 @@ class AbstractTestPhase5Orchestration3NF(ABC):
             "delta_epist": 0.02,        # [R-1] Campo obligatorio
             "psi_epist": 0.9722,        # [R-1] Campo obligatorio
             "phi_lead2": 0.58,
+            # [LN-QBE-070-C · Enmienda Nudo 1] Distribución fáctica declarada (suma 1.0).
+            "prob_fav": 0.55, "prob_emp": 0.25, "prob_und": 0.20,
             "odd_fav": 1.85,
             "odd_emp": 3.60,
             "odd_und": 4.50,

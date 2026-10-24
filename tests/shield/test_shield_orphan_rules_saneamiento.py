@@ -363,3 +363,151 @@ class TestGobernanzaSinComentarios:
         assert "HÍBRIDO" not in regimen and "DBBD-FUNGIBLE" not in regimen, (
             f"🚨 El Censo conserva un régimen fungible: {regimen!r}"
         )
+
+
+class TestNudo1ErradicacionMasaFabricada:
+    """[FASE 2 · BLOQUE 1 — NUDO 1] Erradicación de la masa de probabilidad fabricada.
+
+    Régimen: [DIRGEN-STRICT]. Estos jueces certifican la legislación de
+    `[LN-QBE-093]` (Enmienda Nudo 1), `[LN-QBE-070-C]` (Enmienda Nudo 1) y
+    `[GOVERNANCE-01]` (Enmienda Nudo 1). En Fase 2 deben estar en ROJO; en Fase 3
+    (materialización en `src/`) deben pasar sin una sola concesión.
+    """
+
+    LITERALES_PROHIBIDOS_TESIS = ("1.80", "0.80", "70.0%", "$16.00")
+
+    def test_gemini_sensor_eliminado(self):
+        """[LN-QBE-093 · Enmienda Nudo 1] El sensor de contingencia está extirpado del árbol."""
+        ruta = RAIZ / "src" / "ingestion" / "providers" / "gemini_search_sensor.py"
+        assert not ruta.exists(), (
+            "🚨 VIOLACIÓN [LN-QBE-093 · Enmienda Nudo 1]: el sensor genérico de búsqueda "
+            f"`{ruta.relative_to(RAIZ)}` sigue presente en el árbol. [ARCH-1.3.4] lo extirpó "
+            "del pipeline y el Axioma de Cero Mocks prohíbe su existencia como fuente de "
+            "datos de contingencia."
+        )
+
+    def test_dtos_no_fabrican_mercado_ni_confianza(self):
+        """[LN-QBE-093 · Enmienda Nudo 1] Sin evidencia no hay mercado ni confianza del 100%."""
+        from pydantic import ValidationError
+
+        from src.models.raw_input import RawMatchInput
+
+        try:
+            raw = RawMatchInput()
+        except ValidationError:
+            # Post-Fase 3: el contrato exige evidencia y rechaza el payload vacío.
+            return
+
+        cuotas = getattr(raw, "momios", None)
+        pago_anticipado = getattr(cuotas, "pago_anticipado", None) if cuotas is not None else None
+        assert cuotas is None or pago_anticipado is None, (
+            "🚨 VIOLACIÓN [LN-QBE-093 · Enmienda Nudo 1]: `RawMatchInput()` sin cuotas "
+            "materializa un mercado sintético por defecto "
+            f"({pago_anticipado!r}). La ausencia de precio debe viajar como `None`."
+        )
+
+        confiabilidad = getattr(getattr(raw, "trazabilidad_consenso", None), "confiabilidad_porcentaje", None)
+        assert confiabilidad != 100.0, (
+            "🚨 VIOLACIÓN [LN-QBE-093 · Enmienda Nudo 1]: `confiabilidad_porcentaje` nace en "
+            f"{confiabilidad!r}. Declarar 100% por defecto desactiva la aduana de "
+            "`[LN-QBE-010]` (confiabilidad < 80.0% ⇒ Veto QBE-00)."
+        )
+
+    @staticmethod
+    def _ordenes_normalizadas(plan) -> list:
+        """Normaliza `PortfolioExecutionPlan` (Pydantic) o su volcado plano a `[{codigo, inversion}]`."""
+        crudas = getattr(plan, "ordenes_ejecucion_partidos", None)
+        if crudas is None and isinstance(plan, dict):
+            crudas = plan.get("ordenes_ejecucion_partidos", [])
+
+        normalizadas = []
+        for orden in crudas or []:
+            if isinstance(orden, dict):
+                estrategia = orden.get("estrategia_seleccionada") or {}
+                boletos = orden.get("boletos") or {}
+                codigo = (
+                    estrategia.get("codigo")
+                    if isinstance(estrategia, dict)
+                    else getattr(estrategia, "codigo", None)
+                )
+                inversion = (
+                    boletos.get("inversion_partido_A_i", 0.0)
+                    if isinstance(boletos, dict)
+                    else getattr(boletos, "inversion_partido_A_i", 0.0)
+                )
+            else:
+                estrategia = getattr(orden, "estrategia_seleccionada", None)
+                boletos = getattr(orden, "boletos", None)
+                codigo = getattr(estrategia, "codigo", None)
+                inversion = getattr(boletos, "inversion_partido_A_i", 0.0)
+            normalizadas.append(
+                {"codigo": str(codigo or ""), "inversion": float(inversion or 0.0)}
+            )
+        return normalizadas
+
+    def test_portfolio_no_fabrica_distribucion_55_25_20(self):
+        """[LN-QBE-070-C · Enmienda Nudo 1] Un candidato sin distribución no se dimensiona."""
+        from pydantic import ValidationError
+
+        from src.core.portfolio import PortfolioEngine
+
+        candidato = {
+            "id_partido": "SCR-F2-NUDO1-01",
+            "partido_nombre": "Candidato sin distribución soberana",
+            "horario": "Sábado 19:00",
+            "strategy_code": "QBE-H1",
+            "strategy_nombre": "Favorito con Seguro en Empate",
+            "ev_neto_roi": 0.05,
+            "psi_downside": 0.90,
+            "odd_fav": 1.80,
+            "odd_emp": 3.60,
+            "odd_und": 4.20,
+            "fav_name": "Local",
+            "und_name": "Visita",
+            "delta_epist": 0.02,
+        }
+
+        try:
+            plan = PortfolioEngine.build_plan(
+                [candidato],
+                bankroll=100.0,
+                mode="BANKROLL",
+                total_jornada=9,
+                modo_cobertura="DEF",
+            )
+        except Exception as exc:
+            # Una excepción sólo certifica la erradicación si es de DOMINIO (dato ausente).
+            # Un `KeyError` genérico —o cualquier error de implementación— NO es señal de éxito.
+            assert isinstance(exc, (ValueError, ValidationError)), (
+                "🚨 Excepción inesperada en `build_plan` ante un candidato sin distribución: "
+                f"{type(exc).__name__}: {exc}. El motor debe rechazar el dato ausente en voz "
+                "alta (ValueError/ValidationError) o vetar en cuarentena; un `KeyError` "
+                "genérico no certifica la erradicación de la fábrica 55/25/20."
+            )
+        else:
+            ordenes = self._ordenes_normalizadas(plan)
+            con_capital = [
+                orden
+                for orden in ordenes
+                if orden["inversion"] > 0.0 and orden["codigo"] != "QBE-00"
+            ]
+            assert not con_capital, (
+                "🚨 VIOLACIÓN [LN-QBE-070-C · Enmienda Nudo 1]: `build_plan` asignó capital a "
+                f"{len(con_capital)} orden(es) sobre un candidato SIN probabilidades: "
+                f"{con_capital}. La distribución 55/25/20 (y 70/20/10 en la Trinidad) está "
+                "prohibida: la ausencia debe reflejarse como `None` y derivar en cuarentena "
+                f"(QBE-00) o en inversión $0.00 MXN; se observaron {ordenes}."
+            )
+
+    def test_tesis_madlibs_no_inventa_cifras(self):
+        """[GOVERNANCE-01 · Enmienda Nudo 1] La degradación narrativa no inyecta cifras."""
+        from src.reporting.narrative import generar_tesis_madlibs_fallback
+
+        texto = generar_tesis_madlibs_fallback({})
+        hallados = [literal for literal in self.LITERALES_PROHIBIDOS_TESIS if literal in texto]
+        assert not hallados, (
+            "🚨 VIOLACIÓN [GOVERNANCE-01 · Enmienda Nudo 1]: `generar_tesis_madlibs_fallback` "
+            f"inyecta las cifras fabricadas {hallados} con un payload vacío. El fallback debe "
+            "ceñirse a los datos fácticos disponibles y declarar su naturaleza determinista "
+            "(sello Mad-Libs)."
+        )

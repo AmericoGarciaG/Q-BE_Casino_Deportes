@@ -96,7 +96,7 @@ def _mapa_identidad(sesion, league_id: int) -> Dict[str, str]:
     if sesion is None:
         return {}
     try:
-        from scripts.utilidades.poblar_temporada_completa_backtesting import _catalogo_clubes_3nf
+        from src.core.sovereign.h2h_historical_loader import _catalogo_clubes_3nf
 
         equipos = _catalogo_clubes_3nf(sesion, int(league_id))
     except Exception:  # pragma: no cover — degradación honesta, jamás excepción al explotar
@@ -242,7 +242,7 @@ def _desde_boveda(
     if sesion is None:
         return {}
     try:
-        from scripts.utilidades.poblar_temporada_completa_backtesting import _historial_future_blind
+        from src.core.sovereign.h2h_historical_loader import _historial_future_blind
 
         historial = _historial_future_blind(sesion, int(league_id), fecha_ref)
     except Exception as excepcion:  # pragma: no cover — bóveda no disponible: sigue el corpus

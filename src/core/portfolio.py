@@ -10,7 +10,7 @@ de auditoría NO vinculante (TD-COR-01).
 """
 
 import itertools
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from src.core.catalog import STRATEGY_CATALOG
 from src.core.contracts.portfolio_math import (
     calcular_dutching_v0, calcular_kelly_atenuado, aplicar_hard_caps_constitucionales,
@@ -189,6 +189,33 @@ def calcular_trinidad_resiliencia_3k(ordenes_data: List[Dict[str, Any]]) -> Dict
     }
 
 
+def _distribucion_factica(m: Dict[str, Any]) -> Optional[Tuple[float, float, float]]:
+    """[LN-QBE-070-C · Enmienda Nudo 1] Distribución soberana FÁCTICA del candidato.
+
+    Devuelve `(p_fav, p_emp, p_und)` como FRACCIONES en (0, 1] —la unidad que consume
+    `contraer_distribucion_fiduciaria`— o `None` si falta cualquiera de las tres, si no es
+    numérica o si está fuera del símplex. La ausencia se declara; jamás se sustituye por una
+    distribución inventada (55/25/20).
+    """
+    valores: List[float] = []
+    for clave in ("prob_fav", "prob_emp", "prob_und"):
+        valor = m.get(clave)
+        if isinstance(valor, bool) or valor is None:
+            return None
+        try:
+            numero = float(valor)
+        except (TypeError, ValueError):
+            return None
+        if numero != numero:
+            return None
+        if numero > 1.0:
+            numero = numero / 100.0
+        if not 0.0 < numero <= 1.0:
+            return None
+        valores.append(numero)
+    return (valores[0], valores[1], valores[2])
+
+
 class PortfolioEngine:
     DESCRIPCIONES_OFICIALES = {k: v.descripcion_ejecutiva for k, v in STRATEGY_CATALOG.items()}
 
@@ -331,10 +358,16 @@ class PortfolioEngine:
         # pura `calcular_particion_dutching_dinamico` ([LN-QBE-077-C]): cero números nuevos aquí.
         modo_cobertura_norm = str(modo_cobertura or "DEF").strip().upper()
 
+        # ── 0. [LN-QBE-070-C · Enmienda Nudo 1] PUREZA DE DISTRIBUCIÓN ────────────────────
+        # Sin las tres probabilidades soberanas fácticas no hay activo: la ausencia de dato
+        # JAMÁS se rellena con 55/25/20. El candidato se deriva a QBE-00 (queda fuera del
+        # dimensionamiento) y, si no sobrevive ninguno, la cartera es vacía (ValueError de
+        # dominio). Cero distribuciones inventadas.
         approved_matches = [
             m for m in approved_matches
             if float(m.get("delta_epist", 0.02)) <= 0.12
             and float(m.get("psi_epist", 0.97)) > 0.0
+            and _distribucion_factica(m) is not None
         ]
         # ── 1. [LN-QBE-079] Distribución Fiduciaria Contraída P̂_i' (variable DERIVADA downstream).
         # La distribución soberana P̂_i (Poisson/Dixon-Coles 6x6, 3NF) se consume como entrada de
@@ -342,11 +375,9 @@ class PortfolioEngine:
         # hacia P⁽⁰⁾ = (1/3, 1/3, 1/3) se pondera por Ψ_epist,i = max(0, 1 - (Δ_epist,i/0.12)²) y el
         # resultado se inyecta como campo derivado `prob_exito_efectiva` en el payload de trabajo.
         for m in approved_matches:
+            p_fav_f, p_emp_f, p_und_f = _distribucion_factica(m)
             p_l_c, p_e_c, p_v_c = contraer_distribucion_fiduciaria(
-                float(m.get("prob_fav", 55.0)) / 100.0,
-                float(m.get("prob_emp", 25.0)) / 100.0,
-                float(m.get("prob_und", 20.0)) / 100.0,
-                float(m.get("delta_epist", 0.02))
+                p_fav_f, p_emp_f, p_und_f, float(m.get("delta_epist", 0.02))
             )
             m["prob_exito_efectiva"] = calcular_probabilidad_exito_estrategia(
                 m.get("strategy_code", "QBE-H1"), p_l_c, p_e_c, p_v_c
@@ -436,7 +467,7 @@ class PortfolioEngine:
                 # `calcular_kelly_atenuado` subsiste únicamente como trazabilidad del techo fiduciario
                 # de sostenibilidad y se reporta en `desglose_bankroll.auditoria_kelly_atenuado`.
                 # Ningún peso de cartera se deriva de Kelly ([ARCH-1.4.18]).
-                p_fav_i = float(m.get("prob_fav", 55.0)) / 100.0 if float(m.get("prob_fav", 55.0)) > 1.0 else float(m.get("prob_fav", 0.55))
+                p_fav_i = _distribucion_factica(m)[0]
                 o_fav_i = float(m.get("odd_fav", 2.0))
                 delta_epist_i = float(m.get("delta_epist", 0.02))
 
@@ -869,9 +900,7 @@ class PortfolioEngine:
         ordenes_trinidad = []
         for idx, o in enumerate(orders):
             m = approved_matches[idx]
-            p_w = float(m.get("prob_fav", 70.0)) / 100.0 if m.get("prob_fav") is not None else 0.70
-            p_d = float(m.get("prob_emp", 20.0)) / 100.0 if m.get("prob_emp") is not None else 0.20
-            p_l = float(m.get("prob_und", 10.0)) / 100.0 if m.get("prob_und") is not None else o.metricas_clave.psi_downside_riesgo
+            p_w, p_d, p_l = _distribucion_factica(m)
             code = o.estrategia_seleccionada.codigo
             es_directo = code in ["QBE-D1", "QBE-D1+"]
 

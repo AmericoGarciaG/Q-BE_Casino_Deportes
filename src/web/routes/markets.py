@@ -2093,7 +2093,7 @@ def post_backtesting_simulate(payload: SimulatePortfolioRequest) -> Dict[str, An
     sandbox arrastra el plano estocástico completo y sólo se materializa en la primera
     invocación real del endpoint.
     """
-    from scripts.laboratorio.sandbox_rentabilidad_pipeline import (
+    from src.core.simulation_engine import (
         ejecutar_simulacion_rentabilidad,
         parsear_rango_jornadas,
     )

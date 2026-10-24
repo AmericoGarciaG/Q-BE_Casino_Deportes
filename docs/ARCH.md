@@ -365,6 +365,7 @@ Cada partido almacenarás en `matches_json`:
   1. `gateway.read_session()`: Contexto de solo lectura para la interfaz FastAPI. Sin bloqueos, con liberación inmediata de recursos y latencia $< 2\text{ ms}$.
   2. `gateway.write_transaction()`: Contexto de escritura atómica para demonios e ingesta. Si ocurre una sola excepción dentro del bloque, se ejecuta `ROLLBACK` total y la base de datos queda intacta.
 * **Validación de Integridad en el Arranque:** En la inicialización, el gateway ejecuta `PRAGMA quick_check;`. Si reporta anomalías físicas, aborta con `RuntimeError` impidiendo operar sobre datos corruptos.
+* **Enmienda Nudo 2:** Se declara oficialmente obsoleto y erradicado el motor paralelo `src/storage/database.py`. Toda escritura, lectura y transacción en el sistema debe realizarse exclusivamente a través de `PersistenceGateway`. Cualquier uso de `SessionLocal` o `db.commit()` directo en `src/` será motivo de Veto Arquitectónico.
 
 ### [ARCH-1.5.0-B] Aislamiento de Persistencia del Canal Gateway en The Shield [ARCH-PILLAR] [GOVERNANCE-01]
 
@@ -620,6 +621,7 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 * **Gobernanza de Roles:**
   - Los scripts independientes en `scripts/` (Centinela Deportivo y Centinela de Mercado) son los **únicos autorizados** para escribir e interactuar con fuentes externas.
   - `sync_league_live_board()` lee de SQLite y responde en un tiempo SLA de **$\le 10\text{ milisegundos}$**.
+* **Enmienda Nudo 3:** Queda estrictamente prohibido que cualquier módulo dentro de `src/` (especialmente `src/web/` y `src/ingestion/`) importe funciones, clases o variables directamente desde el directorio `scripts/`. Si un endpoint o proveedor de producción requiere una lógica que vive en un script, esa lógica debe ser migrada al núcleo (`src/core/`) o a los servicios (`src/services/`), y el script debe convertirse en un mero consumidor de la misma.
 
 ### [ARCH-1.6.5] Pipeline Adaptador de Portafolio (src/pipeline/adapter.py) [ARCH-PILLAR]
 
@@ -687,6 +689,7 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
   - El centinela deportivo consulta en cada ejecución el árbol JSON `__NEXT_DATA__` de FotMob Opta (League ID 230), el cual contiene el calendario íntegro de la temporada oficial.
   - El parser dinámico `_convertir_match_fotmob` filtra en memoria los partidos de cualquier jornada ($N \in [1, 17]$), extrayendo sus marcadores oficiales consumados y fechas ISO.
   - La complementación de reprogramados se ejecuta dinámicamente contra `ligamx.net` mediante deduplicación estricta por par canónico.
+* **Enmienda Nudo 2:** Queda estrictamente prohibido el uso de rangos de jornadas quemados (ej. `range(10, 18)`). La ingesta debe iterar dinámicamente sobre todas las jornadas devueltas por la fuente fáctica. Asimismo, el Centinela Deportivo debe aplicar `MARCADOR_PENDIENTE` si el partido concluyó sin goles publicados, prohibiendo el uso del literal `"0 - 0"`.
 
 ### [ARCH-1.6.8] Topología Multi-Jornada y Caché Particionado por Slate [ARCH-PILLAR] [PERF-MANDATE]
 
@@ -1192,6 +1195,7 @@ class PortfolioExecutionPlan(BaseModel):
 
 ### [ARCH-1.3.5] Retiro y Deprecación Definitiva de Rutas Legacy en routes/portfolio.py [ARCH-PILLAR]
 * El endpoint `POST /api/portfolio/generate` en `src/web/routes/portfolio.py` queda oficialmente **deprecado y desconectado**. El archivo conserva exclusivamente el servicio de tesis `/api/portfolio/match-thesis`. Toda generación de cartera es gobernada por `src/web/routes/markets.py`.
+* **Enmienda Nudo 3:** El endpoint POST `/generate` en `src/web/routes/portfolio.py` (o cualquier ruta que duplique la funcionalidad de `markets.py`) debe ser físicamente eliminado del código. El router `portfolio.py` solo conservará el endpoint de tesis (`/match-thesis`) y el de registro de boletos (`/register-ticket`).
 
 > **Trazabilidad de registro (VAR-2026-ARCH-1.3.4 — Colisión histórica resuelta por Decreto de Saneamiento):**
 > el identificador `[ARCH-1.3.4]` ya se encuentra **sellado** desde la Fase 8 en `docs/ARCH.md`

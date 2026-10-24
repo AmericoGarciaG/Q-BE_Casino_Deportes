@@ -610,6 +610,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   - `fav_name`, `und_name`: str
   - `pago_anticipado`: bool
   - El valor por defecto legislado de `delta_epist` es `DELTA_EPIST_DEFAULT` (CONSTANTS.md §8).
+  - **Enmienda Nudo 1 (Fase 2 · Bloque 1 — Erradicación de Masa Fabricada):** Los contratos Pydantic asociados al portafolio y a la tesis narrativa (`ConsolidatedPayload`, `MatchThesisRequest`) tienen prohibido inyectar distribuciones (ej. 55/25/20 o 70/20/10) o proyecciones (xG=1.8) por defecto si el payload real no las porta. La ausencia de dato debe reflejarse como `None`, no como una cifra fabricada.
 * **O (Output):** Payload certificado listo para alimentar `build_plan()`.
 * **Φ (Transición):** Hacia [LN-QBE-070-B] (Kelly fraccional y Hard-Caps).
 
@@ -1271,6 +1272,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** Objetos tipados de `src/ingestion/schemas.py` (ej. `ScheduledMatchDTO`, `SeasonOverviewDTO`, `ProgolContestDTO`, `Odds1X2DTO`).
 * **Φ (Transición):** Hacia el `IngestionCoordinator` (Capa 5), responsable de la composición e inyección de los puertos de persistencia.
 * **[SHIELD]:** `tests/shield/test_shield_data_nexus_providers.py`
+* **Enmienda Nudo 1 (Fase 2 · Bloque 1 — Erradicación de Masa Fabricada):** Queda estrictamente prohibido el uso de sensores que generen datos de contingencia (Mocks). El módulo `gemini_search_sensor.py` ha sido formalmente extirpado. Cualquier DTO de ingesta (`raw_input.py`) que declare confiabilidad 100% por defecto, o mercados sintéticos por defecto, viola el Axioma de Cero Mocks.
 
 ### ID: [LN-QBE-094] Algoritmo de Desambiguación Temporal en Ventana Crítica [t_cierre ± 72h]
 * **Ω (Resumen):** Resuelve de forma determinista la asignación de competición y partido cuando un mismo par de clubes se enfrenta en múltiples torneos en fechas cercanas (ej. Cruz Azul vs. América en Liga MX vs. Concachampions).
@@ -1581,6 +1583,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** Reporte estructurado con siete llaves maestras (`bankroll_final`, `pnl_acumulado`, `roi_acumulado_pct`, `drawdown_maximo_pct`, `resumen_coberturas`, `jornadas_detalle`, `curva_bankroll`) más `proyeccion_anual` (`lineal_mxn`, `compuesta_mxn`, `roi_anual_compuesto_pct`) y el tablero ASCII de alta densidad (`--json` suprime el tablero).
 * **Φ (Transición):** Hacia `scripts/laboratorio/sandbox_rentabilidad_pipeline.py` y `[ARCH-1.4.46]`.
 * **[SHIELD]:** `tests/shield/test_shield_sandbox_rentabilidad_pipeline.py`
+* **Enmienda Nudo 3:** El motor matemático de simulación (`ejecutar_simulacion_rentabilidad`) debe residir en `src/core/` para ser consumido por la API REST, no en `scripts/laboratorio/`.
 
 ### ID: [LN-QBE-108] Colisión Cruzada de Fuerzas y Modelado Bipartito de Ataque (𝒯_Fin) y Defensa (𝒯_Def)
 
@@ -2006,6 +2009,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **O (Output):** Transacciones 3NF de catálogos y activos.
 * **Φ (Transición):** Consumidor activo: `src/storage/curation_service.py` y `src/storage/seeder.py`.
 * **[SHIELD]:** `tests/shield/test_shield_orphan_rules_saneamiento.py`
+* **Enmienda Nudo 2:** Queda terminantemente prohibido el seeding de tablas de posiciones estáticas (`TABLA_OFICIAL_J7_CONCLUIDA`) o de cuotas comerciales inventadas (`fixtures_iniciales_j8`). El Seeder solo puede inicializar la estructura base (competiciones), el resto debe venir de la ingesta fáctica.
 
 ---
 

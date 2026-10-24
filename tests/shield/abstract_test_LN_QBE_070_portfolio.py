@@ -14,6 +14,9 @@ class AbstractTestPortfolio(abc.ABC):
                 "id_partido": "M1", "partido_nombre": "A vs B", "fav_name": "A", "und_name": "B",
                 "strategy_code": "QBE-H1", "strategy_nombre": "Favorito con Seguro",
                 "ev_neto_roi": 15.0, "psi_downside": 0.08, "phi_lead2": 0.40,
+                # [LN-QBE-070-C · Enmienda Nudo 1] Distribución fáctica declarada (suma 1.0):
+                # sin ella el candidato se deriva a QBE-00 y no se dimensiona.
+                "prob_fav": 0.55, "prob_emp": 0.25, "prob_und": 0.20,
                 "odd_fav": 1.70, "odd_emp": 3.60, "odd_und": 4.50
             }
         ]

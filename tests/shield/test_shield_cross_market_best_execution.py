@@ -59,6 +59,8 @@ class AbstractTestCrossMarketBestExecution(ABC):
         candidato = {
             "id_partido": "TEST-01", "partido_nombre": "A vs B", "strategy_code": "QBE-H1",
             "strategy_nombre": "Híbrida V=0", "ev_neto_roi": 0.10, "psi_downside": 0.05,
+            # [LN-QBE-070-C · Enmienda Nudo 1] Distribución fáctica declarada (suma 1.0).
+            "prob_fav": 0.55, "prob_emp": 0.25, "prob_und": 0.20,
             "odd_fav": 1.90, "odd_emp": 3.50, "odd_und": 4.00, "fav_name": "A", "und_name": "B"
         }
         plan = PortfolioEngine.build_plan([candidato], bankroll=200.0, mode="BANKROLL", total_jornada=9)

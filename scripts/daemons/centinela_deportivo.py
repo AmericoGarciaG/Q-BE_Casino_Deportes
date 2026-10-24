@@ -223,7 +223,9 @@ def _convertir_match_fotmob(match_obj: Dict[str, Any], idx: int, jornada_num: in
         disponible = False
         operable = False
         minuto = "Final"
-        marcador = score_str or "0 - 0"
+        # [ARCH-1.6.12 · Enmienda Nudo 2] Sin goles publicados NO se fabrica `0 - 0`:
+        # el token legislado por [LN-QBE-018] H4 es `MARCADOR_PENDIENTE`.
+        marcador = score_str or "MARCADOR_PENDIENTE"
     elif es_live:
         # [ARCH-1.4.1-B] El partido está en juego: permanece en la cartelera activa (badge LIVE).
         # Prohibida la deducción por goles: un marcador intermedio jamás concluye el encuentro.
@@ -425,9 +427,13 @@ def extraer_datos_vivos_completos() -> Dict[str, Any]:
     for idx_t, tm in enumerate(teams_all, start=1):
         t_id = str(tm.get("id"))
         t_name = canonicalize_team_name(tm.get("name", ""))
-        scores_str = str(tm.get("scoresStr") or "0-0").split("-")
-        gf = int(scores_str[0]) if len(scores_str) > 0 and scores_str[0].isdigit() else 0
-        gc = int(scores_str[1]) if len(scores_str) > 1 and scores_str[1].isdigit() else 0
+        # [ARCH-1.6.12 · Enmienda Nudo 2] Sin `scoresStr` publicados NO se fabrica un marcador:
+        # los agregados de temporada caen a la fuente alternativa del payload y, en su defecto,
+        # a ausencia numérica declarada. Cero literales de marcador inventado.
+        marcador_temporada = str(tm.get("scoresStr") or tm.get("goalsStr") or "")
+        partes_marcador = marcador_temporada.split("-") if "-" in marcador_temporada else []
+        gf = int(partes_marcador[0]) if len(partes_marcador) > 0 and partes_marcador[0].strip().isdigit() else 0
+        gc = int(partes_marcador[1]) if len(partes_marcador) > 1 and partes_marcador[1].strip().isdigit() else 0
         pts = int(tm.get("pts") or 0)
         pj = int(tm.get("played") or 0)
         pg = int(tm.get("wins") or 0)
@@ -659,8 +665,9 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
         # ocurre por `fill-if-absent` al persistir el snapshot (precedencia: corte sellado > motor).
         p_prima_motor: Dict[str, Dict[str, Any]] = {}
 
-        for r in range(10, 18):
-            fixtures_r = datos["fixtures_por_jornada"].get(r, [])
+        # [ARCH-1.6.12 · Enmienda Nudo 2] Iteración DINÁMICA sobre todas las jornadas que la
+        # fuente fáctica publicó: prohibido alambrar tramos de jornada.
+        for _jornada, fixtures_r in sorted(datos.get("fixtures_por_jornada", {}).items()):
             for f in fixtures_r:
                 h_st = standings_map.get(f["local"], {})
                 a_st = standings_map.get(f["visitante"], {})
@@ -763,14 +770,14 @@ def persistir_en_sqlite(datos: Dict[str, Any], league_fotmob_id: int = LIGAMX_FO
                     if f.get(clave) is None:
                         f[clave] = valor
 
-        # Sincronizar Entidades 3NF Match
-        for r in range(10, 18):
-            for f in datos["fixtures_por_jornada"].get(r, []):
+        # [ARCH-1.6.12 · Enmienda Nudo 2] Sincronización dinámica: TODAS las jornadas capturadas.
+        for jornada, partidos in datos.get("fixtures_por_jornada", {}).items():
+            for f in partidos:
                 m_id = f["id_partido"]
                 m_rec = tx.query(Match).filter(Match.id == m_id).first()
                 if not m_rec:
                     m_rec = Match(
-                        id=m_id, competition_id="MEX_LIGAMX", matchday_num=r,
+                        id=m_id, competition_id="MEX_LIGAMX", matchday_num=int(jornada),
                         home_team_slug=obtener_slug_club(f["local"]),
                         away_team_slug=obtener_slug_club(f["visitante"]),
                         status=f["estado"]

@@ -22,6 +22,13 @@ class SanitizerEngine:
         if match_input.trazabilidad_consenso:
             conf = match_input.trazabilidad_consenso.confiabilidad_porcentaje
             estado = match_input.trazabilidad_consenso.estado_extraccion
+            # [LN-QBE-093 · Enmienda Nudo 1] Confianza no declarada = evidencia insuficiente.
+            # `None` jamás se compara ni se interpreta como 100 %: se veta en voz alta.
+            if conf is None:
+                raise ValueError(
+                    "Veto QBE-00: Confiabilidad no declarada "
+                    "(Fail-Loud, [LN-QBE-093 · Enmienda Nudo 1])"
+                )
             if conf < 80.0:
                 raise ValueError(f"Veto QBE-00: Confiabilidad insuficiente ({conf:.1f}% < 80.0%)")
             if estado and estado.upper() in ["CUARENTENA", "CUARENTENA_DATOS_INSUFICIENTES"]:
