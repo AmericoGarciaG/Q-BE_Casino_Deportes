@@ -23,14 +23,14 @@ CRESTS_DIR.mkdir(parents=True, exist_ok=True)
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 # ─── Catálogo Canónico Oficial FMF / Liga MX (Fuente de la Verdad) ───────────
-# [VARIANZA-09 / ALT-9-B + ALT-9-C RATIFICADAS — DICTAMEN DEL DIRECTOR 2026-10-04]
+# [LN-QBE-130] Curación HITL: catálogo canónico oficial FMF / Liga MX.
 # Cada entrada declara el SLUG CANÓNICO ratificado (ALT-8-C, catálogo `TEAMS_LIGA_MX`) y el
 # identificador FÁCTICO de FotMob. Los slugs legados se conservan como `aliases` para el espejeo
 # físico de escudos (Anti-Archivos Fantasma [ARCH-1.5.4]). Con los slugs legados,
 # `sellar_catalogo_en_db` no hallaba par en la bóveda y fabricaba 10 clubes con
 # `fotmob_team_id = 10000 + idx` ([GOVERNANCE-01]): defecto de idempotencia erradicado de raíz.
 # `Mazatlán FC` no tiene par fáctico en el catálogo ratificado ⇒ `fotmob_id = None` y su
-# inserción queda VETADA por ALT-9-A (cero alta sintética).
+# inserción queda VETADA por [LN-QBE-130] (cero alta sintética).
 PROSPECCION_LIGA_MX: List[Dict[str, Any]] = [
     {
         "name": "Club América", "short": "América", "slug": "club-america",
@@ -160,7 +160,7 @@ PROSPECCION_LIGA_MX: List[Dict[str, Any]] = [
     },
 ]
 
-# ─── Claves de Identidad y Veto de Fabricación [VARIANZA-09 / ALT-9-A] ────────
+# ─── Claves de Identidad y Veto de Fabricación [LN-QBE-130] ──────────────────
 
 def _slug_de_identidad(nombre: str) -> str:
     """Deriva el slug canónico de un nombre de club (paridad `seeder` / `sync_service`)."""
@@ -174,7 +174,7 @@ def _slug_de_identidad(nombre: str) -> str:
 
 def _claves_de_identidad(entrada: Dict[str, Any]) -> Set[str]:
     """
-    [VARIANZA-09 / ALT-9-A RATIFICADA] Claves de reconciliación de una entrada de curación
+    [LN-QBE-130] Claves de reconciliación de una entrada de curación
     frente a la tabla `teams`: el slug declarado (canónico o legado), todos sus `aliases` y el
     slug derivado del nombre canónico. CERO fabricación: sólo habilita la búsqueda de un par
     fáctico ya existente en la bóveda.
@@ -205,7 +205,7 @@ def ejecutar_prospeccion_liga(league_id: int) -> Dict[str, Any]:
             "name": c["name"],
             "short_name": c["short"],
             "canonical_slug": c["slug"],
-            # [VARIANZA-09 / ALT-9-C RATIFICADA] Identidad fáctica propagada al staging HITL: el
+            # [LN-QBE-130] Identidad fáctica propagada al staging HITL: el
             # contrato `TeamCatalogItemIn.fotmob_id` (ya declarado en el router) transporta la
             # evidencia oficial de FotMob hasta el sellado. Cero identificadores fabricados.
             "fotmob_id": c.get("fotmob_id"),
@@ -246,7 +246,7 @@ def sellar_catalogo_en_db(
     Descarga los escudos oficiales a disco con verificación de integridad y realiza
     el espejeo físico obligatorio a todos sus aliases reconocidos [ARCH-1.5.4].
 
-    [VARIANZA-09 / ALT-9-A RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Reconciliación
+    [LN-QBE-130] Reconciliación
     IDEMPOTENTE por clave de identidad (slug canónico | aliases | slug del nombre canónico)
     y por el `fotmob_id` fáctico, con VETO de fabricación ([GOVERNANCE-01] / [ALT-5-A]): si la
     entrada no halla par fáctico comprobable en la bóveda se veta; JAMÁS se inserta identidad
@@ -295,7 +295,7 @@ def sellar_catalogo_en_db(
                         alias_path = CRESTS_DIR / f"{alias_clean}.png"
                         shutil.copyfile(local_path, alias_path)
 
-            # 3. [VARIANZA-09 / ALT-9-A RATIFICADA] Reconciliación idempotente con clave de
+            # 3. [LN-QBE-130] Reconciliación idempotente con clave de
             #    identidad DUAL y VETO de fabricación. Defecto extirpado: la línea previa
             #    (`Team.canonical_slug == slug`) reconciliaba sólo por slug EXACTO, de modo que
             #    los slugs legados del catálogo de prospección no hallaban par en la bóveda y se
@@ -332,12 +332,12 @@ def sellar_catalogo_en_db(
                 team_db.fotmob_team_id = int(fotmob_id_factual)
             if team_db.canonical_slug == slug:
                 # El espejo local sólo se declara sobre el slug canónico: nunca se reescribe el
-                # `crest_url` canónico con un nombre legado (hallazgo 12.3.4 de VARIANZA-09).
+                # `crest_url` canónico con un nombre legado (hallazgo 12.3.4 de [LN-QBE-130]).
                 team_db.crest_url = final_crest_url
             reconciliados += 1
 
     db.commit()
-    # [VARIANZA-09 / 12.3.3] Contador honesto: `teams_committed` reporta ENTRADAS PROCESADAS
+    # [LN-QBE-130 / 12.3.3] Contador honesto: `teams_committed` reporta ENTRADAS PROCESADAS
     # (contrato del Juez 022 preservado) y el desglose real (reconciliadas / vetadas) se declara
     # aparte. El contador previo anunciaba «18 clubes» mientras insertaba 10 filas sintéticas.
     print(

@@ -72,7 +72,7 @@ TEAMS_LIGA_MX = [
     {"fotmob_id": 649424, "name": "FC Juárez", "short": "Juárez", "slug": "fc-juarez"},
 ]
 
-# [VARIANZA-09 / 12.7 RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Proyección de identidad
+# [LN-QBE-130] Proyección de identidad
 # fáctica `nombre canónico → fotmob_id` derivada del catálogo ratificado (ALT-8-C). Sustituye la
 # fabricación `10000 + pos` del snapshot de arranque ([GOVERNANCE-01]): el identificador de club
 # NUNCA se inventa, se toma de la evidencia oficial de FotMob.
@@ -155,7 +155,7 @@ def seed_initial_data(db):
         standings_iniciales.append({
             "pos": row["pos"],
             "equipo": eq,
-            # [VARIANZA-09 / 12.7 RATIFICADA — DICTAMEN DEL DIRECTOR 2026-10-04] Erradicada la
+            # [LN-QBE-130] Erradicada la
             # fabricación `10000 + pos` ([GOVERNANCE-01]): la identidad se proyecta desde el
             # catálogo fáctico ratificado (ALT-8-C) por nombre canónico. Cero IDs inventados.
             "fotmob_id": _FOTMOB_ID_POR_NOMBRE.get(eq),

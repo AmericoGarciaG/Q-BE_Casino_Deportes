@@ -12,7 +12,7 @@ de género: `club-america` ≠ `club-america-femenil`).
 import re
 from typing import Dict, Pattern, Tuple
 
-from src.ingestion.normalizer import canonicalize_team_name
+from src.ingestion.normalizer import NormalizationException, canonicalize_team_name
 from src.ingestion.schemas import CategorizedEntityDTO
 from src.storage.crest_resolver import obtener_slug_club
 
@@ -77,7 +77,14 @@ def categorizar_entidad_deportiva(raw_team_name: str) -> CategorizedEntityDTO:
     """
     categoria = detectar_categoria(raw_team_name)
     base = _nombre_base(raw_team_name, categoria)
-    nombre_canonico = canonicalize_team_name(base) or base or str(raw_team_name or "").strip()
+    try:
+        nombre_canonico = canonicalize_team_name(base)
+    except NormalizationException:
+        # La guarda categoriza entidades internacionales y filiales que no viven en el
+        # catálogo Liga MX; el Fail-Loud del normalizador se preserva, pero aquí la
+        # identidad se deriva del nombre base depurado.
+        nombre_canonico = base
+    nombre_canonico = nombre_canonico or base or str(raw_team_name or "").strip()
 
     sufijo = _SUFIJO_SLUG[categoria]
     etiqueta = _ETIQUETA_NOMBRE[categoria]

@@ -231,4 +231,24 @@ class SlateItem(Base):
     __table_args__ = (UniqueConstraint("slate_id", "position", name="uq_slate_item_position"),)
 
 
+class PaperTradingLedger(Base):
+    """[ARCH-1.4.32 / P3-9] Ledger fiduciario de boletos persistido en 3NF.
+
+    Sustituye el registro en `localStorage`: cada boleto comprado se sella con la cuota
+    congelada y el monto exacto del clic. La terna (match_id, desenlace, monto) es única
+    para garantizar la idempotencia del endpoint POST /api/portfolio/register-ticket.
+    """
+    __tablename__ = "paper_trading_ledger"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    match_id = Column(String(100), nullable=False, index=True)
+    desenlace = Column(String(120), nullable=False)
+    cuota_congelada = Column(Float, nullable=False)
+    monto = Column(Float, nullable=False)
+    fecha_registro = Column(DateTime, nullable=False, default=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("match_id", "desenlace", "monto", name="uq_paper_trading_ledger_ticket"),
+    )
+
+
 

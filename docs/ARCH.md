@@ -307,6 +307,7 @@ Cada partido almacenarás en `matches_json`:
 * **Ubicación:** `src/core/contracts/portfolio_math.py`
 * **Régimen:** `[DIRGEN-STRICT]` (Plano canónico en `docs/DIRGEN_VAULT.md`).
 * **Responsabilidad:** Biblioteca matemática funcional pura, sin I/O y sin dependencias de base de datos. Las funciones de cálculo (`calcular_alpha_edge`, `dutching`, Kelly atenuado, ranking, hard-caps) permanecen **puras** (cero Pydantic en sus rutas algorítmicas); el módulo aloja además, como **contrato DTO tipado de entrada** para la ejecución de cartera, la clase `PortfolioParameters` (`[ARCH-1.4.30]`), anexada al final del archivo mediante *import diferido* con el único fin de preservar intactos los anclajes de línea del plano canónico (`docs/DIRGEN_VAULT.md`). *(Armonización `VAR-11` / ALT-1, Director Humano, 2026-10-07.)*
+* **Pureza de Precios de Mercado (P1-3):** El módulo `portfolio_math.py` y `evaluator.py` operan como consumidores puros de precios de mercado. No generan, estiman ni suplen cuotas comerciales bajo ninguna circunstancia.
 * **Funciones requeridas:**
   - `calcular_alpha_edge(p, O) -> float`
   - `calcular_umbral_theta_estrella(o_fav) -> float`
@@ -376,13 +377,15 @@ Cada partido almacenarás en `matches_json`:
   4. **Nivel 4 (Centinela Fail-Loud):** Si tras el reseteo la URL resuelta del motor contiene `data/qbe_database.db`, la fixture aborta con `RuntimeError`, imposibilitando la ejecución de la suite sobre datos reales. La degradación silenciosa hacia la bóveda viva es inadmisible bajo el Mandato de Fallo Ruidoso (`[GOVERNANCE-01]`).
 * **Certificación de No-Mutación:** La inocuidad sobre la bóveda viva se certifica por telemetría de archivo (`Length` y `LastWriteTime` de `data/qbe_database.db`) medida antes y después de la corrida completa, dado que el archivo está excluido en `.gitignore` y `git status` no puede dar fe de su integridad.
 * **[SHIELD]:** `tests/shield/test_shield_persistence_isolation.py`
+* **Enmienda de Aislamiento Hermético Total (P0-1):** El aislamiento se extiende de forma mandatoria a la totalidad de la superficie de persistencia. El mecanismo de Cuádruple Cerrojo en `tests/shield/conftest.py` intercepta, redirige y sobrescribe `src.storage.database.engine` y `src.storage.database.SessionLocal` hacia la URL SQLite efímera generada por sesión. Queda estrictamente prohibido que `get_db` o cualquier consumidor del motor paralelo apunten a `data/qbe_database.db` durante la ejecución de pruebas.
 
-### [ARCH-1.5.0-B-Δ1] Deuda Técnica: Unificación de Motores de Persistencia y Retiro de database.py [DEUDA]
+### [ARCH-1.5.0-B-Δ1] Deuda Técnica: Unificación de Motores de Persistencia y Retiro de database.py [DEUDA CERRADA]
 
 * **Hecho Registrado (Split-Brain de Persistencia):** Conviven dos motores SQLAlchemy sobre la misma bóveda: `PersistenceGateway` (canal gobernado por `[ARCH-1.5.0]`) y `src/storage/database.py` (`engine` / `SessionLocal` / `get_db`), consumido por las rutas REST (`src/web/routes/*`), `sync_service.py`, `repository.py` y `seeder.py`. El aislamiento de `[ARCH-1.5.0-B]` cubre el primero; el segundo permanece ligado a `data/qbe_database.db`.
 * **Excepción Declarada:** Los jueces que inspeccionan por `get_db` / `SessionLocal` (`test_LN_QBE_003`, `test_LN_QBE_017`, `test_LN_QBE_019`, `test_LN_QBE_026` y las suites que sirven la capa web) operan por excepción declarada contra la bóveda viva.
 * **Hito de Liquidación (H-2):** Retiro de `src/storage/database.py` y unificación total del acceso a datos en el Gateway, extendiendo el aislamiento al 100% de la superficie de persistencia. Queda agendado como hito independiente y **exige su propio ciclo Paso 1 → Paso 2 → Paso 3** con Juez Inmutable y certificación de estado rojo.
 * **Prohibición Expresa:** Mientras esta deuda permanezca abierta, queda prohibido publicar, citar o legislar el aislamiento de The Shield bajo los calificativos "hermético total" o "integral".
+* **Nota de Cierre (P0-1):** Resuelto en la enmienda P0-1. El aislamiento ya no es parcial; abarca el 100% de la superficie de persistencia de pruebas.
 
 ### [ARCH-1.5.1] Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT]
 
@@ -546,7 +549,7 @@ El vínculo con la bóveda estocástica es **opcional por diseño**: `slate_item
 ### [ARCH-1.5.8] Parámetros Canónicos de Normalización y Bóveda de Activos [ARCH-PILLAR] [ANTI-BUG]
 
 * **Limpieza Lingüística Determinista (H9):** El normalizador canónico (`[LN-QBE-012]`) aplica obligatoriamente: eliminación estricta de acentos (`strip_accents`), conversión a minúsculas, sustitución de caracteres no-alfanuméricos por espacios (`[^a-z0-9\s]`) y colapso de dobles espacios antes de cualquier comparación.
-* **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`.
+* **Umbrales de Coincidencia Difusa (H10):** Ante variantes ortográficas de scrapers heterogéneos, se autoriza la equivalencia de identidad si `SequenceMatcher.ratio() >= 0.78` o si la distancia de Levenshtein es $\le 2$ para cadenas de longitud $\ge 4$ caracteres. Si el ratio es inferior, el sistema invoca `NormalizationException`. La contención por subcadena queda formalmente derogada como método de matching.
 * **Aduana de IDs de Imagen FMF (H1):** El diccionario inmutable `LIGAMX_LOGO_ID_MAP` opera como respaldo determinista de resolución cuando el servidor oficial de la federación emite etiquetas `<img>` con atributo `alt` vacío o indefinido en el carrusel de marcadores.
 * **Umbrales Físicos de Bóveda y Espejeo (H13, H14):** Todo escudo de club guardado localmente debe verificar `size >= 3000` bytes y cabecera PNG válida (`\x89PNG`). Todo emblema de torneo debe verificar `size >= 1000` bytes. Durante el commit de curación HITL, se ejecuta el copiado físico obligatorio (`shutil.copyfile`) hacia todos los aliases del club para garantizar integridad multi-slug inmediata.
 
@@ -1388,6 +1391,7 @@ def sincronizar_progol_pipeline_completo(
   1. **Extremo Izquierdo:** `🔬 Ver Análisis Cuantitativo` — abre la vista analítica cuantitativa sin disparar inferencia LLM (`[ARCH-1.4.31]`).
   2. **Extremo Derecho:** `📋 Copiar Ticket` y `🎟️ Comprar Boleto` — la compra congela la cuota comercial del instante y conmuta el estado a `✔ Boleto Registrado` (`[LN-QBE-099]`).
   3. **Barra de Control:** Badge dinámico `#badge-boletos-comprados` con el agregado de cartera (`🎟️ Comprados: N ($XX.XX MXN)`).
+* **Persistencia 3NF del Ledger:** Queda estrictamente prohibido el uso de `localStorage` para el registro de boletos. El contenedor de acciones consumirá el endpoint `POST /api/portfolio/register-ticket`, el cual persistirá el boleto en la nueva tabla relacional `paper_trading_ledger` a través del `PersistenceGateway`.
 * **Invariante de Procedencia:** Sin hecho soberano no hay cifra: cero cuotas fabricadas y cero placeholders de relleno (`[GOVERNANCE-01]`).
 * **[SHIELD]:** `tests/shield/test_shield_portfolio_p_prime_and_ui_contracts.py`
 
@@ -2021,6 +2025,18 @@ def sincronizar_progol_pipeline_completo(
 * **Anti-fuga:** el vector de candidatas se DERIVA del encabezado del CSV excluyendo las Zonas C y D; la etiqueta es `clasificacion_triada`. Ninguna columna derivada de P′ puede entrar como predictora.
 * **Registro en el cockpit:** `mineria_factores_shannon` y `sembrar_prior_apertura2025` se inscriben en `TAREAS_PERMITIDAS` de `src/web/routes/admin_tasks.py` (20 ⇒ 22) con sus botones en `src/web/templates/index.html`.
 * **[SHIELD]:** `tests/shield/test_shield_sprint3_prior_seeding_and_shannon_mining.py` (INVARIANZAS 3 y 4).
+
+### Apéndice 3NF — Ledger Fiduciario de Paper Trading
+
+#### Tabla: `paper_trading_ledger`
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | `INTEGER` | `PK` | Autoincremental |
+| `match_id` | `VARCHAR` | `NOT NULL` | Partido asociado |
+| `desenlace` | `VARCHAR` | `NOT NULL` | Ej. "L", "E", "V" |
+| `cuota_congelada` | `FLOAT` | `NOT NULL` | Cuota exacta al momento del clic |
+| `monto` | `FLOAT` | `NOT NULL` | Monto apostado |
+| `fecha_registro` | `DATETIME` | `NOT NULL` | Timestamp UTC |
 
 
 ---

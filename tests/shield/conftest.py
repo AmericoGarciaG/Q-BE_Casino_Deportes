@@ -12,9 +12,10 @@ Cuádruple Cerrojo (fixture de sesión autouse, exclusiva del arnés `tests/shie
      encendido): los jueces de inspección conservan su evidencia fáctica sin exponer la bóveda viva.
   4. Centinela fail-loud → `RuntimeError` si el motor resolviera a la bóveda viva.
 
-Alcance declarado (honesto): aísla el canal transaccional `PersistenceGateway`. El motor paralelo
-`src/storage/database.py` (`engine` / `SessionLocal` / `get_db`) permanece ligado a `data/qbe_database.db`
-por excepción declarada y se registra como deuda técnica abierta en `[ARCH-1.5.0-B-Δ1]`.
+Extensión P0-1 (Aislamiento Hermético Total): el mismo cerrojo intercepta el motor paralelo
+`src/storage/database.py` (`engine` / `SessionLocal` / `get_db`), lo redirige al SQLite efímero y
+neutraliza los alias capturados por imports directos (`from ... import SessionLocal, engine`).
+La bóveda viva queda fuera del alcance de la totalidad de la superficie de persistencia de pruebas.
 """
 
 import os
@@ -67,15 +68,45 @@ def boveda_gateway_aislada(tmp_path_factory):
     gateway = PersistenceGateway()
     Base.metadata.create_all(bind=gateway.engine)
 
-    # ── Nivel 4: Centinela fail-loud (imposibilita degradar en silencio a la bóveda viva) ────────
+    # ── Extensión P0-1: Aislamiento Hermético Total del motor paralelo ──────────────────────────
+    import sys
+
+    import src.storage.database as db_module
+    from sqlalchemy.orm import sessionmaker
+
+    motor_previo = db_module.engine
+    sesion_previa = db_module.SessionLocal
+
+    db_module.engine = gateway.engine
+    db_module.SessionLocal = sessionmaker(
+        bind=gateway.engine, autocommit=False, autoflush=False
+    )
+    Base.metadata.create_all(bind=db_module.engine)
+
+    # Los módulos que hicieron `from src.storage.database import SessionLocal/engine` conservan
+    # el objeto previo: se reconfigura in situ y se re-apunta cada alias ya cargado en `sys.modules`.
+    sesion_previa.configure(bind=gateway.engine)
+    for modulo in list(sys.modules.values()):
+        if getattr(modulo, "SessionLocal", None) is sesion_previa:
+            modulo.SessionLocal = db_module.SessionLocal
+        if getattr(modulo, "engine", None) is motor_previo:
+            modulo.engine = db_module.engine
+
+    # ── Nivel 4: Centinela fail-loud (Gateway + database.py, sin degradar a la bóveda viva) ─────
     url_resuelta = str(gateway.engine.url)
-    if BOVEDA_VIVA in url_resuelta or sandbox.as_posix() not in url_resuelta:
+    url_db = str(db_module.engine.url)
+    if (
+        BOVEDA_VIVA in url_resuelta
+        or sandbox.as_posix() not in url_resuelta
+        or BOVEDA_VIVA in url_db
+        or url_db != url_resuelta
+    ):
         gateway.engine.dispose()
         PersistenceGateway._instance = None
         shutil.rmtree(sandbox, ignore_errors=True)
         raise RuntimeError(
-            "🚨 FATAL [ARCH-1.5.0-B]: falló el aislamiento de persistencia de The Shield. El motor "
-            f"del Gateway resuelve a '{url_resuelta}' en lugar del sandbox efímero "
+            "🚨 FATAL [ARCH-1.5.0-B / P0-1]: falló el aislamiento de persistencia de The Shield. "
+            f"Gateway='{url_resuelta}', database.py='{url_db}', sandbox efímero="
             f"'{sandbox.as_posix()}'. Ejecución abortada para impedir mutaciones sobre la bóveda viva."
         )
 

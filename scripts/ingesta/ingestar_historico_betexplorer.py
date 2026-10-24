@@ -40,7 +40,7 @@ if PROJECT_ROOT not in sys.path:
 
 from bs4 import BeautifulSoup
 
-from src.ingestion.normalizer import canonicalize_team_name
+from src.ingestion.normalizer import NormalizationException, canonicalize_team_name
 from src.storage.crest_resolver import obtener_slug_club
 from src.storage.gateway import PersistenceGateway
 from src.storage.models import (
@@ -214,7 +214,12 @@ def _slugs_candidatos(nombre: str) -> List[str]:
     candidatos: List[str] = []
     actual = nombre
     for _ in range(2):
-        actual = canonicalize_team_name(actual)
+        try:
+            actual = canonicalize_team_name(actual)
+        except NormalizationException:
+            # [P1-4] El normalizador es Fail-Loud por diseño; este resolutor de catálogo
+            # no inventa identidad y continúa con los candidatos crudos.
+            break
         candidatos.append(obtener_slug_club(actual))
     candidatos.append(obtener_slug_club(nombre))
     return [candidato for candidato in candidatos if candidato]

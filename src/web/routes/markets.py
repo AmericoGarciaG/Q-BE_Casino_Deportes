@@ -20,6 +20,7 @@ from src.storage.gateway import PersistenceGateway
 from src.storage.models import FixtureSnapshot, League, Match, SovereignDistribution, Slate, SlateItem
 from src.models.web_schemas import CalibrationReportResponse, SimulatePortfolioRequest
 from src.storage.database import get_db
+from src.core.constants import DELTA_EPIST_DEFAULT, PSI_DOWNSIDE_DEFAULT
 from src.core.contracts.progol_math import (
     calcular_sesgo_quiniela,
     optimizar_quiniela_por_presupuesto,
@@ -990,10 +991,10 @@ def generate_sportsbook_portfolio_endpoint(
             # porta y la columna 3NF `epistemic_delta` almacena magnitudes FUERA del rango
             # legislado Δ_epist ∈ [0,1) (su unidad no está certificada), por lo que NO se
             # transcribe. Se emiten los defaults LEGISLADOS del Contrato R-1 [LN-QBE-070-C] /
-            # Directiva Fase 5 Paso 3: delta_epist = 0.02 (portfolio.py L246-249). Ψ se deriva
-            # con la fórmula canónica VERBATIM de `calcular_ranking_friccion`
+            # Directiva Fase 5 Paso 3: delta_epist = DELTA_EPIST_DEFAULT (portfolio.py L246-249).
+            # Ψ se deriva con la fórmula canónica VERBATIM de `calcular_ranking_friccion`
             # (portfolio_math.py L139): Ψ = 1 − (Δ/0.12)², y Ψ = 0 ⟺ Cuarentena Fiduciaria.
-            delta_epist = 0.02
+            delta_epist = DELTA_EPIST_DEFAULT
             psi_epist = max(0.0, 1.0 - (delta_epist / 0.12) ** 2) if delta_epist <= 0.12 else 0.0
             # André: el diagnóstico del fixture primero, el estrato 3NF después y, si tampoco
             # existe, el valor neutro LEGISLADO para "no evaluado" (portfolio.py L298-303:
@@ -1087,7 +1088,7 @@ def generate_sportsbook_portfolio_endpoint(
                 "strategy_code": triaje["codigo"],
                 "strategy_nombre": triaje["nombre"],
                 "ev_neto_roi": triaje["alpha"],
-                "psi_downside": 0.05,
+                "psi_downside": PSI_DOWNSIDE_DEFAULT,
                 "delta_epist": delta_epist,
                 "psi_epist": psi_epist,
                 "phi_lead2": phi_lead2,

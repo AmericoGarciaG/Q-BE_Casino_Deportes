@@ -6,8 +6,26 @@ Evalúa el cumplimiento booleano estricto sin umbrales arbitrarios, aplicando
 candados de jerarquía y el Triple Candado Fáctico para la Familia R.
 """
 
+import math
 from typing import Dict, Any
 from src.core.catalog import STRATEGY_CATALOG
+from src.core.constants import (
+    CANDADO_3_H2H_MIN,
+    PSI_RUINA_DEFAULT,
+    THETA_FAV_H1_DEFAULT,
+    THETA_UND_R1_DEFAULT,
+)
+
+
+def _veto_mercado_no_disponible() -> Dict[str, Any]:
+    """[LN-QBE-060-B / P1-3] Veto fiduciario por cuotas comerciales ausentes o inválidas."""
+    return {
+        "codigo": "QBE-00",
+        "nombre": "Veto Fiduciario: Mercado no disponible",
+        "alpha": 0.0,
+        "pa": False,
+        "motivo": "Cuotas comerciales ausentes o inválidas. Mercado suspendido o no capturado.",
+    }
 
 
 class StrategyEvaluatorEngine:
@@ -34,6 +52,26 @@ class StrategyEvaluatorEngine:
         q_mod_fav: float = 0.90,
         h2h_x2_prob: float = 0.50
     ) -> Dict[str, Dict[str, Any]]:
+        # ── [P1-3 / Saneamiento O-05] Pureza de mercado: sin O_L, O_E y O_V fácticas no hay
+        # evaluación. Cero fallbacks, interpolaciones o proxies sintéticos de precio.
+        try:
+            precios = tuple(float(precio) for precio in (o_fav, o_emp, o_und))
+        except (TypeError, ValueError):
+            precios = ()
+        if len(precios) != 3 or not all(
+            math.isfinite(precio) and precio >= 1.0 for precio in precios
+        ):
+            veto = _veto_mercado_no_disponible()
+            return {
+                "QBE_00": {
+                    "viable": True,
+                    "ev_neto_roi": 0.0,
+                    "nombre_oficial": veto["nombre"],
+                    "motivo_diagnostico": veto["motivo"],
+                }
+            }
+        o_fav, o_emp, o_und = precios
+
         results = {}
 
         edge_fav = p_fav - (1.0 / o_fav)
@@ -118,7 +156,7 @@ class StrategyEvaluatorEngine:
             bool(q_mod_fav <= 0.95)
         ])
         candado_2 = bool(senales_crisis >= 2)
-        candado_3 = bool(h2h_x2_prob >= 0.4000)
+        candado_3 = bool(h2h_x2_prob >= CANDADO_3_H2H_MIN)
         candado_4 = not bool(p_fav > p_und and edge_und <= 0.0)
         triple_candado_superado = bool(candado_1 and candado_2 and candado_3 and candado_4)
 
@@ -179,17 +217,20 @@ def evaluar_estrategia_individual(codigo_estrategia: str, metricas: Dict[str, An
     p_emp = float(metricas.get("prob_emp", metricas.get("p_emp", 0.0)))
     p_und = float(metricas.get("prob_und", metricas.get("p_und", 0.0)))
 
-    edge_fav = float(metricas.get("edge_fav", 0.0))
-    edge_emp = float(metricas.get("edge_emp", 0.0))
-    edge_und = float(metricas.get("edge_und", 0.0))
+    # ── [P1-3 / Saneamiento O-05] Sin cuotas comerciales fácticas no hay evaluación. La
+    # ausencia de O_L, O_E u O_V colapsa de inmediato a QBE-00; jamás se infiere un precio.
+    try:
+        o_fav = float(metricas.get("o_fav"))
+        o_emp = float(metricas.get("o_emp"))
+        o_und = float(metricas.get("o_und"))
+    except (TypeError, ValueError):
+        return _veto_mercado_no_disponible()
+    if not all(math.isfinite(precio) and precio >= 1.0 for precio in (o_fav, o_emp, o_und)):
+        return _veto_mercado_no_disponible()
 
-    o_fav = float(metricas.get("o_fav", 1.0 / (p_fav - edge_fav) if (p_fav - edge_fav) > 0 else 2.5))
-    o_emp = float(metricas.get("o_emp", 1.0 / (p_emp - edge_emp) if (p_emp - edge_emp) > 0 else 3.0))
-    o_und = float(metricas.get("o_und", 1.0 / (p_und - edge_und) if (p_und - edge_und) > 0 else 3.5))
-
-    theta_fav = float(metricas.get("theta_fav_h1", metricas.get("theta_req_fav", 0.40)))
+    theta_fav = float(metricas.get("theta_fav_h1", metricas.get("theta_req_fav", THETA_FAV_H1_DEFAULT)))
     theta_emp = float(metricas.get("theta_emp_h2", metricas.get("theta_req_emp", 0.30)))
-    theta_und = float(metricas.get("theta_und_r1", metricas.get("theta_req_und", 0.35)))
+    theta_und = float(metricas.get("theta_und_r1", metricas.get("theta_req_und", THETA_UND_R1_DEFAULT)))
 
     pts_pj_fav = float(metricas.get("pts_pj_fav", metricas.get("fav_pts_pj", 1.0)))
     gc_10p_fav = float(metricas.get("gc_10p_fav", metricas.get("fav_gc_promedio", 1.5)))
@@ -197,9 +238,10 @@ def evaluar_estrategia_individual(codigo_estrategia: str, metricas: Dict[str, An
     h2h_x2_prob = float(metricas.get("h2h_x2_prob", metricas.get("peso_h2h", 0.50)))
     pago_anticipado = bool(metricas.get("pago_anticipado", False))
 
-    momio_sintetico_x2 = float(metricas.get("momio_sintetico_x2", 1.60))
+    # Campo no consumido por el evaluador: se propaga la ausencia explícita (0.0), nunca 1.60.
+    momio_sintetico_x2 = metricas.get("momio_sintetico_x2", 0.0)
     phi_lead2 = float(metricas.get("phi_lead2", 0.0))
-    psi_ruina = float(metricas.get("psi_ruina", 0.05))
+    psi_ruina = float(metricas.get("psi_ruina", PSI_RUINA_DEFAULT))
     d_mkt = float(metricas.get("d_mkt", 1.0))
 
     res = StrategyEvaluatorEngine.evaluate_all(

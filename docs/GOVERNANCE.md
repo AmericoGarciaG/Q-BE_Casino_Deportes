@@ -297,6 +297,9 @@ Toda suite de The Shield debe incluir pruebas de inspección estática del Árbo
 ### [GOV-TEST-08] Invarianza de Mercado y Arbitraje Surebet [ALGO-PROTECTED] [GOVERNANCE]
 * **Principio:** Toda prueba de cuotas multi-operador debe verificar analíticamente que las probabilidades desprovistas de comisión sumen exactamente $1.0000 \pm 10^{-4}$ (Símplex $\Delta^2$), y que el índice de arbitraje sea no-negativo ($S_{\text{arb}} > 0$).
 
+### 7.2 El Libro de Registro de Identificadores (ID_REGISTRY) [GOVERNANCE]
+**Regla de Sincronización Mecánica (P2-7):** Queda estrictamente prohibida la edición manual del archivo `docs/ID_REGISTRY.md`. Este libro es un artefacto de compilación. Toda actualización debe realizarse exclusivamente ejecutando `python scripts/auditoria/reconciliar_registro_legislativo.py --write`. La suite de pruebas (The Shield) bloqueará cualquier commit si el registro no refleja el 100% de los nodos legislados en `LOGIC.md` y `ARCH.md`.
+
 ---
 
 ## 8. NOMENCLATURA MAESTRA INMUTABLE DE ESTRATEGIAS Q-BE

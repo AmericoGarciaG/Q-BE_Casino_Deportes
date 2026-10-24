@@ -39,6 +39,7 @@
 | `[LN-QBE-050]` | LOGIC | `docs/LOGIC.md` | Ecuaciones de Breakeven Dinámico Continuo ($\theta^*$) | SELLADO |
 | `[LN-QBE-059]` | LOGIC | `docs/LOGIC.md` | Partición Canónica del 2-Símplex Δ² sobre P' y Concentración Dinámica Γ [ARCH-PILLAR] | SELLADO |
 | `[LN-QBE-060]` | LOGIC | `docs/LOGIC.md` | Evaluador Determinista del Catálogo y Triple Candado Fáctico | SELLADO |
+| `[LN-QBE-060-R]` | LOGIC | `docs/LOGIC.md` | NOTA FORMAL DE DEROGACIÓN — Sueño Profundo de la Familia R (R1 y R2) [GOVERNANCE] | SELLADO |
 | `[LN-QBE-060-B]` | LOGIC | `docs/LOGIC.md` | Partición Exhaustiva de las 9 Estrategias Canónicas y Cascada de Triaje | SELLADO |
 | `[LN-QBE-060-C]` | LOGIC | `docs/LOGIC.md` | Filtro de Veto Fiduciario Inteligente Anti-Ruptura (QBE-00) | SELLADO |
 | `[LN-QBE-060-R-AWAKEN]` | LOGIC | `docs/LOGIC.md` | Las Cuatro Leyes de Hierro del Underdog (Familia R) | SELLADO |
@@ -126,6 +127,7 @@
 | `[LN-QBE-127]` | LOGIC | `docs/LOGIC.md` | Fuente Única de Verdad en la Calibración: Resolución al Vuelo de $P'$ y Derogación del Descarte Silencioso | SELLADO |
 | `[LN-QBE-128]` | LOGIC | `docs/LOGIC.md` | Prior Congelado de Apertura 2025 y Ley de Mezcla Monótona del Corte (Erradicación del Cold Start Estructural) | SELLADO |
 | `[LN-QBE-129]` | LOGIC | `docs/LOGIC.md` | Minería de Información Mutua de Shannon y Árbol Esparso de Veto (Descubrimiento de Rupturas P_LOW) | SELLADO |
+| `[LN-QBE-130]` | LOGIC | `docs/LOGIC.md` | Reglas de Curación HITL y Seeding de Competiciones | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -155,6 +157,7 @@
 | `[ARCH-1.5.0]` | ARCH | `docs/ARCH.md` | Central Persistence Gateway y Unidad de Trabajo (Unit of Work) [DIRGEN-SEALED] [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.0-B]` | ARCH | `docs/ARCH.md` | Aislamiento de Persistencia del Canal Gateway en The Shield [ARCH-PILLAR] [GOVERNANCE-01] | SELLADO |
 | `[ARCH-1.5.1]` | ARCH | `docs/ARCH.md` | Esquema Relacional 3NF Multi-Torneo — Especificación Canónica de Columnas [ARCH-PILLAR] [DIRGEN-STRICT] | SELLADO |
+| `[ARCH-1.5.1-C]` | ARCH | `docs/ARCH.md` | Tablas: `slates` y `slate_items` | SELLADO |
 | `[ARCH-1.5.2]` | ARCH | `docs/ARCH.md` | Persistencia Local en Base de Datos SQLite [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.5.3]` | ARCH | `docs/ARCH.md` | Catálogo de Equipos y Escudos en Base de Datos Local (`teams`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.5.3-B]` | ARCH | `docs/ARCH.md` | Política de Servido de Activos Visuales y Mitigación Anti-Hotlinking [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
@@ -249,6 +252,8 @@
 | `[ARCH-1.4.57]` | ARCH | `docs/ARCH.md` | Frontera de Presentación de los Cards Polimórficos: `variables_44` como Única Fuente y Deuda Declarada de `insumos_factivados` [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.58]` | ARCH | `docs/ARCH.md` | Telemetría Dimensional en el DTO, 19.ª Tarea del Centro de Control y Sonda de Completitud Fáctica 44V [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.4.59]` | ARCH | `docs/ARCH.md` | Centinela de Macro-Estadísticas FotMob y Congelación Idempotente del Artefacto `cache_macro_stats_liga_mx_2026.json` [ARCH-PILLAR] | SELLADO |
+| `[ARCH-1.4.60]` | ARCH | `docs/ARCH.md` | Inyección Macro-Torneal como Aduana de Exhibición y Derivación Dinámica de Taxonomías desde el Catálogo Único | SELLADO |
+| `[ARCH-1.4.61]` | ARCH | `docs/ARCH.md` | Taxonomías Derivadas en Import-Time y Régimen de Auxiliares `AUX_*` (Cierre de la Deriva Nominal 44V) | SELLADO |
 | `[ARCH-1.4.62]` | ARCH | `docs/ARCH.md` | Fase C de Vitrina: Retiro del Régimen 44V en la Capa Visible y Alineación de `sandbox_micro_dinamicas_pipeline` al Catálogo de 32 Variables | SELLADO |
 | `[ARCH-1.4.63]` | ARCH | `docs/ARCH.md` | Saneamiento de Vitrina: Derogación de la Tabla Duplicada por Dimensión, Soporte Forense Único y Normalización de la Barra de Posesión | SELLADO |
 | `[ARCH-1.4.64]` | ARCH | `docs/ARCH.md` | Delegación del Orden Fiduciario del Visor a la Función Pura Canónica y Resolución Declarada del Desnivel de Altitud | SELLADO |

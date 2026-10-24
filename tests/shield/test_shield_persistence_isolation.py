@@ -8,9 +8,9 @@ Axioma: Ningún juez de The Shield puede alcanzar la bóveda viva `data/qbe_data
 del canal transaccional `PersistenceGateway`. Este Juez certifica la existencia y vigencia del
 Cuádruple Cerrojo materializado por la fixture de sesión en `tests/shield/conftest.py`.
 
-Alcance declarado (honesto): certifica EXCLUSIVAMENTE el canal Gateway. El motor paralelo
-`src/storage/database.py` (`engine` / `SessionLocal` / `get_db`) permanece ligado a la bóveda viva
-por excepción declarada y se registra como deuda técnica abierta en `[ARCH-1.5.0-B-Δ1]`.
+Alcance: certifica el canal Gateway y, desde la Enmienda de Aislamiento Hermético Total (P0-1),
+también el motor paralelo `src/storage/database.py` (`engine` / `SessionLocal` / `get_db`), que el
+cerrojo de `tests/shield/conftest.py` intercepta y redirige hacia el SQLite efímero de la sesión.
 """
 
 import os
@@ -62,3 +62,78 @@ def test_invarianza_3_singleton_pydantic_reapuntado_y_ruta_efimera():
         "🚨 VIOLACIÓN CRÍTICA [GOV-TEST-01]: la URL efectiva no reside en el sandbox efímero de pytest "
         f"({url_entorno})."
     )
+
+
+class TestAislamientoHermeticoDatabasePy:
+    """[P0-1] Extensión del Juez Inmutable al motor paralelo `src.storage.database`."""
+
+    def test_aislamiento_hermetico_database_py(self):
+        """Certifica que `engine` / `SessionLocal` fueron interceptados por el cerrojo P0-1."""
+        import sqlite3
+        import uuid
+        from pathlib import Path
+
+        import src.storage.database as db_module
+        from src.storage.models import League
+
+        gateway = PersistenceGateway()
+        url_motor = str(db_module.engine.url)
+        assert BOVEDA_VIVA not in url_motor, (
+            "🚨 VIOLACIÓN CRÍTICA [ARCH-1.5.0-B / P0-1]: `src.storage.database.engine` sigue "
+            f"apuntando a la bóveda viva ({url_motor}). El cerrojo de aislamiento hermético "
+            "total no se materializó en `tests/shield/conftest.py`."
+        )
+        assert db_module.engine.url == gateway.engine.url, (
+            "🚨 VIOLACIÓN CRÍTICA [ARCH-1.5.0-B / P0-1]: el motor paralelo "
+            f"({db_module.engine.url}) no coincide con el motor efímero del Gateway "
+            f"({gateway.engine.url}); el split-brain de persistencia persiste."
+        )
+
+        marca = f"P0-1-{uuid.uuid4().hex}"
+        fotmob_id = 900_000_000 + (uuid.uuid4().int % 90_000_000)
+        sesion = db_module.SessionLocal()
+        try:
+            sesion.add(
+                League(
+                    name=marca,
+                    country="Sandbox P0-1",
+                    flag="🏳️",
+                    fotmob_id=fotmob_id,
+                )
+            )
+            sesion.commit()
+        finally:
+            sesion.close()
+
+        verificacion = db_module.SessionLocal()
+        try:
+            assert verificacion.query(League).filter(League.name == marca).count() == 1, (
+                "🚨 VIOLACIÓN CRÍTICA [ARCH-1.5.0-B / P0-1]: la escritura dummy no quedó "
+                "registrada en el entorno efímero."
+            )
+        finally:
+            verificacion.close()
+
+        # La bóveda viva se inspecciona en modo lectura puro: la ausencia del registro dummy
+        # certifica que la escritura de `SessionLocal()` jamás atravesó el motor paralelo.
+        boveda_viva = Path(BOVEDA_VIVA)
+        if boveda_viva.exists():
+            uri_ro = f"file:{boveda_viva.resolve().as_posix()}?mode=ro"
+            conexion = sqlite3.connect(uri_ro, uri=True)
+            try:
+                fila = conexion.execute(
+                    "SELECT COUNT(*) FROM leagues WHERE name = ?", (marca,)
+                ).fetchone()
+            finally:
+                conexion.close()
+            assert not fila or fila[0] == 0, (
+                "🚨 VIOLACIÓN CRÍTICA [ARCH-1.5.0-B / P0-1]: la escritura dummy alcanzó la "
+                f"bóveda viva ({boveda_viva}). El aislamiento es nominal, no hermético."
+            )
+
+        limpieza = db_module.SessionLocal()
+        try:
+            limpieza.query(League).filter(League.name == marca).delete()
+            limpieza.commit()
+        finally:
+            limpieza.close()

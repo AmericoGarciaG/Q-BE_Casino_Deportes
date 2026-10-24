@@ -405,3 +405,26 @@ class SimulatePortfolioRequest(BaseModel):
     target_certeza_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     modo_cobertura: Literal["DEF", "BAL", "AGR"] = "DEF"
 
+
+class TicketRegistrationRequest(BaseModel):
+    """[ARCH-1.4.32 / P3-9] Boleto a sellar en el ledger 3NF."""
+    match_id: str = Field(..., min_length=1, max_length=100)
+    desenlace: str = Field(..., min_length=1, max_length=120)
+    cuota_congelada: float = Field(..., gt=1.0)
+    monto: float = Field(..., gt=0.0)
+
+
+class TicketRegistrationResponse(BaseModel):
+    """[ARCH-1.4.32 / P3-9] Confirmación del sellado y agregado para el badge."""
+    status: str
+    ticket_id: int
+    boletos_comprados: int
+    monto_comprometido_mxn: float
+
+
+class TicketLedgerStatusResponse(BaseModel):
+    """[ARCH-1.4.32 / P3-9] Estado agregado del ledger para hidratar la SPA."""
+    boletos_comprados: int
+    monto_comprometido_mxn: float
+    match_ids: List[str] = Field(default_factory=list)
+

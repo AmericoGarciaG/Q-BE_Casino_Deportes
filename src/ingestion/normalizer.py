@@ -9,6 +9,11 @@ import re
 from difflib import SequenceMatcher
 from typing import Dict, Iterable, List, Optional, Tuple
 
+
+class NormalizationException(Exception):
+    """[LN-QBE-012 / Saneamiento O-09] Identidad no resoluble con certeza."""
+
+
 _CANONICAL_ALIASES: Dict[str, str] = {
     # Liga MX
     "club tijuana": "Club Tijuana",
@@ -67,6 +72,7 @@ _CANONICAL_ALIASES: Dict[str, str] = {
     "mazatlán fc": "Mazatlán",
     "pumas": "Pumas UNAM",
     "pumas unam": "Pumas UNAM",
+    "unam pumas": "Pumas UNAM",
     "unam": "Pumas UNAM",
     "univ. nacional": "Pumas UNAM",
     "univ nacional": "Pumas UNAM",
@@ -125,17 +131,12 @@ def canonicalize_team_name(team_name: Optional[str]) -> str:
     if direct:
         return direct
 
-    for alias, canonical in _CANONICAL_ALIASES.items():
-        if texto == alias or texto in alias or alias in texto:
-            return canonical
-
-    # Fuzzy matching robusto para errores OCR / tipográficos
+    # Fuzzy matching robusto para errores OCR / tipográficos. [Saneamiento O-09]
+    # Prohibida la contención de subcadenas: sólo igualdad exacta, ratio >= 0.78 o
+    # distancia de Levenshtein <= 2 para cadenas de longitud >= 4.
     for canonical in _CANONICAL_TEAM_NAMES:
         normalized_canonical = _normalize_text(canonical)
         if texto == normalized_canonical:
-            return canonical
-
-        if texto in normalized_canonical or normalized_canonical in texto:
             return canonical
 
         ratio = SequenceMatcher(None, texto, normalized_canonical).ratio()
@@ -146,7 +147,7 @@ def canonicalize_team_name(team_name: Optional[str]) -> str:
             if _levenshtein_distance(texto, normalized_canonical) <= 2:
                 return canonical
 
-    return str(team_name).strip()
+    raise NormalizationException(f"No se pudo normalizar el equipo: '{team_name}'")
 
 
 normalizar_nombre_club = canonicalize_team_name

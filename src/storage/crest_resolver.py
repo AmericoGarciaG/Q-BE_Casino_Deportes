@@ -8,7 +8,7 @@ import logging
 import urllib.parse
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
-from src.ingestion.normalizer import canonicalize_team_name
+from src.ingestion.normalizer import NormalizationException, canonicalize_team_name
 
 logger = logging.getLogger("CrestResolver")
 
@@ -35,8 +35,16 @@ def _generar_svg_fallback(iniciales: str, club_nombre: str) -> str:
     return f"data:image/svg+xml;utf8,{encoded}"
 
 def obtener_slug_club(nombre: str) -> str:
-    """Genera un slug limpio y canónico a partir del nombre del club."""
-    nombre_canonico = canonicalize_team_name(nombre)
+    """Genera un slug limpio y canónico a partir del nombre del club.
+
+    [LN-QBE-019] El resolutor de activos degrada de forma elegante ante un club fuera del
+    catálogo: el normalizador conserva su Fail-Loud (P1-4), pero el slug se deriva del texto
+    limpio para que la escalera de escudos pueda entregar el SVG institucional.
+    """
+    try:
+        nombre_canonico = canonicalize_team_name(nombre)
+    except NormalizationException:
+        nombre_canonico = str(nombre or "").strip()
     slug = (
         nombre_canonico.lower()
         .replace(" ", "-")

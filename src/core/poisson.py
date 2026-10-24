@@ -15,6 +15,17 @@ from src.models.analytics import (
     SyntheticMetricsResult,
     PoissonModulationResult
 )
+from src.core.constants import (
+    BASELINE_LIGA,
+    SATURACION_MADUREZ_J,
+    OMEGA_MIN,
+    OMEGA_MAX,
+    BLEND_XG,
+    BLEND_GF,
+    CLAMP_GOLES_MIN,
+    CLAMP_GOLES_MAX,
+    EDGE_MIN_SATELITE,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -127,27 +138,27 @@ class PoissonBivariateEngine:
             w_liga = 1.0 - w_h2h
 
         # 2. Modulador de tabla
-        madurez = min(1.0, float(jornada_tabla) / 6.0)
-        mod_tabla_l = 1.0 + madurez * ((pts_pj_local / 1.35) - 1.0)
-        mod_tabla_v = 1.0 + madurez * ((pts_pj_vis / 1.35) - 1.0)
+        madurez = min(1.0, float(jornada_tabla) / SATURACION_MADUREZ_J)
+        mod_tabla_l = 1.0 + madurez * ((pts_pj_local / BASELINE_LIGA) - 1.0)
+        mod_tabla_v = 1.0 + madurez * ((pts_pj_vis / BASELINE_LIGA) - 1.0)
 
         # 3. Multiplicador compuesto (Omega)
-        omega_l = float(np.clip(metrics.fcf_local * metrics.e_att_local * mod_tabla_l * q_mod_local, 0.40, 1.60))
-        omega_v = float(np.clip(metrics.fcf_vis * metrics.e_att_vis * mod_tabla_v * q_mod_vis, 0.40, 1.60))
+        omega_l = float(np.clip(metrics.fcf_local * metrics.e_att_local * mod_tabla_l * q_mod_local, OMEGA_MIN, OMEGA_MAX))
+        omega_v = float(np.clip(metrics.fcf_vis * metrics.e_att_vis * mod_tabla_v * q_mod_vis, OMEGA_MIN, OMEGA_MAX))
 
         # 4. Goles esperados (lambda, mu) con calibración cruzada Opta xG [LN-QBE-040]
         if loc_xg is not None and v_xga is not None:
             gc_v = vis_gc_10p if vis_gc_10p is not None else 1.0
-            base_att_l = 0.65 * loc_xg + 0.35 * gf_local_10p
-            base_def_v = 0.65 * v_xga + 0.35 * gc_v
+            base_att_l = BLEND_XG * loc_xg + BLEND_GF * gf_local_10p
+            base_def_v = BLEND_XG * v_xga + BLEND_GF * gc_v
             lambda_base = math.sqrt(max(0.01, base_att_l * base_def_v))
         else:
             lambda_base = gf_local_10p
 
         if vis_xg is not None and local_xga is not None:
             gc_l = local_gc_10p if local_gc_10p is not None else 1.0
-            base_att_v = 0.65 * vis_xg + 0.35 * gf_vis_10p
-            base_def_l = 0.65 * local_xga + 0.35 * gc_l
+            base_att_v = BLEND_XG * vis_xg + BLEND_GF * gf_vis_10p
+            base_def_l = BLEND_XG * local_xga + BLEND_GF * gc_l
             mu_base = math.sqrt(max(0.01, base_att_v * base_def_l))
         else:
             mu_base = gf_vis_10p
@@ -155,8 +166,8 @@ class PoissonBivariateEngine:
         raw_lambda = ((w_h2h * h2h.gf_h2h_local) + (w_liga * lambda_base)) * omega_l
         raw_mu = ((w_h2h * h2h.gf_h2h_visita) + (w_liga * mu_base)) * omega_v
 
-        lambda_loc = float(np.clip(raw_lambda, 0.05, 6.00))
-        mu_vis = float(np.clip(raw_mu, 0.05, 6.00))
+        lambda_loc = float(np.clip(raw_lambda, CLAMP_GOLES_MIN, CLAMP_GOLES_MAX))
+        mu_vis = float(np.clip(raw_mu, CLAMP_GOLES_MIN, CLAMP_GOLES_MAX))
 
         # 5. Matriz Poisson Bivariada 6x6 con corrección Dixon-Coles táctica [LN-QBE-040-C]
         #    ρ = None ⇒ ley de resolución dinámica por régimen de anotación (Σλ vs 2.6500 xG).
@@ -216,7 +227,7 @@ class PoissonBivariateEngine:
         edge_emp = p_hib_emp - (1.0 / odd_emp)
         edge_und = p_hib_und - (1.0 / odd_und)
 
-        candidato_satelite = bool(odd_und >= 4.50 and pago_anticipado_activo and edge_und >= 0.05 and q_mod_vis >= 0.95)
+        candidato_satelite = bool(odd_und >= 4.50 and pago_anticipado_activo and edge_und >= EDGE_MIN_SATELITE and q_mod_vis >= 0.95)
 
         return PoissonModulationResult(
             lambda_local=lambda_loc,

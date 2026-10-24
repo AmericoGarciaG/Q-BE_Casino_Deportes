@@ -1,7 +1,7 @@
 # 🕵️ CENSO DE REGLAS HUÉRFANAS (ORPHAN RULES CENSUS)
 
 **Documento:** Auditoría Estática de Gobernanza — Protocolo C.2 (Arqueología de Gobierno / Reconciliación Inversa)
-**Régimen:** `[HÍBRIDO DUAL-TRACK]` — `[DIRGEN-STRICT]` (Core / Fórmulas / Vault) · `[DBBD-FUNGIBLE]` (Rutas / UI / Docs)
+**Régimen:** `[DIRGEN-STRICT]` — documento inmutable de la Base de Gobierno (no fungible)
 **Ruta SDLC:** `SDLC-04 Feature Injection`
 **Fecha de emisión:** 2026-10-08
 **Autoridad Suprema:** Américo García Guerrero (Director Humano)

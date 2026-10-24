@@ -133,3 +133,40 @@ def test_registry_covers_total_node_universe():
         f"docs/ID_REGISTRY.md: {huerfanos}"
     )
 
+
+class TestRegistrySincronizacionMecanica:
+    """[P2-7] El Registro Maestro es un artefacto de compilación, no un documento editable."""
+
+    def test_registry_cubre_total_node_universe(self):
+        """Todo encabezado de nodo en LOGIC.md/ARCH.md debe tener fila en ID_REGISTRY.md.
+
+        Se ancla por encabezado (`###`/`####`), no por mención inline: los identificadores
+        declarados "no asignados", los placeholders (`LN-QBE-XXX`) y las referencias cruzadas
+        no son nodos legislados y no deben inventarse en el registro.
+        """
+        registro_path = DOCS_DIR / "ID_REGISTRY.md"
+        assert registro_path.exists(), "Falta docs/ID_REGISTRY.md (Registro Maestro del Paso 0)"
+        registro = registro_path.read_text(encoding="utf-8")
+        ids_registrados = set()
+        for linea in registro.splitlines():
+            coincidencia_fila = re.match(r"^\|\s*`?\[([^\]]+)\]`?\s*\|", linea.strip())
+            if coincidencia_fila:
+                ids_registrados.add(coincidencia_fila.group(1))
+
+        patron_encabezado = re.compile(
+            r"^#{3,4}\s+(?:ID:\s+)?.*?\[(LN-QBE-[A-Za-z0-9_\-]+|ARCH-[0-9A-Za-z\.\-_]+)\]"
+        )
+        nodos = set()
+        for ruta in (LOGIC_PATH, ARCH_PATH):
+            for linea in ruta.read_text(encoding="utf-8").splitlines():
+                coincidencia = patron_encabezado.match(linea)
+                if coincidencia:
+                    nodos.add(coincidencia.group(1))
+
+        assert nodos, "Los Libros no publican ningún encabezado de nodo reconocible."
+        faltantes = sorted(nodos - ids_registrados)
+        assert len(faltantes) == 0, (
+            "🚨 REGISTRO DESACTUALIZADO: nodos legislados sin fila en docs/ID_REGISTRY.md: "
+            f"{faltantes}. Ejecute `python scripts/auditoria/reconciliar_registro_legislativo.py --write`."
+        )
+

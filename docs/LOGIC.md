@@ -76,8 +76,8 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **P (Process) [ARCH-PILLAR]:**
   1. Limpieza de texto: eliminación de caracteres no alfanuméricos, acentos y normalización de espacios.
   2. Mapeo directo contra el diccionario canónico `_CANONICAL_ALIASES` (18 clubes Liga MX + clubes internacionales).
-  3. Búsqueda difusa (*Fuzzy Matching*) mediante distancia de Levenshtein ($\text{ratio} \ge 0.78$) ante fallos de OCR o variantes tipográficas.
-  4. Si un equipo no puede resolverse con certeza $\implies$ lanzamiento de `NormalizationException`.
+  3. **Aduana de Identidad Estricta (Saneamiento O-09):** Queda estrictamente prohibida la validación por contención de subcadenas (`texto in alias` o `alias in texto`). La coincidencia se validará exclusivamente por igualdad exacta, ratio de `SequenceMatcher` $\ge 0.78$ o distancia de Levenshtein $\le 2$.
+  4. **Fail-Loud Mandatorio:** Si un equipo no puede resolverse con certeza con los umbrales anteriores, se lanzará obligatoriamente `NormalizationException`. Prohibido el retorno silencioso del texto crudo.
 * **Heurística de Resolución de Próximo Rival (Safe Rival Lookup):**
   1. Si la fuente estructurada omite el rival o devuelve texto genérico (`"vs Rival"` o vacío), el normalizador deducirá el club rival a partir del fixture cruzado de la jornada activa.
   2. Si no es posible identificar con certeza al rival en la jornada, se resolverá como `"Por Definir"` asociando el placeholder SVG institucional. Prohibido el renderizado de cadenas vacías o términos no procesados.
@@ -369,6 +369,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   2. Matriz bivariada: $P(X=x, Y=y) = \frac{\lambda^x e^{-\lambda}}{x!} \cdot \frac{\mu^y e^{-\mu}}{y!} \quad \forall x, y \in [0, 5]$.
   3. Fusión Híbrida: $P_{\text{híbrida}}(k) = W_{\text{H2H}} \cdot P_{\text{H2H}}(k) + W_{\text{Liga}} \cdot P_{\text{Poisson}}(k)$.
   4. Variables de Salida: $\Phi_{\text{Lead2}}$ (Pago Anticipado), $\Psi_{\text{Ruina}} = P_{\text{híbrida}}(\text{Und}) \times 0.98$.
+* **Constantes Formalizadas (CONSTANTS.md §8):** `BASELINE_LIGA`, `SATURACION_MADUREZ_J`, `OMEGA_MIN`, `OMEGA_MAX`, `BLEND_XG`, `BLEND_GF`, `CLAMP_GOLES_MIN`, `CLAMP_GOLES_MAX`.
 * **O (Output):** `PoissonAnalyticsResult`.
 * **Φ (Transición):** Hacia **[LN-QBE-050]**.
 
@@ -486,6 +487,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Ω (Resumen):** Partición formal del espacio de inversión en exactamente nueve estrategias mutuamente excluyentes y colectivamente exhaustivas: `QBE-D1`, `QBE-D2`, `QBE-H1`, `QBE-H2`, `QBE-R1`, `QBE-R2`, `QBE-C1`, `QBE-C2` y `QBE-00`.
 * **I (Input):** Tupla $\mathcal{T}_i = \langle \vec{p}_i, \Delta_{\text{epist}}, S(\mathcal{I}_i), \vec{O}_i, \vec{\alpha}_i, \theta^*, \Phi_{\text{Lead2}}, Q_{\text{mod}} \rangle$.
 * **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
+  **Cláusula de Pureza de Mercado (Saneamiento O-05):** El triaje y el evaluador exigen la presencia fáctica de las cuotas comerciales. Queda estrictamente prohibido el uso de valores por defecto (fallbacks), interpolaciones o proxis sintéticos para `O_L`, `O_E` u `O_V`. Si alguno de los precios no está disponible o es menor a 1.0, la tupla se considera inválida y el partido colapsa inmediatamente a `QBE-00` por Veto Fiduciario.
   Árbol de decisión determinista en cascada de 7 pasos:
   1. Si $S(\mathcal{I}_i) = 0 \lor \Delta_{\text{epist}} > 0.12 \implies$ **`QBE-00`** (Cuarentena / Capital = $\$0.00$).
   2. Si la morfología de Capa 0 resuelve `HEGEMONIA_LOCAL` o `HEGEMONIA_VISITANTE` bajo el umbral $\Gamma$ recibido $\land \Delta_{\text{epist}} \le 0.04 \land \alpha_{\text{fav}} > 0.05 \implies$ **`QBE-D1`** (Local) o **`QBE-D2`** (Visita). Si $p_{\text{fav}}' < \Gamma$, el partido no puede ser Directa y es transferido a Asimetría Híbrida (ver Paso 4).
@@ -607,6 +609,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   - `odd_fav`, `odd_emp`, `odd_und`: float (cuotas comerciales efectivas $> 1.0$)
   - `fav_name`, `und_name`: str
   - `pago_anticipado`: bool
+  - El valor por defecto legislado de `delta_epist` es `DELTA_EPIST_DEFAULT` (CONSTANTS.md §8).
 * **O (Output):** Payload certificado listo para alimentar `build_plan()`.
 * **Φ (Transición):** Hacia [LN-QBE-070-B] (Kelly fraccional y Hard-Caps).
 
@@ -1112,6 +1115,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   2. En toda orden híbrida ($H1, H2$), si tras aplicar la escala el seguro comprimido resulta $B_{\text{seg}} < \$2.00\text{ MXN}$, se impone la **Regla de Clamping Fiduciario**:
      $$B_{\text{seg}}^* = \$2.00\text{ MXN}$$
      El ajuste residual necesario para no rebasar el tope de cartera se absorbe reduciendo el boleto de ataque ($B_{\text{prio}}$) o prorrateando sobre las demás posiciones con holgura.
+     **Guarda O-06:** El parámetro `o_emp` (cuota de empate) es obligatorio para el reescalado. Queda estrictamente prohibido asumir un valor por defecto (como 3.30). Si la orden no porta `o_emp`, se debe levantar `ValueError` o descartar la orden del prorrateo.
   3. Garantiza simultáneamente que ningún boleto sea rechazado por la ventanilla del casino y que la cartera jamás arriesgue más del $25.0\%$.
 
 ---
@@ -1145,6 +1149,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
   p_{\text{fav}}' / (p_{\text{fav}}' + p_{\text{dog}}') & \text{para apuestas sin empate } (QBE-C1) \\
   0.3333 & \text{para cuarentena } (QBE-00)
   \end{cases}$$
+  **Guarda O-07:** Si el denominador $(p_{fav}' + p_{dog}')$ es igual a cero, la probabilidad efectiva es estrictamente `0.0`. Queda derogado el fallback neutral de `0.50` por no estar promulgado en el sistema.
 * **Regla de Ordenamiento Lexicográfico de Cartera:**
   $$\mathbf{\text{Clave Primaria: } P_{\text{éxito}}' \quad \text{Descendente} \quad \longrightarrow \quad \text{Clave Secundaria: } \text{Ganancia Neta} \quad \text{Descendente}}$$
 * **Materialización:** `calcular_probabilidad_exito_estrategia` y `ordenar_cartera_por_certeza_lexicografica` (`[VAULT-CORE-079-SHRINKAGE]`). El campo derivado viaja como `prob_exito_efectiva` dentro del payload de partidos aprobados (`[ARCH-1.4.17]`).
@@ -1195,6 +1200,7 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **P (Process) [ARCH-PILLAR] [ALGO-PROTECTED]:**
   1. Para $K=14$ partidos, se construye el vector ordenado $P'$ tal que:
      $$P(B_{(1)}) \ge P(B_{(2)}) \ge \dots \ge P(B_{(N)})$$
+     **Cláusula de Ignorancia Explícita (Saneamiento O-08):** Queda prohibido el uso de literales `0.3333` huérfanos en el cálculo de la probabilidad conjunta. Si un partido no provee distribución fiduciaria, se debe inyectar la terna canónica del Prior Fiduciario `(0.3333, 0.3333, 0.3334)` importando o referenciando las constantes legisladas del sistema, garantizando la conservación de la masa probabilística.
   2. Dado un presupuesto $B_{\text{presupuesto}}$, el cupo de boletas sencillas es $M = \lfloor B_{\text{presupuesto}} / 15.0 \rfloor$.
   3. Se selecciona el subconjunto óptimo $\mathcal{A}_M = \{ B_{(1)}, B_{(2)}, \dots, B_{(M)} \}$.
   4. **Teorema de Maximización de Masa:** $\mathcal{A}_M$ maximiza estrictamente la masa acumulada $C(M) = \sum_{j=1}^M P(B_{(j)})$ frente a cualquier otro subconjunto de tamaño $M$. Se descarta toda selección heurística o subjetiva de boletas.
@@ -1990,7 +1996,16 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **Deuda declarada:** (i) la información mutua es **sesgada al alza** en muestras pequeñas: la corrección por permutación queda fuera del Sprint; (ii) `k = 4` es una decisión de discretización declarada, no una optimalidad; (iii) las reglas describen la MUESTRA y no constituyen certificación out-of-sample; (iv) el árbol no reemplaza la cobertura de la tríada: es un mapa de riesgo para el analista.
 * **[SHIELD]:** `tests/shield/test_shield_sprint3_prior_seeding_and_shannon_mining.py` (INVARIANZAS 3 y 4).
 
-
+### ID: [LN-QBE-130] Reglas de Curación HITL y Seeding de Competiciones
+* **Ω (Resumen):** Gobernar la inicialización de competiciones y la lógica de curación de escudos, absorbiendo las decisiones operativas previamente documentadas como comentarios en el código (VARIANZA-09, ALT-9).
+* **I (Input):** Identificadores de liga, catálogos de clubes.
+* **P (Process) [BIZ-LOGIC]:**
+  1. El Seeder inicializa las competiciones base garantizando la idempotencia.
+  2. La Curación HITL aplica las reglas de hash SHA-256 para validar los escudos descargados.
+  3. Los fallbacks de imágenes aplican la jerarquía SVG en caso de ausencia del binario.
+* **O (Output):** Transacciones 3NF de catálogos y activos.
+* **Φ (Transición):** Consumidor activo: `src/storage/curation_service.py` y `src/storage/seeder.py`.
+* **[SHIELD]:** `tests/shield/test_shield_orphan_rules_saneamiento.py`
 
 ---
 

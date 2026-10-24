@@ -430,3 +430,62 @@ def test_v1_modal_vincula_p_prima_por_identidad_de_pierna():
     )
 
 
+# ---------------------------------------------------------------------------
+# 8. [ARCH-1.4.32 / P3-9] LEDGER FIDUCIARIO PERSISTIDO EN 3NF
+# ---------------------------------------------------------------------------
+class TestLedgerFiduciario3NF:
+    def test_registro_boleto_persiste_en_3nf(self):
+        """POST register-ticket persiste el boleto y bloquea el duplicado (idempotencia)."""
+        import uuid
+        from fastapi.testclient import TestClient
+        from src.web.app import app
+
+        payload = {
+            "match_id": f"LIGAMX-P3-9-{uuid.uuid4().hex}",
+            "desenlace": "L",
+            "cuota_congelada": 1.85,
+            "monto": 100.0,
+        }
+        client = TestClient(app)
+
+        primera = client.post("/api/portfolio/register-ticket", json=payload)
+        assert primera.status_code == 200, primera.text
+        cuerpo = primera.json()
+        assert cuerpo.get("status") == "OK", cuerpo
+        assert cuerpo.get("boletos_comprados", 0) >= 1, cuerpo
+
+        from src.storage.gateway import PersistenceGateway
+        from src.storage.models import PaperTradingLedger
+
+        with PersistenceGateway().read_session() as db:
+            fila = db.query(PaperTradingLedger).filter(
+                PaperTradingLedger.match_id == payload["match_id"],
+                PaperTradingLedger.desenlace == payload["desenlace"],
+                PaperTradingLedger.monto == payload["monto"],
+            ).first()
+            assert fila is not None, "El boleto no quedó persistido en paper_trading_ledger"
+
+        estado = client.get("/api/portfolio/ledger-status")
+        assert estado.status_code == 200, estado.text
+        assert payload["match_id"] in estado.json().get("match_ids", []), (
+            "El endpoint de hidratación no publica el boleto recién sellado"
+        )
+
+        duplicado = client.post("/api/portfolio/register-ticket", json=payload)
+        assert duplicado.status_code in (400, 409), (
+            "La idempotencia debe rechazar el duplicado con 400/409: "
+            f"{duplicado.status_code} {duplicado.text}"
+        )
+
+        code = APP_JS.read_text(encoding="utf-8")
+        assert "qbe_boletos_comprados" not in code, (
+            "🚨 El frontend conserva el ledger en localStorage; debe consumir el endpoint 3NF"
+        )
+        assert "/api/portfolio/register-ticket" in code, (
+            "🚨 El frontend no invoca el endpoint POST /api/portfolio/register-ticket"
+        )
+        assert "/api/portfolio/ledger-status" in code, (
+            "🚨 El frontend no hidrata el badge desde el ledger 3NF"
+        )
+
+

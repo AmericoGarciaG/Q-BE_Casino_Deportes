@@ -181,6 +181,21 @@ Este libro declara formalmente todas las constantes numéricas, escalas y factor
 
 ---
 
+## 8. DOMINIO DE FÍSICA ESTOCÁSTICA Y CLAMPS (SANEAMIENTO O-04 Y O-14)
+| Símbolo | Nombre Canónico | Valor Exacto | Unidad | Nodo Dueño | Dominio de Validez |
+|:---:|---|---|:---:|:---:|---|
+| $B_{\text{liga}}$ | `BASELINE_LIGA` | `1.35` | Goles / Partido | `[LN-QBE-040]` | Baseline para cálculo de madurez |
+| $J_{\text{sat}}$ | `SATURACION_MADUREZ_J` | `6.0` | Jornadas | `[LN-QBE-040]` | Punto de saturación de madurez |
+| $\Omega_{\min}$ | `OMEGA_MIN` | `0.40` | Adimensional | `[LN-QBE-040]` | Clamp inferior de rendimiento |
+| $\Omega_{\max}$ | `OMEGA_MAX` | `1.60` | Adimensional | `[LN-QBE-040]` | Clamp superior de rendimiento |
+| $w_{xG}$ | `BLEND_XG` | `0.65` | Fracción | `[LN-QBE-040]` | Peso de xG en mezcla de ataque |
+| $w_{GF}$ | `BLEND_GF` | `0.35` | Fracción | `[LN-QBE-040]` | Peso de GF en mezcla de ataque |
+| $G_{\min}$ | `CLAMP_GOLES_MIN` | `0.05` | Goles | `[LN-QBE-040]` | Cota inferior de goles esperados |
+| $G_{\max}$ | `CLAMP_GOLES_MAX` | `6.00` | Goles | `[LN-QBE-040]` | Cota superior de goles esperados |
+| $\Delta_{\text{epist}}^{\text{def}}$ | `DELTA_EPIST_DEFAULT` | `0.02` | Probabilidad | `[LN-QBE-070-C]` | Delta epistémico por defecto |
+
+---
+
 ## 📎 NOTA DE TRANSCRIPCIÓN (Provenance)
 
 Transcrito **verbatim** desde el Decreto de Consolidación (Sprint 3 — Capa 4), según la Directiva

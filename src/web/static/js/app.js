@@ -1661,9 +1661,9 @@ function renderizarResultadosPortafolio(data) {
             `;
             contSplit.appendChild(card);
         });
-        // [UI-REFINEMENT-5-POINTS §1] La píldora del Ledger reside ahora en la CABECERA de
-        // #panel-resumen-asignacion: se re-hidrata tras pintar la cartera entregada.
-        _actualizarContadorBoletosComprados();
+        // [UI-REFINEMENT-5-POINTS §1] La píldora del Ledger se pinta desde el estado
+        // server-side hidratado; cero lectura de localStorage.
+        _pintarBadgeLedger();
     }
 
     // 6. Radar de Descartes (QBE-00)
@@ -2223,97 +2223,101 @@ function cerrarRadiografiaForense() {
 window.abrirRadiografiaForense = abrirRadiografiaForense;
 window.cerrarRadiografiaForense = cerrarRadiografiaForense;
 
-// ─── [DES-QBE-069] SISTEMA DE CONGELAMIENTO "COMPRAR BOLETO" (LEDGER INMUTABLE) ──
-// El estado del boleto se congela al momento de la compra para auditoría post-partido:
-// cuotas, importes y proyecciones quedan inmutables en localStorage. Cero red y cero
-// LLM ([GOVERNANCE-01]): la UI sólo persiste el contrato ya hidratado por el motor.
+// ─── [ARCH-1.4.32 / P3-9] LEDGER FIDUCIARIO 3NF (SIN localStorage) ──────────
+// El boleto se sella vía POST /api/portfolio/register-ticket. El servidor es la única
+// fuente de verdad del agregado y del estado "ya comprado" (tabla paper_trading_ledger).
 
-/** ¿El boleto de este partido ya fue congelado en el Ledger local? */
-function _verificarBoletoComprado(matchId) {
-    try {
-        const ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
-        return ledger.some(t => t.id_partido === matchId);
-    } catch (e) {
-        return false;
-    }
-}
+let _ledgerBoletos = new Set();
+let _ledgerCount = 0;
+let _ledgerMonto = 0.0;
 
-/** [MEJORA 1] Refresca el contador de boletos comprados en la barra superior. */
-function _actualizarContadorBoletosComprados() {
-    let ledger = [];
-    try {
-        ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
-    } catch (e) {
-        ledger = [];
-    }
-    const count = ledger.length;
-    const totalComprometido = ledger.reduce((acc, t) => acc + (Number(t.inversion_total_mxn) || 0), 0);
+function _pintarBadgeLedger() {
     const badge = document.getElementById("badge-boletos-comprados");
     if (badge) {
-        badge.textContent = `🎟️ Comprados: ${count} ($${totalComprometido.toFixed(2)} MXN)`;
+        badge.textContent = `🎟️ Comprados: ${_ledgerCount} ($${Number(_ledgerMonto).toFixed(2)} MXN)`;
     }
 }
 
-/** [CONGELAMIENTO] Almacena el estado INMUTABLE del boleto en el momento de la compra. */
-function comprarBoleto(matchId) {
+/** ¿El boleto de este partido ya fue sellado en el ledger 3NF? */
+function _verificarBoletoComprado(matchId) {
+    return _ledgerBoletos.has(matchId);
+}
+
+/** Hidrata el badge y el estado "ya comprado" desde el servidor (cero localStorage). */
+async function _hidratarLedgerDesdeServidor() {
+    try {
+        const resp = await fetch("/api/portfolio/ledger-status");
+        if (!resp.ok) return;
+        const data = await resp.json();
+        _ledgerBoletos = new Set(data.match_ids || []);
+        _ledgerCount = Number(data.boletos_comprados || 0);
+        _ledgerMonto = Number(data.monto_comprometido_mxn || 0);
+        _pintarBadgeLedger();
+    } catch (e) {
+        // Sin red: el badge conserva el último estado conocido; cero escritura local.
+    }
+}
+
+/** [CONGELAMIENTO] Sella el boleto en el ledger 3NF a través del endpoint gobernado. */
+async function comprarBoleto(matchId) {
     const allOrders = currentPortfolioData?.ordenes_ejecucion_partidos
         || currentPortfolioData?.ordenes
         || [];
     const ord = allOrders.find(x => x.id_partido === matchId);
     if (!ord) return;
 
-    const b1 = ord.boletos?.boleto_1_seguro || {};
     const b2 = ord.boletos?.boleto_2_ganancia || {};
-
-    const ticketCongelado = {
-        id_partido: ord.id_partido,
-        partido: ord.partido,
-        horario_evento: ord.horario_evento,
-        estrategia: ord.estrategia_seleccionada?.codigo || ord.estrategia_codigo,
-        inversion_total_mxn: ord.boletos?.inversion_partido_A_i || 0,
-        pierna_ataque: {
-            seleccion: b2.seleccion,
-            monto_mxn: b2.monto_mxn,
-            momio_congelado: b2.momio,
-            operador: b2.operador,
-            prob_p_prime: b2.prob_qbe
-        },
-        pierna_seguro: {
-            seleccion: b1.seleccion,
-            monto_mxn: b1.monto_mxn,
-            momio_congelado: b1.momio,
-            operador: b1.operador,
-            prob_p_prime: b1.prob_qbe
-        },
-        proyecciones: ord.proyecciones,
-        timestamp_compra_utc: new Date().toISOString(),
-        estado_auditoria: "PENDIENTE_RESULTADO"
+    const payload = {
+        match_id: ord.id_partido,
+        desenlace: b2.seleccion || ord.estrategia_seleccionada?.codigo || "QBE-00",
+        cuota_congelada: Number(b2.momio),
+        monto: Number(ord.boletos?.inversion_partido_A_i),
     };
 
-    let ledger = [];
-    try {
-        ledger = JSON.parse(localStorage.getItem("qbe_boletos_comprados") || "[]");
-    } catch (e) {
-        ledger = [];
+    if (!(payload.cuota_congelada > 1.0) || !(payload.monto > 0.0)) {
+        alert("No se puede registrar el boleto: cuota congelada o monto inválidos.");
+        return;
     }
-    ledger = ledger.filter(t => t.id_partido !== matchId);
-    ledger.push(ticketCongelado);
-    localStorage.setItem("qbe_boletos_comprados", JSON.stringify(ledger));
 
-    // Feedback visual inmediato en el botón de compra de la tarjeta.
     const btn = document.getElementById(`btn-comprar-${matchId}`);
     if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#00E676";
-        btn.style.border = "1px solid #00E676";
-        btn.style.boxShadow = "none";
-        btn.style.cursor = "default";
-        btn.innerHTML = "✔ Boleto Registrado";
         btn.disabled = true;
+        btn.textContent = "Registrando...";
     }
 
-    _actualizarContadorBoletosComprados();
-    alert(`🎟️ Boleto congelado exitosamente para ${ord.partido}.\nLas cuotas e importes se han registrado para auditoría post-partido.`);
+    try {
+        const resp = await fetch("/api/portfolio/register-ticket", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            throw new Error(data.detail || "No se pudo registrar el boleto.");
+        }
+
+        _ledgerBoletos.add(matchId);
+        _ledgerCount = Number(data.boletos_comprados || _ledgerCount);
+        _ledgerMonto = Number(data.monto_comprometido_mxn || _ledgerMonto);
+        _pintarBadgeLedger();
+
+        if (btn) {
+            btn.style.background = "#1e293b";
+            btn.style.color = "#00E676";
+            btn.style.border = "1px solid #00E676";
+            btn.style.boxShadow = "none";
+            btn.style.cursor = "default";
+            btn.innerHTML = "✔ Boleto Registrado";
+            btn.disabled = true;
+        }
+        alert(`🎟️ Boleto registrado en el ledger 3NF para ${ord.partido}.`);
+    } catch (e) {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "🎟️ Comprar Boleto";
+        }
+        alert(`No se pudo registrar el boleto: ${e.message}`);
+    }
 }
 
 /** [MEJORA 2] Copia al portapapeles el ticket en formato limpio para ventanilla / WhatsApp. */
@@ -2348,8 +2352,8 @@ function copiarTicketPortapapeles(matchId) {
 window.comprarBoleto = comprarBoleto;
 window.copiarTicketPortapapeles = copiarTicketPortapapeles;
 
-// El contador de boletos comprados se hidrata al cargar la SPA.
-document.addEventListener("DOMContentLoaded", _actualizarContadorBoletosComprados);
+// El ledger 3NF se hidrata desde el servidor al cargar la SPA.
+document.addEventListener("DOMContentLoaded", _hidratarLedgerDesdeServidor);
 
 // ─── Funciones del Panel de Curación Agéntica HITL [ARCH-1.5.2] ─────────────
 async function abrirModalCurador(leagueId = 262) {

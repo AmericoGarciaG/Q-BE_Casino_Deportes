@@ -8,6 +8,7 @@ Régimen: [DIRGEN-STRICT]
 Axioma: Cero dependencias de base de datos. Cero I/O. Cero números mágicos.
 """
 
+import math
 from typing import List, Dict, Tuple, Optional, Any
 
 
@@ -242,14 +243,35 @@ def calcular_ganancia_cobertura_v0(
     return round((g * (1.0 - p_x)) - (b * p_x), 2)
 
 
+def construir_veto_mercado_no_disponible() -> dict:
+    """[LN-QBE-060-B / P1-3] Veto fiduciario único por ausencia o invalidez de cuotas."""
+    return {
+        "codigo": "QBE-00",
+        "nombre": "Veto Fiduciario: Mercado no disponible",
+        "alpha": 0.0,
+        "pa": False,
+        "motivo": "Cuotas comerciales ausentes o inválidas. Mercado suspendido o no capturado.",
+    }
+
+
 def triaje_determinista_9_estrategias(payload: dict, cuotas: dict, gamma: float = 0.67) -> dict:
     """[LN-QBE-060-B] Triaje determinista subordinado a la morfología Capa 0."""
     from src.core.simplex_morphology import clasificar_morfologia_simplex
     if not payload.get("es_operable", True) or payload.get("delta_epist", 0.0) > 0.12:
         return {"codigo": "QBE-00", "nombre": "Cuarentena Fiduciaria", "alpha": 0.0, "pa": False}
 
+    # ── [P1-3 / Saneamiento O-05] Pureza de mercado: sin las tres cuotas fácticas no hay triaje.
+    # Prohibidos los fallbacks, interpolaciones y proxies sintéticos de O_L, O_E u O_V.
+    try:
+        oL = float(cuotas["L"])
+        oX = float(cuotas["E"])
+        oV = float(cuotas["V"])
+    except (KeyError, TypeError, ValueError):
+        return construir_veto_mercado_no_disponible()
+    if not all(math.isfinite(precio) and precio >= 1.0 for precio in (oL, oX, oV)):
+        return construir_veto_mercado_no_disponible()
+
     p1, pX, p2 = payload["p_local"], payload["p_empate"], payload["p_visitante"]
-    oL, oX, oV = cuotas.get("L", 0.0), cuotas.get("E", 0.0), cuotas.get("V", 0.0)
     delta_epist = payload.get("delta_epist", 0.0)
     pa = bool(cuotas.get("pa", False) or cuotas.get("pago_anticipado", False))
 
@@ -532,7 +554,15 @@ def aplicar_hard_caps_con_respeto_a_piso(
 
             codigo = str(ord_item.get("strategy_code", "")).upper().strip()
             if codigo in FAMILIAS_CON_COBERTURA and nueva_inv > 0.0:
-                o_emp = float(ord_item.get("odd_emp", 3.30))
+                if (
+                    "odd_emp" not in ord_item
+                    or ord_item["odd_emp"] is None
+                    or float(ord_item["odd_emp"]) <= 1.0
+                ):
+                    raise ValueError(
+                        "[O-06] La orden requiere un 'odd_emp' válido para el reescalado al piso de ventanilla."
+                    )
+                o_emp = float(ord_item["odd_emp"])
                 # Piso NATURAL ([LN-QBE-070-E].2): inversión mínima para que el seguro
                 # (B_i / odd_emp) alcance la ventanilla, con dos piernas admisibles como suelo.
                 piso_natural[indice] = max(round(piso_min_boleto * o_emp, 2), piso_bivariado)
@@ -574,7 +604,15 @@ def aplicar_hard_caps_con_respeto_a_piso(
             if indice not in piso_natural:
                 continue
             inv = float(ord_item["inversion_total"])
-            o_emp = float(ord_item.get("odd_emp", 3.30))
+            if (
+                "odd_emp" not in ord_item
+                or ord_item["odd_emp"] is None
+                or float(ord_item["odd_emp"]) <= 1.0
+            ):
+                raise ValueError(
+                    "[O-06] La orden requiere un 'odd_emp' válido para el reescalado al piso de ventanilla."
+                )
+            o_emp = float(ord_item["odd_emp"])
             seguro_teorico = round(inv / o_emp, 2) if o_emp > 1.0 else 0.0
             if seguro_teorico < piso_min_boleto or inv < piso_bivariado:
                 b_seg = float(piso_min_boleto)
@@ -682,7 +720,9 @@ def calcular_probabilidad_exito_estrategia(
         return round(p_und_p, 4)
     elif cod == "QBE-C1":
         denom = p_fav_p + p_und_p
-        return round(p_fav_p / denom, 4) if denom > 0 else 0.50
+        if denom <= 0:
+            return 0.0
+        return round(p_fav_p / denom, 4)
     return 0.3333
 
 

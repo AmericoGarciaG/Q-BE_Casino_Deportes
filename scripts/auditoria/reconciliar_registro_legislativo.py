@@ -46,8 +46,10 @@ RESERVADOS = {
     "LN-QBE-040-B": ("LOGIC", "Techo Conjunto de Intensidad Ofensiva en Espacio Logarítmico (Anti-Resonancia)", "SELLADO"),
 }
 
-PATRON_LOGICO = re.compile(r'^###\s+ID:\s+\[(LN-QBE-[A-Za-z0-9_\-]+)\]\s*(.*)$')
-PATRON_ARCH = re.compile(r'^###\s+\[(ARCH-[0-9A-Za-z\.\-_]+)\]\s*(.*)$')
+PATRON_LOGICO = re.compile(r'^###\s+(?:ID:\s+)?\[(LN-QBE-[A-Za-z0-9_\-]+)\]\s*(.*)$')
+PATRON_ARCH = re.compile(r'^###\s+(?:ID:\s+)?\[(ARCH-[0-9A-Za-z\.\-_]+)\]\s*(.*)$')
+# Subnodos legislados como tablas (`#### Tablas: ... — [ARCH-1.5.1-C]`).
+PATRON_ARCH_H4 = re.compile(r'^####\s+(.*?)\[(ARCH-[0-9A-Za-z\.\-_]+)\]\s*$')
 
 # [DIRGEN-STRICT] Estado asignado EXCLUSIVAMENTE a las filas de nodos que aún no existían en el
 # registro. Todo estado preexistente se preserva verbatim (salvaguarda anti-destrucción).
@@ -91,10 +93,18 @@ def extraer_nodos() -> list:
         if not ruta.exists():
             raise SystemExit(f"[ALTO AL FUEGO] Libro canónico ausente: {ruta}")
         for linea in ruta.read_text(encoding="utf-8").splitlines():
-            coincidencia = patron.match(linea.strip())
-            if not coincidencia:
+            limpia = linea.strip()
+            coincidencia = patron.match(limpia)
+            if coincidencia:
+                nodo_id, titulo = coincidencia.group(1), coincidencia.group(2)
+            elif familia == "ARCH":
+                coincidencia_h4 = PATRON_ARCH_H4.match(limpia)
+                if not coincidencia_h4:
+                    continue
+                nodo_id = coincidencia_h4.group(2)
+                titulo = re.sub(r"\[[^\]]+\]", "", coincidencia_h4.group(1)).strip(" —-")
+            else:
                 continue
-            nodo_id, titulo = coincidencia.group(1), coincidencia.group(2)
             if nodo_id in vistos:
                 raise SystemExit(f"[ALTO AL FUEGO] Nodo duplicado en los Libros: {nodo_id}")
             vistos.add(nodo_id)

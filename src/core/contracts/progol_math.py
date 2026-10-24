@@ -9,6 +9,15 @@ Base de Gobierno: Kybern Framework v12.0
 from itertools import product
 from typing import List, Dict, Tuple, Any, Optional
 
+# [LN-QBE-075 / P1-5] Prior de Ignorancia Fiduciaria — fuente única legislada.
+from src.ingestion.progol_scraper import PRIOR_IGNORANCIA_FIDUCIARIA
+
+PROB_IGNORANCIA: Dict[str, float] = {
+    "L": PRIOR_IGNORANCIA_FIDUCIARIA[0],
+    "E": PRIOR_IGNORANCIA_FIDUCIARIA[1],
+    "V": PRIOR_IGNORANCIA_FIDUCIARIA[2],
+}
+
 
 def calcular_sesgo_quiniela(v_publico: Dict[str, float], p_soberana: Dict[str, float]) -> Dict[str, Any]:
     """
@@ -167,10 +176,10 @@ def seleccionar_cobertura_binaria_optima(partidos_14: List[Dict[str, Any]]) -> L
     """[LN-QBE-085] Selecciona los 2 desenlaces con mayor probabilidad por partido."""
     resultado = []
     for p in partidos_14:
-        p_qbe = p.get("p_qbe") or {"L": 0.3333, "E": 0.3333, "V": 0.3334}
-        probs = [("L", float(p_qbe.get("L", 0.3333))), 
-                 ("E", float(p_qbe.get("E", 0.3333))), 
-                 ("V", float(p_qbe.get("V", 0.3334)))]
+        p_qbe = p.get("p_qbe") or PROB_IGNORANCIA
+        probs = [("L", float(p_qbe.get("L", PROB_IGNORANCIA["L"]))),
+                 ("E", float(p_qbe.get("E", PROB_IGNORANCIA["E"]))),
+                 ("V", float(p_qbe.get("V", PROB_IGNORANCIA["V"])))]
         # Ordenar desenlaces por probabilidad descendente
         probs.sort(key=lambda x: x[1], reverse=True)
         top_2 = [probs[0][0], probs[1][0]]
@@ -197,7 +206,7 @@ def generar_universo_restringido_y_ordenar_p_prime(partidos_14: List[Dict[str, A
     for combinacion in product(*opciones_por_partido):
         p_conjunta = 1.0
         for idx, signo in enumerate(combinacion):
-            p_conjunta *= probs_por_partido[idx].get(signo, 0.3333)
+            p_conjunta *= probs_por_partido[idx].get(signo, PROB_IGNORANCIA[signo])
         candidatos.append((combinacion, round(p_conjunta, 8)))
 
     # Ordenamiento canónico descendente por masa probabilística P'
