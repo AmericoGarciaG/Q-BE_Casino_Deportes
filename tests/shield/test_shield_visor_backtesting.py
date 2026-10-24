@@ -9,6 +9,15 @@ Contrato vigilado:
 Regímenes: [DIRGEN-STRICT] en la matemática de calibración (verbatim de bóveda),
 [DBBD-FUNGIBLE] en la capa de presentación.
 Gobierno: [GOV-TEST-01] Aislamiento hermético en memoria (cero red / cero navegador / cero tokens).
+
+ENMIENDA DE PRESENTACIÓN `[DES-QBE-064-B]` (2026-10-23, expediente
+`SPRINT-REFINAMIENTO-UI-SYNC-J13-33`, autorizada por el Director): los rótulos literales de la
+franja inferior del Nivel 3 se realinean a la maqueta limpia legislada —`Brier (QBE / Mkt)`,
+`Masa Cubierta`, `Alpha`— y la franja pasa de `flex` a rejilla CSS Grid estricta de 3 columnas
+(`repeat(3, minmax(0, 1fr))`, anti-desborde por zoom). **Ningún axioma se toca**: el Brier dual
+servido, la masa fiduciaria `(P′(1) + P′(2)) · 100` y la fórmula sellada
+`Alpha_i = (1 − BS_QBE / BS_MKT) · 100` siguen certificados, y la franja conserva su ancla
+`.micro-partido-footer-v2` y el literal `<div class="footer-col-postura">${badgePostura}`.
 """
 
 
@@ -35,7 +44,8 @@ def test_juez_4_parrilla_micro_semantica_visual():
     assert "💀 RUPTURA UNDERDOG" not in js
     assert "Pronóstico P′:" not in js
     assert "· Final:" not in js
-    assert "Brier: Q-BE" in js
+    # [DES-QBE-064-B] El Brier dual se certifica por el rótulo limpio de la rejilla inferior.
+    assert "Brier (QBE / Mkt)" in js
     assert "bt-casilla-ganadora" not in js
 
     for color_class, color, background in (
@@ -188,8 +198,9 @@ def test_juez_6_rediseno_tridimensional_parrilla_micro():
          P′ descendente (verde / azul cian / rojo carmín) — contrato sellado del Juez 4.
 
     El Nivel 3 (franja inferior) queda limpio de la pastilla fiduciaria y del texto central
-    derogados, y despliega las métricas cuantitativas en 3 columnas flex
-    (`.micro-partido-footer-v2`): postura fiduciaria (Consenso / Contrarian), Brier Score dual con
+    derogados, y despliega las métricas cuantitativas en rejilla CSS Grid ESTRICTA de 3 columnas
+    (`.footer-kpi-grid` dentro de `.micro-partido-footer-v2`, `[DES-QBE-064-B]`): postura
+    fiduciaria (Consenso / Contrarian) en banda superior a ancho completo, Brier Score dual con
     Alpha individual `Alpha_i = (1 − BS_QBE / BS_MKT) · 100` y masa fiduciaria protegida
     `(P′(1) + P′(2)) · 100`.
 
@@ -237,21 +248,35 @@ def test_juez_6_rediseno_tridimensional_parrilla_micro():
         "La pastilla fiduciaria derogada (ACIERTO FAVORITO / COBERTURA TABLAS) no debe regresar."
     )
 
-    # ── Nivel 3: FRANJA INFERIOR de 3 columnas con métricas cuantitativas ──────────────────
+    # ── Nivel 3: REJILLA INFERIOR estricta de 3 columnas con métricas cuantitativas ────────
+    # [DES-QBE-064-B] Rótulos realineados a la maqueta limpia (sin redundancia «Brier: Q-BE ·
+    # Mkt», «Masa Cubierta:» ni paréntesis de Alpha). Axiomas intactos: dual Brier servido,
+    # masa fiduciaria y fórmula sellada del Alpha individual.
     assert "micro-partido-footer-v2" in js and ".micro-partido-footer-v2 {" in css, (
-        "Falta el contenedor flex de 3 columnas de la franja inferior del Nivel 3."
+        "Falta el contenedor de la franja inferior del Nivel 3."
     )
-    assert "Masa Cubierta:" in js, (
-        "Falta la masa fiduciaria protegida (P′(1) + P′(2)) de la columna derecha."
+    assert '<div class="footer-kpi-grid">' in js, (
+        "Falta la rejilla de KPIs que encapsula Brier / Masa / Alpha."
     )
-    assert "'(Alpha ${signoAlpha}${alphaPct}%)'" in js or "(Alpha ${signoAlpha}${alphaPct}%)" in js, (
-        "Falta el Alpha individual del partido con su signo porcentual en la columna central."
+    assert js.count('<div class="footer-kpi">') == 3, (
+        "La rejilla inferior debe declarar EXACTAMENTE tres celdas KPI (Brier · Masa · Alpha)."
+    )
+    regla_kpi = css[css.index(".footer-kpi-grid {"):]
+    regla_kpi = regla_kpi[:regla_kpi.index("}")]
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in regla_kpi, (
+        "La rejilla inferior no declara 3 columnas estrictas con ancho mínimo 0 (anti-zoom)."
+    )
+    assert "Brier (QBE / Mkt)" in js and "${bsQbe} / ${bsMkt}" in js, (
+        "La primera columna debe desplegar el Brier Score dual (Q-BE vs Mkt) en formato limpio."
+    )
+    assert ">Masa Cubierta</div>" in js and "${masaPct}%" in js, (
+        "Falta la masa fiduciaria protegida (P′(1) + P′(2)) de la segunda columna."
+    )
+    assert ">Alpha</div>" in js and "${signoAlpha}${alphaPct}%" in js, (
+        "Falta el Alpha individual del partido con su signo porcentual en la tercera columna."
     )
     assert "(1 - bsQbeRaw / bsMktRaw) * 100" in js, (
         "Falta la fórmula sellada del Alpha individual: Alpha_i = (1 − BS_QBE / BS_MKT) · 100."
-    )
-    assert "Brier: Q-BE" in js and "· Mkt " in js, (
-        "La columna central debe desplegar el Brier Score dual (Q-BE vs Mkt)."
     )
     assert "opacity: 0.75;" in css and ".micro-box-inactivo" in css, (
         "Las dos casillas que no ocurrieron deben conservar el fondo neutro `.micro-box-inactivo`."

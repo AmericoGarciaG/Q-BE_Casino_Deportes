@@ -4234,8 +4234,8 @@ function pintarMesoBacktesting(jornadas, resumen) {
                 <td class="numeric">${fila.total_partidos}</td>
                 <td class="${_claseCoberturaBacktesting(masaJornada)}">${masaJornada.toFixed(2)}%</td>
                 <td>
-                    ${desgloseTriada}
-                    <span style="display:block; color:#94A3B8; font-size:10px;">${conteosTriada}</span>
+                    <div style="font-weight:700; font-variant-numeric: tabular-nums;">${desgloseTriada}</div>
+                    <div style="color:#94A3B8; font-size:10px; margin-top:2px; font-variant-numeric: tabular-nums;">${conteosTriada}</div>
                 </td>
                 <td class="numeric">${Number(fila.brier_score_qbe || 0).toFixed(4)}</td>
                 <td class="numeric">${Number(fila.brier_score_mercado || 0).toFixed(4)}</td>
@@ -4287,7 +4287,7 @@ function mostrarMicroJornadaBacktesting(idx) {
         const motivoExclusion = _motivoExclusionPartidoCalibracion(p, jornada);
         const claseExclusion = motivoExclusion ? " partido-excluido-filtro" : "";
         const badgeExclusion = motivoExclusion
-            ? '<span class="badge-excluido-motivo" style="background:#1C1917; border:1px solid #78716C; color:#D6D3D1; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="No cuenta en masa, Brier ni Alpha: retirado por el alcance declarado o por un filtro fiduciario activo">' +
+            ? '<span class="badge-excluido-motivo" style="background:#1C1917; border:1px solid #78716C; color:#D6D3D1; padding:2px 6px; border-radius:4px; font-size:10px;" title="No cuenta en masa, Brier ni Alpha: retirado por el alcance declarado o por un filtro fiduciario activo">' +
                 `🚫 EXCLUIDO · ${motivoExclusion}</span>`
             : "";
         const momios = p.momios || {};
@@ -4296,8 +4296,18 @@ function mostrarMicroJornadaBacktesting(idx) {
         // así que el rótulo ya no puede afirmar que la parrilla espeja q_mkt: declara la ignorancia
         // fáctica del insumo y deja que el Brier mida la degradación real del prior.
         const pildoraColdStart = p.suficiencia_S_I === 0
-            ? '<span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px;" title="Suficiencia de Datos = 0: sin evidencia fáctica; se evalúa el prior puro del modelo (Cold Start sincero)">❄️ Cold Start · Suficiencia de Datos = 0</span>'
+            ? '<span class="bt-badge-cold-start" style="background:#1E293B; color:#93C5FD; border:1px solid #3B82F6; padding:2px 6px; border-radius:4px; font-size:10px;" title="Suficiencia de Datos = 0: sin evidencia fáctica; se evalúa el prior puro del modelo (Cold Start sincero)">❄️ Cold Start · Suficiencia de Datos = 0</span>'
             : "";
+        // [DES-QBE-064-B] BANDA FIDUCIARIA DE ANCHO COMPLETO: los tres sellos (Cold Start,
+        // procedencia de captura y exclusión) ABANDONAN la columna `auto` del marcador y se
+        // apilan en una fila propia por encima de los equipos. Es la pieza que devuelve la
+        // centralidad al resultado y extingue el desborde por zoom (una columna de ancho
+        // intrínseco crecía con cada badge y comprimía las dos columnas `1fr` de los equipos).
+        const bandaBadges = [
+            pildoraColdStart,
+            _badgeProcedenciaHtml(p.origen_captura),
+            badgeExclusion,
+        ].filter(Boolean).join("");
         // [ARCH-1.4.38-R3 · Rediseño Tridimensional 1X2] Ranking fiduciario del partido: los tres
         // desenlaces ordenados por P′ descendente resuelven QUIÉN es 1er, 2º y 3er favorito de
         // Q-BE. La colorimetría del desenlace real consumado se ancla a esa POSICIÓN (jamás al rol
@@ -4373,7 +4383,7 @@ function mostrarMicroJornadaBacktesting(idx) {
         // un desnivel ΔAlt⁺ ≥ 1000 msnm. Se exhibe la magnitud REALMENTE consumida por λ (traza
         // V29); el pintor no deriva ni recalcula nada ([GOVERNANCE-01]).
         const badgeRescateAltitudHtml = p.rescate_indiferencia
-            ? '<span class="bt-badge-rescate-alt" style="background:#082F49; border:1px solid #22D3EE; color:#67E8F9; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace; margin-left:6px;" title="Banda de indiferencia ε = 1.00%: el LOCAL se promueve al Rescate de Cobertura por el Asedio Territorial Neto del anfitrión">' +
+            ? '<span class="bt-badge-rescate-alt" style="background:#082F49; border:1px solid #22D3EE; color:#67E8F9; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:10px; font-family:monospace; display:inline-block; max-width:100%; margin-top:2px;" title="Banda de indiferencia ε = 1.00%: el LOCAL se promueve al Rescate de Cobertura por el Asedio Territorial Neto del anfitrión">' +
                 `🛡️ Rescate de Cobertura · ΔAlt ${Math.round(Number(p.delta_alt_metros || 0))} m</span>`
             : "";
         // Columna central: Brier Score individual + Alpha del partido
@@ -4400,13 +4410,12 @@ function mostrarMicroJornadaBacktesting(idx) {
         const atribucion = p.atribucion_factorial || null;
         const semaforosHud = (atribucion && atribucion.semaforos) || {};
         // [DES-QBE-071] EPIST sale de la vista, no del payload: el veto anti-cuarentena lo consume.
-        const tiraSemaforos = ["opta", "sede", "h2h", "ctx"].map(clave => {
-            const estado = semaforosHud[clave] || "NEUTRO";
-            const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
-            return `<span class="hud-semaforo" data-semaforo="${clave.toUpperCase()}" ` +
-                `data-estado="${estado}" title="${clave.toUpperCase()}: ${estado}" ` +
-                `style="color:${color};">● ${clave.toUpperCase()}</span>`;
-        }).join("");
+        // [DES-QBE-064-B] Limpieza semántica: el glifo BASTA. El estado viaja en `data-estado`
+        // (lo consume el filtro anti-cuarentena y lo audita el Shield) y en el `title`
+        // accesible; JAMÁS se imprime como texto redundante sobre el color.
+        const tiraSemaforos = ["opta", "sede", "h2h", "ctx"].map(clave =>
+            _glifoSemaforo(clave, semaforosHud[clave] || "NEUTRO", "hud-semaforo")
+        ).join("");
         const driverPrincipal = atribucion && atribucion.driver_principal
             ? atribucion.driver_principal
             : null;
@@ -4447,27 +4456,33 @@ function mostrarMicroJornadaBacktesting(idx) {
 
         return `
         <div class="bt-micro-row${claseExclusion}">
+            ${bandaBadges ? `<div class="bt-micro-badges">${bandaBadges}</div>` : ""}
             <div class="bt-micro-equipo">${escudo(p.local_escudo_url)}<span>${p.local}</span></div>
-            <div class="bt-micro-marcador">${p.marcador}${pildoraColdStart}${_badgeProcedenciaHtml(p.origen_captura)}${badgeExclusion}</div>
+            <div class="bt-micro-marcador">${p.marcador}</div>
             <div class="bt-micro-equipo bt-visita"><span>${p.visitante}</span>${escudo(p.visitante_escudo_url)}</div>
             <div class="bt-micro-casillas">${casillas}</div>
             ${microHud}
             <div class="micro-partido-footer-v2">
                 <div class="footer-col-postura">${badgePostura}<span style="display:inline-block; width:6px;"></span>${badgeTriadaHtml}</div>
-                <div class="footer-col-brier">
-                    Brier: Q-BE <span style="color:#F8FAFC;">${bsQbe}</span>
-                    · Mkt <span style="color:#F8FAFC;">${bsMkt}</span>
-                    · <span style="color:${alphaColor}; font-weight:bold;">(Alpha ${signoAlpha}${alphaPct}%)</span>
-                </div>
-                <div class="footer-col-masa">
-                    Masa Cubierta: <strong style="color:#F8FAFC;">${masaPct}%</strong>
-                    ${triadaProv
-                        ? `<span style="color:#94A3B8; font-size:10px;"> · ${triadaProv}` +
-                            `${p.clasificacion_triada
+                <div class="footer-kpi-grid">
+                    <div class="footer-kpi">
+                        <div class="footer-kpi-kicker">Brier (QBE / Mkt)</div>
+                        <div class="footer-kpi-valor">${bsQbe} / ${bsMkt}</div>
+                    </div>
+                    <div class="footer-kpi">
+                        <div class="footer-kpi-kicker">Masa Cubierta</div>
+                        <div class="footer-kpi-valor">${masaPct}%</div>
+                        ${triadaProv
+                            ? `<div class="footer-kpi-nota">${triadaProv}${p.clasificacion_triada
                                 ? ` (${GLOSARIO_VERTICES_VISOR[p.clasificacion_triada] || p.clasificacion_triada})`
-                                : ""}</span>`
-                        : ""}
-                    ${badgeRescateAltitudHtml}
+                                : ""}</div>`
+                            : ""}
+                        ${badgeRescateAltitudHtml}
+                    </div>
+                    <div class="footer-kpi">
+                        <div class="footer-kpi-kicker">Alpha</div>
+                        <div class="footer-kpi-valor" style="color:${alphaColor};">${signoAlpha}${alphaPct}%</div>
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -4589,14 +4604,26 @@ function _delta32(valor) {
     return `<span style="color:${color}; font-family:monospace;">${numero >= 0 ? "+" : ""}${numero.toFixed(4)}</span>`;
 }
 
+/**
+ * [DES-QBE-064-B] Glifo soberano de un semáforo: `● DIMENSIÓN` teñido por la colorimetría
+ * sellada de `COLORES_SEMAFORO_SALUD`. Única fuente de verdad del DOM de semáforos: la
+ * parrilla micro (`.hud-semaforo`) y el panel del modal de 32V (`.vars44-semaforo`) la
+ * consumen por igual. Prohibido imprimir el estado (`VERDE` / `AMARILLO` / `ROJO` / `NEUTRO`)
+ * como texto visible: el dato viaja en `data-estado` (gobierno) y en `title` (accesibilidad),
+ * nunca en el layout.
+ */
+function _glifoSemaforo(clave, estado, clase) {
+    const nombre = ETIQUETAS_SEMAFORO_32[clave] || String(clave).toUpperCase();
+    const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
+    return `<span class="${clase || "vars44-semaforo"}" data-semaforo="${nombre}" ` +
+        `data-estado="${estado}" title="${nombre}: ${estado}" ` +
+        `style="color:${color};">● ${nombre}</span>`;
+}
+
 function _bloqueSemaforos32(semaforos) {
-    return Object.keys(ETIQUETAS_SEMAFORO_32).map(clave => {
-        const estado = (semaforos && semaforos[clave]) || "NEUTRO";
-        const color = COLORES_SEMAFORO_SALUD[estado] || COLORES_SEMAFORO_SALUD.NEUTRO;
-        return `<span class="vars44-semaforo" data-semaforo="${ETIQUETAS_SEMAFORO_32[clave]}" ` +
-            `data-estado="${estado}" style="color:${color};">● ${ETIQUETAS_SEMAFORO_32[clave]} ` +
-            `<strong>${estado}</strong></span>`;
-    }).join("");
+    return Object.keys(ETIQUETAS_SEMAFORO_32).map(clave =>
+        _glifoSemaforo(clave, (semaforos && semaforos[clave]) || "NEUTRO")
+    ).join("");
 }
 
 function _badgeDimension32(dimension) {
