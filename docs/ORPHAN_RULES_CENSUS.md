@@ -82,6 +82,10 @@ El censo cita el **working copy** (incluido `docs/DIRGEN_VAULT.md` no commiteado
 | **O-13** | `scratch/apply_directiva_integracion.py:53` | Duplicado de `o_dnb = o_fav * 0.75` y del bloque sellado `[VAULT-CORE-070-TRIAJE]` | Copia del algoritmo sellado fuera de `src/` y no versionada ⇒ segunda fuente de verdad | **MEDIO** | ⏳ Abierto (Fase 2 — retiro o guardián AST) |
 | **O-14** | `poisson.py:66-67` (Ω `[0.40,1.60]`), `:72-73,80-81` (blend `0.65 xG + 0.35`), `:89-90` (clamp `[0.05,6.00]`); `evaluator.py` θ; `markets.py:519` (`delta_epist=0.02`) | Clamps y mezclas sin verificación documental cerrada | Literales etiquetados con nodo pero sin localización en `CONSTANTS.md` | **MEDIO** | ⏳ Abierto (Fase 2 — una línea de verificación c/u) |
 
+> **Saneamiento de Auditor Duplicado:** La duplicidad entre `src/core/coherence_auditor.py` y `scripts/auditoria/...` ha sido erradicada mediante la conversión del script a un Wrapper Puro, en apego a `[ARCH-1.6.4]`.
+>
+> *Evidencia de Fase 1 (2026-10-24):* ambos artefactos publicaban el MISMO SHA-256 (`D8FF7C35FE097F9CCC3D41138C5A1487CE57A8DF3EC6A75F06674F5C992370D8`, 767 líneas), es decir, una segunda fuente de verdad byte a byte del contrato `[ARCH-1.4.34]`. El Juez Inmutable `tests/shield/test_auditor_parity.py` congela la identidad de objeto (`is`) y prohíbe la redefinición de funciones, clases y constantes de auditoría en la capa de scripts.
+
 ---
 
 ## 5. Resumen ejecutivo

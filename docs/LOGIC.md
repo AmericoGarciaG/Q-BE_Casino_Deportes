@@ -2011,6 +2011,24 @@ El pipeline de inteligencia cuantitativa se modela como un dígrafo acíclico di
 * **[SHIELD]:** `tests/shield/test_shield_orphan_rules_saneamiento.py`
 * **Enmienda Nudo 2:** Queda terminantemente prohibido el seeding de tablas de posiciones estáticas (`TABLA_OFICIAL_J7_CONCLUIDA`) o de cuotas comerciales inventadas (`fixtures_iniciales_j8`). El Seeder solo puede inicializar la estructura base (competiciones), el resto debe venir de la ingesta fáctica.
 
+### ID: [LN-QBE-133] Ingesta Fáctica Profunda
+
+* **Ω (Resumen):** la ingesta histórica masiva de FotMob deja de ser un volcado de resultados y se convierte en una **fuente fáctica profunda**: cada partido terminado de 2010/11 a la actualidad se persiste en `matches` con su marcador real y, cuando la fuente lo publica, su telemetría (`xG`, `xGA`, posesión, `SoT`, `SoTA`) en `match_telemetry`. La identidad de los clubes se resuelve exclusivamente con `[LN-QBE-012]`; un club extinto o sin alias se declara `unmapped` y se excluye, nunca se inventa un slug.
+* **I (Input):** `__NEXT_DATA__` de la página de liga de FotMob para cada temporada (fixtures, jornada, estado, marcador, `utcTime`) + `matchDetails` por partido (bloque `content.stats.Periods.All`).
+* **P (Process) [ARCH-PILLAR]:**
+  1. **Descubrimiento de temporada:** la lista se toma de `props.pageProps.allAvailableSeasons`; cada etiqueta `AAAA/AAAA - Apertura|Clausura` se traduce a una fila de `seasons` (`MEX_AAAA_AAAA_APERTURA|CLAUSURA`). Una temporada sin `__NEXT_DATA__` se reporta como error y no produce escrituras.
+  2. **Extracción fáctica:** solo fixtures con `status.finished == true`; se extraen `matchId`, jornada, `utcTime`, nombres de local/visitante, marcador y estado terminal. El marcador se persiste en `matches.score_home` / `matches.score_away`; el estado canónico es `FINISHED`.
+  3. **Normalización de identidad:** `canonicalize_team_name` → `obtener_slug_club` (`[LN-QBE-012]`). La aduana es fail-loud: `NormalizationException` se captura por partido, se registra `unmapped` con el nombre crudo y el partido se omite completo para preservar la integridad foránea de `matches.home_team_slug`/`away_team_slug` y `match_telemetry.team_slug`.
+  4. **Persistencia de telemetría:** `possession_pct`, `sot`, `sota`, `xg`, `xga` se escriben en `match_telemetry` por PK `(match_id, team_slug)`. La posesión debe ser bipartita (suma 100); `SoTA` de un club es el `SoT` del rival. Si el bloque de stats no existe, no se escribe telemetría para ese partido (`sin_telemetria`) y **no** se sustituye por `0.0`/`50.0`; si existe pero una métrica falta, esa celda queda `NULL`.
+  5. **Idempotencia:** `seasons` por PK, `matches` por `match_id` determinista (`FOTMOB-<matchId>`) y `match_telemetry` por PK compuesta. El upsert se ejecuta en una sola `PersistenceGateway.write_transaction()`: repetir la misma temporada actualiza en sitio y no duplica. `id_partido` es la llave contractual de la ingesta.
+  6. **Cero segunda verdad:** el parser no reimplementa `[LN-QBE-012]` ni la ley de persistencia; importa el normalizador y el gateway sellados. La matemática de identidad y la transacción son las mismas que usa la ingesta viva.
+  7. **Aislamiento de la bóveda viva:** la 3NF histórica se materializa en `data/qbe_historico.db` (mismo esquema ORM) y **no** en `data/qbe_database.db`; así el corpus histórico no altera los agregados de la temporada activa ni los Jueces del Shield. `--db` permite apuntar otra 3NF; tocar la bóveda viva exige orden expresa.
+  8. **Hidratación y publicación:** `homologar_historico_aislado.py` hidrata `sovereign_distributions` por temporada con el corte intra-temporada y sellado P′/S(I); `generar_matriz_investigacion.py --db` construye la matriz histórica; el dataset Manus publica C/D solo para partidos con `match_telemetry` y deja vacías las celdas de los partidos sin evidencia.
+* **O (Output):** filas de `seasons`, `matches` y `match_telemetry`; reporte con `insertados`, `actualizados`, `omitidos`, `unmapped`, `sin_telemetria`, `errores` y cobertura por temporada. `--json` emite el mismo reporte estructurado.
+* **Φ (Transición):** `scripts/ingesta/ingestar_historico_fotmob.py` bajo `[ARCH-1.4.73]`; consumo posterior por `scripts/laboratorio/generar_dataset_manus.py` en modo histórico, con celdas vacías donde no exista evidencia.
+* **Deuda declarada:** (i) 2010/11–2017/18 no publican bloque de stats: entran con resultado y sin telemetría; (ii) `xG`/`xGA` aparecen de forma consistente desde 2020/21; (iii) los clubes sin alias canónico quedan fuera de la 3NF hasta que el Director autorice una enmienda a `[LN-QBE-012]`; (iv) el manifest reporta el conteo real, nunca el “miles” prometido.
+* **[SHIELD]:** `tests/shield/test_historical_mass_ingestion.py`.
+
 ---
 
 **BASE DE GOBIERNO SELLADA BAJO EL KYBERN FRAMEWORK v8.0 / v12.0 — GRAFO LÓGICO INMUTABLE.**

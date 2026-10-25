@@ -128,6 +128,7 @@
 | `[LN-QBE-128]` | LOGIC | `docs/LOGIC.md` | Prior Congelado de Apertura 2025 y Ley de Mezcla Monótona del Corte (Erradicación del Cold Start Estructural) | SELLADO |
 | `[LN-QBE-129]` | LOGIC | `docs/LOGIC.md` | Minería de Información Mutua de Shannon y Árbol Esparso de Veto (Descubrimiento de Rupturas P_LOW) | SELLADO |
 | `[LN-QBE-130]` | LOGIC | `docs/LOGIC.md` | Reglas de Curación HITL y Seeding de Competiciones | SELLADO |
+| `[LN-QBE-133]` | LOGIC | `docs/LOGIC.md` | Ingesta Fáctica Profunda | SELLADO |
 | `[ARCH-1.3.1]` | ARCH | `docs/ARCH.md` | Rueda de Inferencia Gemini y Rotador de Llaves Multi-Proyecto [ARCH-PILLAR] | SELLADO |
 | `[ARCH-1.3.2]` | ARCH | `docs/ARCH.md` | Modelo Gemini Canónico Inmutable (`gemini-3.6-flash`) [ARCH-PILLAR] [ANTI-BUG] | SELLADO |
 | `[ARCH-1.3.3]` | ARCH | `docs/ARCH.md` | Gestor Contable Local de Cuotas y Circuit Breaker [ARCH-PILLAR] | SELLADO |
@@ -263,6 +264,7 @@
 | `[ARCH-1.4.68]` | ARCH | `docs/ARCH.md` | Motor Cliente de Cuatro Capas del Visor de Calibración: Proyección Pura, Propagación Atómica y Transparencia de Denominador | SELLADO |
 | `[ARCH-1.4.69]` | ARCH | `docs/ARCH.md` | Artefacto Congelado del Prior de Apertura 2025 y Resolvedor de Insumos con Mezcla | SELLADO |
 | `[ARCH-1.4.70]` | ARCH | `docs/ARCH.md` | Instrumento CLI-FIRST de Minería de Shannon y Árbol Esparso de Veto | SELLADO |
+| `[ARCH-1.4.73]` | ARCH | `docs/ARCH.md` | Extractor Histórico Masivo de FotMob | SELLADO |
 | `[LN-QBE-092]` | LOGIC | `docs/LOGIC.md` | *(Reservado - Conciliación de Mercados Derivados)* | LIBRE |
 
 ---

@@ -1346,6 +1346,62 @@ def optimize_progol_endpoint(req: ProgolOptimizeRequest) -> Dict[str, Any]:
 _ESTADOS_CONCLUIDOS_BACKTESTING = frozenset({"FINISHED", "FINALIZADO"})
 
 
+def _estado_concluido(valor: Any) -> bool:
+    """[ARCH-1.4.38 · Enmienda] Normaliza el estado del partido (`FINISHED` ≡ `FINALIZADO`).
+
+    La aduana tolera espacios y minúsculas: un estado rezagado en la captura no puede cambiar la
+    conclusión fáctica de un partido que la evidencia ya cerró.
+    """
+    return str(valor or "").strip().upper() in _ESTADOS_CONCLUIDOS_BACKTESTING
+
+
+def _captura_declara_resultado(fixture: Optional[Dict[str, Any]]) -> bool:
+    """La captura congelada declara el partido TERMINADO (`is_finished` o su `estado`)."""
+    if not isinstance(fixture, dict):
+        return False
+    return fixture.get("is_finished") is True or _estado_concluido(fixture.get("estado"))
+
+
+def _marcador_de_captura(fixture: Optional[Dict[str, Any]]) -> Optional[Tuple[int, int]]:
+    """Marcador consumado publicado por la captura congelada (`marcador_actual` = "L - V").
+
+    Sólo se acepta con el sello de partido terminado y AMBOS goles enteros: una captura en curso
+    o un marcador ilegible no producen resultado (cero fabricación, `[GOVERNANCE-01]`).
+    """
+    if not _captura_declara_resultado(fixture):
+        return None
+    crudo = str((fixture or {}).get("marcador_actual") or "").strip()
+    if not crudo:
+        return None
+    normalizado = crudo.replace("–", "-").replace("—", "-").replace("−", "-")
+    partes = [parte.strip() for parte in normalizado.split("-")]
+    if len(partes) != 2 or not all(parte.isdigit() for parte in partes):
+        return None
+    return int(partes[0]), int(partes[1])
+
+
+def _resultado_consumado(
+    fila: Match, fixture: Optional[Dict[str, Any]]
+) -> Optional[Tuple[int, int]]:
+    """[ARCH-1.4.38 · Enmienda] Marcador consumado con precedencia DECLARADA.
+
+    1. `matches` porta el marcador y su estado (normalizado) es concluyente ⇒ hecho sellado.
+    2. `matches` porta el marcador pero el estado 3NF quedó rezagado ⇒ se admite sólo si la
+       captura congelada declara el partido terminado (transición no sincronizada).
+    3. `matches` NO porta marcador (J12/J13 con captura final) ⇒ se recupera el marcador que la
+       captura publicó, que es evidencia congelada y la recuperación se declara en el log.
+
+    Sin marcador legible y sin sello de partido terminado el partido NO entra al universo
+    auditable: cero invención de resultados (`[GOVERNANCE-01]`).
+    """
+    tiene_marcador = fila.score_home is not None and fila.score_away is not None
+    if tiene_marcador and (_estado_concluido(fila.status) or _captura_declara_resultado(fixture)):
+        return int(fila.score_home), int(fila.score_away)
+    if tiene_marcador:
+        return None
+    return _marcador_de_captura(fixture)
+
+
 def _fixtures_snapshot_indexados(
     session: Session, league_id: Optional[int] = None
 ) -> Dict[str, Dict[str, Any]]:
@@ -1758,6 +1814,12 @@ def _construir_reporte_calibracion(
     declara `origen_p_prima = "AL_VUELO"` con `suficiencia_S_I = 0` [LN-QBE-127]. El descarte
     silencioso queda derogado: sólo se contabiliza como "Pendiente de captura" el partido en el
     que el motor no pudo emitir vector alguno (fallo declarado en el log) [GOVERNANCE-01].
+
+    [ARCH-1.4.38 · Enmienda de Saneamiento] CERO TRUNCAMIENTO NO DECLARADO: el universo abarca
+    TODAS las jornadas concluidas. Cuando el marcador consumado vive en la captura congelada
+    (`estado`/`is_finished` ⇒ FINALIZADO y `marcador_actual` legible) pero la fila 3NF quedó
+    rezagada, el resultado se recupera de la evidencia congelada con precedencia declarada
+    (`matches` → captura) y la recuperación se cuenta en el log. Jamás se inventa un marcador.
     """
     from src.core.contracts.portfolio_math import (
         desmarcar_cuotas_proporcional,
@@ -1785,15 +1847,23 @@ def _construir_reporte_calibracion(
     registros_por_partido: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]] = {}
 
     filas = session.query(Match).order_by(Match.matchday_num.asc(), Match.id.asc()).all()
+    marcadores_recuperados = 0
 
     for fila in filas:
-        if fila.matchday_num is None or fila.score_home is None or fila.score_away is None:
-            continue
-        if str(fila.status or "").upper() not in _ESTADOS_CONCLUIDOS_BACKTESTING:
+        if fila.matchday_num is None:
             continue
 
         id_partido = str(fila.id)
         fixture = fixtures.get(id_partido)
+        # [ARCH-1.4.38 · Enmienda] Universo COMPLETO: el marcador consumado manda y la captura
+        # congelada rescata la transición 3NF rezagada (J12/J13). Prohibido el truncamiento no
+        # declarado: la recuperación se cuenta y se publica, jamás se silencia.
+        resultado_consumado = _resultado_consumado(fila, fixture)
+        if resultado_consumado is None:
+            continue
+        goles_local, goles_visitante = resultado_consumado
+        if fila.score_home is None or fila.score_away is None:
+            marcadores_recuperados += 1
         # [ARCH-1.4.38] P' sellada: captura del snapshot o, EN SU DEFECTO, tabla soberana 3NF.
         # El respaldo rige también cuando el fixture EXISTE pero NO porta P' (jornadas históricas
         # con momios de cierre y distribución sellada sólo en la tabla soberana): sin él, una
@@ -1820,7 +1890,6 @@ def _construir_reporte_calibracion(
             origen_p_prima = ORIGEN_P_PRIMA_AL_VUELO
 
         p_local, p_empate, p_visitante = p_prima
-        goles_local, goles_visitante = int(fila.score_home), int(fila.score_away)
         desenlace = _desenlace_real_1x2(goles_local, goles_visitante)
 
         cuotas = _cuotas_1x2_factuales(fixture) if fixture else {}
@@ -2043,6 +2112,15 @@ def _construir_reporte_calibracion(
             "🏳️ [LN-QBE-127] Calibración: %d resueltos AL VUELO · %d pendientes de captura (motor sin vector)",
             resoluciones_al_vuelo,
             partidos_pendientes,
+        )
+
+    if marcadores_recuperados:
+        # [ARCH-1.4.38 · Enmienda] Recuperación DECLARADA: el marcador consumado de la captura
+        # congelada rescata a la jornada cuya fila 3NF quedó rezagada. Cero truncamiento mudo.
+        logger.info(
+            "🧭 [ARCH-1.4.38 · Enmienda] Calibración: %d marcador(es) recuperados de la captura "
+            "congelada (fila 3NF rezagada); cero truncamiento no declarado.",
+            marcadores_recuperados,
         )
 
     return {

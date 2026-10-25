@@ -319,6 +319,15 @@ def _imprimir_reporte(filas: Sequence[Dict[str, Any]], ruta_csv: str) -> int:
     return 0
 
 
+def _configurar_bd(ruta: str) -> None:
+    """Reapunta el Gateway a una 3NF alterna (p. ej. `data/qbe_historico.db`)."""
+    import src.config as cfg
+
+    absoluta = os.path.abspath(ruta)
+    cfg.settings.DATABASE_URL = f"sqlite:///{absoluta.replace(os.sep, '/')}"
+    PersistenceGateway._instance = None
+
+
 def ejecutar(argv: Optional[Sequence[str]] = None) -> int:
     """Punto de entrada: lectura pura de la bóveda, tabulación y publicación del CSV."""
     parser = argparse.ArgumentParser(
@@ -329,8 +338,15 @@ def ejecutar(argv: Optional[Sequence[str]] = None) -> int:
         default=RUTA_SALIDA_DEFAULT,
         help=f"ruta del CSV de salida (default: {RUTA_SALIDA_DEFAULT})",
     )
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="SQLite alterna (p. ej. data/qbe_historico.db); omítala para la bóveda viva.",
+    )
     args = parser.parse_args(argv)
 
+    if args.db:
+        _configurar_bd(str(args.db))
     gateway = PersistenceGateway()
     with gateway.read_session() as sesion:
         filas = construir_matriz_investigacion(sesion)

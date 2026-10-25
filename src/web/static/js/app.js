@@ -3894,6 +3894,7 @@ const MOTIVOS_EXCLUSION_VISOR = {
     ALCANCE: "Fuera de la muestra calibrada (Suficiencia de Datos = 0)",
     DISCREPANCIA: "Alta Discrepancia (Δ_epist > 0.12)",
     ALTITUD: "Asedio Territorial Neto (ΔAlt ≥ 1,000 m)",
+    ALTITUD_FUERA: "Sin Asedio Territorial Neto (ΔAlt < 1,000 m)",
     FRAGIL: "Favorito Frágil (P′ máx < 0.50)",
 };
 
@@ -3932,8 +3933,12 @@ function _motivoFiltroFiduciarioVisor(partido, filtros) {
     if (activos.epist && _partidoVetadoBacktesting(partido)) {
         return MOTIVOS_EXCLUSION_VISOR.DISCREPANCIA;
     }
-    if (activos.altitud && partido.delta_alt_metros >= 1000) {
-        return MOTIVOS_EXCLUSION_VISOR.ALTITUD;
+    // [DES-QBE-072 · Enmienda de Saneamiento] El Asedio Territorial Neto (ΔAlt ≥ 1,000 m) es una
+    // VENTAJA física del LOCAL, no un defecto: el toggle obra como filtro de INCLUSIÓN (aisla y
+    // muestra únicamente a quien goza de ella). Queda derogada la semántica de penalización que
+    // excluía precisamente a los mejores partidos del anfitrión y restaba masa probabilística.
+    if (activos.altitud && !(partido.delta_alt_metros >= 1000)) {
+        return MOTIVOS_EXCLUSION_VISOR.ALTITUD_FUERA;
     }
     const pMaximo = Math.max(
         Number(partido.p_local || 0),
@@ -4119,7 +4124,10 @@ function _actualizarDenominadorVisor(universo) {
     const filtros = proyeccion.filtros || _filtrosVisorActivos();
     const etiquetas = [];
     if (filtros.epist) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.DISCREPANCIA);
-    if (filtros.altitud) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.ALTITUD);
+    // [DES-QBE-072 · Enmienda] El toggle de altitud es de INCLUSIÓN: se rotula como tal para no
+    // confundirlo con los filtros de exclusión y no sugerir que resta masa a los partidos con
+    // ventaja física del local.
+    if (filtros.altitud) etiquetas.push(`Inclusión · ${MOTIVOS_EXCLUSION_VISOR.ALTITUD}`);
     if (filtros.fragil) etiquetas.push(MOTIVOS_EXCLUSION_VISOR.FRAGIL);
     badge.textContent = etiquetas.length
         ? `Filtros activos: ${etiquetas.join(" · ")}`
